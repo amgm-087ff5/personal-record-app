@@ -26,15 +26,24 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // 更新エラー対策: debug 署名鍵をリポジトリ内の固定ファイルに固定する。
+    // 更新エラー対策: debug 署名鍵を固定する。
     // CIは毎回新しいランナーで ~/.android/debug.keystore を作り直すため、固定しないと
     // ビルドごとに署名が変わり「上書き更新できない」(INSTALL_FAILED_UPDATE_INCOMPATIBLE)になる。
+    // 公開リポジトリのため鍵はコミットしない。CIが GitHub Secrets から app/debug.keystore を復元し、
+    // 下記の環境変数でパスワード等を渡す。app/debug.keystore が無い(ローカルビルド)ときは
+    // AGP標準のデバッグ鍵のまま。
     signingConfigs {
         getByName("debug") {
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            val ksFile = file(System.getenv("DEBUG_KEYSTORE_PATH") ?: "debug.keystore")
+            if (ksFile.exists()) {
+                fun env(name: String): String =
+                    System.getenv(name)?.takeIf { it.isNotEmpty() }
+                        ?: error("署名鍵 ${ksFile.name} があるのに環境変数 $name が未設定です")
+                storeFile = ksFile
+                storePassword = env("DEBUG_KEYSTORE_PASSWORD")
+                keyAlias = env("DEBUG_KEY_ALIAS")
+                keyPassword = env("DEBUG_KEY_PASSWORD")
+            }
         }
     }
 
