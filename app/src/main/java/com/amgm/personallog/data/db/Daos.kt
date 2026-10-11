@@ -72,6 +72,19 @@ interface ReceiptDao {
     @Query("SELECT * FROM receipts WHERE id = :id")
     suspend fun getById(id: Long): Receipt?
 
+    @Query("SELECT * FROM receipts ORDER BY id")
+    suspend fun getAll(): List<Receipt>
+
+    @Query("SELECT * FROM receipts WHERE imageHash = :hash ORDER BY id")
+    suspend fun getByImageHash(hash: String): List<Receipt>
+
+    @Query("SELECT * FROM receipts WHERE imageHash IS NULL")
+    suspend fun getWithoutImageHash(): List<Receipt>
+
+    /** 他の項目を上書きしないよう imageHash だけを更新する(未記録の行のみ)。 */
+    @Query("UPDATE receipts SET imageHash = :hash WHERE id = :id AND imageHash IS NULL")
+    suspend fun setImageHashIfMissing(id: Long, hash: String): Int
+
     @Insert
     suspend fun insert(receipt: Receipt): Long
 

@@ -48,6 +48,8 @@ data class Receipt(
     val rawJson: String,
     val status: String = ReceiptStatus.DRAFT,
     val createdAt: Long,
+    /** 原本画像(imagePath)のSHA-256(16進小文字)。重複検知用。v1からの移行直後や旧バックアップ由来は null(取り込み時に後から計算する)。 */
+    val imageHash: String? = null,
 )
 
 object ReceiptStatus {

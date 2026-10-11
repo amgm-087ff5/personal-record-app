@@ -10,6 +10,7 @@ import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.receipt.ParsedItem
 import com.amgm.personallog.receipt.ReceiptCalc
+import com.amgm.personallog.receipt.ReceiptDedup
 import com.amgm.personallog.receipt.ReceiptImageStore
 import com.amgm.personallog.receipt.ReceiptMapper
 import com.amgm.personallog.receipt.ReceiptScanner
@@ -50,6 +51,12 @@ data class DetailUiState(
     val error: String? = null,
     val info: String? = null,
     val finished: Boolean = false,
+    /** 原本画像のハッシュ。保存時に引き継ぐ(フォームからは変えない)。 */
+    val imageHash: String? = null,
+    /** 同じ内容の別レシートがある場合、その要約(警告表示用)。 */
+    val possibleDuplicate: String? = null,
+    /** 確定時に同じ内容の確定済みレシートが見つかった場合、その要約(確認ダイアログ用)。 */
+    val duplicateWarning: String? = null,
 ) {
     /** total - 品目合計。一致、または total 未入力なら null。 */
     val mismatch: Long?
@@ -82,11 +89,14 @@ class ReceiptDetailViewModel @Inject constructor(
             }
             val items = repository.getItems(receiptId)
             val (d, t) = splitPurchasedAt(r.purchasedAt)
+            val original = ReceiptDedup.laterDuplicates(repository.allReceipts())[receiptId]
             _state.value = DetailUiState(
                 loading = false,
                 imagePath = r.imagePath,
                 rawJson = r.rawJson,
                 createdAt = r.createdAt,
+                imageHash = r.imageHash,
+                possibleDuplicate = original?.let { ReceiptDedup.summary(it) },
                 confirmed = r.status == ReceiptStatus.CONFIRMED,
                 date = d,
                 time = t,
@@ -179,6 +189,7 @@ class ReceiptDetailViewModel @Inject constructor(
             rawJson = s.rawJson,
             status = if (s.confirmed) ReceiptStatus.CONFIRMED else ReceiptStatus.DRAFT,
             createdAt = s.createdAt,
+            imageHash = s.imageHash,
         )
         return receipt to items
     }
@@ -200,13 +211,39 @@ class ReceiptDetailViewModel @Inject constructor(
         }
     }
 
-    /** 確定: レシート・品目を保存し、家計簿(Expense)を品目ごとに作り直す。 */
-    fun confirm() {
+    /**
+     * 確定: レシート・品目を保存し、家計簿(Expense)を品目ごとに作り直す。
+     * 同じ内容(日付・店名・合計)の確定済みレシートが既にあれば、確認ダイアログを出して止める(既定はキャンセル)。
+     */
+    fun confirm() = startConfirm(checkDuplicate = true)
+
+    /** 重複確認ダイアログで「追加する」を選んだときの確定。 */
+    fun confirmAnyway() {
+        _state.update { it.copy(duplicateWarning = null) }
+        startConfirm(checkDuplicate = false)
+    }
+
+    fun dismissDuplicateWarning() = _state.update { it.copy(duplicateWarning = null) }
+
+    private fun startConfirm(checkDuplicate: Boolean) {
         if (_state.value.busy) return
         val built = buildFromForm(strict = true) ?: return
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             try {
+                if (checkDuplicate) {
+                    val key = ReceiptDedup.keyOf(built.first)
+                    val dup = if (key == null) {
+                        null
+                    } else {
+                        val confirmed = repository.allReceipts().filter { it.status == ReceiptStatus.CONFIRMED }
+                        ReceiptDedup.sameContent(key, confirmed, receiptId).firstOrNull()
+                    }
+                    if (dup != null) {
+                        _state.update { it.copy(busy = false, duplicateWarning = ReceiptDedup.summary(dup)) }
+                        return@launch
+                    }
+                }
                 repository.save(built.first, built.second)
                 repository.confirm(receiptId, perItem = true)
                 _state.update { it.copy(busy = false, confirmed = true, finished = true) }

@@ -122,6 +122,17 @@ fun ReceiptDetailScreen(
             }
         }
 
+        s.possibleDuplicate?.let { original ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        "重複の可能性: 同じ内容(日付・店名・合計)のレシートが既にあります。\n$original",
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
+            }
+        }
+
         if (s.confirmed) {
             Text("確定済み(編集して「再確定」すると家計簿も更新されます)", color = MaterialTheme.colorScheme.primary)
         } else {
@@ -228,6 +239,16 @@ fun ReceiptDetailScreen(
         TextButton(enabled = !s.busy, onClick = { showDelete = true }) {
             Text("このレシートを削除", color = MaterialTheme.colorScheme.error)
         }
+    }
+
+    s.duplicateWarning?.let { existing ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissDuplicateWarning,
+            title = { Text("重複の確認") },
+            text = { Text("既に同じレシートがあります。追加しますか?\n\n$existing") },
+            confirmButton = { TextButton(onClick = viewModel::confirmAnyway) { Text("追加する") } },
+            dismissButton = { TextButton(onClick = viewModel::dismissDuplicateWarning) { Text("キャンセル") } },
+        )
     }
 
     if (showDelete) {

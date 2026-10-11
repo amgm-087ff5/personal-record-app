@@ -65,6 +65,12 @@ class ReceiptRepository @Inject constructor(
     fun observeItems(receiptId: Long): Flow<List<ReceiptItem>> = receiptDao.observeItems(receiptId)
     suspend fun getReceipt(id: Long): Receipt? = receiptDao.getById(id)
     suspend fun getItems(receiptId: Long): List<ReceiptItem> = receiptDao.getItems(receiptId)
+    suspend fun allReceipts(): List<Receipt> = receiptDao.getAll()
+    suspend fun receiptsByImageHash(hash: String): List<Receipt> = receiptDao.getByImageHash(hash)
+    suspend fun receiptsWithoutImageHash(): List<Receipt> = receiptDao.getWithoutImageHash()
+    suspend fun setImageHashIfMissing(id: Long, hash: String) {
+        receiptDao.setImageHashIfMissing(id, hash)
+    }
 
     /** レシートと品目を保存(id=0なら新規)。品目は丸ごと置き換える。receiptId を返す。 */
     suspend fun save(receipt: Receipt, items: List<ReceiptItem>): Long = db.withTransaction {

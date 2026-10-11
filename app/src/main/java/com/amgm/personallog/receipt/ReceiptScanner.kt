@@ -71,6 +71,8 @@ object ReceiptMapper {
         now: Long,
         today: String = LocalDate.now().toString(),
         existingId: Long = 0,
+        imageHash: String? = null,
+        createdAt: Long = now,
     ): Pair<Receipt, List<ReceiptItem>> = when (outcome) {
         is ScanOutcome.Parsed -> {
             val p = outcome.receipt
@@ -85,16 +87,19 @@ object ReceiptMapper {
                 imagePath = imagePath,
                 rawJson = outcome.raw,
                 status = ReceiptStatus.DRAFT,
-                createdAt = now,
+                createdAt = createdAt,
+                imageHash = imageHash,
             ) to items
         }
         is ScanOutcome.Unparsable -> Receipt(
             id = existingId, purchasedAt = today, storeName = "", totalAmount = 0,
-            imagePath = imagePath, rawJson = outcome.raw, status = ReceiptStatus.DRAFT, createdAt = now,
+            imagePath = imagePath, rawJson = outcome.raw, status = ReceiptStatus.DRAFT, createdAt = createdAt,
+            imageHash = imageHash,
         ) to emptyList()
         is ScanOutcome.Failed -> Receipt(
             id = existingId, purchasedAt = today, storeName = "", totalAmount = 0,
-            imagePath = imagePath, rawJson = "", status = ReceiptStatus.DRAFT, createdAt = now,
+            imagePath = imagePath, rawJson = "", status = ReceiptStatus.DRAFT, createdAt = createdAt,
+            imageHash = imageHash,
         ) to emptyList()
     }
 }
