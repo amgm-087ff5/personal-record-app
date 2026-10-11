@@ -77,7 +77,11 @@ object ReceiptMapper {
         is ScanOutcome.Parsed -> {
             val p = outcome.receipt
             val items = p.items.map {
-                ReceiptItem(receiptId = existingId, name = it.name, quantity = it.quantity, unitPrice = it.unitPrice, amount = it.amount, category = it.category)
+                ReceiptItem(
+                    receiptId = existingId, name = it.name, quantity = it.quantity, unitPrice = it.unitPrice,
+                    amount = it.amount, category = it.category,
+                    taxRate = it.taxRate, priceIncludesTax = it.priceIncludesTax,
+                )
             }
             Receipt(
                 id = existingId,

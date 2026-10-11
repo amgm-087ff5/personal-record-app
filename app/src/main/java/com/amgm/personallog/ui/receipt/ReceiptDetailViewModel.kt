@@ -8,6 +8,7 @@ import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.receipt.ParsedItem
 import com.amgm.personallog.receipt.ReceiptCalc
 import com.amgm.personallog.receipt.ReceiptDedup
@@ -32,7 +33,28 @@ data class ItemForm(
     val amount: String,
     val category: String,
     val unitPrice: Int = 0,
+    val taxRate: Int = TaxCalc.DEFAULT_TAX_RATE,
+    val priceIncludesTax: Boolean = true,
+    /** 自分の負担割合(入力文字列)。 */
+    val ownPercent: String = "100",
 )
+
+/** 入力中の品目を計算用のモデルにする(金額・負担割合は不正なら既定値)。 */
+internal fun ItemForm.toItemModel(receiptId: Long = 0L): ReceiptItem {
+    val qty = quantity.toDoubleOrNull()?.takeIf { it > 0 } ?: 1.0
+    val price = amount.toIntOrNull() ?: 0
+    return ReceiptItem(
+        receiptId = receiptId,
+        name = name.trim(),
+        quantity = qty,
+        unitPrice = if (unitPrice != 0) unitPrice else Math.round(price / qty).toInt(),
+        amount = price,
+        category = category,
+        taxRate = TaxCalc.normalizeTaxRate(taxRate),
+        priceIncludesTax = priceIncludesTax,
+        ownPercent = ownPercent.toIntOrNull()?.let { TaxCalc.normalizeOwnPercent(it) } ?: 100,
+    )
+}
 
 data class DetailUiState(
     val loading: Boolean = true,
@@ -46,6 +68,8 @@ data class DetailUiState(
     val store: String = "",
     val total: String = "",
     val items: List<ItemForm> = emptyList(),
+    /** 立て替え(自分が払った。他の人の分を含む)かどうか。 */
+    val isAdvance: Boolean = false,
     val busy: Boolean = false,
     val scanning: Boolean = false,
     val error: String? = null,
@@ -58,11 +82,24 @@ data class DetailUiState(
     /** 確定時に同じ内容の確定済みレシートが見つかった場合、その要約(確認ダイアログ用)。 */
     val duplicateWarning: String? = null,
 ) {
-    /** total - 品目合計。一致、または total 未入力なら null。 */
-    val mismatch: Long?
-        get() = ReceiptCalc.mismatch(items.map { it.amount.toIntOrNull() ?: 0 }, total.toIntOrNull())
+    private val models: List<ReceiptItem> get() = items.map { it.toItemModel() }
 
-    val itemsSum: Long get() = ReceiptCalc.itemsSum(items.map { it.amount.toIntOrNull() ?: 0 })
+    /** 税込の支払総額(品目ごとの税込価格の合計、円は切り捨て)。 */
+    val itemsSum: Long get() = TaxCalc.paidYen(models)
+
+    /** 自分の分の合計(家計簿に入る額)。 */
+    val ownTotal: Long get() = TaxCalc.ownYen(models)
+
+    /** 貰う分(立て替えの場合のみ意味がある): 支払総額 - 自分の分。 */
+    val theirTotal: Long get() = itemsSum - ownTotal
+
+    /** 合計欄 - 税込支払総額。一致、または合計欄が未入力なら null。 */
+    val mismatch: Long?
+        get() {
+            val t = total.toIntOrNull() ?: return null
+            val diff = t.toLong() - itemsSum
+            return if (diff == 0L) null else diff
+        }
 }
 
 @HiltViewModel
@@ -98,12 +135,23 @@ class ReceiptDetailViewModel @Inject constructor(
                 imageHash = r.imageHash,
                 possibleDuplicate = original?.let { ReceiptDedup.summary(it) },
                 confirmed = r.status == ReceiptStatus.CONFIRMED,
+                isAdvance = r.isAdvance,
                 date = d,
                 time = t,
                 store = r.storeName,
                 total = r.totalAmount.toString(),
                 items = items.map {
-                    ItemForm(newKey(), it.name, formatQuantity(it.quantity), it.amount.toString(), it.category, it.unitPrice)
+                    ItemForm(
+                        key = newKey(),
+                        name = it.name,
+                        quantity = formatQuantity(it.quantity),
+                        amount = it.amount.toString(),
+                        category = it.category,
+                        unitPrice = it.unitPrice,
+                        taxRate = it.taxRate,
+                        priceIncludesTax = it.priceIncludesTax,
+                        ownPercent = it.ownPercent.toString(),
+                    )
                 },
             )
         }
@@ -129,6 +177,10 @@ class ReceiptDetailViewModel @Inject constructor(
     fun setItemQuantity(key: Long, v: String) = updateItem(key) { it.copy(quantity = v.filter { c -> c.isDigit() || c == '.' }) }
     fun setItemAmount(key: Long, v: String) = updateItem(key) { it.copy(amount = v.filter { c -> c.isDigit() || c == '-' }) }
     fun setItemCategory(key: Long, v: String) = updateItem(key) { it.copy(category = v) }
+    fun setItemTaxRate(key: Long, rate: Int) = updateItem(key) { it.copy(taxRate = TaxCalc.normalizeTaxRate(rate)) }
+    fun toggleItemTaxIncluded(key: Long) = updateItem(key) { it.copy(priceIncludesTax = !it.priceIncludesTax) }
+    fun setItemOwnPercent(key: Long, v: String) = updateItem(key) { it.copy(ownPercent = v.filter { c -> c.isDigit() }.take(3)) }
+    fun setAdvance(v: Boolean) = _state.update { it.copy(isAdvance = v) }
 
     fun toggleItemSign(key: Long) = updateItem(key) {
         val a = it.amount
@@ -167,19 +219,13 @@ class ReceiptDetailViewModel @Inject constructor(
                 return null
             }
         }
-        val items = s.items.map {
-            val qty = it.quantity.toDoubleOrNull()?.takeIf { q -> q > 0 } ?: 1.0
-            val amount = it.amount.toIntOrNull() ?: 0
-            ReceiptItem(
-                receiptId = receiptId,
-                name = it.name.trim(),
-                quantity = qty,
-                unitPrice = if (it.unitPrice != 0) it.unitPrice else Math.round(amount / qty).toInt(),
-                amount = amount,
-                category = it.category,
-            )
+        val badPercent = s.items.indexOfFirst { (it.ownPercent.toIntOrNull() ?: 0) > 100 }
+        if (badPercent >= 0) {
+            _state.update { it.copy(error = "品目${badPercent + 1}の負担割合は0〜100%で入力してください。") }
+            return null
         }
-        val total = s.total.toIntOrNull() ?: ReceiptCalc.itemsSum(items.map { it.amount }).toInt()
+        val items = s.items.map { it.toItemModel(receiptId) }
+        val total = s.total.toIntOrNull() ?: TaxCalc.paidYen(items).toInt()
         val receipt = Receipt(
             id = receiptId,
             purchasedAt = ReceiptMapper.purchasedAt(date, time),
@@ -190,6 +236,7 @@ class ReceiptDetailViewModel @Inject constructor(
             status = if (s.confirmed) ReceiptStatus.CONFIRMED else ReceiptStatus.DRAFT,
             createdAt = s.createdAt,
             imageHash = s.imageHash,
+            isAdvance = s.isAdvance,
         )
         return receipt to items
     }
@@ -273,7 +320,7 @@ class ReceiptDetailViewModel @Inject constructor(
                             date = p.date ?: cur.date.ifBlank { LocalDate.now().toString() },
                             time = p.time.orEmpty(),
                             store = p.store,
-                            total = (p.total ?: ReceiptCalc.itemsSum(p.items.map { it.amount }).toInt()).toString(),
+                            total = (p.total ?: TaxCalc.paidYen(p.items.map { it.toModel() }).toInt()).toString(),
                             items = p.items.map { it.toForm() },
                             info = "読み取りました。内容を確認してください。",
                         )
@@ -290,6 +337,17 @@ class ReceiptDetailViewModel @Inject constructor(
         }
     }
 
+    private fun ParsedItem.toModel() = ReceiptItem(
+        receiptId = 0,
+        name = name,
+        quantity = quantity,
+        unitPrice = unitPrice,
+        amount = amount,
+        category = category,
+        taxRate = taxRate,
+        priceIncludesTax = priceIncludesTax,
+    )
+
     private fun ParsedItem.toForm() = ItemForm(
         key = newKey(),
         name = name,
@@ -297,6 +355,8 @@ class ReceiptDetailViewModel @Inject constructor(
         amount = amount.toString(),
         category = category,
         unitPrice = unitPrice,
+        taxRate = taxRate,
+        priceIncludesTax = priceIncludesTax,
     )
 
     /** レシート削除。画像ファイルも消す。alsoExpenses=true なら家計簿の行も消す(false なら残る)。 */

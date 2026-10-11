@@ -19,6 +19,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -45,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.data.model.Categories
+import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.receipt.ReceiptImageCodec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -162,6 +164,10 @@ fun ReceiptDetailScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = s.isAdvance, onCheckedChange = viewModel::setAdvance)
+            Text("自分が立て替えた支払い(他の人の分を含む)")
+        }
 
         Text("品目", style = MaterialTheme.typography.titleMedium)
         s.items.forEachIndexed { index, item ->
@@ -197,6 +203,29 @@ fun ReceiptDetailScreen(
                         TextButton(onClick = { viewModel.toggleItemSign(item.key) }) { Text("+/-") }
                     }
                     CategoryPicker(value = item.category, onChange = { viewModel.setItemCategory(item.key, it) })
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { viewModel.setItemTaxRate(item.key, if (item.taxRate == 8) 10 else 8) }) {
+                            Text("税率 ${item.taxRate}%")
+                        }
+                        OutlinedButton(onClick = { viewModel.toggleItemTaxIncluded(item.key) }) {
+                            Text(if (item.priceIncludesTax) "金額は税込" else "金額は税抜")
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = item.ownPercent,
+                            onValueChange = { viewModel.setItemOwnPercent(item.key, it) },
+                            label = { Text("自分の負担%") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            "税込 ${TaxCalc.paidYenText(item.toItemModel())}円 / 自分 ${TaxCalc.ownYenText(item.toItemModel())}円",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1.4f),
+                        )
+                    }
                 }
             }
         }
@@ -210,12 +239,21 @@ fun ReceiptDetailScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
         )
-        Text("品目の合計: ${formatYen(s.itemsSum)}", style = MaterialTheme.typography.bodyMedium)
+        Card {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("税込の支払合計(品目の合計): ${formatYen(s.itemsSum)}", style = MaterialTheme.typography.bodyMedium)
+                Text("自分の分(家計簿に入る額): ${formatYen(s.ownTotal)}", style = MaterialTheme.typography.bodyMedium)
+                if (s.isAdvance) {
+                    Text("貰う分(他の人の分): ${formatYen(s.theirTotal)}", style = MaterialTheme.typography.bodyMedium)
+                }
+                Text("小数点以下は合計で切り捨てています。", style = MaterialTheme.typography.bodySmall)
+            }
+        }
         s.mismatch?.let { diff ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
                 Column(Modifier.padding(12.dp)) {
                     Text(
-                        "品目の合計と合計欄が一致しません(合計欄 - 品目合計 = ${formatYen(diff)})。読み取りミスの可能性があります。",
+                        "合計欄と税込の支払合計が一致しません(合計欄 - 支払合計 = ${formatYen(diff)})。読み取りミスか、端数の差の可能性があります。",
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
                     TextButton(onClick = viewModel::useItemsSumAsTotal) { Text("合計欄を品目合計に合わせる") }

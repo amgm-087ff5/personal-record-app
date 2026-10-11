@@ -9,4 +9,10 @@ class MigrationsTest {
         val m = Migrations.ALL.single { it.startVersion == 1 && it.endVersion == 2 }
         assertSame(Migrations.MIGRATION_1_2, m)
     }
+
+    @Test
+    fun v2ToV3_isRegistered() {
+        val m = Migrations.ALL.single { it.startVersion == 2 && it.endVersion == 3 }
+        assertSame(Migrations.MIGRATION_2_3, m)
+    }
 }

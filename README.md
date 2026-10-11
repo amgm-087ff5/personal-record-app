@@ -35,7 +35,7 @@ CIはビルド前にこれらから `app/debug.keystore` を復元します(こ�
 |---|---|
 | a. 署名の固定 | 鍵はリポジトリに置かず GitHub Secrets から CI で `app/debug.keystore` を復元し、`app/build.gradle.kts` で debug 署名をこの鍵に固定。CIの使い捨てランナーでも毎回同じ署名になる(`INSTALL_FAILED_UPDATE_INCOMPATIBLE` の原因対策)。Secretsが未設定ならCIは失敗する。 |
 | b. versionCode | `(System.currentTimeMillis() / 60000L).toInt()`(エポックからの分)で単調増加。ダウングレードにならない。versionName は `0.1.<GITHUB_RUN_NUMBER or local>`。 |
-| c. Room | `exportSchema = true`、スキーマは `app/schemas` にコミット、DB version=2(v1→v2: レシートの画像ハッシュ追加)。`fallbackToDestructiveMigration` は使わない。version を上げるときは `data/db/Migrations.kt` に Migration を必ず追加する。 |
+| c. Room | `exportSchema = true`、スキーマは `app/schemas` にコミット、DB version=3(v1→v2: レシートの画像ハッシュ追加、v2→v3: 品目の税率・税込/税抜・負担割合、レシートの立て替えフラグ)。`fallbackToDestructiveMigration` は使わない。version を上げるときは `data/db/Migrations.kt` に Migration を必ず追加する。 |
 | d. バックアップ無効 | `android:allowBackup="false"`。自動バックアップの復元でDBだけ古く戻る事故を避ける。 |
 | e. 失敗時の診断 | 起動時にDBを開き、例外が出ても落ちずに原因を画面へ表示する。 |
 

@@ -22,7 +22,8 @@ object LedgerCalc {
             .sortedByDescending { it.total }
 
     /**
-     * レシート確定時の Expense 生成。perItem=true なら品目ごと、false(または品目なし)なら合計1行。
+     * レシート確定時の Expense 生成。家計簿に入るのは「自分の分」(品目の税込価格 × 負担割合)。
+     * perItem=true なら品目ごと(0円の行は作らない)、false(または品目なし)なら合計1行。
      * 日付は purchasedAt の先頭10文字(yyyy-MM-dd)。
      */
     fun expensesFromReceipt(
@@ -33,22 +34,28 @@ object LedgerCalc {
     ): List<Expense> {
         val date = receipt.purchasedAt.take(10)
         if (perItem && items.isNotEmpty()) {
-            return items.map {
-                Expense(
-                    date = date,
-                    amount = it.amount,
-                    category = it.category,
-                    memo = listOf(receipt.storeName, it.name).filter { s -> s.isNotBlank() }.joinToString(" "),
-                    receiptId = receipt.id,
-                    createdAt = now,
-                )
+            val own = TaxCalc.ownYenPerItem(items)
+            return items.mapIndexedNotNull { i, it ->
+                if (own[i] == 0L) {
+                    null
+                } else {
+                    Expense(
+                        date = date,
+                        amount = own[i].toInt(),
+                        category = it.category,
+                        memo = listOf(receipt.storeName, it.name).filter { s -> s.isNotBlank() }.joinToString(" "),
+                        receiptId = receipt.id,
+                        createdAt = now,
+                    )
+                }
             }
         }
         val category = items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED
+        val amount = if (items.isEmpty()) receipt.totalAmount.toLong() else TaxCalc.ownYen(items)
         return listOf(
             Expense(
                 date = date,
-                amount = receipt.totalAmount,
+                amount = amount.toInt(),
                 category = category,
                 memo = receipt.storeName,
                 receiptId = receipt.id,

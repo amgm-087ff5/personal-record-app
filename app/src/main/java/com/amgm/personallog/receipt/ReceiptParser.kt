@@ -1,6 +1,7 @@
 package com.amgm.personallog.receipt
 
 import com.amgm.personallog.data.model.Categories
+import com.amgm.personallog.domain.TaxCalc
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -9,13 +10,18 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.math.roundToInt
 
-/** Claude が返した品目1行(正規化後)。値引きは amount が負。 */
+/**
+ * Claude が返した品目1行(正規化後)。値引きは amount が負。
+ * amount は印字どおりの金額。priceIncludesTax が false なら税抜で、税込価格は taxRate から計算する。
+ */
 data class ParsedItem(
     val name: String,
     val quantity: Double,
     val unitPrice: Int,
     val amount: Int,
     val category: String,
+    val taxRate: Int = TaxCalc.DEFAULT_TAX_RATE,
+    val priceIncludesTax: Boolean = true,
 )
 
 data class ParsedReceipt(
@@ -121,7 +127,20 @@ object ReceiptParser {
             unitPrice = unit ?: amount,
             amount = amount,
             category = normalizeCategory(o.str("category")),
+            taxRate = TaxCalc.normalizeTaxRate(o["taxRate"].asInt()),
+            priceIncludesTax = o.bool("priceIncludesTax") ?: true,
         )
+    }
+
+    /** true/false の真偽値。文字列や不明な値は null。 */
+    private fun JsonObject.bool(key: String): Boolean? {
+        val p = this[key] as? JsonPrimitive ?: return null
+        if (p is JsonNull) return null
+        return when (p.content.trim().lowercase()) {
+            "true" -> true
+            "false" -> false
+            else -> null
+        }
     }
 
     private fun JsonObject.str(key: String): String? {

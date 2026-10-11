@@ -58,10 +58,12 @@ data class BackupReceipt(
     val rawJson: String,
     val status: String,
     val createdAt: Long,
+    /** v3で追加。古いバックアップには無いので既定値(false)になる。 */
+    val isAdvance: Boolean = false,
 ) {
-    fun toEntity() = Receipt(id, purchasedAt, storeName, totalAmount, imagePath, rawJson, status, createdAt)
+    fun toEntity() = Receipt(id, purchasedAt, storeName, totalAmount, imagePath, rawJson, status, createdAt, isAdvance = isAdvance)
     companion object {
-        fun from(e: Receipt) = BackupReceipt(e.id, e.purchasedAt, e.storeName, e.totalAmount, e.imagePath, e.rawJson, e.status, e.createdAt)
+        fun from(e: Receipt) = BackupReceipt(e.id, e.purchasedAt, e.storeName, e.totalAmount, e.imagePath, e.rawJson, e.status, e.createdAt, e.isAdvance)
     }
 }
 
@@ -74,10 +76,20 @@ data class BackupReceiptItem(
     val unitPrice: Int = 0,
     val amount: Int = 0,
     val category: String,
+    /** v3で追加。古いバックアップには無いので既定値(10%・税込・全額自分)になる。 */
+    val taxRate: Int = 10,
+    val priceIncludesTax: Boolean = true,
+    val ownPercent: Int = 100,
 ) {
-    fun toEntity() = ReceiptItem(id, receiptId, name, quantity, unitPrice, amount, category)
+    fun toEntity() = ReceiptItem(
+        id, receiptId, name, quantity, unitPrice, amount, category,
+        taxRate = taxRate, priceIncludesTax = priceIncludesTax, ownPercent = ownPercent,
+    )
     companion object {
-        fun from(e: ReceiptItem) = BackupReceiptItem(e.id, e.receiptId, e.name, e.quantity, e.unitPrice, e.amount, e.category)
+        fun from(e: ReceiptItem) = BackupReceiptItem(
+            e.id, e.receiptId, e.name, e.quantity, e.unitPrice, e.amount, e.category,
+            taxRate = e.taxRate, priceIncludesTax = e.priceIncludesTax, ownPercent = e.ownPercent,
+        )
     }
 }
 
