@@ -38,8 +38,8 @@ jobs:
             exit 1
           fi
           printf '%s' "$KS_B64" | base64 -d > app/debug.keystore
-          if ! keytool -list -keystore app/debug.keystore -storepass "$KS_PASS" -alias personallog >/dev/null 2>&1; then
-            echo "::error title=署名鍵の検証に失敗::DEBUG_KEYSTORE_PASSWORD か鍵のaliasが一致しません(aliasは personallog 固定)"
+          if ! keytool -list -keystore app/debug.keystore -storepass "$KS_PASS" >/dev/null 2>&1; then
+            echo "::error title=署名鍵の検証に失敗::DEBUG_KEYSTORE_PASSWORD が一致しません"
             exit 1
           fi
 

@@ -23,7 +23,7 @@ https://github.com/amgm-masamune/personal-record-app/releases/download/personal-
 - `DEBUG_KEYSTORE_BASE64`(keystoreを `base64 -w0` した1行)
 - `DEBUG_KEYSTORE_PASSWORD`
 
-キーのaliasは `personallog` 固定で、キーパスワードはストアパスワード(`DEBUG_KEYSTORE_PASSWORD`)と同一です(PKCS12のため)。
+キーのaliasは app/build.gradle.kts に `personallog` で固定(Secretではない)で、キーパスワードはストアパスワード(`DEBUG_KEYSTORE_PASSWORD`)と同一です(PKCS12のため)。
 
 CIはビルド前にこれらから `app/debug.keystore` を復元します(このファイルは `.gitignore` 済みでコミットされません)。ローカルビルドで `app/debug.keystore` が無ければAGP標準のデバッグ鍵になります。
 

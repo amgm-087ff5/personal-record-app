@@ -7,6 +7,9 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// aliasは鍵のラベルで秘密ではない。キーストア生成時の -alias と一致させる
+val debugKeyAlias = "personallog"
+
 // versionCode: エポックからの経過「分」。CIでもローカルでも同じ式なので単調増加し、ダウングレードしない。
 val appVersionCode: Int = (System.currentTimeMillis() / 60000L).toInt()
 // versionName: CIでは GITHUB_RUN_NUMBER、ローカルでは "local"
@@ -43,7 +46,7 @@ android {
                 // PKCS12のためキーパスワードはストアパスワードと同一でなければならない
                 val pass = env("DEBUG_KEYSTORE_PASSWORD")
                 storePassword = pass
-                keyAlias = System.getenv("DEBUG_KEY_ALIAS")?.takeIf { it.isNotEmpty() } ?: "personallog"
+                keyAlias = debugKeyAlias
                 keyPassword = pass
             }
         }
