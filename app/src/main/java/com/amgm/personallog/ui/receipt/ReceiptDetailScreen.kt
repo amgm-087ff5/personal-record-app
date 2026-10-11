@@ -1,6 +1,7 @@
 package com.amgm.personallog.ui.receipt
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,6 +61,7 @@ fun ReceiptDetailScreen(
     var showDelete by rememberSaveable { mutableStateOf(false) }
     var showRescan by rememberSaveable { mutableStateOf(false) }
     var bigImage by rememberSaveable { mutableStateOf(false) }
+    var viewerOpen by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(s.finished) { if (s.finished) onBack() }
 
@@ -86,10 +88,13 @@ fun ReceiptDetailScreen(
         }
 
         if (s.imagePath.isNotBlank()) {
-            ReceiptImage(imagePath = s.imagePath, big = bigImage)
+            ReceiptImage(imagePath = s.imagePath, big = bigImage, onClick = { viewerOpen = true })
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { bigImage = !bigImage }) { Text(if (bigImage) "画像を小さく" else "画像を大きく") }
                 OutlinedButton(enabled = !s.busy, onClick = { showRescan = true }) { Text("読み取り直す") }
+            }
+            if (viewerOpen) {
+                ReceiptImageViewer(relativePath = s.imagePath, onDismiss = { viewerOpen = false })
             }
         }
 
@@ -267,7 +272,7 @@ private fun CategoryPicker(value: String, onChange: (String) -> Unit) {
 }
 
 @Composable
-private fun ReceiptImage(imagePath: String, big: Boolean) {
+private fun ReceiptImage(imagePath: String, big: Boolean, onClick: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val bitmap by produceState<ImageBitmap?>(initialValue = null, imagePath) {
         value = withContext(Dispatchers.IO) {
@@ -284,9 +289,12 @@ private fun ReceiptImage(imagePath: String, big: Boolean) {
     } else {
         Image(
             bitmap = bmp,
-            contentDescription = "レシート画像",
+            contentDescription = "レシート画像(タップで拡大表示)",
             contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth().heightIn(max = if (big) 640.dp else 220.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = if (big) 640.dp else 220.dp)
+                .clickable(onClick = onClick),
         )
     }
 }
