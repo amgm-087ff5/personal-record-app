@@ -18,12 +18,12 @@ https://github.com/amgm-masamune/personal-record-app/releases/download/personal-
 
 ### 署名鍵の登録(初回のみ・必須)
 
-署名鍵(keystore)はリポジトリに置かず、GitHub Actions の Secrets から供給します。Settings → Secrets and variables → Actions に次の4つを登録してください。未登録だとCIは「署名鍵が未設定」で失敗します。
+署名鍵(keystore)はリポジトリに置かず、GitHub Actions の Secrets から供給します。Settings → Secrets and variables → Actions に次の2つを登録してください。未登録だとCIは「署名鍵が未設定」で失敗します。
 
 - `DEBUG_KEYSTORE_BASE64`(keystoreを `base64 -w0` した1行)
 - `DEBUG_KEYSTORE_PASSWORD`
-- `DEBUG_KEY_ALIAS`
-- `DEBUG_KEY_PASSWORD`
+
+キーのaliasは `personallog` 固定で、キーパスワードはストアパスワード(`DEBUG_KEYSTORE_PASSWORD`)と同一です(PKCS12のため)。
 
 CIはビルド前にこれらから `app/debug.keystore` を復元します(このファイルは `.gitignore` 済みでコミットされません)。ローカルビルドで `app/debug.keystore` が無ければAGP標準のデバッグ鍵になります。
 

@@ -32,21 +32,21 @@ jobs:
         env:
           KS_B64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
           KS_PASS: ${{ secrets.DEBUG_KEYSTORE_PASSWORD }}
-          KS_ALIAS: ${{ secrets.DEBUG_KEY_ALIAS }}
-          KEY_PASS: ${{ secrets.DEBUG_KEY_PASSWORD }}
         run: |
-          if [ -z "$KS_B64" ] || [ -z "$KS_PASS" ] || [ -z "$KS_ALIAS" ] || [ -z "$KEY_PASS" ]; then
-            echo "::error title=署名鍵が未設定::GitHubのSettings→Secrets→Actionsに DEBUG_KEYSTORE_BASE64 / DEBUG_KEYSTORE_PASSWORD / DEBUG_KEY_ALIAS / DEBUG_KEY_PASSWORD を登録してください"
+          if [ -z "$KS_B64" ] || [ -z "$KS_PASS" ]; then
+            echo "::error title=署名鍵が未設定::GitHubのSettings→Secrets→Actionsに DEBUG_KEYSTORE_BASE64 / DEBUG_KEYSTORE_PASSWORD の2つを登録してください"
             exit 1
           fi
           printf '%s' "$KS_B64" | base64 -d > app/debug.keystore
+          if ! keytool -list -keystore app/debug.keystore -storepass "$KS_PASS" -alias personallog >/dev/null 2>&1; then
+            echo "::error title=署名鍵の検証に失敗::DEBUG_KEYSTORE_PASSWORD か鍵のaliasが一致しません(aliasは personallog 固定)"
+            exit 1
+          fi
 
       - name: Unit tests and debug build
         shell: bash
         env:
           DEBUG_KEYSTORE_PASSWORD: ${{ secrets.DEBUG_KEYSTORE_PASSWORD }}
-          DEBUG_KEY_ALIAS: ${{ secrets.DEBUG_KEY_ALIAS }}
-          DEBUG_KEY_PASSWORD: ${{ secrets.DEBUG_KEY_PASSWORD }}
         run: ./gradlew testDebugUnitTest assembleDebug --stacktrace 2>&1 | tee build.log
 
       # 失敗時にエラー要約をannotationとして残す(ログ全文を開かなくても原因が分かる)

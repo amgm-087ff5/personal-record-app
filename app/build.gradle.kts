@@ -40,9 +40,11 @@ android {
                     System.getenv(name)?.takeIf { it.isNotEmpty() }
                         ?: error("署名鍵 ${ksFile.name} があるのに環境変数 $name が未設定です")
                 storeFile = ksFile
-                storePassword = env("DEBUG_KEYSTORE_PASSWORD")
-                keyAlias = env("DEBUG_KEY_ALIAS")
-                keyPassword = env("DEBUG_KEY_PASSWORD")
+                // PKCS12のためキーパスワードはストアパスワードと同一でなければならない
+                val pass = env("DEBUG_KEYSTORE_PASSWORD")
+                storePassword = pass
+                keyAlias = System.getenv("DEBUG_KEY_ALIAS")?.takeIf { it.isNotEmpty() } ?: "personallog"
+                keyPassword = pass
             }
         }
     }
