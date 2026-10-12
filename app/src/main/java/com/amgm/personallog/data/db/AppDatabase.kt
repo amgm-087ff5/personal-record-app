@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import com.amgm.personallog.data.model.DiaryEntry
 import com.amgm.personallog.data.model.DiaryPhoto
 import com.amgm.personallog.data.model.Expense
+import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 
@@ -13,14 +14,15 @@ import com.amgm.personallog.data.model.ReceiptItem
  * fallbackToDestructiveMigration は使わない(データが消えるため)。
  */
 @Database(
-    entities = [DiaryEntry::class, DiaryPhoto::class, Receipt::class, ReceiptItem::class, Expense::class],
-    version = 5,
+    entities = [DiaryEntry::class, DiaryPhoto::class, Receipt::class, ReceiptItem::class, Expense::class, ExpenseGroup::class],
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun diaryDao(): DiaryDao
     abstract fun receiptDao(): ReceiptDao
     abstract fun expenseDao(): ExpenseDao
+    abstract fun expenseGroupDao(): ExpenseGroupDao
 
     companion object {
         const val NAME = "personal_log.db"

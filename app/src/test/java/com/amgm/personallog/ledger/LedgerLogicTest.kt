@@ -2,6 +2,8 @@ package com.amgm.personallog.ledger
 
 import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.Expense
+import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.ui.ledger.LedgerEntry
 import com.amgm.personallog.ui.ledger.LedgerLogic
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -40,7 +42,7 @@ class LedgerLogicTest {
     @Test
     fun groupByDate_sortsDescendingAndSums() {
         val groups = LedgerLogic.groupByDate(
-            listOf(e(1, "2026-10-01", 100), e(2, "2026-10-03", 300), e(3, "2026-10-01", 50)),
+            listOf(e(1, "2026-10-01", 100), e(2, "2026-10-03", 300), e(3, "2026-10-01", 50)).map { LedgerEntry.Single(it) },
         )
         assertEquals(listOf("2026-10-03", "2026-10-01"), groups.map { it.date })
         assertEquals(150L, groups[1].total)
@@ -59,10 +61,40 @@ class LedgerLogicTest {
     @Test
     fun monthlyTotals_includesEmptyMonths() {
         val totals = LedgerLogic.monthlyTotals(
-            listOf(e(1, "2026-10-01", 100), e(2, "2026-08-15", 200), e(3, "2026-10-31", 5)),
+            listOf(e(1, "2026-10-01", 100), e(2, "2026-08-15", 200), e(3, "2026-10-31", 5)).map { LedgerEntry.Single(it) },
             listOf("2026-08", "2026-09", "2026-10"),
         )
         assertEquals(listOf(200L, 0L, 105L), totals.map { it.total })
+    }
+
+    @Test
+    fun buildEntries_groupCountsOnceAndItemsStayInside() {
+        val group = ExpenseGroup(id = 7, date = "2026-10-03", amount = 1000, category = "食費", memo = "スーパー", createdAt = 5)
+        val items = listOf(
+            Expense(id = 11, date = "2026-10-03", amount = 400, category = "食費", groupId = 7, createdAt = 5),
+            Expense(id = 12, date = "2026-10-03", amount = 300, category = "日用品", groupId = 7, createdAt = 5),
+        )
+        val single = e(13, "2026-10-03", 50, "その他")
+        val entries = LedgerLogic.buildEntries(items + single, listOf(group))
+
+        // 単独1行 + グループ1行。品目は行の中に入り、二重計上しない。
+        assertEquals(2, entries.size)
+        assertEquals(1050L, LedgerLogic.monthlyTotals(entries, listOf("2026-10"))[0].total)
+        val g = entries.filterIsInstance<LedgerEntry.Group>().single()
+        assertEquals(listOf(11L, 12L), g.items.map { it.id })
+        assertEquals(700L, g.itemSum)
+        assertEquals(300L, g.difference)
+        assertEquals(
+            listOf("その他" to 50L, "食費" to 1000L),
+            LedgerLogic.totalsByCategory(entries).map { it.category to it.total }.sortedBy { it.second },
+        )
+    }
+
+    @Test
+    fun buildEntries_orphanChildBecomesSingle() {
+        val orphan = Expense(id = 1, date = "2026-10-01", amount = 10, groupId = 99, createdAt = 1)
+        val entries = LedgerLogic.buildEntries(listOf(orphan), emptyList())
+        assertTrue(entries.single() is LedgerEntry.Single)
     }
 
     @Test

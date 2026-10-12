@@ -8,6 +8,7 @@ import com.amgm.personallog.backup.BackupManager
 import com.amgm.personallog.backup.BackupProgress
 import com.amgm.personallog.backup.ImportMode
 import com.amgm.personallog.data.model.Expense
+import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.repository.ExpenseRepository
 import com.amgm.personallog.domain.LedgerCalc
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,8 +18,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.YearMonth
@@ -68,8 +69,9 @@ class LedgerViewModel @Inject constructor(
                 val months = LedgerLogic.recentMonths(ym)
                 val from = LedgerCalc.monthRange(months.first()).first
                 val to = LedgerCalc.monthRange(ym).second
-                repository.observeBetween(from, to)
-                    .map { all -> snapshot(ym, months, all) }
+                combine(repository.observeBetween(from, to), repository.observeGroupsBetween(from, to)) { all, groups ->
+                    snapshot(ym, months, all, groups)
+                }
                     .catch { e ->
                         _uiState.update { it.copy(loading = false, error = "家計簿の読み込みに失敗しました: ${e.message}") }
                     }
@@ -88,14 +90,15 @@ class LedgerViewModel @Inject constructor(
         }
     }
 
-    private fun snapshot(ym: String, months: List<String>, all: List<Expense>): MonthSnapshot {
-        val current = LedgerLogic.filterMonth(all, ym)
+    private fun snapshot(ym: String, months: List<String>, all: List<Expense>, groups: List<ExpenseGroup>): MonthSnapshot {
+        val entries = LedgerLogic.buildEntries(all, groups)
+        val current = entries.filter { it.date.startsWith(ym) }
         return MonthSnapshot(
             month = ym,
-            total = current.sumOf { it.amount.toLong() },
-            shares = LedgerLogic.categoryShares(LedgerCalc.totalsByCategory(current)),
+            total = current.sumOf { it.amount },
+            shares = LedgerLogic.categoryShares(LedgerLogic.totalsByCategory(current)),
             days = LedgerLogic.groupByDate(current),
-            trend = LedgerLogic.monthlyTotals(all, months),
+            trend = LedgerLogic.monthlyTotals(entries, months),
         )
     }
 
@@ -132,6 +135,19 @@ class LedgerViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 onDone("保存に失敗しました: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    /** 支払いグループを品目ごと消す。 */
+    fun deleteGroup(group: ExpenseGroup) {
+        viewModelScope.launch {
+            try {
+                repository.deleteGroup(group)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "削除に失敗しました: ${e.message ?: e.javaClass.simpleName}") }
             }
         }
     }

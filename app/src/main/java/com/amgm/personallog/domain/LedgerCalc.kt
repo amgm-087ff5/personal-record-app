@@ -3,6 +3,7 @@ package com.amgm.personallog.domain
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.Expense
+import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import java.time.YearMonth
@@ -20,6 +21,44 @@ object LedgerCalc {
         expenses.groupBy { it.category }
             .map { (cat, list) -> CategoryTotal(cat, list.sumOf { it.amount.toLong() }) }
             .sortedByDescending { it.total }
+
+    /** レシート1枚ぶんの支払いグループ。items は品目ごとの支出(groupId は未設定)。 */
+    data class ReceiptGroup(val group: ExpenseGroup, val items: List<Expense>)
+
+    /**
+     * 複数品目のレシートを1つの支払いグループにする。
+     * 支払い金額(group.amount)はレシートの確定額(receipt.totalAmount)を正とし、品目は品目ごとの自分の払う分で持つ。
+     * 立て替え・品目なし・品目がすべて0円のときは null(従来どおり単独の支出にする)。
+     */
+    fun groupFromReceipt(receipt: Receipt, items: List<ReceiptItem>, now: Long): ReceiptGroup? {
+        if (receipt.isAdvance || items.isEmpty()) return null
+        val date = receipt.purchasedAt.take(10)
+        val paid = TaxCalc.paidYenPerItem(items)
+        val children = items.mapIndexedNotNull { i, it ->
+            if (paid[i] == 0L) {
+                null
+            } else {
+                Expense(
+                    date = date,
+                    amount = paid[i].toInt(),
+                    category = it.category,
+                    memo = listOf(it.name, it.memo).filter { s -> s.isNotBlank() }.joinToString(" "),
+                    receiptId = receipt.id,
+                    createdAt = now,
+                )
+            }
+        }
+        if (children.isEmpty()) return null
+        val group = ExpenseGroup(
+            date = date,
+            amount = receipt.totalAmount,
+            category = items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED,
+            memo = receipt.storeName,
+            receiptId = receipt.id,
+            createdAt = now,
+        )
+        return ReceiptGroup(group, children)
+    }
 
     /**
      * レシート確定時の Expense 生成。家計簿に入るのは「自分の払う分」。

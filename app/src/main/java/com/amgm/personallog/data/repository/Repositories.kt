@@ -4,11 +4,13 @@ import androidx.room.withTransaction
 import com.amgm.personallog.data.db.AppDatabase
 import com.amgm.personallog.data.db.DiaryDao
 import com.amgm.personallog.data.db.ExpenseDao
+import com.amgm.personallog.data.db.ExpenseGroupDao
 import com.amgm.personallog.data.db.ReceiptDao
 import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.DiaryEntry
 import com.amgm.personallog.data.model.DiaryPhoto
 import com.amgm.personallog.data.model.Expense
+import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptStatus
@@ -59,6 +61,7 @@ class ReceiptRepository @Inject constructor(
     private val db: AppDatabase,
     private val receiptDao: ReceiptDao,
     private val expenseDao: ExpenseDao,
+    private val expenseGroupDao: ExpenseGroupDao,
 ) {
     fun observeReceipts(): Flow<List<Receipt>> = receiptDao.observeAll()
     fun observeReceipt(id: Long): Flow<Receipt?> = receiptDao.observeById(id)
@@ -90,10 +93,22 @@ class ReceiptRepository @Inject constructor(
         db.withTransaction {
             val receipt = receiptDao.getById(receiptId) ?: return@withTransaction
             val items = receiptDao.getItems(receiptId)
-            expenseDao.deleteByReceiptId(receiptId)
-            expenseDao.insertAll(LedgerCalc.expensesFromReceipt(receipt, items, perItem, now))
+            deleteExpensesOf(receiptId)
+            val grouped = if (perItem) LedgerCalc.groupFromReceipt(receipt, items, now) else null
+            if (grouped != null) {
+                val groupId = expenseGroupDao.insert(grouped.group)
+                expenseDao.insertAll(grouped.items.map { it.copy(groupId = groupId) })
+            } else {
+                expenseDao.insertAll(LedgerCalc.expensesFromReceipt(receipt, items, perItem, now))
+            }
             receiptDao.update(receipt.copy(status = ReceiptStatus.CONFIRMED))
         }
+    }
+
+    /** レシート由来の家計簿の行(支出とグループ)を消す。 */
+    suspend fun deleteExpensesOf(receiptId: Long) {
+        expenseDao.deleteByReceiptId(receiptId)
+        expenseGroupDao.deleteByReceiptId(receiptId)
     }
 
     /** レシート削除。紐づく Expense は receiptId が NULL になって残る(家計簿は消さない)。 */
@@ -103,9 +118,12 @@ class ReceiptRepository @Inject constructor(
 @Singleton
 class ExpenseRepository @Inject constructor(
     private val dao: ExpenseDao,
+    private val groupDao: ExpenseGroupDao,
+    private val db: AppDatabase,
 ) {
     fun observeAll(): Flow<List<Expense>> = dao.observeAll()
     fun observeBetween(from: String, to: String): Flow<List<Expense>> = dao.observeBetween(from, to)
+    fun observeGroupsBetween(from: String, to: String): Flow<List<ExpenseGroup>> = groupDao.observeBetween(from, to)
 
     /** yearMonth は "yyyy-MM"。 */
     fun observeMonth(yearMonth: String): Flow<List<Expense>> {
@@ -127,4 +145,10 @@ class ExpenseRepository @Inject constructor(
     suspend fun update(expense: Expense) = dao.update(expense)
     suspend fun delete(expense: Expense) = dao.delete(expense)
     suspend fun get(id: Long): Expense? = dao.getById(id)
+
+    /** 支払いグループを、品目ごと消す。 */
+    suspend fun deleteGroup(group: ExpenseGroup) = db.withTransaction {
+        dao.deleteByGroupId(group.id)
+        groupDao.delete(group)
+    }
 }

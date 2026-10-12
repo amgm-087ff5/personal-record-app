@@ -3,7 +3,6 @@ package com.amgm.personallog.ui.receipt
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.amgm.personallog.data.db.ExpenseDao
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
@@ -147,7 +146,6 @@ data class DetailUiState(
 class ReceiptDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: ReceiptRepository,
-    private val expenseDao: ExpenseDao,
     private val store: ReceiptImageStore,
     private val scanner: ReceiptScanner,
 ) : ViewModel() {
@@ -414,7 +412,7 @@ class ReceiptDetailViewModel @Inject constructor(
             try {
                 val r = repository.getReceipt(receiptId)
                 if (r != null) {
-                    if (alsoExpenses) expenseDao.deleteByReceiptId(receiptId)
+                    if (alsoExpenses) repository.deleteExpensesOf(receiptId)
                     repository.delete(r)
                     store.delete(r.imagePath)
                 }

@@ -3,6 +3,7 @@ package com.amgm.personallog.backup
 import com.amgm.personallog.data.model.DiaryEntry
 import com.amgm.personallog.data.model.DiaryPhoto
 import com.amgm.personallog.data.model.Expense
+import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.domain.PricedLine
@@ -15,7 +16,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /** バックアップZIPのフォーマット版。互換性を壊す変更をしたら上げる。 */
-const val BACKUP_FORMAT_VERSION = 3
+const val BACKUP_FORMAT_VERSION = 4
 const val BACKUP_DATA_ENTRY = "data.json"
 const val BACKUP_FILES_PREFIX = "files/"
 
@@ -36,6 +37,8 @@ data class BackupData(
     val receipts: List<BackupReceipt> = emptyList(),
     val receiptItems: List<BackupReceiptItem> = emptyList(),
     val expenses: List<BackupExpense> = emptyList(),
+    /** v4 以降。v3 以前のファイルには無いので空として読む。 */
+    val expenseGroups: List<BackupExpenseGroup> = emptyList(),
 )
 
 @Serializable
@@ -143,10 +146,29 @@ data class BackupExpense(
     val memo: String = "",
     val receiptId: Long? = null,
     val createdAt: Long,
+    /** v4 以降。支払いグループの品目なら、そのグループの id。 */
+    val groupId: Long? = null,
 ) {
-    fun toEntity() = Expense(id, date, amount, category, memo, receiptId, createdAt)
+    fun toEntity() = Expense(id, date, amount, category, memo, receiptId, createdAt, groupId)
     companion object {
-        fun from(e: Expense) = BackupExpense(e.id, e.date, e.amount, e.category, e.memo, e.receiptId, e.createdAt)
+        fun from(e: Expense) = BackupExpense(e.id, e.date, e.amount, e.category, e.memo, e.receiptId, e.createdAt, e.groupId)
+    }
+}
+
+/** 支払いグループ(v4 以降)。amount は支払い金額。 */
+@Serializable
+data class BackupExpenseGroup(
+    val id: Long,
+    val date: String,
+    val amount: Int,
+    val category: String,
+    val memo: String = "",
+    val receiptId: Long? = null,
+    val createdAt: Long,
+) {
+    fun toEntity() = ExpenseGroup(id, date, amount, category, memo, receiptId, createdAt)
+    companion object {
+        fun from(g: ExpenseGroup) = BackupExpenseGroup(g.id, g.date, g.amount, g.category, g.memo, g.receiptId, g.createdAt)
     }
 }
 
