@@ -182,7 +182,8 @@ class BackupManager @Inject constructor(
 
         data.diaryEntries.forEach { diaryDao.insert(it.toEntity()) }
         data.diaryPhotos.forEach { diaryDao.insertPhoto(it.toEntity()) }
-        data.receipts.forEach { receiptDao.insert(it.toEntity()) }
+        val replaceItemsByReceipt = data.receiptItems.groupBy { it.receiptId }
+        data.receipts.forEach { receiptDao.insert(it.toEntity(replaceItemsByReceipt[it.id].orEmpty())) }
         val replaceItems = data.receiptItems.flatMap { it.toEntities() }
         if (replaceItems.isNotEmpty()) receiptDao.insertItems(replaceItems)
         val receiptIds = data.receipts.map { it.id }.toSet()
@@ -246,7 +247,7 @@ class BackupManager @Inject constructor(
         val receiptIdMap = HashMap<Long, Long>()
         val itemsByReceipt = data.receiptItems.groupBy { it.receiptId }
         for (r in data.receipts) {
-            val entity = r.toEntity()
+            val entity = r.toEntity(itemsByReceipt[r.id].orEmpty())
             val key = receiptKey(entity)
             val existing = receiptByKey[key]
             if (existing != null) {

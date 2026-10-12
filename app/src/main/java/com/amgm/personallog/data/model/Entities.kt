@@ -54,6 +54,8 @@ data class Receipt(
     /** 立て替え: 自分が払った(他の人の分を含む)レシートなら true。 */
     @ColumnInfo(defaultValue = "0")
     val isAdvance: Boolean = false,
+    /** 立て替えのとき、レシート全体のうち自分が払う金額(円・税込)。null は支払総額の全額。 */
+    val ownAmount: Int? = null,
 )
 
 object ReceiptStatus {
@@ -90,8 +92,6 @@ data class ReceiptItem(
     /** amount が税込か。false なら税率から税込価格を計算する。 */
     @ColumnInfo(defaultValue = "1")
     val priceIncludesTax: Boolean = true,
-    /** 自分が払う金額(円・税込)。null は全額自分。立て替えのときだけ使う。 */
-    val ownAmount: Int? = null,
     /** この1個へのメモ。 */
     val memo: String = "",
 )

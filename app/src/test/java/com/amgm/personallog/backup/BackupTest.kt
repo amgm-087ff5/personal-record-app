@@ -51,11 +51,10 @@ class BackupTest {
     fun legacyItem_isExpandedOnImport() {
         // v3までの形式: 数量2・負担割合50%
         val legacy = BackupReceiptItem(id = 1, receiptId = 9, name = "洗剤", amount = 200, category = "日用品", quantity = 2.0, unitPrice = 100, ownPercent = 50)
-        val rows = legacy.toEntities()
+        val rows = legacy.toUnitRows()
         assertEquals(2, rows.size)
         assertEquals(listOf(100, 100), rows.map { it.amount })
         assertEquals(listOf(50, 50), rows.map { it.ownAmount })
-        assertEquals(listOf(9L, 9L), rows.map { it.receiptId })
     }
 
     @Test

@@ -37,8 +37,8 @@ data class ItemForm(
     val category: String,
     val taxRate: String,
     val priceIncludesTax: Boolean,
-    /** 自分が払う金額(円)。空なら全額自分。立て替えのときだけ使う。 */
-    val ownAmount: String,
+    /** 割り勘の補助: この品目を「自分の払う分」の計算に含めるか(画面だけの状態。保存しない)。 */
+    val picked: Boolean = false,
 )
 
 /** 同じ品名・金額・税率・税込/税抜・カテゴリの行をまとめた表示単位(データにグループは持たない)。 */
@@ -61,14 +61,13 @@ internal fun groupItemForms(items: List<ItemForm>): List<ItemGroup> =
     items.groupBy { it.groupKey() }.values.map { units -> ItemGroup(units.first(), units) }
 
 /** 入力中の1個ぶんを計算用のモデルにする。立て替えでなければ自分の分は無視する(全額自分)。 */
-internal fun ItemForm.toItemModel(receiptId: Long = 0L, advance: Boolean = true): ReceiptItem = ReceiptItem(
+internal fun ItemForm.toItemModel(receiptId: Long = 0L): ReceiptItem = ReceiptItem(
     receiptId = receiptId,
     name = name.trim(),
     amount = amount.toIntOrNull() ?: 0,
     category = category,
     taxRate = TaxCalc.normalizeTaxRate(taxRate.toIntOrNull()),
     priceIncludesTax = priceIncludesTax,
-    ownAmount = if (advance) ownAmount.toIntOrNull() else null,
     memo = memo.trim(),
 )
 
@@ -83,7 +82,6 @@ private fun ReceiptItem.toForm(key: Long) = ItemForm(
     category = category,
     taxRate = taxRate.toString(),
     priceIncludesTax = priceIncludesTax,
-    ownAmount = ownAmount?.toString().orEmpty(),
 )
 
 private fun UnitRow.toForm(key: Long) = ItemForm(
@@ -94,7 +92,6 @@ private fun UnitRow.toForm(key: Long) = ItemForm(
     category = category,
     taxRate = taxRate.toString(),
     priceIncludesTax = priceIncludesTax,
-    ownAmount = ownAmount?.toString().orEmpty(),
 )
 
 data class DetailUiState(
@@ -111,6 +108,8 @@ data class DetailUiState(
     val items: List<ItemForm> = emptyList(),
     /** 立て替え(自分が払った。他の人の分を含む)かどうか。 */
     val isAdvance: Boolean = false,
+    /** 立て替えのとき、レシート全体のうち自分が払う金額(円・税込)。空は支払総額の全額。 */
+    val ownAmount: String = "",
     val busy: Boolean = false,
     val scanning: Boolean = false,
     val error: String? = null,
@@ -123,13 +122,14 @@ data class DetailUiState(
     /** 確定時に同じ内容の確定済みレシートが見つかった場合、その要約(確認ダイアログ用)。 */
     val duplicateWarning: String? = null,
 ) {
-    private val models: List<ReceiptItem> get() = items.map { it.toItemModel(advance = isAdvance) }
+    private val models: List<ReceiptItem> get() = items.map { it.toItemModel() }
 
     /** 税込の支払総額(品目ごとの税込価格の合計、円は切り捨て)。 */
     val itemsSum: Long get() = TaxCalc.paidYen(models)
 
-    /** 自分の払う分の合計。立て替えでなければ支払総額と同じ。 */
-    val ownTotal: Long get() = TaxCalc.ownYen(models)
+    /** 自分の払う分(円)。立て替えでなければ支払総額と同じ。立て替えで未入力なら支払総額の全額。 */
+    val ownTotal: Long
+        get() = if (isAdvance) ownAmount.toLongOrNull() ?: itemsSum else itemsSum
 
     /** 貰う分(立て替えのときだけ意味がある): 支払総額 - 自分の払う分。 */
     val theirTotal: Long get() = itemsSum - ownTotal
@@ -177,6 +177,7 @@ class ReceiptDetailViewModel @Inject constructor(
                 possibleDuplicate = original?.let { ReceiptDedup.summary(it) },
                 confirmed = r.status == ReceiptStatus.CONFIRMED,
                 isAdvance = r.isAdvance,
+                ownAmount = r.ownAmount?.toString().orEmpty(),
                 date = d,
                 time = t,
                 store = r.storeName,
@@ -196,6 +197,7 @@ class ReceiptDetailViewModel @Inject constructor(
     fun setStore(v: String) = _state.update { it.copy(store = v) }
     fun setTotal(v: String) = _state.update { it.copy(total = v.filter { c -> c.isDigit() || c == '-' }) }
     fun setAdvance(v: Boolean) = _state.update { it.copy(isAdvance = v) }
+    fun setOwnAmount(v: String) = _state.update { it.copy(ownAmount = v.filterAmount()) }
 
     private fun updateKeys(keys: Set<Long>, f: (ItemForm) -> ItemForm) =
         _state.update { s -> s.copy(items = s.items.map { if (it.key in keys) f(it) else it }) }
@@ -210,7 +212,22 @@ class ReceiptDetailViewModel @Inject constructor(
     // 1個ずつの変更。金額を個別に変えると、その1個だけ別のグループになる。
     fun setUnitMemo(key: Long, v: String) = updateKeys(setOf(key)) { it.copy(memo = v) }
     fun setUnitAmount(key: Long, v: String) = updateKeys(setOf(key)) { it.copy(amount = v.filterAmount()) }
-    fun setUnitOwnAmount(key: Long, v: String) = updateKeys(setOf(key)) { it.copy(ownAmount = v.filterAmount()) }
+
+    /**
+     * 割り勘の補助: 品目(グループ)を「自分の分に含める」を切り替える。
+     * 含めた品目の税込価格の合計を、レシート全体の「自分の払う分」に入れる。
+     */
+    fun togglePicked(keys: Set<Long>) = _state.update { s ->
+        val allPicked = s.items.filter { it.key in keys }.all { it.picked }
+        val items = s.items.map { if (it.key in keys) it.copy(picked = !allPicked) else it }
+        val picked = items.filter { it.picked }
+        val own = if (picked.isEmpty()) {
+            ""
+        } else {
+            TaxCalc.ownYenOfPicked(items.map { it.toItemModel() }, items.map { it.picked }).toString()
+        }
+        s.copy(items = items, ownAmount = own)
+    }
 
     /** 新しい品目(1個)を末尾に追加する。 */
     fun addItem() = _state.update {
@@ -223,7 +240,6 @@ class ReceiptDetailViewModel @Inject constructor(
                 category = Categories.UNCATEGORIZED,
                 taxRate = TaxCalc.DEFAULT_TAX_RATE.toString(),
                 priceIncludesTax = true,
-                ownAmount = "",
             ),
         )
     }
@@ -231,7 +247,7 @@ class ReceiptDetailViewModel @Inject constructor(
     /** 同じ品目をもう1個追加する(名前・金額・税などは同じ。メモと自分の分は空)。 */
     fun addSameItem(key: Long) = _state.update { s ->
         val src = s.items.firstOrNull { it.key == key } ?: return@update s
-        s.copy(items = s.items + src.copy(key = newKey(), memo = "", ownAmount = ""))
+        s.copy(items = s.items + src.copy(key = newKey(), memo = "", picked = false))
     }
 
     /** 1個だけ削除する。 */
@@ -271,14 +287,11 @@ class ReceiptDetailViewModel @Inject constructor(
             _state.update { it.copy(error = "品目${badRate + 1}の税率は0〜100の整数で入力してください。") }
             return null
         }
-        if (s.isAdvance) {
-            val badOwn = s.items.indexOfFirst { it.ownAmount.isNotEmpty() && it.ownAmount.toIntOrNull() == null }
-            if (badOwn >= 0) {
-                _state.update { it.copy(error = "品目${badOwn + 1}の「自分の払う分」は金額(円)で入力してください。") }
-                return null
-            }
+        if (s.isAdvance && s.ownAmount.isNotEmpty() && s.ownAmount.toIntOrNull() == null) {
+            _state.update { it.copy(error = "「自分の払う分」は金額(円)で入力してください。") }
+            return null
         }
-        val items = s.items.map { it.toItemModel(receiptId, advance = s.isAdvance) }
+        val items = s.items.map { it.toItemModel(receiptId) }
         val total = s.total.toIntOrNull() ?: TaxCalc.paidYen(items).toInt()
         val receipt = Receipt(
             id = receiptId,
@@ -291,6 +304,7 @@ class ReceiptDetailViewModel @Inject constructor(
             createdAt = s.createdAt,
             imageHash = s.imageHash,
             isAdvance = s.isAdvance,
+            ownAmount = if (s.isAdvance) s.ownAmount.toIntOrNull() else null,
         )
         return receipt to items
     }

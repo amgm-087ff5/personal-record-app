@@ -79,7 +79,7 @@ object ReceiptMapper {
             val items = p.items.flatMap { ReceiptUnits.fromParsed(it) }.map {
                 ReceiptItem(
                     receiptId = existingId, name = it.name, amount = it.amount, category = it.category,
-                    taxRate = it.taxRate, priceIncludesTax = it.priceIncludesTax, ownAmount = it.ownAmount, memo = it.memo,
+                    taxRate = it.taxRate, priceIncludesTax = it.priceIncludesTax, memo = it.memo,
                 )
             }
             Receipt(

@@ -23,8 +23,8 @@ object LedgerCalc {
 
     /**
      * レシート確定時の Expense 生成。家計簿に入るのは「自分の払う分」。
-     * 立て替えでないレシートは全額が自分の分(ownAmount は無視する)。
-     * perItem=true なら1個ずつの行(自分の分が0円の行は作らない)、false(または品目なし)なら合計1行。
+     *  - 立て替えでない: 全額が自分の分。perItem=true で品目があれば1個ずつの行、それ以外は合計1行。
+     *  - 立て替え: レシート全体の自分の分(receipt.ownAmount)を合計1行。未入力なら支払総額の全額。
      */
     fun expensesFromReceipt(
         receipt: Receipt,
@@ -33,16 +33,18 @@ object LedgerCalc {
         now: Long,
     ): List<Expense> {
         val date = receipt.purchasedAt.take(10)
-        val effective = if (receipt.isAdvance) items else items.map { it.copy(ownAmount = null) }
-        if (perItem && effective.isNotEmpty()) {
-            val own = TaxCalc.ownYenPerItem(effective)
-            return effective.mapIndexedNotNull { i, it ->
-                if (own[i] == 0L) {
+        val category = items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED
+        val paidTotal = if (items.isEmpty()) receipt.totalAmount.toLong() else TaxCalc.paidYen(items)
+
+        if (!receipt.isAdvance && perItem && items.isNotEmpty()) {
+            val paid = TaxCalc.paidYenPerItem(items)
+            return items.mapIndexedNotNull { i, it ->
+                if (paid[i] == 0L) {
                     null
                 } else {
                     Expense(
                         date = date,
-                        amount = own[i].toInt(),
+                        amount = paid[i].toInt(),
                         category = it.category,
                         memo = listOf(receipt.storeName, it.name, it.memo).filter { s -> s.isNotBlank() }.joinToString(" "),
                         receiptId = receipt.id,
@@ -51,8 +53,7 @@ object LedgerCalc {
                 }
             }
         }
-        val category = effective.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED
-        val amount = if (effective.isEmpty()) receipt.totalAmount.toLong() else TaxCalc.ownYen(effective)
+        val amount = if (receipt.isAdvance) receipt.ownAmount?.toLong() ?: paidTotal else paidTotal
         return listOf(
             Expense(
                 date = date,

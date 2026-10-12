@@ -14,7 +14,7 @@ import com.amgm.personallog.data.model.ReceiptItem
  */
 @Database(
     entities = [DiaryEntry::class, DiaryPhoto::class, Receipt::class, ReceiptItem::class, Expense::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

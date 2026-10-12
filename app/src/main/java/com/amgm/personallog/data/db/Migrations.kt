@@ -2,6 +2,8 @@ package com.amgm.personallog.data.db
 
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.amgm.personallog.domain.PricedLine
+import com.amgm.personallog.domain.legacyReceiptOwnYen
 import com.amgm.personallog.receipt.LegacyRow
 import com.amgm.personallog.receipt.ReceiptUnits
 
@@ -97,5 +99,54 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+    /**
+     * v4 -> v5: 割り勘をレシート全体で持つ。receipts に ownAmount(円)を追加し、
+     * 品目ごとの自分の分(v4の receipt_items.ownAmount)からレシート全体の値を求めて入れる。
+     * 品目の ownAmount 列は削除する(表を作り直す)。
+     */
+    val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `receipts` ADD COLUMN `ownAmount` INTEGER")
+            val lines = LinkedHashMap<Long, MutableList<PricedLine>>()
+            db.query(
+                "SELECT receiptId, amount, taxRate, priceIncludesTax, ownAmount FROM receipt_items ORDER BY id",
+            ).use { c ->
+                while (c.moveToNext()) {
+                    lines.getOrPut(c.getLong(0)) { mutableListOf() }.add(
+                        PricedLine(
+                            amount = c.getInt(1),
+                            taxRate = c.getInt(2),
+                            priceIncludesTax = c.getInt(3) != 0,
+                            ownAmount = if (c.isNull(4)) null else c.getInt(4),
+                        ),
+                    )
+                }
+            }
+            for ((receiptId, rows) in lines) {
+                val own = legacyReceiptOwnYen(rows) ?: continue
+                db.execSQL("UPDATE `receipts` SET `ownAmount` = ? WHERE `id` = ?", arrayOf<Any?>(own, receiptId))
+            }
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `receipt_items_new` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`receiptId` INTEGER NOT NULL, " +
+                    "`name` TEXT NOT NULL, " +
+                    "`amount` INTEGER NOT NULL, " +
+                    "`category` TEXT NOT NULL, " +
+                    "`taxRate` INTEGER NOT NULL DEFAULT 10, " +
+                    "`priceIncludesTax` INTEGER NOT NULL DEFAULT 1, " +
+                    "`memo` TEXT NOT NULL, " +
+                    "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+            )
+            db.execSQL(
+                "INSERT INTO `receipt_items_new` (`id`, `receiptId`, `name`, `amount`, `category`, `taxRate`, `priceIncludesTax`, `memo`) " +
+                    "SELECT `id`, `receiptId`, `name`, `amount`, `category`, `taxRate`, `priceIncludesTax`, `memo` FROM `receipt_items`",
+            )
+            db.execSQL("DROP TABLE `receipt_items`")
+            db.execSQL("ALTER TABLE `receipt_items_new` RENAME TO `receipt_items`")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_receipt_items_receiptId` ON `receipt_items` (`receiptId`)")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 }
