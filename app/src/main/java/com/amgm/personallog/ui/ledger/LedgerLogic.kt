@@ -2,13 +2,46 @@ package com.amgm.personallog.ui.ledger
 
 import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.Expense
+import com.amgm.personallog.data.model.ExpenseGroup
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeParseException
 import java.util.Locale
 
-/** 日付ごとにまとめた支出。 */
-data class DayGroup(val date: String, val total: Long, val items: List<Expense>)
+/**
+ * 家計簿の一覧に並ぶ1行。単独の支出か、支払いグループ(品目をまとめたもの)。
+ * amount / category はこの行が家計簿の合計・カテゴリ集計に入る値(グループは支払い金額)。
+ */
+sealed interface LedgerEntry {
+    val date: String
+    val amount: Long
+    val category: String
+    val createdAt: Long
+
+    data class Single(val expense: Expense) : LedgerEntry {
+        override val date: String get() = expense.date
+        override val amount: Long get() = expense.amount.toLong()
+        override val category: String get() = expense.category
+        override val createdAt: Long get() = expense.createdAt
+    }
+
+    /** items は品目(支出)。amount は支払い金額(正)。 */
+    data class Group(val group: ExpenseGroup, val items: List<Expense>) : LedgerEntry {
+        override val date: String get() = group.date
+        override val amount: Long get() = group.amount.toLong()
+        override val category: String get() = group.category
+        override val createdAt: Long get() = group.createdAt
+
+        /** 品目の合計。 */
+        val itemSum: Long get() = items.sumOf { it.amount.toLong() }
+
+        /** 支払い金額 - 品目の合計。0 なら一致。 */
+        val difference: Long get() = amount - itemSum
+    }
+}
+
+/** 日付ごとにまとめた行。 */
+data class DayGroup(val date: String, val total: Long, val items: List<LedgerEntry>)
 
 data class CategoryShare(val category: String, val total: Long, val percent: Int)
 
@@ -41,11 +74,35 @@ object LedgerLogic {
     fun recentMonths(yearMonth: String, count: Int = 6): List<String> =
         (count - 1 downTo 0).map { shiftMonth(yearMonth, -it) }
 
-    /** 日付降順にグループ化。グループ内は元の順序(id降順)を保つ。 */
-    fun groupByDate(expenses: List<Expense>): List<DayGroup> =
-        expenses.groupBy { it.date }
-            .map { (date, list) -> DayGroup(date, list.sumOf { it.amount.toLong() }, list) }
+    /**
+     * 支出と支払いグループを一覧用の行にする。グループの品目は group の行に入り、単独の行には入らない
+     * (合計が二重にならない)。並びは日付の降順、同じ日は作成の新しい順。
+     */
+    fun buildEntries(expenses: List<Expense>, groups: List<ExpenseGroup>): List<LedgerEntry> {
+        val groupIds = groups.map { it.id }.toSet()
+        val itemsByGroup = expenses
+            .filter { e -> e.groupId != null && e.groupId in groupIds }
+            .groupBy { it.groupId!! }
+        val singles = expenses
+            .filter { e -> e.groupId == null || e.groupId !in groupIds }
+            .map { LedgerEntry.Single(it) }
+        val grouped = groups.map { LedgerEntry.Group(it, itemsByGroup[it.id].orEmpty().sortedBy { x -> x.id }) }
+        return (singles + grouped).sortedWith(
+            compareByDescending<LedgerEntry> { it.date }.thenByDescending { it.createdAt },
+        )
+    }
+
+    /** 日付降順にグループ化。グループ内は entries の順序を保つ。 */
+    fun groupByDate(entries: List<LedgerEntry>): List<DayGroup> =
+        entries.groupBy { it.date }
+            .map { (date, list) -> DayGroup(date, list.sumOf { it.amount }, list) }
             .sortedByDescending { it.date }
+
+    /** 行のカテゴリ別合計(金額の多い順)。 */
+    fun totalsByCategory(entries: List<LedgerEntry>): List<CategoryTotal> =
+        entries.groupBy { it.category }
+            .map { (cat, list) -> CategoryTotal(cat, list.sumOf { it.amount }) }
+            .sortedByDescending { it.total }
 
     /** カテゴリ別の割合(合計100%に丸める必要はなく、四捨五入)。合計0なら空。 */
     fun categoryShares(totals: List<CategoryTotal>): List<CategoryShare> {
@@ -56,9 +113,9 @@ object LedgerLogic {
     }
 
     /** months の各月の合計(date の先頭7文字で判定)。支出が無い月は0。 */
-    fun monthlyTotals(expenses: List<Expense>, months: List<String>): List<MonthTotal> {
-        val byMonth = expenses.groupBy { it.date.take(7) }
-        return months.map { m -> MonthTotal(m, byMonth[m].orEmpty().sumOf { it.amount.toLong() }) }
+    fun monthlyTotals(entries: List<LedgerEntry>, months: List<String>): List<MonthTotal> {
+        val byMonth = entries.groupBy { it.date.take(7) }
+        return months.map { m -> MonthTotal(m, byMonth[m].orEmpty().sumOf { it.amount }) }
     }
 
     fun filterMonth(expenses: List<Expense>, yearMonth: String): List<Expense> =

@@ -45,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -64,6 +65,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.backup.ImportMode
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.data.model.Expense
+import com.amgm.personallog.data.model.ExpenseGroup
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -74,6 +76,8 @@ fun LedgerScreen(modifier: Modifier = Modifier, viewModel: LedgerViewModel = hil
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf<Expense?>(null) }
     var creating by remember { mutableStateOf(false) }
+    val expandedGroups = remember { mutableStateMapOf<Long, Boolean>() }
+    var deletingGroup by remember { mutableStateOf<ExpenseGroup?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
@@ -173,8 +177,17 @@ fun LedgerScreen(modifier: Modifier = Modifier, viewModel: LedgerViewModel = hil
                     }
                     HorizontalDivider()
                 }
-                items(group.items, key = { "exp-" + it.id }) { expense ->
-                    ExpenseRow(expense, onClick = { editing = expense })
+                items(group.items, key = { entryKey(it) }) { entry ->
+                    when (entry) {
+                        is LedgerEntry.Single -> ExpenseRow(entry.expense, onClick = { editing = entry.expense })
+                        is LedgerEntry.Group -> GroupRow(
+                            entry = entry,
+                            expanded = expandedGroups[entry.group.id] == true,
+                            onToggle = { expandedGroups[entry.group.id] = expandedGroups[entry.group.id] != true },
+                            onItemClick = { editing = it },
+                            onDelete = { deletingGroup = entry.group },
+                        )
+                    }
                 }
             }
         }
@@ -204,6 +217,21 @@ fun LedgerScreen(modifier: Modifier = Modifier, viewModel: LedgerViewModel = hil
                 viewModel.deleteExpense(target)
                 editing = null
             },
+        )
+    }
+
+    deletingGroup?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deletingGroup = null },
+            title = { Text("グループを削除") },
+            text = { Text("「${target.memo.ifBlank { target.category }}」の支払いと品目をすべて削除します。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteGroup(target)
+                    deletingGroup = null
+                }) { Text("削除") }
+            },
+            dismissButton = { TextButton(onClick = { deletingGroup = null }) { Text("キャンセル") } },
         )
     }
 
@@ -281,6 +309,69 @@ private fun TrendChart(trend: List<MonthTotal>, selected: String) {
                         fontWeight = if (m.yearMonth == selected) FontWeight.Bold else FontWeight.Normal,
                     )
                 }
+            }
+        }
+    }
+}
+
+private fun entryKey(entry: LedgerEntry): String = when (entry) {
+    is LedgerEntry.Single -> "exp-" + entry.expense.id
+    is LedgerEntry.Group -> "grp-" + entry.group.id
+}
+
+/** 支払いグループの1行。タップで品目を開く。展開時は品目・品目の合計・差額・削除を出す。 */
+@Composable
+private fun GroupRow(
+    entry: LedgerEntry.Group,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onItemClick: (Expense) -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        entry.group.memo.ifBlank { entry.category },
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "${entry.items.size}品",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    if (expanded) "タップで閉じる" else "タップで品目を表示",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(LedgerLogic.formatYen(entry.amount), style = MaterialTheme.typography.bodyLarge)
+        }
+        if (expanded) {
+            Column(Modifier.fillMaxWidth().padding(start = 12.dp, bottom = 8.dp)) {
+                entry.items.forEach { item -> ExpenseRow(item, onClick = { onItemClick(item) }) }
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("品目の合計", style = MaterialTheme.typography.bodySmall)
+                    Text(LedgerLogic.formatYen(entry.itemSum), style = MaterialTheme.typography.bodySmall)
+                }
+                if (entry.difference != 0L) {
+                    Text(
+                        "差額 ${LedgerLogic.formatYen(entry.difference)}(品目の合計と支払い金額が一致しません)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                TextButton(onClick = onDelete) { Text("このグループを削除") }
             }
         }
     }

@@ -16,6 +16,36 @@ class LedgerCalcTest {
     }
 
     @Test
+    fun groupFromReceipt_totalIsReceiptAmountAndItemsAreChildren() {
+        val receipt = Receipt(
+            id = 9, purchasedAt = "2026-10-05 12:30", storeName = "スーパー", totalAmount = 700,
+            imagePath = "", rawJson = "{}", createdAt = 0,
+        )
+        val items = listOf(
+            ReceiptItem(receiptId = 9, name = "牛乳", amount = 200, category = "食費"),
+            ReceiptItem(receiptId = 9, name = "洗剤", amount = 500, category = "日用品"),
+        )
+        val g = LedgerCalc.groupFromReceipt(receipt, items, now = 3)!!
+        assertEquals(700, g.group.amount)
+        assertEquals("日用品", g.group.category)
+        assertEquals("スーパー", g.group.memo)
+        assertEquals(9L, g.group.receiptId)
+        assertEquals(listOf(200, 500), g.items.map { it.amount })
+        assertTrue(g.items.all { it.receiptId == 9L && it.groupId == null })
+    }
+
+    @Test
+    fun groupFromReceipt_advanceOrNoItemsIsNotGrouped() {
+        val receipt = Receipt(
+            id = 9, purchasedAt = "2026-10-05", storeName = "店", totalAmount = 700,
+            imagePath = "", rawJson = "{}", createdAt = 0, isAdvance = true,
+        )
+        val items = listOf(ReceiptItem(receiptId = 9, name = "牛乳", amount = 200))
+        assertTrue(LedgerCalc.groupFromReceipt(receipt, items, now = 3) == null)
+        assertTrue(LedgerCalc.groupFromReceipt(receipt.copy(isAdvance = false), emptyList(), now = 3) == null)
+    }
+
+    @Test
     fun totalsByCategory_sumsAndSortsDescending() {
         val e = listOf(
             Expense(date = "2026-10-01", amount = 300, category = "食費", createdAt = 0),

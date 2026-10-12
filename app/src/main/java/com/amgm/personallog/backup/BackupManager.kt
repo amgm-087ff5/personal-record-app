@@ -7,7 +7,9 @@ import androidx.room.withTransaction
 import com.amgm.personallog.data.db.AppDatabase
 import com.amgm.personallog.data.db.DiaryDao
 import com.amgm.personallog.data.db.ExpenseDao
+import com.amgm.personallog.data.db.ExpenseGroupDao
 import com.amgm.personallog.data.db.ReceiptDao
+import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +35,7 @@ class BackupManager @Inject constructor(
     private val diaryDao: DiaryDao,
     private val receiptDao: ReceiptDao,
     private val expenseDao: ExpenseDao,
+    private val expenseGroupDao: ExpenseGroupDao,
 ) {
     private val filesDir: File get() = context.filesDir
 
@@ -46,6 +49,7 @@ class BackupManager @Inject constructor(
             val receipts = receiptDao.observeAll().first()
             val items = receipts.flatMap { receiptDao.getItems(it.id) }
             val expenses = expenseDao.observeAll().first()
+            val groups = expenseGroupDao.observeAll().first()
             val data = BackupData(
                 formatVersion = BACKUP_FORMAT_VERSION,
                 dbVersion = db.openHelper.readableDatabase.version,
@@ -55,6 +59,7 @@ class BackupManager @Inject constructor(
                 receipts = receipts.map { BackupReceipt.from(it) },
                 receiptItems = items.map { BackupReceiptItem.from(it) },
                 expenses = expenses.map { BackupExpense.from(it) },
+                expenseGroups = groups.map { BackupExpenseGroup.from(it) },
             )
             val json = BackupJson.encodeToString(BackupData.serializer(), data).toByteArray(Charsets.UTF_8)
             val files = collectFiles()
@@ -177,6 +182,7 @@ class BackupManager @Inject constructor(
 
     private suspend fun replaceAll(data: BackupData, fileCount: Int): ImportResult {
         expenseDao.observeAll().first().forEach { expenseDao.delete(it) }
+        expenseGroupDao.observeAll().first().forEach { expenseGroupDao.delete(it) }
         receiptDao.observeAll().first().forEach { receiptDao.delete(it) }
         diaryDao.observeAll().first().forEach { diaryDao.delete(it) }
 
@@ -187,10 +193,17 @@ class BackupManager @Inject constructor(
         val replaceItems = data.receiptItems.flatMap { it.toEntities() }
         if (replaceItems.isNotEmpty()) receiptDao.insertItems(replaceItems)
         val receiptIds = data.receipts.map { it.id }.toSet()
+        data.expenseGroups.forEach { g ->
+            expenseGroupDao.insert(g.toEntity().copy(receiptId = g.receiptId?.takeIf { it in receiptIds }))
+        }
+        val groupIds = data.expenseGroups.map { it.id }.toSet()
         if (data.expenses.isNotEmpty()) {
             expenseDao.insertAll(
                 data.expenses.map { e ->
-                    e.toEntity().copy(receiptId = e.receiptId?.takeIf { it in receiptIds })
+                    e.toEntity().copy(
+                        receiptId = e.receiptId?.takeIf { it in receiptIds },
+                        groupId = e.groupId?.takeIf { it in groupIds },
+                    )
                 },
             )
         }
@@ -205,7 +218,15 @@ class BackupManager @Inject constructor(
     }
 
     private data class ReceiptKey(val purchasedAt: String, val storeName: String, val totalAmount: Int, val imagePath: String)
-    private data class ExpenseKey(val date: String, val amount: Int, val category: String, val memo: String, val receiptId: Long?)
+    private data class ExpenseKey(
+        val date: String,
+        val amount: Int,
+        val category: String,
+        val memo: String,
+        val receiptId: Long?,
+        val groupId: Long?,
+    )
+    private data class ExpenseGroupKey(val date: String, val amount: Int, val category: String, val memo: String, val receiptId: Long?)
 
     private fun receiptKey(r: Receipt) = ReceiptKey(r.purchasedAt, r.storeName, r.totalAmount, r.imagePath)
 
@@ -265,22 +286,47 @@ class BackupManager @Inject constructor(
             }
         }
 
+        // 支払いグループ(日付・金額・カテゴリ・メモ・レシートで重複判定)。既存と重複したグループの品目は飛ばす
+        val groupKeyOf = { g: ExpenseGroup -> ExpenseGroupKey(g.date, g.amount, g.category, g.memo, g.receiptId) }
+        val groupByKey = expenseGroupDao.observeAll().first().associate { groupKeyOf(it) to it.id }.toMutableMap()
+        val groupIdMap = HashMap<Long, Long>()
+        val duplicateGroups = HashSet<Long>()
+        for (g in data.expenseGroups) {
+            val entity = g.toEntity().copy(id = 0, receiptId = g.receiptId?.let { receiptIdMap[it] })
+            val key = groupKeyOf(entity)
+            val existing = groupByKey[key]
+            if (existing != null) {
+                groupIdMap[g.id] = existing
+                duplicateGroups.add(g.id)
+                skipped++
+            } else {
+                val newId = expenseGroupDao.insert(entity)
+                groupIdMap[g.id] = newId
+                groupByKey[key] = newId
+            }
+        }
+
         // 支出(同一内容は件数ベースで重複判定。同じ日に同額の買い物が2件あっても保たれる)
         val remaining = HashMap<ExpenseKey, Int>()
         expenseDao.observeAll().first().forEach {
-            val k = ExpenseKey(it.date, it.amount, it.category, it.memo, it.receiptId)
+            val k = ExpenseKey(it.date, it.amount, it.category, it.memo, it.receiptId, it.groupId)
             remaining[k] = (remaining[k] ?: 0) + 1
         }
         val toInsert = ArrayList<com.amgm.personallog.data.model.Expense>()
         for (e in data.expenses) {
+            if (e.groupId != null && e.groupId in duplicateGroups) {
+                skipped++
+                continue
+            }
             val mappedReceipt = e.receiptId?.let { receiptIdMap[it] }
-            val k = ExpenseKey(e.date, e.amount, e.category, e.memo, mappedReceipt)
+            val mappedGroup = e.groupId?.let { groupIdMap[it] }
+            val k = ExpenseKey(e.date, e.amount, e.category, e.memo, mappedReceipt, mappedGroup)
             val left = remaining[k] ?: 0
             if (left > 0) {
                 remaining[k] = left - 1
                 skipped++
             } else {
-                toInsert.add(e.toEntity().copy(id = 0, receiptId = mappedReceipt))
+                toInsert.add(e.toEntity().copy(id = 0, receiptId = mappedReceipt, groupId = mappedGroup))
                 addedExpenses++
             }
         }

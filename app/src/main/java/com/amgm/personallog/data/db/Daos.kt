@@ -9,6 +9,7 @@ import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.DiaryEntry
 import com.amgm.personallog.data.model.DiaryPhoto
 import com.amgm.personallog.data.model.Expense
+import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import kotlinx.coroutines.flow.Flow
@@ -143,6 +144,9 @@ interface ExpenseDao {
     @Query("DELETE FROM expenses WHERE receiptId = :receiptId")
     suspend fun deleteByReceiptId(receiptId: Long)
 
+    @Query("DELETE FROM expenses WHERE groupId = :groupId")
+    suspend fun deleteByGroupId(groupId: Long)
+
     /** 月別(期間別)のカテゴリ集計。支出の多い順。 */
     @Query(
         "SELECT category AS category, SUM(amount) AS total FROM expenses " +
@@ -152,4 +156,23 @@ interface ExpenseDao {
 
     @Query("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE date BETWEEN :from AND :to")
     fun observeTotal(from: String, to: String): Flow<Long>
+}
+
+@Dao
+interface ExpenseGroupDao {
+    @Query("SELECT * FROM expense_groups ORDER BY date DESC, id DESC")
+    fun observeAll(): Flow<List<ExpenseGroup>>
+
+    /** from / to は "yyyy-MM-dd"(両端を含む)。 */
+    @Query("SELECT * FROM expense_groups WHERE date BETWEEN :from AND :to ORDER BY date DESC, id DESC")
+    fun observeBetween(from: String, to: String): Flow<List<ExpenseGroup>>
+
+    @Insert
+    suspend fun insert(group: ExpenseGroup): Long
+
+    @Delete
+    suspend fun delete(group: ExpenseGroup)
+
+    @Query("DELETE FROM expense_groups WHERE receiptId = :receiptId")
+    suspend fun deleteByReceiptId(receiptId: Long)
 }

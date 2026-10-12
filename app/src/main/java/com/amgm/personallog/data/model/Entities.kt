@@ -96,9 +96,12 @@ data class ReceiptItem(
     val memo: String = "",
 )
 
-/** 家計簿の1行。amount は円で、支出は正の値。receiptId はレシート由来の場合のみ。 */
+/**
+ * 1回の支払い(レシートなど)をまとめる親。amount は支払い金額(店への払い総額。確定値で、正)。
+ * 品目は Expense.groupId で紐づく。品目の合計と amount がずれる場合は表示で差額を示す。
+ */
 @Entity(
-    tableName = "expenses",
+    tableName = "expense_groups",
     foreignKeys = [
         ForeignKey(
             entity = Receipt::class,
@@ -109,6 +112,38 @@ data class ReceiptItem(
     ],
     indices = [Index("receiptId"), Index("date")],
 )
+data class ExpenseGroup(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val date: String,
+    val amount: Int,
+    val category: String = Categories.UNCATEGORIZED,
+    val memo: String = "",
+    val receiptId: Long? = null,
+    val createdAt: Long,
+)
+
+/**
+ * 家計簿の1行。amount は円で、支出は正の値。receiptId はレシート由来の場合のみ。
+ * groupId は支払いグループの品目の場合のみ(単独の支出は null)。
+ */
+@Entity(
+    tableName = "expenses",
+    foreignKeys = [
+        ForeignKey(
+            entity = Receipt::class,
+            parentColumns = ["id"],
+            childColumns = ["receiptId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
+        ForeignKey(
+            entity = ExpenseGroup::class,
+            parentColumns = ["id"],
+            childColumns = ["groupId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("receiptId"), Index("date"), Index("groupId")],
+)
 data class Expense(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val date: String,
@@ -117,6 +152,7 @@ data class Expense(
     val memo: String = "",
     val receiptId: Long? = null,
     val createdAt: Long,
+    val groupId: Long? = null,
 )
 
 /** 月別カテゴリ集計の結果行(Roomのクエリ結果としても使う)。 */

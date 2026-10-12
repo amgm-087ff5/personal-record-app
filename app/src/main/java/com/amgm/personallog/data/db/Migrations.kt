@@ -148,5 +148,49 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+    /**
+     * v5 -> v6: 支払いグループ(expense_groups)を追加し、expenses に groupId を足す。
+     * 既存の支出は groupId=NULL(単独の支出)のまま。expenses は外部キーを増やすため表を作り直す。
+     */
+    val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `expense_groups` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`date` TEXT NOT NULL, " +
+                    "`amount` INTEGER NOT NULL, " +
+                    "`category` TEXT NOT NULL, " +
+                    "`memo` TEXT NOT NULL, " +
+                    "`receiptId` INTEGER, " +
+                    "`createdAt` INTEGER NOT NULL, " +
+                    "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL)",
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_expense_groups_receiptId` ON `expense_groups` (`receiptId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_expense_groups_date` ON `expense_groups` (`date`)")
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `expenses_new` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`date` TEXT NOT NULL, " +
+                    "`amount` INTEGER NOT NULL, " +
+                    "`category` TEXT NOT NULL, " +
+                    "`memo` TEXT NOT NULL, " +
+                    "`receiptId` INTEGER, " +
+                    "`createdAt` INTEGER NOT NULL, " +
+                    "`groupId` INTEGER, " +
+                    "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL, " +
+                    "FOREIGN KEY(`groupId`) REFERENCES `expense_groups`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+            )
+            db.execSQL(
+                "INSERT INTO `expenses_new` (`id`, `date`, `amount`, `category`, `memo`, `receiptId`, `createdAt`) " +
+                    "SELECT `id`, `date`, `amount`, `category`, `memo`, `receiptId`, `createdAt` FROM `expenses`",
+            )
+            db.execSQL("DROP TABLE `expenses`")
+            db.execSQL("ALTER TABLE `expenses_new` RENAME TO `expenses`")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_receiptId` ON `expenses` (`receiptId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_date` ON `expenses` (`date`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_expenses_groupId` ON `expenses` (`groupId`)")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 }

@@ -8,6 +8,7 @@ import androidx.room.Room
 import com.amgm.personallog.data.db.AppDatabase
 import com.amgm.personallog.data.db.DiaryDao
 import com.amgm.personallog.data.db.ExpenseDao
+import com.amgm.personallog.data.db.ExpenseGroupDao
 import com.amgm.personallog.data.db.Migrations
 import com.amgm.personallog.data.db.ReceiptDao
 import dagger.Module
@@ -33,6 +34,7 @@ object AppModule {
     @Provides fun provideDiaryDao(db: AppDatabase): DiaryDao = db.diaryDao()
     @Provides fun provideReceiptDao(db: AppDatabase): ReceiptDao = db.receiptDao()
     @Provides fun provideExpenseDao(db: AppDatabase): ExpenseDao = db.expenseDao()
+    @Provides fun provideExpenseGroupDao(db: AppDatabase): ExpenseGroupDao = db.expenseGroupDao()
 
     @Provides
     @Singleton
