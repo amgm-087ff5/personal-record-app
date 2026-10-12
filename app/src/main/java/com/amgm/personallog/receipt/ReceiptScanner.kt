@@ -76,11 +76,10 @@ object ReceiptMapper {
     ): Pair<Receipt, List<ReceiptItem>> = when (outcome) {
         is ScanOutcome.Parsed -> {
             val p = outcome.receipt
-            val items = p.items.map {
+            val items = p.items.flatMap { ReceiptUnits.fromParsed(it) }.map {
                 ReceiptItem(
-                    receiptId = existingId, name = it.name, quantity = it.quantity, unitPrice = it.unitPrice,
-                    amount = it.amount, category = it.category,
-                    taxRate = it.taxRate, priceIncludesTax = it.priceIncludesTax,
+                    receiptId = existingId, name = it.name, amount = it.amount, category = it.category,
+                    taxRate = it.taxRate, priceIncludesTax = it.priceIncludesTax, ownAmount = it.ownAmount, memo = it.memo,
                 )
             }
             Receipt(

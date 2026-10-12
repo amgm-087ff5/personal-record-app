@@ -183,7 +183,8 @@ class BackupManager @Inject constructor(
         data.diaryEntries.forEach { diaryDao.insert(it.toEntity()) }
         data.diaryPhotos.forEach { diaryDao.insertPhoto(it.toEntity()) }
         data.receipts.forEach { receiptDao.insert(it.toEntity()) }
-        if (data.receiptItems.isNotEmpty()) receiptDao.insertItems(data.receiptItems.map { it.toEntity() })
+        val replaceItems = data.receiptItems.flatMap { it.toEntities() }
+        if (replaceItems.isNotEmpty()) receiptDao.insertItems(replaceItems)
         val receiptIds = data.receipts.map { it.id }.toSet()
         if (data.expenses.isNotEmpty()) {
             expenseDao.insertAll(
@@ -257,7 +258,7 @@ class BackupManager @Inject constructor(
                 receiptByKey[key] = newId
                 val items = itemsByReceipt[r.id].orEmpty()
                 if (items.isNotEmpty()) {
-                    receiptDao.insertItems(items.map { it.toEntity().copy(id = 0, receiptId = newId) })
+                    receiptDao.insertItems(items.flatMap { it.toEntities() }.map { it.copy(id = 0, receiptId = newId) })
                 }
                 addedReceipts++
             }

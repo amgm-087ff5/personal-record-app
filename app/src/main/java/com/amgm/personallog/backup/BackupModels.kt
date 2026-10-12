@@ -5,11 +5,13 @@ import com.amgm.personallog.data.model.DiaryPhoto
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.receipt.LegacyRow
+import com.amgm.personallog.receipt.ReceiptUnits
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /** バックアップZIPのフォーマット版。互換性を壊す変更をしたら上げる。 */
-const val BACKUP_FORMAT_VERSION = 1
+const val BACKUP_FORMAT_VERSION = 2
 const val BACKUP_DATA_ENTRY = "data.json"
 const val BACKUP_FILES_PREFIX = "files/"
 
@@ -72,23 +74,50 @@ data class BackupReceiptItem(
     val id: Long,
     val receiptId: Long,
     val name: String,
-    val quantity: Double = 1.0,
-    val unitPrice: Int = 0,
+    val memo: String = "",
     val amount: Int = 0,
     val category: String,
-    /** v3で追加。古いバックアップには無いので既定値(10%・税込・全額自分)になる。 */
     val taxRate: Int = 10,
     val priceIncludesTax: Boolean = true,
-    val ownPercent: Int = 100,
+    val ownAmount: Int? = null,
+    // 旧形式(v3まで)の項目。読み込み時に1個ずつの行へ変換する。新形式では null のまま出力される。
+    val quantity: Double? = null,
+    val unitPrice: Int? = null,
+    val ownPercent: Int? = null,
 ) {
-    fun toEntity() = ReceiptItem(
-        id, receiptId, name, quantity, unitPrice, amount, category,
-        taxRate = taxRate, priceIncludesTax = priceIncludesTax, ownPercent = ownPercent,
-    )
+    /** 取り込み用の行に変換する。旧形式の数量は1個ずつの行に展開する。 */
+    fun toEntities(): List<ReceiptItem> {
+        if (quantity == null && ownPercent == null) {
+            return listOf(
+                ReceiptItem(
+                    receiptId = receiptId, name = name, amount = amount, category = category,
+                    taxRate = taxRate, priceIncludesTax = priceIncludesTax, ownAmount = ownAmount, memo = memo,
+                ),
+            )
+        }
+        val rows = ReceiptUnits.fromLegacy(
+            LegacyRow(
+                name = name,
+                quantity = quantity ?: 1.0,
+                amount = amount,
+                category = category,
+                taxRate = taxRate,
+                priceIncludesTax = priceIncludesTax,
+                ownPercent = ownPercent ?: 100,
+            ),
+        )
+        return rows.map {
+            ReceiptItem(
+                receiptId = receiptId, name = it.name, amount = it.amount, category = it.category,
+                taxRate = it.taxRate, priceIncludesTax = it.priceIncludesTax, ownAmount = it.ownAmount, memo = memo,
+            )
+        }
+    }
+
     companion object {
         fun from(e: ReceiptItem) = BackupReceiptItem(
-            e.id, e.receiptId, e.name, e.quantity, e.unitPrice, e.amount, e.category,
-            taxRate = e.taxRate, priceIncludesTax = e.priceIncludesTax, ownPercent = e.ownPercent,
+            id = e.id, receiptId = e.receiptId, name = e.name, memo = e.memo, amount = e.amount, category = e.category,
+            taxRate = e.taxRate, priceIncludesTax = e.priceIncludesTax, ownAmount = e.ownAmount,
         )
     }
 }

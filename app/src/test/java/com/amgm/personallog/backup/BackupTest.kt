@@ -17,7 +17,7 @@ class BackupTest {
             diaryEntries = listOf(BackupDiaryEntry(1, "2026-10-01", "今日は\"晴れ\"\n改行あり", 10, 20)),
             diaryPhotos = listOf(BackupDiaryPhoto(1, 1, "diary/a.jpg", null, 0)),
             receipts = listOf(BackupReceipt(5, "2026-10-02 12:30", "店", 980, "receipts/r.jpg", "{\"a\":1}", "confirmed", 30)),
-            receiptItems = listOf(BackupReceiptItem(1, 5, "牛乳", 1.5, 100, 150, "食費")),
+            receiptItems = listOf(BackupReceiptItem(id = 1, receiptId = 5, name = "牛乳", memo = "2本目", amount = 150, category = "食費", ownAmount = 100)),
             expenses = listOf(
                 BackupExpense(1, "2026-10-02", 980, "食費", "店", 5, 40),
                 BackupExpense(2, "2026-10-03", 500, "その他", "", null, 41),
@@ -45,6 +45,17 @@ class BackupTest {
         assertEquals(e, BackupExpense.from(e.toEntity()))
         val r = BackupReceipt(1, "2026-01-01", "s", 1, "receipts/x.jpg", "{}", "draft", 2)
         assertEquals(r, BackupReceipt.from(r.toEntity()))
+    }
+
+    @Test
+    fun legacyItem_isExpandedOnImport() {
+        // v3までの形式: 数量2・負担割合50%
+        val legacy = BackupReceiptItem(id = 1, receiptId = 9, name = "洗剤", amount = 200, category = "日用品", quantity = 2.0, unitPrice = 100, ownPercent = 50)
+        val rows = legacy.toEntities()
+        assertEquals(2, rows.size)
+        assertEquals(listOf(100, 100), rows.map { it.amount })
+        assertEquals(listOf(50, 50), rows.map { it.ownAmount })
+        assertEquals(listOf(9L, 9L), rows.map { it.receiptId })
     }
 
     @Test

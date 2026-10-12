@@ -26,9 +26,10 @@ object ClaudeRequest {
 
     val PROMPT: String = """
         このレシート画像から情報を抽出し、次の形式のJSONだけを返してください。
-        {"date":"yyyy-MM-dd","time":"HH:mm"またはnull,"store":"店名","items":[{"name":"品目名","quantity":数量(数値、不明なら1),"unitPrice":単価(円の整数),"amount":金額(円の整数、値引き行は負の数),"taxRate":消費税率(8または10の数値、不明ならnull),"priceIncludesTax":金額が税込ならtrue、税抜ならfalse(不明ならnull),"category":"カテゴリ"}],"total":合計(円の整数),"note":"補足またはnull"}
+        {"date":"yyyy-MM-dd","time":"HH:mm"またはnull,"store":"店名","items":[{"name":"品目名","quantity":数量(数値、不明なら1),"unitPrice":単価(円の整数),"amount":金額(円の整数、値引き行は負の数),"taxRate":消費税率(整数の%。例 8 や 10。不明ならnull),"priceIncludesTax":金額が税込ならtrue、税抜ならfalse(不明ならnull),"category":"カテゴリ"}],"total":合計(円の整数),"note":"補足またはnull"}
         品目の金額(amount)は印字されているとおりの値にしてください。税抜表示の品目を税込に換算しないでください(税込換算はシステム側で行います)。
         軽減税率(8%)の品目は taxRate を 8 にしてください。品目ごとの税率が分からない場合は null にしてください。
+        数量が2以上の品目は quantity に数量を入れ、amount には数量分の合計金額を入れてください。
         カテゴリは次のいずれか1つにしてください: 食費, 外食, 日用品, 交通, 医療, 衣服, 娯楽, 光熱費, その他。
         読み取れない項目はnullにしてください。
         値引き・クーポン・ポイント値引きは、負の金額の品目として含めてください。

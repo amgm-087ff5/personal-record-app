@@ -127,7 +127,8 @@ class ReceiptParserTest {
         assertEquals("2026-10-09 18:32", r.purchasedAt)
         assertEquals(748, r.totalAmount)
         assertEquals(ReceiptStatus.DRAFT, r.status)
-        assertEquals(3, items.size)
+        // 洗剤(2個)は1個ずつの行に展開されるので 1+2+1 = 4行
+        assertEquals(4, items.size)
         val (r2, items2) = ReceiptMapper.draftReceipt(ScanOutcome.Unparsable("oops", "x"), "receipts/a.jpg", 1L, today = "2026-01-01")
         assertEquals("2026-01-01", r2.purchasedAt)
         assertEquals("oops", r2.rawJson)

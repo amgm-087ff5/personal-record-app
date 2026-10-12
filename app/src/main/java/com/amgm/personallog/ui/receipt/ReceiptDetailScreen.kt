@@ -141,6 +141,7 @@ fun ReceiptDetailScreen(
             Text("未確定(下書き)", color = MaterialTheme.colorScheme.tertiary)
         }
 
+        // 店の情報: 日付・時刻・店名・立て替え
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
                 value = s.date,
@@ -169,81 +170,27 @@ fun ReceiptDetailScreen(
             Text("自分が立て替えた支払い(他の人の分を含む)")
         }
 
+        // 品目: 同じ品目はまとめて表示。主な項目(品名・金額・税込/税抜)は常に見え、他は詳細に折りたたむ。
         Text("品目", style = MaterialTheme.typography.titleMedium)
-        s.items.forEachIndexed { index, item ->
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = item.name,
-                            onValueChange = { viewModel.setItemName(item.key, it) },
-                            label = { Text("品目${index + 1}") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(onClick = { viewModel.removeItem(item.key) }) { Text("削除") }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = item.quantity,
-                            onValueChange = { viewModel.setItemQuantity(item.key, it) },
-                            label = { Text("数量") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
-                        )
-                        OutlinedTextField(
-                            value = item.amount,
-                            onValueChange = { viewModel.setItemAmount(item.key, it) },
-                            label = { Text("金額(円)") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1.4f),
-                        )
-                        TextButton(onClick = { viewModel.toggleItemSign(item.key) }) { Text("+/-") }
-                    }
-                    CategoryPicker(value = item.category, onChange = { viewModel.setItemCategory(item.key, it) })
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { viewModel.setItemTaxRate(item.key, if (item.taxRate == 8) 10 else 8) }) {
-                            Text("税率 ${item.taxRate}%")
-                        }
-                        OutlinedButton(onClick = { viewModel.toggleItemTaxIncluded(item.key) }) {
-                            Text(if (item.priceIncludesTax) "金額は税込" else "金額は税抜")
-                        }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = item.ownPercent,
-                            onValueChange = { viewModel.setItemOwnPercent(item.key, it) },
-                            label = { Text("自分の負担%") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f),
-                        )
-                        Text(
-                            "税込 ${TaxCalc.paidYenText(item.toItemModel())}円 / 自分 ${TaxCalc.ownYenText(item.toItemModel())}円",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1.4f),
-                        )
-                    }
-                }
-            }
+        groupItemForms(s.items).forEach { group ->
+            ItemGroupCard(group = group, isAdvance = s.isAdvance, viewModel = viewModel)
         }
         OutlinedButton(onClick = viewModel::addItem) { Text("品目を追加") }
 
+        // 合計
         OutlinedTextField(
             value = s.total,
             onValueChange = viewModel::setTotal,
-            label = { Text("合計(円)") },
+            label = { Text("合計(円・レシートの印字)") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
         )
         Card {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("税込の支払合計(品目の合計): ${formatYen(s.itemsSum)}", style = MaterialTheme.typography.bodyMedium)
-                Text("自分の分(家計簿に入る額): ${formatYen(s.ownTotal)}", style = MaterialTheme.typography.bodyMedium)
+                Text("税込の支払合計: ${formatYen(s.itemsSum)}", style = MaterialTheme.typography.bodyMedium)
                 if (s.isAdvance) {
+                    Text("自分が払う分: ${formatYen(s.ownTotal)}", style = MaterialTheme.typography.bodyMedium)
                     Text("貰う分(他の人の分): ${formatYen(s.theirTotal)}", style = MaterialTheme.typography.bodyMedium)
                 }
                 Text("小数点以下は合計で切り捨てています。", style = MaterialTheme.typography.bodySmall)
@@ -256,7 +203,7 @@ fun ReceiptDetailScreen(
                         "合計欄と税込の支払合計が一致しません(合計欄 - 支払合計 = ${formatYen(diff)})。読み取りミスか、端数の差の可能性があります。",
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
-                    TextButton(onClick = viewModel::useItemsSumAsTotal) { Text("合計欄を品目合計に合わせる") }
+                    TextButton(onClick = viewModel::useItemsSumAsTotal) { Text("合計欄を支払合計に合わせる") }
                 }
             }
         }
@@ -313,6 +260,117 @@ fun ReceiptDetailScreen(
             },
             dismissButton = { TextButton(onClick = { showRescan = false }) { Text("キャンセル") } },
         )
+    }
+}
+
+/**
+ * 同じ品目のまとまり1つ分のカード。
+ * 常に見える行: 品名・金額(+税込/税抜の切り替え)。税抜のときは確定する税込価格も出す。
+ * 折りたたみ(詳細): 税率・カテゴリ・1個ずつのメモ・金額・自分の払う分・削除。
+ */
+@Composable
+private fun ItemGroupCard(group: ItemGroup, isAdvance: Boolean, viewModel: ReceiptDetailViewModel) {
+    val head = group.head
+    val keys = group.keys
+    val count = group.units.size
+    var expanded by rememberSaveable(head.key) { mutableStateOf(false) }
+    val headModel = head.toItemModel(advance = false)
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = head.name,
+                    onValueChange = { viewModel.setGroupName(keys, it) },
+                    label = { Text("品名") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                if (count > 1) {
+                    Text("×$count", style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = head.amount,
+                    onValueChange = { viewModel.setGroupAmount(keys, it) },
+                    label = { Text(if (count > 1) "金額(1個・円)" else "金額(円)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { viewModel.toggleGroupTaxIncluded(keys) }) {
+                    Text(if (head.priceIncludesTax) "税込" else "税抜 ${head.taxRate}%")
+                }
+            }
+            if (!head.priceIncludesTax) {
+                Text(
+                    "→ 税込 ${TaxCalc.paidYenText(headModel)}円",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(if (expanded) "詳細を閉じる" else "詳細(税率・カテゴリ・メモ・自分の分)")
+            }
+            if (expanded) {
+                OutlinedTextField(
+                    value = head.taxRate,
+                    onValueChange = { viewModel.setGroupTaxRate(keys, it) },
+                    label = { Text("税率(%・0〜100)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                CategoryPicker(value = head.category, onChange = { viewModel.setGroupCategory(keys, it) })
+                group.units.forEachIndexed { index, unit ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        if (count > 1) {
+                            Text("${index + 1}個目", style = MaterialTheme.typography.labelMedium)
+                        }
+                        OutlinedTextField(
+                            value = unit.memo,
+                            onValueChange = { viewModel.setUnitMemo(unit.key, it) },
+                            label = { Text("メモ") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        if (count > 1) {
+                            OutlinedTextField(
+                                value = unit.amount,
+                                onValueChange = { viewModel.setUnitAmount(unit.key, it) },
+                                label = { Text("この1個の金額(円)") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        if (isAdvance) {
+                            OutlinedTextField(
+                                value = unit.ownAmount,
+                                onValueChange = { viewModel.setUnitOwnAmount(unit.key, it) },
+                                label = { Text("自分が払う分(円)") },
+                                placeholder = { Text("全額 ${TaxCalc.paidYenText(unit.toItemModel(advance = false))}円") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        TextButton(
+                            onClick = {
+                                if (count > 1) viewModel.removeUnit(unit.key) else viewModel.removeGroup(keys)
+                            },
+                        ) {
+                            Text(
+                                if (count > 1) "この1個を削除" else "この品目を削除",
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+                OutlinedButton(onClick = { viewModel.addSameItem(head.key) }) { Text("同じ品目をもう1個追加") }
+            }
+        }
     }
 }
 

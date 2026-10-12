@@ -10,10 +10,10 @@ class TaxCalcTest {
         amount: Int,
         taxRate: Int = 10,
         included: Boolean = true,
-        own: Int = 100,
+        own: Int? = null,
     ) = ReceiptItem(
         receiptId = 1, name = "x", amount = amount, taxRate = taxRate,
-        priceIncludesTax = included, ownPercent = own,
+        priceIncludesTax = included, ownAmount = own,
     )
 
     @Test
@@ -31,20 +31,25 @@ class TaxCalcTest {
     }
 
     @Test
-    fun unknownRate_fallsBackToTenPercent() {
-        assertEquals(10, TaxCalc.normalizeTaxRate(9))
+    fun taxRate_acceptsAnyIntegerInRange_elseDefault() {
+        assertEquals(7, TaxCalc.normalizeTaxRate(7))
+        assertEquals(0, TaxCalc.normalizeTaxRate(0))
+        assertEquals(100, TaxCalc.normalizeTaxRate(100))
+        assertEquals(10, TaxCalc.normalizeTaxRate(101))
+        assertEquals(10, TaxCalc.normalizeTaxRate(-1))
         assertEquals(10, TaxCalc.normalizeTaxRate(null))
-        assertEquals(8, TaxCalc.normalizeTaxRate(8))
+        // 7%の税抜1000円は1070円
+        assertEquals("1070", TaxCalc.paidYenText(item(1000, taxRate = 7, included = false)))
     }
 
     @Test
-    fun ownPercent_isClampedToZeroToHundred() {
-        assertEquals(100, TaxCalc.normalizeOwnPercent(150))
-        assertEquals(0, TaxCalc.normalizeOwnPercent(-5))
-        // 税抜1000円(10%)=税込1100円の半分
-        val half = item(1000, taxRate = 10, included = false, own = 50)
-        assertEquals("550", TaxCalc.ownYenText(half))
-        assertEquals(550L, TaxCalc.ownYen(listOf(half)))
+    fun ownAmount_isYenAndDefaultsToWholePaid() {
+        val paidWhole = item(1000, taxRate = 10, included = false)
+        assertEquals("1100", TaxCalc.ownYenText(paidWhole))
+        // 自分が払う分を金額で指定(税込1100円のうち400円)
+        val share = item(1000, taxRate = 10, included = false, own = 400)
+        assertEquals(400L, TaxCalc.ownYen(listOf(share)))
+        assertEquals(700L, TaxCalc.paidYen(listOf(share)) - TaxCalc.ownYen(listOf(share)))
     }
 
     @Test
@@ -55,32 +60,30 @@ class TaxCalcTest {
     @Test
     fun perItemOwnShares_sumToFlooredOwnTotal() {
         val items = listOf(
-            item(120, taxRate = 8, included = false),  // 129.6
-            item(123, taxRate = 8, included = false),  // 132.84
-            item(500, included = true, own = 50),       // 250
+            item(120, taxRate = 8, included = false),          // 税込 129.6(全額自分)
+            item(123, taxRate = 8, included = false, own = 100), // 税込 132.84 のうち 100円
+            item(500, included = true),                         // 500
         )
-        // 支払合計 762.44 -> 762、自分の分 512.44 -> 512
+        // 支払合計 762.44 -> 762 / 自分の分 729.6 -> 729
         assertEquals(762L, TaxCalc.paidYen(items))
-        assertEquals(512L, TaxCalc.ownYen(items))
+        assertEquals(729L, TaxCalc.ownYen(items))
         val per = TaxCalc.ownYenPerItem(items)
-        assertEquals(listOf(129L, 133L, 250L), per)
         assertEquals(TaxCalc.ownYen(items), per.sum())
-        // 立て替えの貰う分 = 支払合計 - 自分の分
-        assertEquals(250L, TaxCalc.paidYen(items) - TaxCalc.ownYen(items))
     }
 
     @Test
-    fun expensesFromReceipt_usesOwnShare() {
-        val receipt = Receipt(
+    fun expensesFromReceipt_advanceUsesOwnAmount_nonAdvanceIgnoresIt() {
+        val items = listOf(
+            item(120, taxRate = 8, included = false),
+            item(500, included = true, own = 200),
+        )
+        val advance = Receipt(
             id = 3, purchasedAt = "2026-10-06", storeName = "店", totalAmount = 762,
             imagePath = "", rawJson = "{}", createdAt = 0, isAdvance = true,
         )
-        val items = listOf(
-            item(120, taxRate = 8, included = false),
-            item(500, included = true, own = 50),
-        )
-        val rows = LedgerCalc.expensesFromReceipt(receipt, items, perItem = true, now = 1)
-        assertEquals(listOf(129, 250), rows.map { it.amount })
-        assertEquals(379, rows.sumOf { it.amount })
+        assertEquals(listOf(129L, 200L), LedgerCalc.expensesFromReceipt(advance, items, perItem = true, now = 1).map { it.amount.toLong() })
+
+        val normal = advance.copy(isAdvance = false)
+        assertEquals(listOf(129L, 500L), LedgerCalc.expensesFromReceipt(normal, items, perItem = true, now = 1).map { it.amount.toLong() })
     }
 }

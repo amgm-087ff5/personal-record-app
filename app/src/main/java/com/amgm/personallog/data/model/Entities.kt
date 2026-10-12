@@ -1,7 +1,7 @@
 package com.amgm.personallog.data.model
 
-import androidx.room.Entity
 import androidx.room.ColumnInfo
+import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -49,9 +49,9 @@ data class Receipt(
     val rawJson: String,
     val status: String = ReceiptStatus.DRAFT,
     val createdAt: Long,
-    /** 原本画像(imagePath)のSHA-256(16進小文字)。重複検知用。v1からの移行直後や旧バックアップ由来は null(取り込み時に後から計算する)。 */
+    /** 原本画像(imagePath)のSHA-256(16進小文字)。重複検知用。 */
     val imageHash: String? = null,
-    /** 立て替え: 自分が払った(他の人の分を含む)レシートなら true。貰う分(払った額 - 自分の分)を計算する対象。 */
+    /** 立て替え: 自分が払った(他の人の分を含む)レシートなら true。 */
     @ColumnInfo(defaultValue = "0")
     val isAdvance: Boolean = false,
 )
@@ -61,6 +61,10 @@ object ReceiptStatus {
     const val CONFIRMED = "confirmed"
 }
 
+/**
+ * レシートの品目。1行 = 1個ぶん(数量は持たず、N個は N 行に分ける)。
+ * 同じ品名・金額などの行は表示時にまとめる(データにグループは持たない)。
+ */
 @Entity(
     tableName = "receipt_items",
     foreignKeys = [
@@ -77,20 +81,19 @@ data class ReceiptItem(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val receiptId: Long,
     val name: String,
-    val quantity: Double = 1.0,
-    val unitPrice: Int = 0,
-    /** 印字どおりの金額(priceIncludesTax が false なら税抜)。 */
+    /** 1個ぶんの印字金額。税込/税抜は priceIncludesTax で決まる。値引きは負の値。 */
     val amount: Int = 0,
     val category: String = Categories.UNCATEGORIZED,
-    /** 消費税率(%)。8 または 10。 */
+    /** 消費税率(%)。0〜100の整数。 */
     @ColumnInfo(defaultValue = "10")
     val taxRate: Int = 10,
-    /** amount が税込か。true なら amount をそのまま支払額とする。false なら税率から税込価格を計算する。 */
+    /** amount が税込か。false なら税率から税込価格を計算する。 */
     @ColumnInfo(defaultValue = "1")
     val priceIncludesTax: Boolean = true,
-    /** 自分の負担割合(0〜100%)。既定100(全額自分)。 */
-    @ColumnInfo(defaultValue = "100")
-    val ownPercent: Int = 100,
+    /** 自分が払う金額(円・税込)。null は全額自分。立て替えのときだけ使う。 */
+    val ownAmount: Int? = null,
+    /** この1個へのメモ。 */
+    val memo: String = "",
 )
 
 /** 家計簿の1行。amount は円で、支出は正の値。receiptId はレシート由来の場合のみ。 */

@@ -22,9 +22,9 @@ object LedgerCalc {
             .sortedByDescending { it.total }
 
     /**
-     * レシート確定時の Expense 生成。家計簿に入るのは「自分の分」(品目の税込価格 × 負担割合)。
-     * perItem=true なら品目ごと(0円の行は作らない)、false(または品目なし)なら合計1行。
-     * 日付は purchasedAt の先頭10文字(yyyy-MM-dd)。
+     * レシート確定時の Expense 生成。家計簿に入るのは「自分の払う分」。
+     * 立て替えでないレシートは全額が自分の分(ownAmount は無視する)。
+     * perItem=true なら1個ずつの行(自分の分が0円の行は作らない)、false(または品目なし)なら合計1行。
      */
     fun expensesFromReceipt(
         receipt: Receipt,
@@ -33,9 +33,10 @@ object LedgerCalc {
         now: Long,
     ): List<Expense> {
         val date = receipt.purchasedAt.take(10)
-        if (perItem && items.isNotEmpty()) {
-            val own = TaxCalc.ownYenPerItem(items)
-            return items.mapIndexedNotNull { i, it ->
+        val effective = if (receipt.isAdvance) items else items.map { it.copy(ownAmount = null) }
+        if (perItem && effective.isNotEmpty()) {
+            val own = TaxCalc.ownYenPerItem(effective)
+            return effective.mapIndexedNotNull { i, it ->
                 if (own[i] == 0L) {
                     null
                 } else {
@@ -43,15 +44,15 @@ object LedgerCalc {
                         date = date,
                         amount = own[i].toInt(),
                         category = it.category,
-                        memo = listOf(receipt.storeName, it.name).filter { s -> s.isNotBlank() }.joinToString(" "),
+                        memo = listOf(receipt.storeName, it.name, it.memo).filter { s -> s.isNotBlank() }.joinToString(" "),
                         receiptId = receipt.id,
                         createdAt = now,
                     )
                 }
             }
         }
-        val category = items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED
-        val amount = if (items.isEmpty()) receipt.totalAmount.toLong() else TaxCalc.ownYen(items)
+        val category = effective.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED
+        val amount = if (effective.isEmpty()) receipt.totalAmount.toLong() else TaxCalc.ownYen(effective)
         return listOf(
             Expense(
                 date = date,
