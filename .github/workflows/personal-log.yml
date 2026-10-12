@@ -43,11 +43,11 @@ jobs:
             exit 1
           fi
 
-      - name: Unit tests and debug build
+      - name: Unit tests, debug and release build
         shell: bash
         env:
           DEBUG_KEYSTORE_PASSWORD: ${{ secrets.DEBUG_KEYSTORE_PASSWORD }}
-        run: ./gradlew testDebugUnitTest assembleDebug --stacktrace 2>&1 | tee build.log
+        run: ./gradlew testDebugUnitTest assembleDebug assembleRelease --stacktrace 2>&1 | tee build.log
 
       # 失敗時にエラー要約をannotationとして残す(ログ全文を開かなくても原因が分かる)
       - name: Summarize failure
@@ -72,7 +72,8 @@ jobs:
       - name: Verify APK signature
         id: sig
         run: |
-          APK=app/build/outputs/apk/debug/app-debug.apk
+          # 配布は release(最適化・非デバッグ)。debug は動作が遅いため配布に使わない。署名鍵は同じ。
+          APK=app/build/outputs/apk/release/app-release.apk
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           "$BT/apksigner" verify --print-certs "$APK" | tee sig.txt
           SHA=$(grep 'certificate SHA-256 digest' sig.txt | head -1 | awk '{print $NF}')
@@ -82,12 +83,12 @@ jobs:
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "vc=$VC" >> "$GITHUB_OUTPUT"
           echo "vn=$VN" >> "$GITHUB_OUTPUT"
-          cp "$APK" personal-log-debug.apk
+          cp "$APK" personal-log-release.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: personal-log-debug-apk
-          path: personal-log-debug.apk
+          name: personal-log-release-apk
+          path: personal-log-release.apk
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -106,7 +107,7 @@ jobs:
         run: |
           TAG=personal-log-debug-latest
           gh release delete "$TAG" --cleanup-tag --yes || true
-          NOTES=$(printf '個人記録 debug ビルド\n\n- versionName: %s\n- versionCode: %s\n- コミット: %s\n- 署名証明書 SHA-256: `%s`\n\n署名SHA-256が前回と同じなら上書きインストールできます。' "$VN" "$VC" "$GITHUB_SHA" "$SHA256")
-          gh release create "$TAG" personal-log-debug.apk \
+          NOTES=$(printf '個人記録 release ビルド(最適化済み・配布用)\n\n- versionName: %s\n- versionCode: %s\n- コミット: %s\n- 署名証明書 SHA-256: `%s`\n\n署名SHA-256が前回と同じなら上書きインストールできます。' "$VN" "$VC" "$GITHUB_SHA" "$SHA256")
+          gh release create "$TAG" personal-log-release.apk \
             --prerelease --target "$GITHUB_SHA" \
             --title "personal-log debug (latest)" --notes "$NOTES"
