@@ -19,13 +19,14 @@ object LedgerCalc {
         return ym.atDay(1).toString() to ym.atEndOfMonth().toString()
     }
 
-    /** 時刻が無いときの既定値。レシートに時刻が無い場合などに使う。 */
-    const val DEFAULT_TIME = "00:00"
-
-    /** "yyyy-MM-dd" または "yyyy-MM-dd HH:mm" を (date, time) に分ける。時刻が無ければ DEFAULT_TIME。 */
+    /**
+     * "yyyy-MM-dd" または "yyyy-MM-dd HH:mm" を (date, time) に分ける。
+     * 時刻が無ければ time は空文字("")のまま返す。00:00 を自動で補完しない。
+     * 表示や時間別の集計では空を 0 時として扱う(LedgerChart.hourOf)。
+     */
     fun splitPurchasedAt(purchasedAt: String): Pair<String, String> {
         val date = purchasedAt.take(10)
-        val time = if (purchasedAt.length >= 16) purchasedAt.substring(11, 16) else DEFAULT_TIME
+        val time = if (purchasedAt.length >= 16) purchasedAt.substring(11, 16) else ""
         return date to time
     }
 

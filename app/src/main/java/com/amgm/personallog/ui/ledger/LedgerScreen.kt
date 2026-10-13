@@ -503,7 +503,9 @@ private fun ExpenseRow(expense: Expense, onClick: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(expense.time, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (expense.time.isNotEmpty()) {
+                    Text(expense.time, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 Spacer(Modifier.width(8.dp))
                 Text(expense.category, style = MaterialTheme.typography.bodyLarge)
                 if (expense.receiptId != null) {

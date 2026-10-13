@@ -194,22 +194,22 @@ object Migrations {
 
     /**
      * v6 -> v7: 支出と支払いグループに時刻 time("HH:mm")を足す。支出には timeEdited(日時を支出側で変えたか)も足す。
-     * 既存行の時刻は、レシート紐づきならレシートの時刻(無ければ 00:00)、それ以外は作成時刻の現地時刻で埋める。
+     * 既存行の時刻は、レシート紐づきならレシートの時刻(レシートに時刻が無ければ空のまま。00:00 は入れない)、それ以外は作成時刻の現地時刻で埋める。
      */
     val MIGRATION_6_7: Migration = object : Migration(6, 7) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL("ALTER TABLE `expenses` ADD COLUMN `time` TEXT NOT NULL DEFAULT '00:00'")
+            db.execSQL("ALTER TABLE `expenses` ADD COLUMN `time` TEXT NOT NULL DEFAULT ''")
             db.execSQL("ALTER TABLE `expenses` ADD COLUMN `timeEdited` INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE `expense_groups` ADD COLUMN `time` TEXT NOT NULL DEFAULT '00:00'")
+            db.execSQL("ALTER TABLE `expense_groups` ADD COLUMN `time` TEXT NOT NULL DEFAULT ''")
             db.execSQL(
                 "UPDATE `expenses` SET `time` = COALESCE(" +
-                    "(SELECT CASE WHEN length(r.purchasedAt) >= 16 THEN substr(r.purchasedAt, 12, 5) ELSE '00:00' END " +
+                    "(SELECT CASE WHEN length(r.purchasedAt) >= 16 THEN substr(r.purchasedAt, 12, 5) ELSE '' END " +
                     "FROM `receipts` r WHERE r.id = `expenses`.`receiptId`), " +
                     "strftime('%H:%M', `createdAt` / 1000, 'unixepoch', 'localtime'))",
             )
             db.execSQL(
                 "UPDATE `expense_groups` SET `time` = COALESCE(" +
-                    "(SELECT CASE WHEN length(r.purchasedAt) >= 16 THEN substr(r.purchasedAt, 12, 5) ELSE '00:00' END " +
+                    "(SELECT CASE WHEN length(r.purchasedAt) >= 16 THEN substr(r.purchasedAt, 12, 5) ELSE '' END " +
                     "FROM `receipts` r WHERE r.id = `expense_groups`.`receiptId`), " +
                     "strftime('%H:%M', `createdAt` / 1000, 'unixepoch', 'localtime'))",
             )

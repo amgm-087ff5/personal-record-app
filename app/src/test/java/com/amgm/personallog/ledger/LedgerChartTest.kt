@@ -120,6 +120,16 @@ class LedgerChartTest {
     }
 
     @Test
+    fun hourOf_blankTime_isStartOfDay_butNotFilled() {
+        // 時刻が無い行は 0 時の棒に入るが、行の time は空のまま(補完しない)
+        val entry = LedgerLogic.buildEntries(listOf(t(1, "2026-10-14", "", 700, "食費")), emptyList()).first()
+        assertEquals(0, LedgerChart.hourOf(entry))
+        assertEquals("", entry.time)
+        val bars = LedgerChart.bars(ChartLevel.DAY, oct14, listOf(entry))
+        assertEquals(700L, bars[0].total)
+    }
+
+    @Test
     fun hourOf_invalidTime_isMinusOne() {
         assertEquals(-1, LedgerChart.hourOf(LedgerLogic.buildEntries(listOf(t(1, "2026-10-14", "--:--", 1, "食費")), emptyList()).first()))
     }

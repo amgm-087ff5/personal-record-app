@@ -106,8 +106,15 @@ object LedgerChart {
             .sortedByDescending { it.amount }
     }
 
-    /** 行の時刻 "HH:mm" の時(0〜23)。不正な値は -1(どの時台にも入らない)。 */
-    fun hourOf(entry: LedgerEntry): Int = entry.time.take(2).toIntOrNull()?.takeIf { it in 0..23 } ?: -1
+    /**
+     * 行の時刻 "HH:mm" の時(0〜23)。
+     * 時刻が空(レシートに時刻が無かった)は 1日の始まりとして 0 時に入れる。値は補完しない。
+     * 形式が不正な値は -1(どの時台にも入らない)。
+     */
+    fun hourOf(entry: LedgerEntry): Int {
+        if (entry.time.isEmpty()) return 0
+        return entry.time.take(2).toIntOrNull()?.takeIf { it in 0..23 } ?: -1
+    }
 
     /** 表示中の期間全体のカテゴリ別内訳(円と割合)。凡例に使う。 */
     fun legend(entries: List<LedgerEntry>, level: ChartLevel, focus: LocalDate): List<CategoryShare> {

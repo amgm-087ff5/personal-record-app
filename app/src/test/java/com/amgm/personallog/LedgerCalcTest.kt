@@ -87,9 +87,9 @@ class LedgerCalcTest {
     }
 
     @Test
-    fun splitPurchasedAt_dateOnlyUsesDefaultTime() {
+    fun splitPurchasedAt_dateOnlyHasNoTime() {
         assertEquals("2026-10-05" to "12:30", LedgerCalc.splitPurchasedAt("2026-10-05 12:30"))
-        assertEquals("2026-10-05" to "00:00", LedgerCalc.splitPurchasedAt("2026-10-05"))
+        assertEquals("2026-10-05" to "", LedgerCalc.splitPurchasedAt("2026-10-05"))
     }
 
     @Test

@@ -150,12 +150,12 @@ class ExpenseRepository @Inject constructor(
     suspend fun delete(expense: Expense) = dao.delete(expense)
     suspend fun get(id: Long): Expense? = dao.getById(id)
 
-    /** 支出が紐づくレシートの日時 "yyyy-MM-dd HH:mm"(時刻が無いレシートは 00:00)。紐づかなければ null。 */
+    /** 支出が紐づくレシートの日時 "yyyy-MM-dd HH:mm"(レシートに時刻が無ければ "yyyy-MM-dd")。紐づかなければ null。 */
     suspend fun linkedReceiptDateTime(expense: Expense): String? {
         val receiptId = expense.receiptId ?: return null
         val r = db.receiptDao().getById(receiptId) ?: return null
         val (date, time) = LedgerCalc.splitPurchasedAt(r.purchasedAt)
-        return "$date $time"
+        return if (time.isEmpty()) date else "$date $time"
     }
 
     /** 支払いグループを、品目ごと消す。 */
