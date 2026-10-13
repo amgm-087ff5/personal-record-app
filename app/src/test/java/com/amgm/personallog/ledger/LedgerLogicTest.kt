@@ -105,7 +105,7 @@ class LedgerLogicTest {
 
     @Test
     fun validate_acceptsGoodInput() {
-        val v = LedgerLogic.validate("2026-10-05", "1200", "食費")
+        val v = LedgerLogic.validate("2026-10-05", "12:00", "1200", "食費")
         assertTrue(v.isValid)
         assertEquals(1200, v.amount)
         assertEquals("2026-10-05", v.date)
@@ -114,18 +114,18 @@ class LedgerLogicTest {
     @Test
     fun validate_rejectsBadAmounts() {
         for (bad in listOf("", "0", "-5", "+5", "12.5", "abc", "99999999999", "1,000")) {
-            assertNotNull("amount '$bad' should be rejected", LedgerLogic.validate("2026-10-05", bad, "食費").amountError)
+            assertNotNull("amount '$bad' should be rejected", LedgerLogic.validate("2026-10-05", "12:00", bad, "食費").amountError)
         }
     }
 
     @Test
     fun validate_requiresCategoryAndValidDate() {
-        assertNotNull(LedgerLogic.validate("2026-10-05", "100", null).categoryError)
-        assertNotNull(LedgerLogic.validate("2026-10-05", "100", " ").categoryError)
-        assertNotNull(LedgerLogic.validate("2026-02-30", "100", "食費").dateError)
-        assertNotNull(LedgerLogic.validate("10/05", "100", "食費").dateError)
-        assertNull(LedgerLogic.validate("2026-10-05", "100", "食費").dateError)
-        assertFalse(LedgerLogic.validate("", "", null).isValid)
+        assertNotNull(LedgerLogic.validate("2026-10-05", "12:00", "100", null).categoryError)
+        assertNotNull(LedgerLogic.validate("2026-10-05", "12:00", "100", " ").categoryError)
+        assertNotNull(LedgerLogic.validate("2026-02-30", "12:00", "100", "食費").dateError)
+        assertNotNull(LedgerLogic.validate("10/05", "12:00", "100", "食費").dateError)
+        assertNull(LedgerLogic.validate("2026-10-05", "12:00", "100", "食費").dateError)
+        assertFalse(LedgerLogic.validate("", "", "", null).isValid)
     }
 
     @Test
@@ -143,5 +143,30 @@ class LedgerLogicTest {
         val today = LocalDate.of(2026, 10, 10)
         assertEquals("2026-10-10", LedgerLogic.defaultDate("2026-10", today))
         assertEquals("2026-09-01", LedgerLogic.defaultDate("2026-09", today))
+    }
+
+    @Test
+    fun validate_timeIsRequiredAndStrictHhMm() {
+        assertEquals("09:05", LedgerLogic.validate("2026-10-05", "09:05", "100", "食費").time)
+        assertNotNull(LedgerLogic.validate("2026-10-05", "", "100", "食費").timeError)
+        assertNotNull(LedgerLogic.validate("2026-10-05", "9:05", "100", "食費").timeError)
+        assertNotNull(LedgerLogic.validate("2026-10-05", "24:00", "100", "食費").timeError)
+        assertFalse(LedgerLogic.validate("2026-10-05", "", "100", "食費").isValid)
+    }
+
+    @Test
+    fun defaultTime_isNowOnlyForToday() {
+        val today = LocalDate.of(2026, 10, 14)
+        val now = java.time.LocalTime.of(7, 3)
+        assertEquals("07:03", LedgerLogic.defaultTime("2026-10-14", today, now))
+        assertEquals("12:00", LedgerLogic.defaultTime("2026-10-13", today, now))
+    }
+
+    @Test
+    fun entries_carryTimeFromExpenseAndGroup() {
+        val g = ExpenseGroup(id = 3, date = "2026-10-03", time = "18:45", amount = 100, category = "食費", createdAt = 1)
+        val single = Expense(id = 4, date = "2026-10-03", time = "08:10", amount = 50, category = "食費", createdAt = 1)
+        val rows = LedgerLogic.buildEntries(listOf(single), listOf(g))
+        assertEquals(setOf("18:45", "08:10"), rows.map { it.time }.toSet())
     }
 }

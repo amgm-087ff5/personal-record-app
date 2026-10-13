@@ -47,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -72,6 +73,7 @@ import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneOffset
 
 /** 家計簿タブのトップ画面。 */
@@ -214,20 +216,32 @@ fun LedgerScreen(modifier: Modifier = Modifier, viewModel: LedgerViewModel = hil
     }
 
     if (creating) {
+        val initialDate = LedgerLogic.defaultDate(state.month, LocalDate.now())
         ExpenseEditorDialog(
             original = null,
-            initialDate = LedgerLogic.defaultDate(state.month, LocalDate.now()),
+            initialDate = initialDate,
+            initialTime = LedgerLogic.defaultTime(initialDate, LocalDate.now(), LocalTime.now()),
+            linkedReceiptAt = null,
             onDismiss = { creating = false },
-            onSave = { date, amount, category, memo, done -> viewModel.saveExpense(null, date, amount, category, memo, done) },
+            onSave = { date, time, amount, category, memo, done ->
+                viewModel.saveExpense(null, date, time, amount, category, memo, done)
+            },
             onDelete = null,
         )
     }
     editing?.let { target ->
+        // レシートに紐づく支出なら、そのレシートの日時を取っておき、日時を変えたときの警告に使う
+        var linkedAt by remember(target) { mutableStateOf<String?>(null) }
+        LaunchedEffect(target) { linkedAt = viewModel.linkedReceiptDateTime(target) }
         ExpenseEditorDialog(
             original = target,
             initialDate = target.date,
+            initialTime = target.time,
+            linkedReceiptAt = linkedAt,
             onDismiss = { editing = null },
-            onSave = { date, amount, category, memo, done -> viewModel.saveExpense(target, date, amount, category, memo, done) },
+            onSave = { date, time, amount, category, memo, done ->
+                viewModel.saveExpense(target, date, time, amount, category, memo, done)
+            },
             onDelete = {
                 viewModel.deleteExpense(target)
                 editing = null
@@ -359,21 +373,30 @@ private fun StackedChart(
                     }
                 }
             }
+            // 棒が多い(時間別の24本)ときは、金額は省き、ラベルは3本おきに出す
+            val dense = bars.size > 12
             Row(Modifier.fillMaxWidth()) {
-                bars.forEach { bar ->
+                bars.forEachIndexed { i, bar ->
                     Column(
                         Modifier
                             .weight(1f)
                             .clickable(enabled = bar.drillable) { onBarTap(bar) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
+                        if (!dense) {
+                            Text(
+                                LedgerLogic.compactYen(bar.total),
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Clip,
+                            )
+                        }
                         Text(
-                            LedgerLogic.compactYen(bar.total),
+                            if (!dense || i % 3 == 0) bar.label else "",
                             style = MaterialTheme.typography.labelSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Clip,
                         )
-                        Text(bar.label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Clip)
                     }
                 }
             }
@@ -480,6 +503,8 @@ private fun ExpenseRow(expense: Expense, onClick: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(expense.time, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(8.dp))
                 Text(expense.category, style = MaterialTheme.typography.bodyLarge)
                 if (expense.receiptId != null) {
                     Spacer(Modifier.width(8.dp))
@@ -511,11 +536,17 @@ private fun ExpenseRow(expense: Expense, onClick: () -> Unit) {
 private fun ExpenseEditorDialog(
     original: Expense?,
     initialDate: String,
+    initialTime: String,
+    /** 紐づくレシートの日時 "yyyy-MM-dd HH:mm"。紐づかなければ null。 */
+    linkedReceiptAt: String?,
     onDismiss: () -> Unit,
-    onSave: (date: String, amount: Int, category: String, memo: String, done: (String?) -> Unit) -> Unit,
+    onSave: (date: String, time: String, amount: Int, category: String, memo: String, done: (String?) -> Unit) -> Unit,
     onDelete: (() -> Unit)?,
 ) {
     var dateText by remember { mutableStateOf(initialDate) }
+    var timeText by remember { mutableStateOf(initialTime) }
+    /** 日時がレシートと違うので確認中の入力。null なら確認ダイアログは出ていない。 */
+    var pendingSave by remember { mutableStateOf<ExpenseValidation?>(null) }
     var amountText by remember { mutableStateOf(original?.amount?.toString() ?: "") }
     var category by remember { mutableStateOf(original?.category) }
     var memo by remember { mutableStateOf(original?.memo ?: "") }
@@ -538,7 +569,11 @@ private fun ExpenseEditorDialog(
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (original?.receiptId != null) {
-                    Text("レシート由来の支出です", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
+                    Text(
+                        "レシート由来の支出です" + (linkedReceiptAt?.let { "(レシート日時 $it)" } ?: ""),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
@@ -552,6 +587,15 @@ private fun ExpenseEditorDialog(
                     )
                     TextButton(onClick = { showDatePicker = true }) { Text("選択") }
                 }
+                OutlinedTextField(
+                    value = timeText,
+                    onValueChange = { timeText = it },
+                    label = { Text("時刻 (HH:mm)") },
+                    singleLine = true,
+                    isError = validation?.timeError != null,
+                    supportingText = if (validation?.timeError != null) { { Text(validation?.timeError ?: "") } } else null,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
@@ -596,14 +640,21 @@ private fun ExpenseEditorDialog(
             TextButton(
                 enabled = !saving,
                 onClick = {
-                    val v = LedgerLogic.validate(dateText, amountText, category)
+                    val v = LedgerLogic.validate(dateText, timeText, amountText, category)
                     validation = v
                     saveError = null
                     if (v.isValid) {
-                        saving = true
-                        onSave(v.date!!, v.amount!!, v.category!!, memo) { err ->
-                            saving = false
-                            if (err == null) onDismiss() else saveError = err
+                        // 紐づくレシートと日時が違うまま日時を変えて保存しようとしたら、確認を挟む(レシートは変更しない)
+                        val dateTimeChanged = original != null && (v.date != original.date || v.time != original.time)
+                        val mismatch = linkedReceiptAt != null && "${v.date} ${v.time}" != linkedReceiptAt
+                        if (dateTimeChanged && mismatch) {
+                            pendingSave = v
+                        } else {
+                            saving = true
+                            onSave(v.date!!, v.time!!, v.amount!!, v.category!!, memo) { err ->
+                                saving = false
+                                if (err == null) onDismiss() else saveError = err
+                            }
                         }
                     }
                 },
@@ -620,6 +671,31 @@ private fun ExpenseEditorDialog(
             }
         },
     )
+
+    pendingSave?.let { v ->
+        AlertDialog(
+            onDismissRequest = { pendingSave = null },
+            title = { Text("レシートの日時と異なります") },
+            text = {
+                Text(
+                    "この支出はレシート(${linkedReceiptAt ?: ""})に紐づいています。" +
+                        "入力した日時(${v.date} ${v.time})はレシートと異なります。" +
+                        "レシートの日時は変更されません。このまま保存しますか？",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingSave = null
+                    saving = true
+                    onSave(v.date!!, v.time!!, v.amount!!, v.category!!, memo) { err ->
+                        saving = false
+                        if (err == null) onDismiss() else saveError = err
+                    }
+                }) { Text("このまま保存") }
+            },
+            dismissButton = { TextButton(onClick = { pendingSave = null }) { Text("戻る") } },
+        )
+    }
 
     if (showDatePicker) {
         val initialMillis = try {

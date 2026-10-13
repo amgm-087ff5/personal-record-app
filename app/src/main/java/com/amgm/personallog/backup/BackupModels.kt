@@ -12,6 +12,7 @@ import com.amgm.personallog.domain.legacyReceiptOwnYen
 import com.amgm.personallog.receipt.LegacyRow
 import com.amgm.personallog.receipt.ReceiptUnits
 import com.amgm.personallog.receipt.UnitRow
+import com.amgm.personallog.domain.LedgerCalc
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -141,6 +142,8 @@ data class BackupReceiptItem(
 data class BackupExpense(
     val id: Long,
     val date: String,
+    /** v7 以降。"HH:mm"。古いバックアップには無いので、取り込み時に作成時刻から補う。 */
+    val time: String = "",
     val amount: Int,
     val category: String,
     val memo: String = "",
@@ -148,10 +151,27 @@ data class BackupExpense(
     val createdAt: Long,
     /** v4 以降。支払いグループの品目なら、そのグループの id。 */
     val groupId: Long? = null,
+    /** v7 以降。日時を支出側で変えたか。 */
+    val timeEdited: Boolean = false,
 ) {
-    fun toEntity() = Expense(id, date, amount, category, memo, receiptId, createdAt, groupId)
+    /** linkedTime: 紐づくレシートの時刻(レシートがあれば)。time が空のときの初期値に使う。 */
+    fun toEntity(linkedTime: String? = null) = Expense(
+        id = id,
+        date = date,
+        time = time.ifBlank { linkedTime ?: LedgerCalc.timeOfMillis(createdAt) },
+        amount = amount,
+        category = category,
+        memo = memo,
+        receiptId = receiptId,
+        createdAt = createdAt,
+        groupId = groupId,
+        timeEdited = timeEdited,
+    )
     companion object {
-        fun from(e: Expense) = BackupExpense(e.id, e.date, e.amount, e.category, e.memo, e.receiptId, e.createdAt, e.groupId)
+        fun from(e: Expense) = BackupExpense(
+            id = e.id, date = e.date, time = e.time, amount = e.amount, category = e.category, memo = e.memo,
+            receiptId = e.receiptId, createdAt = e.createdAt, groupId = e.groupId, timeEdited = e.timeEdited,
+        )
     }
 }
 
@@ -160,15 +180,29 @@ data class BackupExpense(
 data class BackupExpenseGroup(
     val id: Long,
     val date: String,
+    /** v7 以降。"HH:mm"。古いバックアップには無いので、取り込み時に作成時刻から補う。 */
+    val time: String = "",
     val amount: Int,
     val category: String,
     val memo: String = "",
     val receiptId: Long? = null,
     val createdAt: Long,
 ) {
-    fun toEntity() = ExpenseGroup(id, date, amount, category, memo, receiptId, createdAt)
+    fun toEntity(linkedTime: String? = null) = ExpenseGroup(
+        id = id,
+        date = date,
+        time = time.ifBlank { linkedTime ?: LedgerCalc.timeOfMillis(createdAt) },
+        amount = amount,
+        category = category,
+        memo = memo,
+        receiptId = receiptId,
+        createdAt = createdAt,
+    )
     companion object {
-        fun from(g: ExpenseGroup) = BackupExpenseGroup(g.id, g.date, g.amount, g.category, g.memo, g.receiptId, g.createdAt)
+        fun from(g: ExpenseGroup) = BackupExpenseGroup(
+            id = g.id, date = g.date, time = g.time, amount = g.amount, category = g.category, memo = g.memo,
+            receiptId = g.receiptId, createdAt = g.createdAt,
+        )
     }
 }
 

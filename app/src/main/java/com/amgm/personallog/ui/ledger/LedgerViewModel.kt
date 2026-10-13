@@ -142,10 +142,18 @@ class LedgerViewModel @Inject constructor(
     }
     fun dismissError() { _uiState.update { it.copy(error = null) } }
 
-    /** original が null なら新規。onDone にはエラーメッセージ(成功なら null)を渡す。 */
+    /** 支出が紐づくレシートの日時 "yyyy-MM-dd HH:mm"。紐づかなければ null。 */
+    suspend fun linkedReceiptDateTime(expense: Expense): String? = repository.linkedReceiptDateTime(expense)
+
+    /**
+     * original が null なら新規。onDone にはエラーメッセージ(成功なら null)を渡す。
+     * 日時(date/time)を変えたら timeEdited を立て、以後レシートの日時変更に追従しないようにする。
+     * レシートの日時は変更しない。
+     */
     fun saveExpense(
         original: Expense?,
         date: String,
+        time: String,
         amount: Int,
         category: String,
         memo: String,
@@ -157,6 +165,7 @@ class LedgerViewModel @Inject constructor(
                     repository.add(
                         Expense(
                             date = date,
+                            time = time,
                             amount = amount,
                             category = category,
                             memo = memo.trim(),
@@ -164,7 +173,17 @@ class LedgerViewModel @Inject constructor(
                         ),
                     )
                 } else {
-                    repository.update(original.copy(date = date, amount = amount, category = category, memo = memo.trim()))
+                    val changed = date != original.date || time != original.time
+                    repository.update(
+                        original.copy(
+                            date = date,
+                            time = time,
+                            amount = amount,
+                            category = category,
+                            memo = memo.trim(),
+                            timeEdited = original.timeEdited || changed,
+                        ),
+                    )
                 }
                 onDone(null)
             } catch (e: CancellationException) {

@@ -115,6 +115,9 @@ data class ReceiptItem(
 data class ExpenseGroup(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val date: String,
+    /** 支払った時刻 "HH:mm"。レシートの日時に従う。 */
+    @ColumnInfo(defaultValue = "'00:00'")
+    val time: String = "00:00",
     val amount: Int,
     val category: String = Categories.UNCATEGORIZED,
     val memo: String = "",
@@ -147,12 +150,20 @@ data class ExpenseGroup(
 data class Expense(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val date: String,
+    /** 支払った時刻 "HH:mm"(必須)。レシート由来の初期値はレシートの時刻。 */
+    @ColumnInfo(defaultValue = "'00:00'")
+    val time: String = "00:00",
     val amount: Int,
     val category: String = Categories.UNCATEGORIZED,
     val memo: String = "",
     val receiptId: Long? = null,
     val createdAt: Long,
     val groupId: Long? = null,
+    /**
+     * 日時(date/time)を支出側で変更したか。false の間だけ、紐づくレシートの日時変更に追従する。
+     */
+    @ColumnInfo(defaultValue = "0")
+    val timeEdited: Boolean = false,
 )
 
 /** 月別カテゴリ集計の結果行(Roomのクエリ結果としても使う)。 */

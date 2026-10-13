@@ -8,7 +8,7 @@ import java.time.temporal.TemporalAdjusters
 /**
  * 積み上げ棒グラフの階層。上の階層の棒をタップすると1段下の階層の棒に分解される。
  * 年: 1年の中の12か月 / 月: その月の週(月曜始まり・週内に1日でも含まれれば表示、月内の日だけで集計) /
- * 週: その週の7日 / 日: その日の合計(時刻データが無いため時間別には分けられない)。
+ * 週: その週の7日 / 日: その日の24時間(支払った時刻で振り分け)。
  */
 enum class ChartLevel(val label: String) {
     YEAR("年"),
@@ -89,9 +89,25 @@ object LedgerChart {
                 val d = cs.plusDays(i.toLong())
                 bar("${d.dayOfMonth}(${WEEKDAY_CHARS[i]})", d, d, entries, drillable = true)
             }
-            ChartLevel.DAY -> listOf(bar(md(cs), cs, ce, entries, drillable = false))
+            ChartLevel.DAY -> (0..23).map { h ->
+                val segs = hourSegments(entries, cs, h)
+                ChartBar("${h}時", cs, cs, segs, segs.sumOf { it.amount }, drillable = false)
+            }
         }
     }
+
+    /** その日の hour 時台(hour:00〜hour:59)の支出をカテゴリごとに合計し、金額の多い順にする。 */
+    fun hourSegments(entries: List<LedgerEntry>, day: LocalDate, hour: Int): List<ChartSegment> {
+        val d = day.toString()
+        return entries
+            .filter { it.date == d && hourOf(it) == hour }
+            .groupBy { it.category }
+            .map { (c, list) -> ChartSegment(c, list.sumOf { it.amount }) }
+            .sortedByDescending { it.amount }
+    }
+
+    /** 行の時刻 "HH:mm" の時(0〜23)。不正な値は -1(どの時台にも入らない)。 */
+    fun hourOf(entry: LedgerEntry): Int = entry.time.take(2).toIntOrNull()?.takeIf { it in 0..23 } ?: -1
 
     /** 表示中の期間全体のカテゴリ別内訳(円と割合)。凡例に使う。 */
     fun legend(entries: List<LedgerEntry>, level: ChartLevel, focus: LocalDate): List<CategoryShare> {

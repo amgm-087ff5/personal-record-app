@@ -85,4 +85,30 @@ class LedgerCalcTest {
         assertEquals(a + 1, b)
         assertTrue(a > 0)
     }
+
+    @Test
+    fun splitPurchasedAt_dateOnlyUsesDefaultTime() {
+        assertEquals("2026-10-05" to "12:30", LedgerCalc.splitPurchasedAt("2026-10-05 12:30"))
+        assertEquals("2026-10-05" to "00:00", LedgerCalc.splitPurchasedAt("2026-10-05"))
+    }
+
+    @Test
+    fun timeOfMillis_usesGivenZone() {
+        // 2026-10-14T01:05:00Z は UTC なら 01:05、東京(+9)なら 10:05
+        val millis = java.time.Instant.parse("2026-10-14T01:05:00Z").toEpochMilli()
+        assertEquals("01:05", LedgerCalc.timeOfMillis(millis, java.time.ZoneOffset.UTC))
+        assertEquals("10:05", LedgerCalc.timeOfMillis(millis, java.time.ZoneId.of("Asia/Tokyo")))
+    }
+
+    @Test
+    fun expensesFromReceipt_carriesReceiptTime() {
+        val receipt = Receipt(
+            id = 5, purchasedAt = "2026-10-05 12:30", storeName = "店", totalAmount = 300,
+            imagePath = "", rawJson = "{}", createdAt = 0,
+        )
+        val items = listOf(ReceiptItem(receiptId = 5, name = "牛乳", amount = 300, category = "食費"))
+        val rows = LedgerCalc.expensesFromReceipt(receipt, items, perItem = true, now = 1)
+        assertTrue(rows.isNotEmpty())
+        assertEquals(setOf("12:30"), rows.map { it.time }.toSet())
+    }
 }

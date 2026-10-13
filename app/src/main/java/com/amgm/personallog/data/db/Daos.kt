@@ -138,6 +138,10 @@ interface ExpenseDao {
     @Update
     suspend fun update(expense: Expense)
 
+    /** レシートの日時が変わったとき、紐づく支出のうち日時を支出側で変えていないものだけ追従させる。 */
+    @Query("UPDATE expenses SET date = :date, time = :time WHERE receiptId = :receiptId AND timeEdited = 0")
+    suspend fun syncDateTimeFromReceipt(receiptId: Long, date: String, time: String)
+
     @Delete
     suspend fun delete(expense: Expense)
 
@@ -166,6 +170,10 @@ interface ExpenseGroupDao {
     /** from / to は "yyyy-MM-dd"(両端を含む)。 */
     @Query("SELECT * FROM expense_groups WHERE date BETWEEN :from AND :to ORDER BY date DESC, id DESC")
     fun observeBetween(from: String, to: String): Flow<List<ExpenseGroup>>
+
+    /** レシートの日時が変わったとき、紐づく支払いグループの日時を追従させる(グループの日時は常にレシートに従う)。 */
+    @Query("UPDATE expense_groups SET date = :date, time = :time WHERE receiptId = :receiptId")
+    suspend fun syncDateTimeFromReceipt(receiptId: Long, date: String, time: String)
 
     @Insert
     suspend fun insert(group: ExpenseGroup): Long

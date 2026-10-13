@@ -4,8 +4,11 @@ import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.time.format.ResolverStyle
 import java.util.Locale
 
 /**
@@ -14,12 +17,15 @@ import java.util.Locale
  */
 sealed interface LedgerEntry {
     val date: String
+    /** 支払った時刻 "HH:mm"。 */
+    val time: String
     val amount: Long
     val category: String
     val createdAt: Long
 
     data class Single(val expense: Expense) : LedgerEntry {
         override val date: String get() = expense.date
+        override val time: String get() = expense.time
         override val amount: Long get() = expense.amount.toLong()
         override val category: String get() = expense.category
         override val createdAt: Long get() = expense.createdAt
@@ -28,6 +34,7 @@ sealed interface LedgerEntry {
     /** items は品目(支出)。amount は支払い金額(正)。 */
     data class Group(val group: ExpenseGroup, val items: List<Expense>) : LedgerEntry {
         override val date: String get() = group.date
+        override val time: String get() = group.time
         override val amount: Long get() = group.amount.toLong()
         override val category: String get() = group.category
         override val createdAt: Long get() = group.createdAt
@@ -50,13 +57,15 @@ data class MonthTotal(val yearMonth: String, val total: Long)
 /** 入力フォームの検証結果。エラーが無ければ date / amount / category が入る。 */
 data class ExpenseValidation(
     val dateError: String? = null,
+    val timeError: String? = null,
     val amountError: String? = null,
     val categoryError: String? = null,
     val date: String? = null,
+    val time: String? = null,
     val amount: Int? = null,
     val category: String? = null,
 ) {
-    val isValid: Boolean get() = dateError == null && amountError == null && categoryError == null
+    val isValid: Boolean get() = dateError == null && timeError == null && amountError == null && categoryError == null
 }
 
 /** 家計簿画面用の純粋ロジック(JVMでテスト可能)。domain/LedgerCalc は変更せず、足りない分をここに置く。 */
@@ -145,17 +154,38 @@ object LedgerLogic {
     fun defaultDate(yearMonth: String, today: LocalDate): String =
         if (YearMonth.from(today).toString() == yearMonth) today.toString() else "$yearMonth-01"
 
-    fun validate(dateText: String, amountText: String, category: String?): ExpenseValidation {
+    /** 時刻の入力形式。"HH:mm" の2桁固定。 */
+    private val HH_MM: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm").withResolverStyle(ResolverStyle.STRICT)
+    private val TIME_PATTERN = Regex("""\d{2}:\d{2}""")
+
+    /** 支出の時刻の初期値。日付が今日なら今の時刻、それ以外は 12:00。 */
+    fun defaultTime(dateText: String, today: LocalDate, nowTime: LocalTime): String =
+        if (dateText == today.toString()) nowTime.format(HH_MM) else "12:00"
+
+    fun validate(dateText: String, timeText: String, amountText: String, category: String?): ExpenseValidation {
         var dateError: String? = null
+        var timeError: String? = null
         var amountError: String? = null
         var categoryError: String? = null
         var date: String? = null
+        var time: String? = null
         var amount: Int? = null
 
         try {
             date = LocalDate.parse(dateText.trim()).toString()
         } catch (e: DateTimeParseException) {
             dateError = "日付は yyyy-MM-dd の形式で入力してください"
+        }
+
+        val tt = timeText.trim()
+        if (!TIME_PATTERN.matches(tt)) {
+            timeError = "時刻は HH:mm の形式で入力してください(必須)"
+        } else {
+            try {
+                time = LocalTime.parse(tt, HH_MM).format(HH_MM)
+            } catch (e: DateTimeParseException) {
+                timeError = "時刻は HH:mm の形式で入力してください(必須)"
+            }
         }
 
         val t = amountText.trim()
@@ -172,6 +202,6 @@ object LedgerLogic {
 
         if (category.isNullOrBlank()) categoryError = "カテゴリを選択してください"
 
-        return ExpenseValidation(dateError, amountError, categoryError, date, amount, category)
+        return ExpenseValidation(dateError, timeError, amountError, categoryError, date, time, amount, category)
     }
 }

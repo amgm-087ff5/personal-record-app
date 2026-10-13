@@ -11,6 +11,7 @@ import com.amgm.personallog.data.db.ExpenseGroupDao
 import com.amgm.personallog.data.db.ReceiptDao
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.domain.LedgerCalc
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -193,14 +194,15 @@ class BackupManager @Inject constructor(
         val replaceItems = data.receiptItems.flatMap { it.toEntities() }
         if (replaceItems.isNotEmpty()) receiptDao.insertItems(replaceItems)
         val receiptIds = data.receipts.map { it.id }.toSet()
+        val times = receiptTimes(data)
         data.expenseGroups.forEach { g ->
-            expenseGroupDao.insert(g.toEntity().copy(receiptId = g.receiptId?.takeIf { it in receiptIds }))
+            expenseGroupDao.insert(g.toEntity(linkedTime(g.receiptId, times)).copy(receiptId = g.receiptId?.takeIf { it in receiptIds }))
         }
         val groupIds = data.expenseGroups.map { it.id }.toSet()
         if (data.expenses.isNotEmpty()) {
             expenseDao.insertAll(
                 data.expenses.map { e ->
-                    e.toEntity().copy(
+                    e.toEntity(linkedTime(e.receiptId, times)).copy(
                         receiptId = e.receiptId?.takeIf { it in receiptIds },
                         groupId = e.groupId?.takeIf { it in groupIds },
                     )
@@ -216,6 +218,12 @@ class BackupManager @Inject constructor(
             files = fileCount,
         )
     }
+
+    /** バックアップ内のレシート id -> レシートの時刻 "HH:mm"(時刻が無ければ 00:00)。古いバックアップの支出の初期値に使う。 */
+    private fun receiptTimes(data: BackupData): Map<Long, String> =
+        data.receipts.associate { it.id to LedgerCalc.splitPurchasedAt(it.purchasedAt).second }
+
+    private fun linkedTime(receiptId: Long?, times: Map<Long, String>): String? = receiptId?.let { times[it] }
 
     private data class ReceiptKey(val purchasedAt: String, val storeName: String, val totalAmount: Int, val imagePath: String)
     private data class ExpenseKey(
@@ -291,8 +299,9 @@ class BackupManager @Inject constructor(
         val groupByKey = expenseGroupDao.observeAll().first().associate { groupKeyOf(it) to it.id }.toMutableMap()
         val groupIdMap = HashMap<Long, Long>()
         val duplicateGroups = HashSet<Long>()
+        val times = receiptTimes(data)
         for (g in data.expenseGroups) {
-            val entity = g.toEntity().copy(id = 0, receiptId = g.receiptId?.let { receiptIdMap[it] })
+            val entity = g.toEntity(linkedTime(g.receiptId, times)).copy(id = 0, receiptId = g.receiptId?.let { receiptIdMap[it] })
             val key = groupKeyOf(entity)
             val existing = groupByKey[key]
             if (existing != null) {
@@ -326,7 +335,7 @@ class BackupManager @Inject constructor(
                 remaining[k] = left - 1
                 skipped++
             } else {
-                toInsert.add(e.toEntity().copy(id = 0, receiptId = mappedReceipt, groupId = mappedGroup))
+                toInsert.add(e.toEntity(linkedTime(e.receiptId, times)).copy(id = 0, receiptId = mappedReceipt, groupId = mappedGroup))
                 addedExpenses++
             }
         }

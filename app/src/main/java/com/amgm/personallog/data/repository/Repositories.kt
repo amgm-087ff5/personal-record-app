@@ -85,6 +85,10 @@ class ReceiptRepository @Inject constructor(
         }
         receiptDao.deleteItemsByReceipt(id)
         receiptDao.insertItems(items.map { it.copy(id = 0, receiptId = id) })
+        // レシートの日時は家計簿側の初期値。支出側で日時を変えていない行だけ追従させる。
+        val (date, time) = LedgerCalc.splitPurchasedAt(receipt.purchasedAt)
+        expenseDao.syncDateTimeFromReceipt(id, date, time)
+        expenseGroupDao.syncDateTimeFromReceipt(id, date, time)
         id
     }
 
@@ -145,6 +149,14 @@ class ExpenseRepository @Inject constructor(
     suspend fun update(expense: Expense) = dao.update(expense)
     suspend fun delete(expense: Expense) = dao.delete(expense)
     suspend fun get(id: Long): Expense? = dao.getById(id)
+
+    /** 支出が紐づくレシートの日時 "yyyy-MM-dd HH:mm"(時刻が無いレシートは 00:00)。紐づかなければ null。 */
+    suspend fun linkedReceiptDateTime(expense: Expense): String? {
+        val receiptId = expense.receiptId ?: return null
+        val r = db.receiptDao().getById(receiptId) ?: return null
+        val (date, time) = LedgerCalc.splitPurchasedAt(r.purchasedAt)
+        return "$date $time"
+    }
 
     /** 支払いグループを、品目ごと消す。 */
     suspend fun deleteGroup(group: ExpenseGroup) = db.withTransaction {

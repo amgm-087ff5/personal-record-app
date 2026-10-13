@@ -6,7 +6,10 @@ import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
+import java.time.Instant
 import java.time.YearMonth
+import java.time.ZoneId
+import java.util.Locale
 
 /** 家計簿まわりの純粋ロジック(JVMでテスト可能)。 */
 object LedgerCalc {
@@ -14,6 +17,22 @@ object LedgerCalc {
     fun monthRange(yearMonth: String): Pair<String, String> {
         val ym = YearMonth.parse(yearMonth)
         return ym.atDay(1).toString() to ym.atEndOfMonth().toString()
+    }
+
+    /** 時刻が無いときの既定値。レシートに時刻が無い場合などに使う。 */
+    const val DEFAULT_TIME = "00:00"
+
+    /** "yyyy-MM-dd" または "yyyy-MM-dd HH:mm" を (date, time) に分ける。時刻が無ければ DEFAULT_TIME。 */
+    fun splitPurchasedAt(purchasedAt: String): Pair<String, String> {
+        val date = purchasedAt.take(10)
+        val time = if (purchasedAt.length >= 16) purchasedAt.substring(11, 16) else DEFAULT_TIME
+        return date to time
+    }
+
+    /** 作成時刻(epoch ミリ秒)を、現地時刻の "HH:mm" にする。時刻が不明な過去データの初期値。 */
+    fun timeOfMillis(millis: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+        val t = Instant.ofEpochMilli(millis).atZone(zone).toLocalTime()
+        return String.format(Locale.US, "%02d:%02d", t.hour, t.minute)
     }
 
     /** 支出リストをカテゴリごとに合計し、金額の多い順に返す。 */
@@ -32,7 +51,7 @@ object LedgerCalc {
      */
     fun groupFromReceipt(receipt: Receipt, items: List<ReceiptItem>, now: Long): ReceiptGroup? {
         if (receipt.isAdvance || items.isEmpty()) return null
-        val date = receipt.purchasedAt.take(10)
+        val (date, time) = splitPurchasedAt(receipt.purchasedAt)
         val paid = TaxCalc.paidYenPerItem(items)
         val children = items.mapIndexedNotNull { i, it ->
             if (paid[i] == 0L) {
@@ -40,6 +59,7 @@ object LedgerCalc {
             } else {
                 Expense(
                     date = date,
+                    time = time,
                     amount = paid[i].toInt(),
                     category = it.category,
                     memo = listOf(it.name, it.memo).filter { s -> s.isNotBlank() }.joinToString(" "),
@@ -51,6 +71,7 @@ object LedgerCalc {
         if (children.isEmpty()) return null
         val group = ExpenseGroup(
             date = date,
+            time = time,
             amount = receipt.totalAmount,
             category = items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED,
             memo = receipt.storeName,
@@ -71,7 +92,7 @@ object LedgerCalc {
         perItem: Boolean,
         now: Long,
     ): List<Expense> {
-        val date = receipt.purchasedAt.take(10)
+        val (date, time) = splitPurchasedAt(receipt.purchasedAt)
         val category = items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED
         val paidTotal = if (items.isEmpty()) receipt.totalAmount.toLong() else TaxCalc.paidYen(items)
 
@@ -83,6 +104,7 @@ object LedgerCalc {
                 } else {
                     Expense(
                         date = date,
+                        time = time,
                         amount = paid[i].toInt(),
                         category = it.category,
                         memo = listOf(receipt.storeName, it.name, it.memo).filter { s -> s.isNotBlank() }.joinToString(" "),
@@ -96,6 +118,7 @@ object LedgerCalc {
         return listOf(
             Expense(
                 date = date,
+                time = time,
                 amount = amount.toInt(),
                 category = category,
                 memo = receipt.storeName,

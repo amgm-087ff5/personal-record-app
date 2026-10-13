@@ -66,15 +66,6 @@ class LedgerChartTest {
     }
 
     @Test
-    fun dayLevel_isSingleNonDrillableBar() {
-        val list = entries(e(1, "2026-10-14", 300, "食費"), e(2, "2026-10-14", 200, "外食"))
-        val bars = LedgerChart.bars(ChartLevel.DAY, oct14, list)
-        assertEquals(1, bars.size)
-        assertEquals(500L, bars.first().total)
-        assertEquals(false, bars.first().drillable)
-    }
-
-    @Test
     fun legend_percentAndYen_forContainer() {
         val list = entries(e(1, "2026-10-01", 3000, "食費"), e(2, "2026-10-02", 1000, "娯楽"))
         val legend = LedgerChart.legend(list, ChartLevel.MONTH, oct14)
@@ -96,5 +87,40 @@ class LedgerChartTest {
         assertEquals(ChartLevel.WEEK, ChartLevel.MONTH.child)
         assertEquals(ChartLevel.DAY, ChartLevel.WEEK.child)
         assertEquals(null, ChartLevel.DAY.child)
+    }
+
+    private fun t(id: Long, date: String, time: String, amount: Int, cat: String) =
+        Expense(id = id, date = date, time = time, amount = amount, category = cat, createdAt = 0)
+
+    @Test
+    fun monthBars_canHaveSixWeeks() {
+        // 2026-08 は 8/1(土)始まり。月曜始まりで 7/27〜8/2 から 8/31 まで 6 週
+        val bars = LedgerChart.bars(ChartLevel.MONTH, LocalDate.of(2026, 8, 1), emptyList())
+        assertEquals(6, bars.size)
+        assertEquals(LocalDate.of(2026, 8, 1), bars.first().start)
+        assertEquals(LocalDate.of(2026, 8, 2), bars.first().end)
+        assertEquals(LocalDate.of(2026, 8, 31), bars.last().end)
+    }
+
+    @Test
+    fun dayBars_are24Hours_splitByPurchaseTime() {
+        val list = entries(
+            t(1, "2026-10-14", "09:05", 300, "食費"),
+            t(2, "2026-10-14", "09:59", 200, "外食"),
+            t(3, "2026-10-14", "18:00", 500, "食費"),
+            t(4, "2026-10-13", "09:30", 9999, "食費"), // 別の日
+        )
+        val bars = LedgerChart.bars(ChartLevel.DAY, oct14, list)
+        assertEquals(24, bars.size)
+        assertEquals(false, bars.all { it.drillable })
+        assertEquals(500L, bars[9].total)
+        assertEquals(listOf("食費", "外食"), bars[9].segments.map { it.category })
+        assertEquals(500L, bars[18].total)
+        assertEquals(0L, bars[0].total)
+    }
+
+    @Test
+    fun hourOf_invalidTime_isMinusOne() {
+        assertEquals(-1, LedgerChart.hourOf(LedgerLogic.buildEntries(listOf(t(1, "2026-10-14", "--:--", 1, "食費")), emptyList()).first()))
     }
 }
