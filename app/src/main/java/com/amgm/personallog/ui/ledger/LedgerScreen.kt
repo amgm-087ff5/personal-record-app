@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
@@ -51,9 +54,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -161,8 +165,19 @@ fun LedgerScreen(modifier: Modifier = Modifier, viewModel: LedgerViewModel = hil
                     CategoryBar(share, fraction = share.total.toFloat() / max)
                 }
             }
-            item(key = "trend-title") { SectionTitle("月別推移(直近6か月)") }
-            item(key = "trend") { TrendChart(state.trend, selected = state.month) }
+            item(key = "chart-title") { SectionTitle("内訳(カテゴリ別の積み上げ)") }
+            item(key = "chart") {
+                StackedChart(
+                    level = state.chartLevel,
+                    label = state.chartLabel,
+                    bars = state.chartBars,
+                    legend = state.chartLegend,
+                    onLevel = viewModel::selectChartLevel,
+                    onPrev = viewModel::chartPrevious,
+                    onNext = viewModel::chartNext,
+                    onBarTap = viewModel::onChartBarTapped,
+                )
+            }
             item(key = "list-title") { SectionTitle("支出一覧") }
             if (state.days.isEmpty()) {
                 item(key = "list-empty") {
@@ -273,41 +288,121 @@ private fun CategoryBar(share: CategoryShare, fraction: Float) {
     }
 }
 
+/** カテゴリの色。定義済みカテゴリは順番で固定し、それ以外は名前から決まる色にする。未分類は灰色。 */
+private val CHART_PALETTE = listOf(
+    Color(0xFF4E79A7), Color(0xFFF28E2B), Color(0xFFE15759), Color(0xFF76B7B2), Color(0xFF59A14F),
+    Color(0xFFEDC948), Color(0xFFB07AA1), Color(0xFFFF9DA7), Color(0xFF9C755F), Color(0xFF86BCB6),
+)
+private val UNCATEGORIZED_COLOR = Color(0xFF9E9E9E)
+
+private fun categoryColor(category: String): Color {
+    if (category == Categories.UNCATEGORIZED) return UNCATEGORIZED_COLOR
+    val fixed = Categories.DEFAULTS.indexOf(category)
+    val index = if (fixed >= 0) fixed else (category.hashCode() and Int.MAX_VALUE)
+    return CHART_PALETTE[index % CHART_PALETTE.size]
+}
+
+/**
+ * 積み上げ棒グラフ。棒をタップすると1段下の階層へ、階層ボタンで表示単位を切り替え、◀▶で前後へ移動する。
+ * 凡例は表示期間全体のカテゴリ別「金額 (割合)」。
+ */
 @Composable
-private fun TrendChart(trend: List<MonthTotal>, selected: String) {
-    if (trend.isEmpty()) return
-    val max = trend.maxOf { it.total }.coerceAtLeast(1L)
-    val active = MaterialTheme.colorScheme.primary
-    val inactive = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+private fun StackedChart(
+    level: ChartLevel,
+    label: String,
+    bars: List<ChartBar>,
+    legend: List<CategoryShare>,
+    onLevel: (ChartLevel) -> Unit,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onBarTap: (ChartBar) -> Unit,
+) {
     Column(Modifier.fillMaxWidth()) {
-        Canvas(Modifier.fillMaxWidth().height(110.dp)) {
-            val n = trend.size
-            val slot = size.width / n
-            val barWidth = slot * 0.55f
-            trend.forEachIndexed { i, m ->
-                val h = if (m.total <= 0L) 2f else (size.height * (m.total.toFloat() / max)).coerceAtLeast(4f)
-                drawRoundRect(
-                    color = if (m.yearMonth == selected) active else inactive,
-                    topLeft = Offset(slot * i + (slot - barWidth) / 2f, size.height - h),
-                    size = Size(barWidth, h),
-                    cornerRadius = CornerRadius(4f, 4f),
-                )
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onPrev) { Text("◀") }
+            Text(
+                label,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onNext) { Text("▶") }
+        }
+
+        val max = bars.maxOfOrNull { it.total }?.coerceAtLeast(1L) ?: 1L
+        if (bars.isNotEmpty()) {
+            Canvas(
+                Modifier.fillMaxWidth().height(160.dp).pointerInput(bars) {
+                    detectTapGestures { offset ->
+                        val slot = size.width.toFloat() / bars.size
+                        val i = (offset.x / slot).toInt().coerceIn(0, bars.lastIndex)
+                        onBarTap(bars[i])
+                    }
+                },
+            ) {
+                val slot = size.width / bars.size
+                val barWidth = slot * 0.6f
+                bars.forEachIndexed { i, bar ->
+                    val x = slot * i + (slot - barWidth) / 2f
+                    var bottom = size.height
+                    bar.segments.forEach { seg ->
+                        val h = size.height * (seg.amount.toFloat() / max)
+                        if (h > 0f) {
+                            drawRect(
+                                color = categoryColor(seg.category),
+                                topLeft = Offset(x, bottom - h),
+                                size = Size(barWidth, h),
+                            )
+                            bottom -= h
+                        }
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth()) {
+                bars.forEach { bar ->
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .clickable(enabled = bar.drillable) { onBarTap(bar) },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            LedgerLogic.compactYen(bar.total),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip,
+                        )
+                        Text(bar.label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Clip)
+                    }
+                }
+            }
+        } else {
+            Text("表示するデータがありません", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 8.dp))
+        }
+
+        if (legend.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            legend.forEach { share ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(10.dp).background(categoryColor(share.category), RoundedCornerShape(2.dp)))
+                    Spacer(Modifier.width(6.dp))
+                    Text(share.category, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text(
+                        "${LedgerLogic.formatYen(share.total)} (${share.percent}%)",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
-        Row(Modifier.fillMaxWidth()) {
-            trend.forEach { m ->
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        LedgerLogic.compactYen(m.total),
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Clip,
-                    )
-                    Text(
-                        "${m.yearMonth.takeLast(2).trimStart('0')}月",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (m.yearMonth == selected) FontWeight.Bold else FontWeight.Normal,
-                    )
+
+        // 階層の切替(下部)。時間別は時刻データが無いため含めない。
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            ChartLevel.values().forEach { lv ->
+                if (lv == level) {
+                    Button(onClick = { onLevel(lv) }) { Text(lv.label) }
+                } else {
+                    OutlinedButton(onClick = { onLevel(lv) }) { Text(lv.label) }
                 }
             }
         }

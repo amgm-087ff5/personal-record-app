@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.YearMonth
 import javax.inject.Inject
 
@@ -38,17 +39,24 @@ data class LedgerUiState(
     val total: Long = 0,
     val shares: List<CategoryShare> = emptyList(),
     val days: List<DayGroup> = emptyList(),
-    val trend: List<MonthTotal> = emptyList(),
+    val chartLevel: ChartLevel = ChartLevel.YEAR,
+    /** 積み上げグラフの見出し(例: "2026年10月")。 */
+    val chartLabel: String = "",
+    val chartBars: List<ChartBar> = emptyList(),
+    /** グラフ表示期間全体のカテゴリ別内訳(円と割合)。 */
+    val chartLegend: List<CategoryShare> = emptyList(),
     val error: String? = null,
     val backup: BackupUiState = BackupUiState(),
 )
 
-private data class MonthSnapshot(
+private data class Snapshot(
     val month: String,
     val total: Long,
     val shares: List<CategoryShare>,
     val days: List<DayGroup>,
-    val trend: List<MonthTotal>,
+    val chartLabel: String,
+    val chartBars: List<ChartBar>,
+    val chartLegend: List<CategoryShare>,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -58,19 +66,26 @@ class LedgerViewModel @Inject constructor(
     private val backupManager: BackupManager,
 ) : ViewModel() {
 
-    private val month = MutableStateFlow(YearMonth.now().toString())
+    /** 表示の基準日。月ヘッダーと積み上げグラフはこの日付から決まる。 */
+    private val focus = MutableStateFlow(LocalDate.now())
+    private val level = MutableStateFlow(ChartLevel.YEAR)
     private val _uiState = MutableStateFlow(LedgerUiState())
     val uiState: StateFlow<LedgerUiState> = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            month.flatMapLatest { ym ->
-                _uiState.update { it.copy(month = ym, loading = true) }
-                val months = LedgerLogic.recentMonths(ym)
-                val from = LedgerCalc.monthRange(months.first()).first
-                val to = LedgerCalc.monthRange(ym).second
+            combine(focus, level) { f, l -> f to l }.flatMapLatest { (f, l) ->
+                val ym = YearMonth.from(f).toString()
+                _uiState.update { it.copy(month = ym, loading = true, chartLevel = l) }
+                // 月の集計と積み上げグラフの両方を含む範囲だけを読む
+                val (monthFrom, monthTo) = LedgerCalc.monthRange(ym)
+                val (chartStart, chartEnd) = LedgerChart.containerRange(l, f)
+                val ms = LocalDate.parse(monthFrom)
+                val me = LocalDate.parse(monthTo)
+                val from = (if (ms.isBefore(chartStart)) ms else chartStart).toString()
+                val to = (if (me.isAfter(chartEnd)) me else chartEnd).toString()
                 combine(repository.observeBetween(from, to), repository.observeGroupsBetween(from, to)) { all, groups ->
-                    snapshot(ym, months, all, groups)
+                    snapshot(f, l, all, groups)
                 }
                     .catch { e ->
                         _uiState.update { it.copy(loading = false, error = "家計簿の読み込みに失敗しました: ${e.message}") }
@@ -83,27 +98,48 @@ class LedgerViewModel @Inject constructor(
                         total = s.total,
                         shares = s.shares,
                         days = s.days,
-                        trend = s.trend,
+                        chartLabel = s.chartLabel,
+                        chartBars = s.chartBars,
+                        chartLegend = s.chartLegend,
                     )
                 }
             }
         }
     }
 
-    private fun snapshot(ym: String, months: List<String>, all: List<Expense>, groups: List<ExpenseGroup>): MonthSnapshot {
+    private fun snapshot(f: LocalDate, l: ChartLevel, all: List<Expense>, groups: List<ExpenseGroup>): Snapshot {
+        val ym = YearMonth.from(f).toString()
         val entries = LedgerLogic.buildEntries(all, groups)
         val current = entries.filter { it.date.startsWith(ym) }
-        return MonthSnapshot(
+        return Snapshot(
             month = ym,
             total = current.sumOf { it.amount },
             shares = LedgerLogic.categoryShares(LedgerLogic.totalsByCategory(current)),
             days = LedgerLogic.groupByDate(current),
-            trend = LedgerLogic.monthlyTotals(entries, months),
+            chartLabel = LedgerChart.containerLabel(l, f),
+            chartBars = LedgerChart.bars(l, f, entries),
+            chartLegend = LedgerChart.legend(entries, l, f),
         )
     }
 
-    fun previousMonth() { month.value = LedgerLogic.shiftMonth(month.value, -1) }
-    fun nextMonth() { month.value = LedgerLogic.shiftMonth(month.value, 1) }
+    /** ヘッダーの ◀▶。月を変えると積み上げグラフの基準もその月の1日になる。 */
+    fun previousMonth() { focus.value = YearMonth.from(focus.value).minusMonths(1).atDay(1) }
+    fun nextMonth() { focus.value = YearMonth.from(focus.value).plusMonths(1).atDay(1) }
+
+    /** 積み上げグラフの階層ボタン。基準日は変えず、その基準日を含む期間の棒に切り替える。 */
+    fun selectChartLevel(newLevel: ChartLevel) { level.value = newLevel }
+
+    /** グラフの ◀▶。階層の単位で1つ前後へ移動する。 */
+    fun chartPrevious() { focus.value = LedgerChart.shift(level.value, focus.value, -1) }
+    fun chartNext() { focus.value = LedgerChart.shift(level.value, focus.value, 1) }
+
+    /** 棒をタップ: 1段下の階層で、その棒の期間を表示する。 */
+    fun onChartBarTapped(bar: ChartBar) {
+        val child = level.value.child ?: return
+        if (!bar.drillable) return
+        level.value = child
+        focus.value = bar.start
+    }
     fun dismissError() { _uiState.update { it.copy(error = null) } }
 
     /** original が null なら新規。onDone にはエラーメッセージ(成功なら null)を渡す。 */
