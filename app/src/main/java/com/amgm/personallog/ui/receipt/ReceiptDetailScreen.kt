@@ -357,7 +357,7 @@ private fun ItemGroupCard(group: ItemGroup, isAdvance: Boolean, viewModel: Recei
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = { viewModel.toggleGroupTaxIncluded(keys) }) {
-                    Text(if (head.priceIncludesTax) "税込" else "税抜 ${head.taxRate}%")
+                    Text(if (head.priceIncludesTax) "税込 ${head.taxRate}%" else "税抜 ${head.taxRate}%")
                 }
             }
             if (!head.priceIncludesTax) {
