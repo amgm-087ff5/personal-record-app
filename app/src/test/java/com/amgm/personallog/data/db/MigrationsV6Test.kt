@@ -6,9 +6,9 @@ import org.junit.Test
 
 class MigrationsV6Test {
     @Test
-    fun v6IsCurrentVersion_andMigrationsAreContiguous() {
+    fun v7IsCurrentVersion_andMigrationsAreContiguous() {
         val pairs = Migrations.ALL.map { it.startVersion to it.endVersion }
-        assertEquals(listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6), pairs)
+        assertEquals(listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7), pairs)
     }
 
     @Test
@@ -21,5 +21,11 @@ class MigrationsV6Test {
     fun v5ToV6_isRegistered() {
         val m = Migrations.ALL.single { it.startVersion == 5 && it.endVersion == 6 }
         assertSame(Migrations.MIGRATION_5_6, m)
+    }
+
+    @Test
+    fun v6ToV7_isRegistered() {
+        val m = Migrations.ALL.single { it.startVersion == 6 && it.endVersion == 7 }
+        assertSame(Migrations.MIGRATION_6_7, m)
     }
 }
