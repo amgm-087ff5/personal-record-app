@@ -47,7 +47,8 @@ jobs:
         shell: bash
         env:
           DEBUG_KEYSTORE_PASSWORD: ${{ secrets.DEBUG_KEYSTORE_PASSWORD }}
-        run: ./gradlew testDebugUnitTest assembleDebug assembleRelease --stacktrace 2>&1 | tee build.log
+        # --no-build-cache: キャッシュ復元時は KSP が Room スキーマ(app/schemas)を再生成せず、未コミットになるため
+        run: ./gradlew testDebugUnitTest assembleDebug assembleRelease --stacktrace --no-build-cache 2>&1 | tee build.log
 
       # 失敗時にエラー要約をannotationとして残す(ログ全文を開かなくても原因が分かる)
       - name: Summarize failure
