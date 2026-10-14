@@ -19,8 +19,8 @@ class BackupTest {
             receipts = listOf(BackupReceipt(5, "2026-10-02 12:30", "店", 980, "receipts/r.jpg", "{\"a\":1}", "confirmed", 30)),
             receiptItems = listOf(BackupReceiptItem(id = 1, receiptId = 5, name = "牛乳", memo = "2本目", amount = 150, category = "食費", ownAmount = 100)),
             expenses = listOf(
-                BackupExpense(1, "2026-10-02", 980, "食費", "店", 5, 40),
-                BackupExpense(2, "2026-10-03", 500, "その他", "", null, 41),
+                BackupExpense(1, "2026-10-02", "12:30", 980, "食費", "店", 5, 40),
+                BackupExpense(2, "2026-10-03", "", 500, "その他", "", null, 41),
             ),
         )
         val text = BackupJson.encodeToString(BackupData.serializer(), data)
@@ -41,10 +41,20 @@ class BackupTest {
 
     @Test
     fun entityConversion_isLossless() {
-        val e = BackupExpense(3, "2026-01-01", 10, "食費", "m", 7, 99)
+        val e = BackupExpense(3, "2026-01-01", "09:00", 10, "食費", "m", 7, 99)
         assertEquals(e, BackupExpense.from(e.toEntity()))
         val r = BackupReceipt(1, "2026-01-01", "s", 1, "receipts/x.jpg", "{}", "draft", 2)
         assertEquals(r, BackupReceipt.from(r.toEntity()))
+    }
+
+    @Test
+    fun receiptWithoutTime_keepsExpenseTimeEmpty_onRestore() {
+        // レシートに時刻が無い支出は、復元しても 00:00 や作成時刻で補完しない
+        val e = BackupExpense(4, "2026-01-01", "", 10, "食費", "", 7, 99)
+        assertEquals("", e.toEntity(linkedTime = "").time)
+        // 古いバックアップ(時刻なし・レシート紐づきなし)は作成時刻から補う
+        val legacy = BackupExpense(5, "2026-01-01", "", 10, "食費", "", null, 0)
+        assertTrue(legacy.toEntity().time.matches(Regex("""\d{2}:\d{2}""")))
     }
 
     @Test
