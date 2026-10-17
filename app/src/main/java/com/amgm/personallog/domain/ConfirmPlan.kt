@@ -69,7 +69,8 @@ object ConfirmPlanner {
             val have = existingByItem[item.id].orEmpty()
             if (want == null) {
                 // 0円の品目: 作らない。あれば消す。ただし家計簿で金額を直した行(amountEdited)は消さずに残す
-                deleteIds += have.filterNot { it.amountEdited }.map { it.id }
+                // (家計簿で消した行は、直した内容を残す意味がないので消す)
+                deleteIds += have.filterNot { it.amountEdited && !it.deletedByUser }.map { it.id }
             } else if (have.isEmpty()) {
                 inserts += want.followGroup()
             } else {
@@ -89,7 +90,7 @@ object ConfirmPlanner {
 
     /** 家計簿で直した欄(または消した行)がある品目の支出か。再確定で作り直されると失われる内容。 */
     fun hasUserChanges(e: Expense): Boolean =
-        e.amountEdited || e.categoryEdited || e.nameEdited || e.memoEdited || (e.groupId == null && e.timeEdited)
+        e.deletedByUser || e.amountEdited || e.categoryEdited || e.nameEdited || e.memoEdited || (e.groupId == null && e.timeEdited)
 
     /** 家計簿で直した欄があるグループか。 */
     fun hasUserChanges(g: ExpenseGroup): Boolean = g.amountEdited || g.categoryEdited || g.memoEdited || g.timeEdited

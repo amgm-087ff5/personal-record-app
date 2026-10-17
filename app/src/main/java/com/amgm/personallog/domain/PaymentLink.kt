@@ -20,7 +20,7 @@ data class PaymentLink(val kind: PaymentKind, val id: Long, val amount: Long) {
         /** グループがあればそれ、無ければ単独の支出(グループの品目ではないもの)。どちらも無ければ null。 */
         fun resolve(groups: List<ExpenseGroup>, expenses: List<Expense>): PaymentLink? {
             groups.firstOrNull()?.let { return PaymentLink(PaymentKind.GROUP, it.id, it.amount.toLong()) }
-            return expenses.firstOrNull { it.groupId == null }
+            return expenses.firstOrNull { it.groupId == null && !it.deletedByUser }
                 ?.let { PaymentLink(PaymentKind.EXPENSE, it.id, it.amount.toLong()) }
         }
     }

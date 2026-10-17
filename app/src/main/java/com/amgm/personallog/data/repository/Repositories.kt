@@ -18,7 +18,9 @@ import com.amgm.personallog.domain.ConfirmPlan
 import com.amgm.personallog.domain.ConfirmPlanner
 import com.amgm.personallog.domain.ItemSaver
 import com.amgm.personallog.domain.LedgerCalc
+import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentLink
+import com.amgm.personallog.domain.ReceiptRevert
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
@@ -262,7 +264,47 @@ class ExpenseRepository @Inject constructor(
 
     suspend fun add(expense: Expense): Long = dao.insert(expense)
     suspend fun update(expense: Expense) = dao.update(expense)
-    suspend fun delete(expense: Expense) = dao.delete(expense)
+
+    /**
+     * 支出を消す。レシート由来の品目(グループの中の、receiptItemId がある行)は、行を消さずに deletedByUser を立てる
+     * (レシートの再確定で復活させない)。手入力の行・単独の支出は本当に消す。
+     */
+    suspend fun delete(expense: Expense) {
+        if (expense.receiptItemId != null && expense.groupId != null) {
+            dao.update(expense.copy(deletedByUser = true))
+        } else {
+            dao.delete(expense)
+        }
+    }
+
+    /** 家計簿で消した品目を元に戻す。 */
+    suspend fun restore(expense: Expense) = dao.update(expense.copy(deletedByUser = false))
+
+    /**
+     * 品目(または単独の支出)の1つの欄を、紐づくレシートの値に戻す(その欄の編集済みを下ろす)。
+     * 値を求められなければ false(何も変えない)。
+     */
+    suspend fun revertExpenseField(expenseId: Long, field: PaymentField): Boolean = db.withTransaction {
+        val e = dao.getById(expenseId) ?: return@withTransaction false
+        val receiptId = e.receiptId ?: return@withTransaction false
+        val receipt = db.receiptDao().getById(receiptId) ?: return@withTransaction false
+        val items = db.receiptDao().getItems(receiptId)
+        val group = e.groupId?.let { groupDao.getById(it) }
+        val reverted = ReceiptRevert.expense(e, field, receipt, items, group) ?: return@withTransaction false
+        dao.update(reverted)
+        true
+    }
+
+    /** 支払いグループの1つの欄を、紐づくレシートの値に戻す。日時を戻したら品目の日時も合わせる。 */
+    suspend fun revertGroupField(groupId: Long, field: PaymentField): Boolean = db.withTransaction {
+        val g = groupDao.getById(groupId) ?: return@withTransaction false
+        val receiptId = g.receiptId ?: return@withTransaction false
+        val receipt = db.receiptDao().getById(receiptId) ?: return@withTransaction false
+        val items = db.receiptDao().getItems(receiptId)
+        val reverted = ReceiptRevert.group(g, field, receipt, items) ?: return@withTransaction false
+        updateGroup(reverted)
+        true
+    }
     suspend fun get(id: Long): Expense? = dao.getById(id)
 
     /** 支出が紐づくレシートの日時 "yyyy-MM-dd HH:mm"(レシートに時刻が無ければ "yyyy-MM-dd")。紐づかなければ null。 */

@@ -2,9 +2,7 @@ package com.amgm.personallog.ui.ledger
 
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
-
-/** 支払いの詳細画面で「レシートと違う」の印を付ける欄。 */
-enum class PaymentField { AMOUNT, CATEGORY, NAME, MEMO, TIME }
+import com.amgm.personallog.domain.PaymentField
 
 /** 編集済みの欄のうち、レシート由来の行についてだけ「レシートと違う」の印を付ける(純Kotlin)。 */
 object PaymentMarks {

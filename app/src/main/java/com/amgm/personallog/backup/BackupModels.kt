@@ -274,6 +274,8 @@ data class BackupExpense(
     val memoEdited: Boolean = false,
     /** v6 以降。端末をまたいで変わらない識別子。古い形式は空(取り込み時に新しく振る)。 */
     val uid: String = "",
+    /** v6 以降。家計簿で消したレシート由来の品目の印。古い形式には無いので false。 */
+    val deletedByUser: Boolean = false,
 ) {
     /** linkedTime: 紐づくレシートの時刻(レシートがあれば)。time が空のときの初期値に使う。 */
     fun toEntity(linkedTime: String? = null) = Expense(
@@ -294,6 +296,7 @@ data class BackupExpense(
         nameEdited = nameEdited,
         memoEdited = memoEdited,
         uid = uid.ifBlank { newUid() },
+        deletedByUser = deletedByUser,
     )
     companion object {
         fun from(e: Expense) = BackupExpense(
@@ -301,7 +304,7 @@ data class BackupExpense(
             receiptId = e.receiptId, createdAt = e.createdAt, groupId = e.groupId, timeEdited = e.timeEdited,
             receiptItemId = e.receiptItemId, name = e.name,
             amountEdited = e.amountEdited, categoryEdited = e.categoryEdited, nameEdited = e.nameEdited,
-            memoEdited = e.memoEdited, uid = e.uid,
+            memoEdited = e.memoEdited, uid = e.uid, deletedByUser = e.deletedByUser,
         )
     }
 }

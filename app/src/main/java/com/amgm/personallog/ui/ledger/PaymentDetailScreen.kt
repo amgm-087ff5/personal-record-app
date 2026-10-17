@@ -36,6 +36,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.receipt.ReceiptImageCodec
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.Hairline
@@ -97,7 +98,7 @@ fun PaymentDetailScreen(
             val single = s.single
             if (group != null) {
                 item(key = "head") {
-                    GroupHeader(group, onEdit = { editingGroup = true })
+                    GroupHeader(group, onEdit = { editingGroup = true }, onRevert = { viewModel.revertGroupField(group, it) })
                 }
                 item(key = "receipt") {
                     ReceiptBlock(s.receipt?.imagePath, s.receipt?.id, onOpenReceipt)
@@ -110,7 +111,7 @@ fun PaymentDetailScreen(
                     }
                 }
                 items(s.items.size, key = { "item-" + s.items[it].id }) { i ->
-                    ItemRow(s.items[i], onClick = { editingItemId = s.items[i].id })
+                    ItemRow(s.items[i], onClick = { editingItemId = s.items[i].id }, onRevert = { viewModel.revertItemField(s.items[i], it) })
                 }
                 item(key = "sum") {
                     Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(top = Space.s)) {
@@ -145,6 +146,19 @@ fun PaymentDetailScreen(
                         }
                     }
                 }
+                if (s.deletedItems.isNotEmpty()) {
+                    item(key = "deleted-title") {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(top = Space.l)) {
+                            Label("消した品目 ${s.deletedItems.size}件")
+                            Spacer(Modifier.height(Space.xs))
+                            Hairline(color = c.ink)
+                            Text(DELETED_ITEMS_NOTE, style = AppTheme.type.caption, color = c.inkFaint, modifier = Modifier.padding(top = Space.xs))
+                        }
+                    }
+                    items(s.deletedItems.size, key = { "deleted-" + s.deletedItems[it].id }) { i ->
+                        DeletedItemRow(s.deletedItems[i], onRestore = { viewModel.restoreItem(s.deletedItems[i]) })
+                    }
+                }
                 item(key = "delete") {
                     TextAction(
                         "この支払いを削除",
@@ -155,7 +169,7 @@ fun PaymentDetailScreen(
                 }
             } else if (single != null) {
                 item(key = "single") {
-                    SingleBody(single, onEdit = { editingItemId = single.id })
+                    SingleBody(single, onEdit = { editingItemId = single.id }, onRevert = { viewModel.revertItemField(single, it) })
                 }
                 item(key = "receipt") {
                     ReceiptBlock(s.receipt?.imagePath, s.receipt?.id, onOpenReceipt)
@@ -234,14 +248,29 @@ fun PaymentDetailScreen(
     }
 }
 
-/** 「レシートと違う」の小さな印。 */
+/** 「レシートと違う」の小さな印。onRevert があれば、その欄を「レシートの値に戻す」操作を添える。 */
 @Composable
-private fun EditedMark(modifier: Modifier = Modifier) {
-    Stamp("レシートと違う", tone = StampTone.Accent, modifier = modifier)
+private fun EditedMark(modifier: Modifier = Modifier, text: String = "レシートと違う", onRevert: (() -> Unit)? = null) {
+    if (onRevert == null) {
+        Stamp(text, tone = StampTone.Accent, modifier = modifier)
+    } else {
+        Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+            Stamp(text, tone = StampTone.Accent)
+            TextAction("レシートの値に戻す", onClick = onRevert)
+        }
+    }
+}
+
+private fun fieldLabel(f: PaymentField): String = when (f) {
+    PaymentField.AMOUNT -> "金額"
+    PaymentField.CATEGORY -> "カテゴリ"
+    PaymentField.NAME -> "品名"
+    PaymentField.MEMO -> "メモ"
+    PaymentField.TIME -> "日時"
 }
 
 @Composable
-private fun GroupHeader(group: ExpenseGroup, onEdit: () -> Unit) {
+private fun GroupHeader(group: ExpenseGroup, onEdit: () -> Unit, onRevert: (PaymentField) -> Unit) {
     val c = AppTheme.colors
     val marks = PaymentMarks.ofGroup(group)
     Column(
@@ -254,11 +283,11 @@ private fun GroupHeader(group: ExpenseGroup, onEdit: () -> Unit) {
                 style = AppTheme.type.body,
                 color = c.inkSoft,
             )
-            if (PaymentField.TIME in marks) EditedMark(Modifier.padding(start = Space.s))
+            if (PaymentField.TIME in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.TIME) })
         }
         Row(verticalAlignment = Alignment.Bottom) {
             Text(LedgerLogic.formatYen(group.amount.toLong()), style = AppTheme.type.numeralXL, color = c.ink)
-            if (PaymentField.AMOUNT in marks) EditedMark(Modifier.padding(start = Space.s, bottom = Space.s))
+            if (PaymentField.AMOUNT in marks) EditedMark(Modifier.padding(start = Space.s, bottom = Space.s), onRevert = { onRevert(PaymentField.AMOUNT) })
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -269,11 +298,11 @@ private fun GroupHeader(group: ExpenseGroup, onEdit: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            if (PaymentField.MEMO in marks) EditedMark(Modifier.padding(start = Space.s))
+            if (PaymentField.MEMO in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.MEMO) })
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("カテゴリ ${group.category}", style = AppTheme.type.caption, color = c.inkSoft)
-            if (PaymentField.CATEGORY in marks) EditedMark(Modifier.padding(start = Space.s))
+            if (PaymentField.CATEGORY in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.CATEGORY) })
         }
         Text("タップで直す", style = AppTheme.type.caption, color = c.inkFaint)
     }
@@ -281,7 +310,7 @@ private fun GroupHeader(group: ExpenseGroup, onEdit: () -> Unit) {
 }
 
 @Composable
-private fun ItemRow(item: Expense, onClick: () -> Unit) {
+private fun ItemRow(item: Expense, onClick: () -> Unit, onRevert: (PaymentField) -> Unit) {
     val c = AppTheme.colors
     val marks = PaymentMarks.ofExpense(item)
     val sub = listOfNotNull(
@@ -300,7 +329,10 @@ private fun ItemRow(item: Expense, onClick: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (marks.isNotEmpty()) EditedMark(Modifier.padding(top = Space.xs))
+                // 日時はグループに従うので、品目の行には出さない(グループの欄で戻す)
+                marks.filter { it != PaymentField.TIME }.forEach { f ->
+                    EditedMark(Modifier.padding(top = Space.xs), text = "${fieldLabel(f)}がレシートと違う", onRevert = { onRevert(f) })
+                }
             }
             Spacer(Modifier.width(Space.s))
             Text(LedgerLogic.formatYen(item.amount.toLong()), style = AppTheme.type.numeral, color = c.ink)
@@ -310,7 +342,7 @@ private fun ItemRow(item: Expense, onClick: () -> Unit) {
 }
 
 @Composable
-private fun SingleBody(e: Expense, onEdit: () -> Unit) {
+private fun SingleBody(e: Expense, onEdit: () -> Unit, onRevert: (PaymentField) -> Unit) {
     val c = AppTheme.colors
     val marks = PaymentMarks.ofExpense(e)
     Column(Modifier.fillMaxWidth().tappable(onEdit).padding(horizontal = Space.edge, vertical = Space.m)) {
@@ -321,16 +353,16 @@ private fun SingleBody(e: Expense, onEdit: () -> Unit) {
                 style = AppTheme.type.body,
                 color = c.inkSoft,
             )
-            if (PaymentField.TIME in marks) EditedMark(Modifier.padding(start = Space.s))
+            if (PaymentField.TIME in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.TIME) })
         }
         Row(verticalAlignment = Alignment.Bottom) {
             Text(LedgerLogic.formatYen(e.amount.toLong()), style = AppTheme.type.numeralXL, color = c.ink)
-            if (PaymentField.AMOUNT in marks) EditedMark(Modifier.padding(start = Space.s, bottom = Space.s))
+            if (PaymentField.AMOUNT in marks) EditedMark(Modifier.padding(start = Space.s, bottom = Space.s), onRevert = { onRevert(PaymentField.AMOUNT) })
         }
         if (e.name.isNotBlank()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(e.name, style = AppTheme.type.title, color = c.ink)
-                if (PaymentField.NAME in marks) EditedMark(Modifier.padding(start = Space.s))
+                if (PaymentField.NAME in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.NAME) })
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -339,15 +371,37 @@ private fun SingleBody(e: Expense, onEdit: () -> Unit) {
                 style = AppTheme.type.body,
                 color = if (e.memo.isBlank()) c.inkFaint else c.ink,
             )
-            if (PaymentField.MEMO in marks) EditedMark(Modifier.padding(start = Space.s))
+            if (PaymentField.MEMO in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.MEMO) })
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("カテゴリ ${e.category}", style = AppTheme.type.caption, color = c.inkSoft)
-            if (PaymentField.CATEGORY in marks) EditedMark(Modifier.padding(start = Space.s))
+            if (PaymentField.CATEGORY in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.CATEGORY) })
         }
         Text("タップで直す", style = AppTheme.type.caption, color = c.inkFaint)
     }
     Hairline()
+}
+
+/** 家計簿で消した品目の行。「元に戻す」で品目に戻る。 */
+@Composable
+private fun DeletedItemRow(item: Expense, onRestore: () -> Unit) {
+    val c = AppTheme.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge)) {
+        Row(Modifier.fillMaxWidth().padding(vertical = Space.xs), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                item.name.ifBlank { "(品名なし)" },
+                style = AppTheme.type.body,
+                color = c.inkSoft,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(Space.s))
+            Text(LedgerLogic.formatYen(item.amount.toLong()), style = AppTheme.type.numeral, color = c.inkSoft)
+            TextAction("元に戻す", onClick = onRestore)
+        }
+        Hairline()
+    }
 }
 
 /** レシート由来のとき: サムネイルと「レシートを開く」。 */

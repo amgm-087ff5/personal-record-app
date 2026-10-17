@@ -88,6 +88,10 @@ data class ExpenseValidation(
 const val ALLOCATION_NOTE =
     "品目ごとの金額は、レシート全体の端数を品目に割り振った値です。品目単位では1円ほどずれることがありますが、合計は一致します。"
 
+/** 家計簿で消した品目の注釈。品目は一覧と品目の合計から外れるが、支払い金額は変わらない。 */
+const val DELETED_ITEMS_NOTE =
+    "家計簿で消した品目の金額は、差額として支払いのカテゴリに入ります(支払い金額は変わらないため)。元に戻すと品目に戻ります。"
+
 /** 家計簿画面用の純粋ロジック(JVMでテスト可能)。domain/LedgerCalc は変更せず、足りない分をここに置く。 */
 object LedgerLogic {
     /** "2026-10" に delta か月を足す。 */
@@ -111,11 +115,12 @@ object LedgerLogic {
      */
     fun buildEntries(expenses: List<Expense>, groups: List<ExpenseGroup>): List<LedgerEntry> {
         val groupIds = groups.map { it.id }.toSet()
+        // 家計簿で消した品目(deletedByUser)は、一覧にも集計にも入れない
         val itemsByGroup = expenses
-            .filter { e -> e.groupId != null && e.groupId in groupIds }
+            .filter { e -> e.groupId != null && e.groupId in groupIds && !e.deletedByUser }
             .groupBy { it.groupId!! }
         val singles = expenses
-            .filter { e -> e.groupId == null }
+            .filter { e -> e.groupId == null && !e.deletedByUser }
             .map { LedgerEntry.Single(it) }
         val grouped = groups.map { LedgerEntry.Group(it, itemsByGroup[it.id].orEmpty().sortedBy { x -> x.id }) }
         return (singles + grouped).sortedWith(

@@ -268,6 +268,12 @@ data class Expense(
     val memoEdited: Boolean = false,
     /** 端末をまたいで変わらない識別子(バックアップの復元時の照合キー)。 */
     val uid: String = newUid(),
+    /**
+     * 家計簿でユーザーが消したレシート由来の品目。行は消さずにこの印を付ける(レシートの再確定で復活させないため)。
+     * 一覧・集計・支払い詳細の品目からは外し、支払い詳細の「消した品目」から元に戻せる。手入力の行は本当に消す。
+     */
+    @ColumnInfo(defaultValue = "0")
+    val deletedByUser: Boolean = false,
 )
 
 /** カテゴリ別の合計1行(画面の集計で使う)。 */

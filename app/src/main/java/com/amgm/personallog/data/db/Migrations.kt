@@ -395,6 +395,7 @@ object Migrations {
             "`nameEdited` INTEGER NOT NULL DEFAULT 0, " +
             "`memoEdited` INTEGER NOT NULL DEFAULT 0, " +
             "`uid` TEXT NOT NULL, " +
+            "`deletedByUser` INTEGER NOT NULL DEFAULT 0, " +
             "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL , " +
             "FOREIGN KEY(`groupId`) REFERENCES `expense_groups`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
             "FOREIGN KEY(`receiptItemId`) REFERENCES `receipt_items`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )"
@@ -435,7 +436,7 @@ object Migrations {
     /**
      * v8 -> v9: 支払いの品目化と「編集済み」の記録。
      *  - expenses を作り直す(receiptItemId の外部キーを足すため)。expenses は子の表なので DROP しても他を壊さない。
-     *    既存行の receiptItemId は NULL(対応付けできない)。uid は乱数で埋める。
+     *    既存行の receiptItemId は NULL(対応付けできない)。uid は乱数で埋める。deletedByUser(家計簿で消した品目の印)は 0。
      *  - expense_groups は親(expenses が参照する)ので作り直さず、ALTER TABLE ADD COLUMN で列を足す。
      *    uid は DEFAULT '' で足してから UPDATE で乱数にする。
      * 安全策(7_8 と同じ):

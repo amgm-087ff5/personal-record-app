@@ -8,6 +8,7 @@ import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.repository.ExpenseRepository
 import com.amgm.personallog.domain.PaymentEdit
+import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentKind
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -30,6 +31,8 @@ data class PaymentUiState(
     val kind: PaymentKind = PaymentKind.GROUP,
     val group: ExpenseGroup? = null,
     val items: List<Expense> = emptyList(),
+    /** 家計簿で消したレシート由来の品目(一覧・合計には入らない。「元に戻す」で品目に戻る)。 */
+    val deletedItems: List<Expense> = emptyList(),
     val single: Expense? = null,
     /** 紐づくレシート(あれば)。サムネイルと「レシートを開く」に使う。 */
     val receipt: Receipt? = null,
@@ -67,8 +70,9 @@ class PaymentDetailViewModel @Inject constructor(
                                 PaymentUiState(loading = false, notFound = true, kind = kind)
                             } else {
                                 val receipt = g.receiptId?.let { repository.receipt(it) }
+                                val (gone, visible) = items.sortedBy { it.id }.partition { it.deletedByUser }
                                 PaymentUiState(
-                                    loading = false, kind = kind, group = g, items = items.sortedBy { it.id },
+                                    loading = false, kind = kind, group = g, items = visible, deletedItems = gone,
                                     receipt = receipt, receiptAt = repository.receiptDateTime(g.receiptId),
                                 )
                             }
@@ -154,6 +158,23 @@ class PaymentDetailViewModel @Inject constructor(
         val sum = s.itemSum
         if (sum <= 0L || sum > Int.MAX_VALUE) return
         run { repository.updateGroup(PaymentEdit.editGroup(g, g.date, g.time, sum.toInt(), g.category, g.memo)) }
+    }
+
+    /** 家計簿で消した品目を元に戻す。 */
+    fun restoreItem(expense: Expense) = run { repository.restore(expense) }
+
+    /** 品目(または単独の支出)の1つの欄を、レシートの値に戻す。 */
+    fun revertItemField(expense: Expense, field: PaymentField) = run {
+        if (!repository.revertExpenseField(expense.id, field)) {
+            _state.update { it.copy(error = "レシートの値を求められませんでした。") }
+        }
+    }
+
+    /** 支払い(グループ)の1つの欄を、レシートの値に戻す。 */
+    fun revertGroupField(group: ExpenseGroup, field: PaymentField) = run {
+        if (!repository.revertGroupField(group.id, field)) {
+            _state.update { it.copy(error = "レシートの値を求められませんでした。") }
+        }
     }
 
     fun deleteItem(expense: Expense) = run {
