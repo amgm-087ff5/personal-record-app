@@ -84,12 +84,15 @@ object ReceiptGeometry {
     fun isFullCrop(left: Float, top: Float, right: Float, bottom: Float): Boolean =
         left <= RATIO_EPS && top <= RATIO_EPS && right >= 1f - RATIO_EPS && bottom >= 1f - RATIO_EPS
 
-    /** 合計の角度を (90度の回数 0〜3, 微調整 -45〜+45 の整数度) に分ける。 */
+    /**
+     * 合計の角度を (90度の回数 0〜3, 微調整 -45〜+44 の整数度) に分ける。
+     * 境界の 45 度は常に「次の90度 -45」側に寄せる(45 -> 1回 -45、135 -> 2回 -45)。
+     * 画面の状態は [RotationParts] が別々に持つので、これは読み込み時の分解にだけ使う。
+     */
     fun splitDegrees(degrees: Float): Pair<Int, Int> {
-        val n = normalizeDegrees(degrees)
-        val q = floor(n / 90f + 0.5f).toInt()
-        val fine = (n - q * 90f).roundToInt().coerceIn(-45, 45)
-        return (q % 4) to fine
+        val r = normalizeDegrees(degrees).roundToInt()
+        val q = Math.floorDiv(r + 45, 90)
+        return (q % 4) to (r - q * 90)
     }
 
     /** (90度の回数, 微調整) から合計の角度(0 以上 360 未満)。 */

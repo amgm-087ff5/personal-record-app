@@ -10,8 +10,10 @@ import com.amgm.personallog.receipt.ReceiptDedup
 import com.amgm.personallog.receipt.ReceiptImageHash
 import com.amgm.personallog.receipt.ReceiptImageStore
 import com.amgm.personallog.receipt.ReceiptMapper
+import com.amgm.personallog.receipt.ReceiptOrphans
 import com.amgm.personallog.receipt.ReceiptScanner
 import com.amgm.personallog.receipt.ScanOutcome
+import com.amgm.personallog.receipt.adjust
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -131,6 +133,9 @@ class ReceiptListViewModel @Inject constructor(
     private var nextKey = 1L
     private val sources = HashMap<Long, ImportSource>()
 
+    /** 補正画面の表示中に読み取りが終わった、開き待ちのレシートID。補正画面が閉じたら開く。 */
+    private val deferredOpens = ArrayDeque<Long>()
+
     /** 処理中の写真ピッカーのUri。同じ選択の連打で二重に投入しないため。 */
     private val inFlightUris = HashSet<String>()
 
@@ -145,6 +150,33 @@ class ReceiptListViewModel @Inject constructor(
 
     /** 同じ選択内の重複検出用: 画像ハッシュ -> 予約している項目。保存が終われば外す。 */
     private val claimedHashes = HashMap<String, Long>()
+
+    init {
+        cleanupOrphanImages()
+    }
+
+    /**
+     * 補正待ちの間にプロセスが終了すると、コピーした画像がどのレシートにも載らないまま残る。
+     * filesDir/receipts のうち、どのレシートからも参照されておらず、作られてから1時間以上経ち、
+     * 今取り込み中でもないファイルを消す。
+     */
+    private fun cleanupOrphanImages() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val files = store.listStored()
+                if (files.isEmpty()) return@launch
+                val referenced = repository.allReceipts().map { it.imagePath }
+                // 取り込み中の項目は、DB を読んだ後に確認する(読んでいる間に増えた分も守る)
+                val inUse = _state.value.imports.mapNotNull { it.imagePath }
+                val targets = ReceiptOrphans.select(files, referenced, inUse, System.currentTimeMillis())
+                targets.forEach { store.delete(it) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // 掃除は付随の処理。失敗しても取り込みには影響させない
+            }
+        }
+    }
 
     fun newCameraPath(): String = store.newRelativePath()
 
@@ -230,6 +262,13 @@ class ReceiptListViewModel @Inject constructor(
             val rel = item.imagePath ?: continue
             launchAnalyze(item.key, rel, item.imageHash)
         }
+        flushDeferredOpens()
+    }
+
+    /** 補正画面が閉じていれば、保留していた詳細画面への移動を実行する。 */
+    private fun flushDeferredOpens() {
+        if (_state.value.adjustItems.isNotEmpty()) return
+        while (deferredOpens.isNotEmpty()) _openEvents.trySend(deferredOpens.removeFirst())
     }
 
     /** 「取り消し」: 補正待ちの全項目の取り込みをやめ、コピーした画像を消す。 */
@@ -242,6 +281,7 @@ class ReceiptListViewModel @Inject constructor(
             patchItem(item.key) { it.copy(phase = ImportPhase.CANCELLED, imagePath = null) }
             if (rel != null) viewModelScope.launch(Dispatchers.IO) { store.delete(rel) }
         }
+        flushDeferredOpens()
     }
 
     /** 終わった項目を一覧から消す(処理中・確認待ちが無いときだけ呼ぶ想定)。 */
@@ -360,7 +400,9 @@ class ReceiptListViewModel @Inject constructor(
     /** Claude で解析して下書きを保存する。existingId があればその下書きを上書きする(読み直し)。 */
     private suspend fun analyze(key: Long, rel: String, hash: String?, existingId: Long) {
         patchItem(key) { it.copy(phase = ImportPhase.WAITING, message = null) }
-        val adjust = find(key)?.adjust ?: ReceiptAdjust.NONE
+        // 読み直しは、取り込み時の補正ではなく、下書き(existingId)に保存してある最新の補正を使う
+        val adjust = (if (existingId != 0L) repository.getReceipt(existingId)?.adjust() else null)
+            ?: find(key)?.adjust ?: ReceiptAdjust.NONE
         val (result, id) = scanLimiter.withPermit {
             patchItem(key) { it.copy(phase = ImportPhase.SCANNING) }
             val scanned = scanner.scan(rel, adjust)
@@ -386,7 +428,10 @@ class ReceiptListViewModel @Inject constructor(
         }
         val autoOpen = find(key)?.autoOpen == true
         patchItem(key) { it.copy(phase = phase, receiptId = id, message = message) }
-        if (autoOpen && outcome !is ScanOutcome.Failed) _openEvents.send(id)
+        if (autoOpen && outcome !is ScanOutcome.Failed) {
+            // 別の取り込みの補正画面を出している間は、詳細画面への移動を保留する(閉じた後に開く)
+            if (_state.value.adjustItems.isNotEmpty()) deferredOpens.add(id) else _openEvents.send(id)
+        }
     }
 
     private fun fail(key: Long, message: String) {

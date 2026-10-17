@@ -18,7 +18,12 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptGeometry
 import com.amgm.personallog.receipt.ReceiptImageCodec
+import com.amgm.personallog.receipt.RotationParts
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.Pill
@@ -215,19 +221,45 @@ private fun nearestCorner(pos: Offset, g: Geo, grab: Float): Int {
     return best
 }
 
-/** 左90°・右90°・元に戻す、と微調整スライダー(-45〜+45度、1度単位)。 */
+/** 補正値を5つの数値の配列で保存する(画面回転・プロセス再生成でも編集中の値を残す)。 */
+internal val ReceiptAdjustSaver: Saver<ReceiptAdjust, Any> = listSaver<ReceiptAdjust, Float>(
+    save = { listOf(it.rotationDegrees, it.cropLeft, it.cropTop, it.cropRight, it.cropBottom) },
+    restore = { ReceiptAdjust(it[0], it[1], it[2], it[3], it[4]).sanitized() },
+)
+
+/** 補正値が無い状態(null)も保存できる版。 */
+internal val ReceiptAdjustOrNullSaver: Saver<ReceiptAdjust?, Any> = listSaver<ReceiptAdjust?, Float>(
+    save = { a -> if (a == null) emptyList() else listOf(a.rotationDegrees, a.cropLeft, a.cropTop, a.cropRight, a.cropBottom) },
+    restore = { if (it.size == 5) ReceiptAdjust(it[0], it[1], it[2], it[3], it[4]).sanitized() else null },
+)
+
+/**
+ * 左90°・右90°・元に戻す、と微調整スライダー(-45〜+45度、1度単位)。
+ * 90度の回数と微調整は別々の状態で持ち、合計の角度から毎回求め直さない(±45度でつまみが跳ばない)。
+ * [stateKey] が変わると(別の画像など)状態を作り直す。
+ */
 @Composable
 fun ReceiptAdjustControls(
     adjust: ReceiptAdjust,
     onChange: (ReceiptAdjust) -> Unit,
     modifier: Modifier = Modifier,
+    stateKey: Any = Unit,
 ) {
     val c = AppTheme.colors
-    val (quarters, fine) = ReceiptGeometry.splitDegrees(adjust.rotationDegrees)
+    var quarters by rememberSaveable(stateKey) { mutableStateOf(RotationParts.of(adjust.rotationDegrees).quarters) }
+    var finePart by rememberSaveable(stateKey) { mutableStateOf(RotationParts.of(adjust.rotationDegrees).fine) }
+    // 外から合計の角度が変わったとき(元に戻す等)だけ分け直す
+    val parts = RotationParts(quarters, finePart).reconciled(adjust.rotationDegrees)
+    val fine = parts.fine
+    fun update(next: RotationParts) {
+        quarters = next.quarters
+        finePart = next.fine
+        onChange(adjust.withRotation(next.degrees))
+    }
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = Space.edge, vertical = Space.s)) {
         Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
-            Pill("左90°", selected = false, onClick = { onChange(adjust.withRotation(adjust.rotationDegrees - 90f)) })
-            Pill("右90°", selected = false, onClick = { onChange(adjust.withRotation(adjust.rotationDegrees + 90f)) })
+            Pill("左90°", selected = false, onClick = { update(parts.turned(-1)) })
+            Pill("右90°", selected = false, onClick = { update(parts.turned(1)) })
             Pill("元に戻す", selected = false, onClick = { onChange(ReceiptAdjust.NONE) })
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -236,7 +268,7 @@ fun ReceiptAdjustControls(
                 value = fine.toFloat(),
                 onValueChange = { v ->
                     val n = v.roundToInt().coerceIn(-45, 45)
-                    if (n != fine) onChange(adjust.withRotation(ReceiptGeometry.combineDegrees(quarters, n)))
+                    if (n != fine) update(parts.withFine(n))
                 },
                 valueRange = -45f..45f,
                 steps = 89,

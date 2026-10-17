@@ -102,7 +102,7 @@ fun ReceiptDetailScreen(
     var editUnitKey by rememberSaveable { mutableStateOf(0L) }
     var viewerOpen by rememberSaveable { mutableStateOf(false) }
     var adjustOpen by rememberSaveable { mutableStateOf(false) }
-    var pendingRescanAdjust by remember { mutableStateOf<ReceiptAdjust?>(null) }
+    var pendingRescanAdjust by rememberSaveable(stateSaver = ReceiptAdjustOrNullSaver) { mutableStateOf<ReceiptAdjust?>(null) }
     val groups = remember(s.items) { groupItemForms(s.items) }
 
     LaunchedEffect(s.finished) { if (s.finished) onBack() }
@@ -842,6 +842,8 @@ private fun ReceiptImage(imagePath: String, adjust: ReceiptAdjust, onClick: () -
         value = withContext(Dispatchers.IO) {
             try {
                 ReceiptImageCodec.decodeAdjusted(File(context.filesDir, imagePath), adjust, 1024)?.asImageBitmap()
+            } catch (e: OutOfMemoryError) {
+                null
             } catch (e: Exception) {
                 null
             }

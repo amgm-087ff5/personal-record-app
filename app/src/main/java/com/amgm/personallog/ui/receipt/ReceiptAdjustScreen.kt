@@ -15,7 +15,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -97,6 +97,7 @@ fun ReceiptAdjustImportDialog(
             ReceiptAdjustControls(
                 adjust = current.adjust,
                 onChange = { onChange(current.key, it) },
+                stateKey = current.key,
             )
             Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(bottom = Space.s),
@@ -128,7 +129,8 @@ fun ReceiptAdjustSingleDialog(
     onDismiss: () -> Unit,
 ) {
     val c = AppTheme.colors
-    var draft by remember { mutableStateOf(initial) }
+    // 画面回転でも編集中の値が消えないよう、5つの数値で保存する
+    var draft by rememberSaveable(stateSaver = ReceiptAdjustSaver) { mutableStateOf(initial) }
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),

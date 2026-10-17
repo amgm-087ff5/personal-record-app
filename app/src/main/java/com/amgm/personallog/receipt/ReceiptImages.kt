@@ -3,10 +3,12 @@ package com.amgm.personallog.receipt
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.BitmapRegionDecoder
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Rect
 import android.media.ExifInterface
 import android.net.Uri
 import androidx.core.content.FileProvider
@@ -66,6 +68,12 @@ class ReceiptImageStore @Inject constructor(
         rel
     }
 
+    /** filesDir/receipts にある画像ファイルの一覧(相対パスと更新時刻)。掃除の候補選びに使う。 */
+    fun listStored(): List<ReceiptOrphans.Candidate> =
+        File(context.filesDir, DIR).listFiles()?.filter { it.isFile }
+            ?.map { ReceiptOrphans.Candidate("$DIR/${it.name}", it.lastModified()) }
+            .orEmpty()
+
     fun delete(relativePath: String) {
         if (relativePath.isBlank()) return
         runCatching { file(relativePath).delete() }
@@ -103,7 +111,7 @@ object ReceiptImageCodec {
         return o == ExifInterface.ORIENTATION_NORMAL || o == ExifInterface.ORIENTATION_UNDEFINED
     }
 
-    private fun exifOrientation(file: File): Int = try {
+    internal fun exifOrientation(file: File): Int = try {
         ExifInterface(file.path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
     } catch (e: Exception) {
         ExifInterface.ORIENTATION_NORMAL
@@ -113,10 +121,76 @@ object ReceiptImageCodec {
      * EXIFの向きを反映したうえで、回転・トリミングを適用したビットマップ(長辺 maxSide 以下)。
      * 回転の基準は EXIF 適用後の画像で、二重にはかけない。90度単位以外の角度は外接矩形に描き、余白は白。
      * 補正なしなら [decodeScaled] と同じ。失敗時 null。
+     * 補正ありのときは、元画像のうち枠に当たる範囲だけを BitmapRegionDecoder で必要な縮小率で読む(全体は読まない)。
      */
     fun decodeAdjusted(file: File, adjust: ReceiptAdjust, maxSide: Int): Bitmap? {
         val a = adjust.sanitized()
         if (a.isNone) return decodeScaled(file, maxSide)
+        return decodeAdjustedRegion(file, a, maxSide) ?: decodeAdjustedWhole(file, a, maxSide)
+    }
+
+    /**
+     * 範囲読み版。範囲の計算は [ReceiptRegion.plan]。デコーダを作れないときなどは null。
+     * 中間のビットマップは使い終わったら recycle する。メモリ不足は呼び出し側へ投げる。
+     */
+    @Suppress("DEPRECATION")
+    fun decodeAdjustedRegion(file: File, adjust: ReceiptAdjust, maxSide: Int): Bitmap? {
+        val decoder = try {
+            BitmapRegionDecoder.newInstance(file.path, false)
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        try {
+            val orientation = exifOrientation(file)
+            val plan = ReceiptRegion.plan(decoder.width, decoder.height, orientation, adjust, maxSide)
+                ?: return null
+            val out = Bitmap.createBitmap(plan.outWidth, plan.outHeight, Bitmap.Config.ARGB_8888)
+            var ok = false
+            try {
+                val canvas = Canvas(out)
+                canvas.drawColor(Color.WHITE)
+                val reg = plan.region
+                if (reg != null) {
+                    val opts = BitmapFactory.Options().apply { inSampleSize = plan.sampleSize }
+                    val part = decoder.decodeRegion(Rect(reg[0], reg[1], reg[2], reg[3]), opts) ?: return null
+                    try {
+                        // 読んだ画素 -> 原本 -> EXIF 後 -> 外接矩形(回転) -> 枠の左上を原点 -> 出力の大きさ
+                        val m = Matrix()
+                        m.postScale((reg[2] - reg[0]).toFloat() / part.width, (reg[3] - reg[1]).toFloat() / part.height)
+                        m.postTranslate(reg[0].toFloat(), reg[1].toFloat())
+                        val e = ReceiptRegion.exifAffine(orientation, decoder.width.toDouble(), decoder.height.toDouble())
+                        val ex = Matrix()
+                        ex.setValues(
+                            floatArrayOf(
+                                e[0].toFloat(), e[1].toFloat(), e[2].toFloat(),
+                                e[3].toFloat(), e[4].toFloat(), e[5].toFloat(),
+                                0f, 0f, 1f,
+                            ),
+                        )
+                        m.postConcat(ex)
+                        m.postTranslate(-plan.exifWidth / 2f, -plan.exifHeight / 2f)
+                        m.postRotate(adjust.rotationDegrees)
+                        m.postTranslate(plan.boundWidth / 2f, plan.boundHeight / 2f)
+                        m.postTranslate(-plan.crop[0].toFloat(), -plan.crop[1].toFloat())
+                        m.postScale(plan.outWidth.toFloat() / plan.cropWidth, plan.outHeight.toFloat() / plan.cropHeight)
+                        canvas.drawBitmap(part, m, Paint(Paint.FILTER_BITMAP_FLAG))
+                    } finally {
+                        part.recycle()
+                    }
+                }
+                ok = true
+                return out
+            } finally {
+                if (!ok) out.recycle()
+            }
+        } finally {
+            decoder.recycle()
+        }
+    }
+
+    /** 範囲読みが使えないときの代わり: 長辺を抑えて全体を読み、回転・トリミングする。 */
+    internal fun decodeAdjustedWhole(file: File, adjust: ReceiptAdjust, maxSide: Int): Bitmap? {
+        val a = adjust
         val srcSide = if (a.isFullCrop) maxSide else minOf(maxSide * 2, 3072)
         val src = decodeScaled(file, srcSide) ?: return null
         try {

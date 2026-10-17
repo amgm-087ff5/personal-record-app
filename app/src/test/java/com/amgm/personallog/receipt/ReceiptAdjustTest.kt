@@ -28,6 +28,18 @@ class ReceiptAdjustTest {
         assertEquals(0 to -5, ReceiptGeometry.splitDegrees(355f))
         assertEquals(3 to 0, ReceiptGeometry.splitDegrees(270f))
         assertEquals(2 to -45, ReceiptGeometry.splitDegrees(135f))
+        // 境界の 45 度は常に「次の90度の -45」側
+        assertEquals(1 to -45, ReceiptGeometry.splitDegrees(45f))
+        assertEquals(3 to -45, ReceiptGeometry.splitDegrees(225f))
+        assertEquals(0 to 44, ReceiptGeometry.splitDegrees(44f))
+        assertEquals(1 to -45, ReceiptGeometry.splitDegrees(44.6f))
+        assertEquals(0 to 0, ReceiptGeometry.splitDegrees(359.7f))
+        for (r in 0 until 360) {
+            val (q, f) = ReceiptGeometry.splitDegrees(r.toFloat())
+            assertTrue("fine=$f at $r", f in -45..44)
+            assertTrue(q in 0..3)
+            assertEquals(r.toFloat(), ReceiptGeometry.combineDegrees(q, f), 0f)
+        }
         assertEquals(93f, ReceiptGeometry.combineDegrees(1, 3), 0f)
         assertEquals(355f, ReceiptGeometry.combineDegrees(0, -5), 0f)
         assertEquals(0f, ReceiptGeometry.combineDegrees(4, 0), 0f)
