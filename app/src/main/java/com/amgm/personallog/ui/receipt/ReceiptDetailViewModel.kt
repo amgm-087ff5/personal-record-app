@@ -527,7 +527,10 @@ class ReceiptDetailViewModel @Inject constructor(
     }
 
     private fun persistAdjust(adjust: ReceiptAdjust, rescanAfter: Boolean) {
-        if (_state.value.busy) return
+        if (_state.value.busy) {
+            _state.update { it.copy(error = BUSY_ADJUST_MESSAGE) }
+            return
+        }
         val clean = adjust.sanitized()
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
@@ -612,3 +615,6 @@ class ReceiptDetailViewModel @Inject constructor(
         }
     }
 }
+
+/** 処理中に向き・範囲を保存しようとしたときの案内(黙って無視しない)。 */
+internal const val BUSY_ADJUST_MESSAGE = "処理中のため向き・範囲を保存できませんでした。終わってからもう一度保存してください。"

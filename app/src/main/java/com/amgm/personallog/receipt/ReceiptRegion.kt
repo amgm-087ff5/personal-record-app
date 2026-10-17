@@ -19,8 +19,8 @@ object ReceiptRegion {
     /** フィルタ用に、必要な範囲の外へ余分に読む画素数(原本の解像度で)。 */
     const val MARGIN = 2
 
-    /** 1回に読む範囲の画素数の上限。超えるときは inSampleSize を上げる。 */
-    const val MAX_REGION_PIXELS = 16_000_000L
+    /** 1回に読む範囲の画素数の上限(RGB_565 で約16MB)。超えるときは inSampleSize を上げる。 */
+    const val MAX_REGION_PIXELS = 8_000_000L
 
     /** EXIF の向きが縦横を入れ替えるか(5〜8)。 */
     fun swapsAxes(orientation: Int): Boolean = orientation in 5..8

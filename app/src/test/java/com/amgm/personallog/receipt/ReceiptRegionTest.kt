@@ -75,7 +75,7 @@ class ReceiptRegionTest {
         assertTrue(p.sampleSize >= 4)
         val reg = p.region!!
         val px = (reg[2] - reg[0]).toLong() / p.sampleSize * ((reg[3] - reg[1]).toLong() / p.sampleSize)
-        assertTrue("読む画素数 $px", px <= 16_000_000L)
+        assertTrue("読む画素数 $px", px <= ReceiptRegion.MAX_REGION_PIXELS)
         assertEquals(2048, maxOf(p.outWidth, p.outHeight))
     }
 

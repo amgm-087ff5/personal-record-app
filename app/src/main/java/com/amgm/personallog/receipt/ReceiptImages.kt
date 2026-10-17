@@ -58,8 +58,11 @@ class ReceiptImageStore @Inject constructor(
                 val opts = BitmapFactory.Options().apply { inSampleSize = sample }
                 val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
                     ?: throw java.io.IOException("この画像形式は読み込めませんでした")
-                target.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 95, it) }
-                bmp.recycle()
+                try {
+                    target.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+                } finally {
+                    bmp.recycle()
+                }
             }
         } catch (e: Throwable) {
             target.delete()
@@ -106,7 +109,11 @@ internal fun openRegionReader(file: File): RegionReader? {
         override val width: Int get() = d.width
         override val height: Int get() = d.height
         override fun read(rect: Rect, sampleSize: Int): Bitmap? =
-            d.decodeRegion(rect, BitmapFactory.Options().apply { inSampleSize = sampleSize })
+            d.decodeRegion(rect, BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                // 読む範囲が大きいので、1画素2バイトで読む(レシートの文字には十分)
+                inPreferredConfig = Bitmap.Config.RGB_565
+            })
 
         override fun recycle() = d.recycle()
     }
@@ -122,15 +129,24 @@ object ReceiptImageCodec {
      * EXIFの向きが通常 / 補正なし / 3.5MB以下。
      * それ以外は「EXIF → 回転 → トリミング → 長辺 MAX_SIDE 以下」の順に変換してJPEG(品質92)にする(メモリ上のみ)。
      */
-    fun prepareForUpload(file: File, adjust: ReceiptAdjust = ReceiptAdjust.NONE): ByteArray {
+    fun prepareForUpload(
+        file: File,
+        adjust: ReceiptAdjust = ReceiptAdjust.NONE,
+        opener: (File) -> RegionReader? = ::openRegionReader,
+    ): ByteArray {
         if (ReceiptGeometry.shouldSendOriginal(isExifNormal(file), adjust, file.length(), RESIZE_THRESHOLD_BYTES)) {
             return file.readBytes()
         }
-        val bmp = decodeAdjusted(file, adjust, MAX_SIDE) ?: return file.readBytes()
-        val out = ByteArrayOutputStream()
-        bmp.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-        bmp.recycle()
-        return out.toByteArray()
+        val bmp = decodeAdjusted(file, adjust, MAX_SIDE, opener)
+            // 補正(回転・トリミング)があるのに作れなかったときは、補正していない原本を送らず失敗にする
+            ?: if (adjust.sanitized().isNone) return file.readBytes() else throw java.io.IOException("補正した画像を作れませんでした")
+        try {
+            val out = ByteArrayOutputStream()
+            bmp.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+            return out.toByteArray()
+        } finally {
+            bmp.recycle()
+        }
     }
 
     /** EXIF の向きが通常(または記録なし)か。読めないときも通常として扱う。 */
@@ -151,10 +167,18 @@ object ReceiptImageCodec {
      * 補正なしなら [decodeScaled] と同じ。失敗時 null。
      * 補正ありのときは、元画像のうち枠に当たる範囲だけを BitmapRegionDecoder で必要な縮小率で読む(全体は読まない)。
      */
-    fun decodeAdjusted(file: File, adjust: ReceiptAdjust, maxSide: Int): Bitmap? {
+    fun decodeAdjusted(
+        file: File,
+        adjust: ReceiptAdjust,
+        maxSide: Int,
+        opener: (File) -> RegionReader? = ::openRegionReader,
+        onFallback: () -> Unit = {},
+    ): Bitmap? {
         val a = adjust.sanitized()
         if (a.isNone) return decodeScaled(file, maxSide)
-        return decodeAdjustedRegion(file, a, maxSide) ?: decodeAdjustedWhole(file, a, maxSide)
+        decodeAdjustedRegion(file, a, maxSide, opener)?.let { return it }
+        onFallback()
+        return decodeAdjustedWhole(file, a, maxSide)
     }
 
     /**
@@ -229,6 +253,8 @@ object ReceiptImageCodec {
             val outW = maxOf(1, Math.round(cw * scale))
             val outH = maxOf(1, Math.round(ch * scale))
             val out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+            var ok = false
+            try {
             val canvas = Canvas(out)
             canvas.drawColor(Color.WHITE)
             val m = Matrix()
@@ -238,7 +264,11 @@ object ReceiptImageCodec {
             m.postTranslate(-r[0].toFloat(), -r[1].toFloat())
             m.postScale(outW.toFloat() / cw, outH.toFloat() / ch)
             canvas.drawBitmap(src, m, Paint(Paint.FILTER_BITMAP_FLAG))
+            ok = true
             return out
+            } finally {
+                if (!ok) out.recycle()
+            }
         } finally {
             src.recycle()
         }
@@ -276,7 +306,12 @@ object ReceiptImageCodec {
             }
         }
         if (!matrix.isIdentity) {
-            val t = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
+            val t = try {
+                Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
+            } catch (e: Throwable) {
+                bmp.recycle()
+                throw e
+            }
             if (t !== bmp) bmp.recycle()
             bmp = t
         }

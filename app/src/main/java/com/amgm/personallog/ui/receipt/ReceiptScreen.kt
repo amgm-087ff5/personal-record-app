@@ -94,8 +94,12 @@ fun ReceiptScreen(
         if (uris.isNotEmpty()) viewModel.onPicked(uris)
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.openEvents.collect { onOpenReceipt(it) }
+    val pendingOpen by viewModel.pendingOpen.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingOpen) {
+        pendingOpen?.let { id ->
+            viewModel.consumeOpen(id)
+            onOpenReceipt(id)
+        }
     }
 
     val pending = state.imports.filter { it.phase == ImportPhase.DUPLICATE_PENDING }

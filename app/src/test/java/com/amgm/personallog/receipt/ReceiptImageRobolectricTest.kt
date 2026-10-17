@@ -279,4 +279,46 @@ class ReceiptImageRobolectricTest {
             }
         }
     }
+
+    @Test
+    fun adjustedDecodeDoesNotFallBackWhenRegionReadWorks() {
+        for (o in intArrayOf(1, 6)) {
+            val f = makeJpeg(o)
+            var fellBack = false
+            val bmp = ReceiptImageCodec.decodeAdjusted(
+                f, ReceiptAdjust(rotationDegrees = 30f), 4096,
+                opener = this::fakeOpener, onFallback = { fellBack = true },
+            )
+            assertNotNull(bmp)
+            assertTrue("o=$o: 範囲読みが使われず全体読みに入った", !fellBack)
+            bmp!!.recycle()
+        }
+    }
+
+    @Test
+    fun adjustedDecodeFallsBackWhenRegionReaderIsUnavailable() {
+        var fellBack = false
+        val bmp = ReceiptImageCodec.decodeAdjusted(
+            makeJpeg(1), ReceiptAdjust(rotationDegrees = 90f), 4096,
+            opener = { null }, onFallback = { fellBack = true },
+        )
+        assertTrue(fellBack)
+        assertNotNull(bmp)
+        bmp!!.recycle()
+    }
+
+    @Test
+    fun uploadFailsInsteadOfSendingOriginalWhenAdjustedImageCannotBeMade() {
+        val bad = File(dir, "bad.jpg").apply { writeBytes(byteArrayOf(1, 2, 3, 4)) }
+        // 補正なし: 従来どおり原本のバイト列
+        assertEquals(4, ReceiptImageCodec.prepareForUpload(bad, ReceiptAdjust.NONE, opener = { null }).size)
+        // 補正あり: 補正していない原本を送らず失敗にする
+        var failed = false
+        try {
+            ReceiptImageCodec.prepareForUpload(bad, ReceiptAdjust(rotationDegrees = 90f), opener = { null })
+        } catch (e: java.io.IOException) {
+            failed = true
+        }
+        assertTrue(failed)
+    }
 }
