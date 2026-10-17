@@ -9,6 +9,7 @@ import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.domain.PaymentLink
 import com.amgm.personallog.domain.TaxBreakdown
 import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.receipt.ReceiptCalc
@@ -38,6 +39,8 @@ data class ItemForm(
     val category: String,
     val taxRate: String,
     val priceIncludesTax: Boolean,
+    /** ReceiptItem の id。新規の行は 0。保存で id を保ち、家計簿の行との対応を切らないために持つ。 */
+    val id: Long = 0L,
     /** 割り勘の補助: この品目を「自分の払う分」の計算に含めるか(画面だけの状態。保存しない)。 */
     val picked: Boolean = false,
 )
@@ -63,6 +66,7 @@ internal fun groupItemForms(items: List<ItemForm>): List<ItemGroup> =
 
 /** 入力中の1個ぶんを計算用のモデルにする。立て替えでなければ自分の分は無視する(全額自分)。 */
 internal fun ItemForm.toItemModel(receiptId: Long = 0L): ReceiptItem = ReceiptItem(
+    id = id,
     receiptId = receiptId,
     name = name.trim(),
     amount = amount.toIntOrNull() ?: 0,
@@ -77,6 +81,7 @@ private fun String.filterAmount(): String = filterIndexed { i, c -> c.isDigit() 
 
 private fun ReceiptItem.toForm(key: Long) = ItemForm(
     key = key,
+    id = id,
     name = name,
     memo = memo,
     amount = amount.toString(),
@@ -132,6 +137,10 @@ data class DetailUiState(
     val duplicateWarning: List<DuplicateRef> = emptyList(),
     /** 確定しようとしたが合計が未入力のとき true(「合計が未入力です」の確認用)。 */
     val missingTotalPrompt: Boolean = false,
+    /** 再確定で、家計簿の行が作り直される(家計簿で直した内容が消える)ときの確認用。 */
+    val rebuildWarning: Boolean = false,
+    /** このレシートに紐づく家計簿の支払い(グループか単独の支出)。無ければ null。 */
+    val paymentLink: PaymentLink? = null,
 ) {
     private val models: List<ReceiptItem> get() = items.map { it.toItemModel() }
 
@@ -216,6 +225,9 @@ class ReceiptDetailViewModel @Inject constructor(
                 printedTotal = ReceiptMapper.printedTotal(r.rawJson),
                 items = items.map { it.toForm(newKey()) },
             )
+            repository.observePaymentLink(receiptId).collect { link ->
+                _state.update { it.copy(paymentLink = link) }
+            }
         }
     }
 
@@ -283,7 +295,7 @@ class ReceiptDetailViewModel @Inject constructor(
     /** 同じ品目をもう1個追加する(名前・金額・税などは同じ。メモと自分の分は空)。 */
     fun addSameItem(key: Long) = _state.update { s ->
         val src = s.items.firstOrNull { it.key == key } ?: return@update s
-        s.copy(items = s.items + src.copy(key = newKey(), memo = "", picked = false))
+        s.copy(items = s.items + src.copy(key = newKey(), id = 0L, memo = "", picked = false))
     }
 
     /** 1個だけ削除する。 */
@@ -375,6 +387,14 @@ class ReceiptDetailViewModel @Inject constructor(
      */
     fun confirm() = startConfirm(checkDuplicate = true)
 
+    /** 再確定の確認で「作り直して確定」を選んだとき。 */
+    fun confirmRebuild() {
+        _state.update { it.copy(rebuildWarning = false) }
+        startConfirm(checkDuplicate = false, rebuildAccepted = true)
+    }
+
+    fun dismissRebuildWarning() = _state.update { it.copy(rebuildWarning = false) }
+
     /** 重複確認で「追加する」を選んだときの確定。 */
     fun confirmAnyway() {
         _state.update { it.copy(duplicateWarning = emptyList()) }
@@ -426,7 +446,7 @@ class ReceiptDetailViewModel @Inject constructor(
         }
     }
 
-    private fun startConfirm(checkDuplicate: Boolean) {
+    private fun startConfirm(checkDuplicate: Boolean, rebuildAccepted: Boolean = false) {
         if (_state.value.busy) return
         val built = buildFromForm(strict = true) ?: return
         if (built.first.totalAmount == null) {
@@ -446,6 +466,11 @@ class ReceiptDetailViewModel @Inject constructor(
                         }
                         return@launch
                     }
+                }
+                // 再確定で家計簿の行が作り直される(立て替えの切り替え・古い形式)なら、先に知らせる
+                if (!rebuildAccepted && repository.confirmWouldRebuild(built.first, built.second)) {
+                    _state.update { it.copy(busy = false, rebuildWarning = true) }
+                    return@launch
                 }
                 repository.save(built.first, built.second)
                 repository.confirm(receiptId, perItem = true)

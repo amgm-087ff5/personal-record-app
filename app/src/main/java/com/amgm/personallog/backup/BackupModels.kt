@@ -9,6 +9,7 @@ import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptNotDuplicate
 import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.model.TotalSource
+import com.amgm.personallog.data.model.newUid
 import com.amgm.personallog.domain.PricedLine
 import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.domain.legacyReceiptOwnYen
@@ -20,7 +21,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /** バックアップZIPのフォーマット版。互換性を壊す変更をしたら上げる。 */
-const val BACKUP_FORMAT_VERSION = 5
+const val BACKUP_FORMAT_VERSION = 6
 const val BACKUP_DATA_ENTRY = "data.json"
 const val BACKUP_FILES_PREFIX = "files/"
 
@@ -237,6 +238,17 @@ data class BackupExpense(
     val groupId: Long? = null,
     /** v7 以降。日時を支出側で変えたか。 */
     val timeEdited: Boolean = false,
+    /** v6 以降。元になったレシートの品目の id(バックアップ内の id)。復元時に復元後の id へ付け替える。 */
+    val receiptItemId: Long? = null,
+    /** v6 以降。品名。 */
+    val name: String = "",
+    /** v6 以降。金額・カテゴリ・品名・メモを支払い側で変えたか。 */
+    val amountEdited: Boolean = false,
+    val categoryEdited: Boolean = false,
+    val nameEdited: Boolean = false,
+    val memoEdited: Boolean = false,
+    /** v6 以降。端末をまたいで変わらない識別子。古い形式は空(取り込み時に新しく振る)。 */
+    val uid: String = "",
 ) {
     /** linkedTime: 紐づくレシートの時刻(レシートがあれば)。time が空のときの初期値に使う。 */
     fun toEntity(linkedTime: String? = null) = Expense(
@@ -250,11 +262,21 @@ data class BackupExpense(
         createdAt = createdAt,
         groupId = groupId,
         timeEdited = timeEdited,
+        receiptItemId = receiptItemId,
+        name = name,
+        amountEdited = amountEdited,
+        categoryEdited = categoryEdited,
+        nameEdited = nameEdited,
+        memoEdited = memoEdited,
+        uid = uid.ifBlank { newUid() },
     )
     companion object {
         fun from(e: Expense) = BackupExpense(
             id = e.id, date = e.date, time = e.time, amount = e.amount, category = e.category, memo = e.memo,
             receiptId = e.receiptId, createdAt = e.createdAt, groupId = e.groupId, timeEdited = e.timeEdited,
+            receiptItemId = e.receiptItemId, name = e.name,
+            amountEdited = e.amountEdited, categoryEdited = e.categoryEdited, nameEdited = e.nameEdited,
+            memoEdited = e.memoEdited, uid = e.uid,
         )
     }
 }
@@ -271,6 +293,13 @@ data class BackupExpenseGroup(
     val memo: String = "",
     val receiptId: Long? = null,
     val createdAt: Long,
+    /** v6 以降。端末をまたいで変わらない識別子。古い形式は空(取り込み時に新しく振る)。 */
+    val uid: String = "",
+    /** v6 以降。金額・カテゴリ・メモ・日時を支払い側で変えたか。 */
+    val amountEdited: Boolean = false,
+    val categoryEdited: Boolean = false,
+    val memoEdited: Boolean = false,
+    val timeEdited: Boolean = false,
 ) {
     fun toEntity(linkedTime: String? = null) = ExpenseGroup(
         id = id,
@@ -281,12 +310,96 @@ data class BackupExpenseGroup(
         memo = memo,
         receiptId = receiptId,
         createdAt = createdAt,
+        uid = uid.ifBlank { newUid() },
+        amountEdited = amountEdited,
+        categoryEdited = categoryEdited,
+        memoEdited = memoEdited,
+        timeEdited = timeEdited,
     )
     companion object {
         fun from(g: ExpenseGroup) = BackupExpenseGroup(
             id = g.id, date = g.date, time = g.time, amount = g.amount, category = g.category, memo = g.memo,
             receiptId = g.receiptId, createdAt = g.createdAt,
+            uid = g.uid, amountEdited = g.amountEdited, categoryEdited = g.categoryEdited,
+            memoEdited = g.memoEdited, timeEdited = g.timeEdited,
         )
+    }
+}
+
+/** 支出の receiptItemId を、復元後の receipt_items の id に付け替える。対応が取れなければ null。 */
+fun remapReceiptItemId(backupItemId: Long?, itemIdMap: Map<Long, Long>): Long? =
+    backupItemId?.let { itemIdMap[it] }
+
+/**
+ * 復元(マージ)で、バックアップの支払いグループが既存のどれに当たるかを探す(純Kotlin)。
+ * uid があれば uid で照合する。uid が無い(形式5以前の)グループは従来のキー(日付・金額・カテゴリ・メモ・レシート)で照合する。
+ */
+class GroupMergeIndex(existing: List<ExpenseGroup>) {
+    private data class Key(val date: String, val amount: Int, val category: String, val memo: String, val receiptId: Long?)
+
+    private val byUid = HashMap<String, Long>()
+    private val byKey = HashMap<Key, Long>()
+
+    init {
+        existing.forEach { register(it, it.id) }
+    }
+
+    private fun keyOf(g: ExpenseGroup) = Key(g.date, g.amount, g.category, g.memo, g.receiptId)
+
+    private fun register(g: ExpenseGroup, id: Long) {
+        if (g.uid.isNotEmpty()) byUid.putIfAbsent(g.uid, id)
+        byKey.putIfAbsent(keyOf(g), id)
+    }
+
+    /**
+     * backup が既存に当たれば既存の id。当たらなければ null。
+     * @param entity バックアップのグループを復元後のレシート id などに直した実体(uid は backupUid を入れておく)
+     */
+    fun find(backupUid: String, entity: ExpenseGroup): Long? =
+        if (backupUid.isNotEmpty()) byUid[backupUid] else byKey[keyOf(entity)]
+
+    /** 新しく入れたグループを登録する(同じバックアップ内の重複にも効く)。 */
+    fun add(entity: ExpenseGroup, newId: Long) = register(entity, newId)
+}
+
+/**
+ * 復元(マージ)で、バックアップの支出が既存と重複しているかを判定する(純Kotlin)。
+ * uid があれば uid で照合する。uid が無い(形式5以前の)支出は従来のキー(日付・金額・カテゴリ・メモ・レシート・グループ)の件数ベースで照合する。
+ */
+class ExpenseMergeIndex(existing: List<Expense>) {
+    private data class Key(
+        val date: String,
+        val amount: Int,
+        val category: String,
+        val memo: String,
+        val receiptId: Long?,
+        val groupId: Long?,
+    )
+
+    private val uids = HashSet<String>()
+    private val remaining = HashMap<Key, Int>()
+
+    init {
+        for (e in existing) {
+            if (e.uid.isNotEmpty()) uids.add(e.uid)
+            val k = Key(e.date, e.amount, e.category, e.memo, e.receiptId, e.groupId)
+            remaining[k] = (remaining[k] ?: 0) + 1
+        }
+    }
+
+    /**
+     * 重複なら true(取り込まない)。重複でなければ false を返し、同じバックアップ内の重複を防ぐため uid を使用済みにする。
+     * @param mappedReceiptId / mappedGroupId 復元後の id に付け替えたもの
+     */
+    fun isDuplicate(e: BackupExpense, mappedReceiptId: Long?, mappedGroupId: Long?): Boolean {
+        if (e.uid.isNotEmpty()) return !uids.add(e.uid)
+        val k = Key(e.date, e.amount, e.category, e.memo, mappedReceiptId, mappedGroupId)
+        val left = remaining[k] ?: 0
+        if (left > 0) {
+            remaining[k] = left - 1
+            return true
+        }
+        return false
     }
 }
 

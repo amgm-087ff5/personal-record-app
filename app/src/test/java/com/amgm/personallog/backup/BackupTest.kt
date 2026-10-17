@@ -120,15 +120,15 @@ class BackupTest {
     }
 
     @Test
-    fun formatVersionIsFive() {
-        assertEquals(5, BACKUP_FORMAT_VERSION)
+    fun formatVersionIsSix() {
+        assertEquals(6, BACKUP_FORMAT_VERSION)
     }
 
     @Test
-    fun format5_roundTrip_keepsNullTotalSourceCropAndNotDuplicates() {
+    fun format5Fields_roundTrip_keepsNullTotalSourceCropAndNotDuplicates() {
         val data = BackupData(
             formatVersion = BACKUP_FORMAT_VERSION,
-            dbVersion = 8,
+            dbVersion = 9,
             exportedAt = 1L,
             receipts = listOf(
                 BackupReceipt(

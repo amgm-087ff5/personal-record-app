@@ -106,11 +106,20 @@ interface ReceiptDao {
     @Insert
     suspend fun insertItems(items: List<ReceiptItem>)
 
+    @Insert
+    suspend fun insertItem(item: ReceiptItem): Long
+
+    @Query("SELECT * FROM receipt_items ORDER BY id")
+    suspend fun getAllItems(): List<ReceiptItem>
+
     @Update
     suspend fun updateItem(item: ReceiptItem)
 
     @Delete
     suspend fun deleteItem(item: ReceiptItem)
+
+    @Query("DELETE FROM receipt_items WHERE id = :id")
+    suspend fun deleteItemById(id: Long)
 
     @Query("DELETE FROM receipt_items WHERE receiptId = :receiptId")
     suspend fun deleteItemsByReceipt(receiptId: Long)
@@ -143,6 +152,28 @@ interface ExpenseDao {
 
     @Query("SELECT * FROM expenses WHERE receiptId = :receiptId ORDER BY id")
     suspend fun getByReceiptId(receiptId: Long): List<Expense>
+
+    @Query("SELECT * FROM expenses WHERE receiptId = :receiptId ORDER BY id")
+    fun observeByReceiptId(receiptId: Long): Flow<List<Expense>>
+
+    @Query("SELECT * FROM expenses WHERE id = :id")
+    fun observeById(id: Long): Flow<Expense?>
+
+    @Query("SELECT * FROM expenses WHERE groupId = :groupId ORDER BY id")
+    fun observeByGroupId(groupId: Long): Flow<List<Expense>>
+
+    @Query("SELECT * FROM expenses WHERE groupId = :groupId ORDER BY id")
+    suspend fun getByGroupId(groupId: Long): List<Expense>
+
+    @Update
+    suspend fun updateAll(expenses: List<Expense>)
+
+    @Query("DELETE FROM expenses WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
+
+    /** 品目が消えたとき、その品目から作った支出も消す(外部キーの SET NULL で古い行と区別が付かなくなるのを防ぐ)。 */
+    @Query("DELETE FROM expenses WHERE receiptItemId IN (:itemIds)")
+    suspend fun deleteByReceiptItemIds(itemIds: List<Long>)
 
     @Insert
     suspend fun insert(expense: Expense): Long
@@ -186,12 +217,27 @@ interface ExpenseGroupDao {
     @Query("SELECT * FROM expense_groups WHERE date BETWEEN :from AND :to ORDER BY date DESC, id DESC")
     fun observeBetween(from: String, to: String): Flow<List<ExpenseGroup>>
 
-    /** レシートの日時が変わったとき、紐づく支払いグループの日時を追従させる(グループの日時は常にレシートに従う)。 */
-    @Query("UPDATE expense_groups SET date = :date, time = :time WHERE receiptId = :receiptId")
+    /** レシートの日時が変わったとき、紐づく支払いグループのうち日時を支払い側で変えていないものだけ追従させる。 */
+    @Query("UPDATE expense_groups SET date = :date, time = :time WHERE receiptId = :receiptId AND timeEdited = 0")
     suspend fun syncDateTimeFromReceipt(receiptId: Long, date: String, time: String)
+
+    @Query("SELECT * FROM expense_groups WHERE receiptId = :receiptId ORDER BY id")
+    suspend fun getByReceiptId(receiptId: Long): List<ExpenseGroup>
+
+    @Query("SELECT * FROM expense_groups WHERE receiptId = :receiptId ORDER BY id")
+    fun observeByReceiptId(receiptId: Long): Flow<List<ExpenseGroup>>
+
+    @Query("SELECT * FROM expense_groups WHERE id = :id")
+    fun observeById(id: Long): Flow<ExpenseGroup?>
+
+    @Query("SELECT * FROM expense_groups WHERE id = :id")
+    suspend fun getById(id: Long): ExpenseGroup?
 
     @Insert
     suspend fun insert(group: ExpenseGroup): Long
+
+    @Update
+    suspend fun update(group: ExpenseGroup)
 
     @Delete
     suspend fun delete(group: ExpenseGroup)

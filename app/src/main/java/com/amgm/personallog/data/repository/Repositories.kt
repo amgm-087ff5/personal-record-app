@@ -15,8 +15,13 @@ import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptNotDuplicate
 import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.domain.ConfirmPlan
+import com.amgm.personallog.domain.ConfirmPlanner
+import com.amgm.personallog.domain.ItemSaver
 import com.amgm.personallog.domain.LedgerCalc
+import com.amgm.personallog.domain.PaymentLink
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -85,7 +90,10 @@ class ReceiptRepository @Inject constructor(
     suspend fun notDuplicates(): List<ReceiptNotDuplicate> = receiptDao.getAllNotDuplicates()
     fun observeNotDuplicates(): Flow<List<ReceiptNotDuplicate>> = receiptDao.observeNotDuplicates()
 
-    /** レシートと品目を保存(id=0なら新規)。品目は丸ごと置き換える。receiptId を返す。 */
+    /**
+     * レシートと品目を保存(id=0なら新規)。品目は差分で保存する: id がある行は更新、無い行は追加、画面から消えた行は削除。
+     * こうして品目の id を保ち、家計簿の行(receiptItemId)との対応を切らない。receiptId を返す。
+     */
     suspend fun save(receipt: Receipt, items: List<ReceiptItem>): Long = db.withTransaction {
         val id = if (receipt.id == 0L) {
             receiptDao.insert(receipt)
@@ -93,8 +101,14 @@ class ReceiptRepository @Inject constructor(
             receiptDao.update(receipt)
             receipt.id
         }
-        receiptDao.deleteItemsByReceipt(id)
-        receiptDao.insertItems(items.map { it.copy(id = 0, receiptId = id) })
+        val plan = ItemSaver.plan(id, receiptDao.getItems(id), items)
+        if (plan.deleteIds.isNotEmpty()) {
+            // 外部キーの SET NULL だと古い行と区別が付かなくなるので、消えた品目の支出は先に消す
+            expenseDao.deleteByReceiptItemIds(plan.deleteIds)
+            plan.deleteIds.forEach { receiptDao.deleteItemById(it) }
+        }
+        plan.updates.forEach { receiptDao.updateItem(it) }
+        if (plan.inserts.isNotEmpty()) receiptDao.insertItems(plan.inserts)
         // レシートの日時は家計簿側の初期値。支出側で日時を変えていない行だけ追従させる。
         val (date, time) = LedgerCalc.splitPurchasedAt(receipt.purchasedAt)
         expenseDao.syncDateTimeFromReceipt(id, date, time)
@@ -102,24 +116,63 @@ class ReceiptRepository @Inject constructor(
         id
     }
 
-    /** レシートを確定し、家計簿に Expense を作る(再確定しても二重にならないよう作り直す)。 */
+    /**
+     * レシートを確定し、家計簿を更新する。再確定では品目ごとに差分で更新し、家計簿で直した欄(編集済み)は残す。
+     * 立て替えと通常を切り替えたときや、v9 以前に確定した古い行は、作り直す(ConfirmPlanner)。
+     */
     suspend fun confirm(receiptId: Long, perItem: Boolean, now: Long = System.currentTimeMillis()) {
         db.withTransaction {
             val receipt = receiptDao.getById(receiptId) ?: return@withTransaction
             // 合計は確定には必須。未入力なら家計簿を作らない(既存の家計簿も消さない)
             checkNotNull(receipt.totalAmount) { "合計が未入力のため確定できません" }
             val items = receiptDao.getItems(receiptId)
-            deleteExpensesOf(receiptId)
-            val grouped = if (perItem) LedgerCalc.groupFromReceipt(receipt, items, now) else null
-            if (grouped != null) {
-                val groupId = expenseGroupDao.insert(grouped.group)
-                expenseDao.insertAll(grouped.items.map { it.copy(groupId = groupId) })
-            } else {
-                expenseDao.insertAll(LedgerCalc.expensesFromReceipt(receipt, items, perItem, now))
+            val groups = expenseGroupDao.getByReceiptId(receiptId)
+            val existing = expenseDao.getByReceiptId(receiptId)
+            when (val plan = ConfirmPlanner.plan(receipt, items, groups, existing, perItem, now)) {
+                is ConfirmPlan.Rebuild -> {
+                    deleteExpensesOf(receiptId)
+                    if (plan.group != null) {
+                        val groupId = expenseGroupDao.insert(plan.group)
+                        expenseDao.insertAll(plan.children.map { it.copy(groupId = groupId) })
+                    } else {
+                        expenseDao.insertAll(plan.children)
+                    }
+                }
+                is ConfirmPlan.UpdateGroup -> {
+                    expenseGroupDao.update(plan.group)
+                    if (plan.deleteIds.isNotEmpty()) expenseDao.deleteByIds(plan.deleteIds)
+                    if (plan.updates.isNotEmpty()) expenseDao.updateAll(plan.updates)
+                    if (plan.inserts.isNotEmpty()) expenseDao.insertAll(plan.inserts.map { it.copy(groupId = plan.group.id) })
+                }
+                is ConfirmPlan.UpdateSingle -> expenseDao.update(plan.expense)
             }
             receiptDao.update(receipt.copy(status = ReceiptStatus.CONFIRMED))
         }
     }
+
+    /**
+     * いま保存してある家計簿の行が、この内容での確定で作り直される(家計簿で直した内容が消える)か。
+     * 確認の文面に使う。items は画面の品目(新規は id=0)。
+     */
+    suspend fun confirmWouldRebuild(receipt: Receipt, items: List<ReceiptItem>, perItem: Boolean = true): Boolean {
+        if (receipt.id == 0L || receipt.totalAmount == null) return false
+        val groups = expenseGroupDao.getByReceiptId(receipt.id)
+        val existing = expenseDao.getByReceiptId(receipt.id)
+        if (groups.isEmpty() && existing.isEmpty()) return false
+        // 保存で消える品目の支出は、先に消えたものとして計画する
+        val stored = receiptDao.getItems(receipt.id)
+        val plan = ItemSaver.plan(receipt.id, stored, items)
+        val deleted = plan.deleteIds.toSet()
+        val remaining = existing.filter { it.receiptItemId == null || it.receiptItemId !in deleted }
+        val p = ConfirmPlanner.plan(receipt, items, groups, remaining, perItem, 0L)
+        return ConfirmPlanner.discardsExisting(p, groups, remaining)
+    }
+
+    /** このレシートに紐づく家計簿の支払い(グループまたは単独の支出)。確定済みで無ければ null。 */
+    fun observePaymentLink(receiptId: Long): Flow<PaymentLink?> =
+        combine(expenseGroupDao.observeByReceiptId(receiptId), expenseDao.observeByReceiptId(receiptId)) { groups, expenses ->
+            PaymentLink.resolve(groups, expenses)
+        }
 
     /** レシート由来の家計簿の行(支出とグループ)を消す。 */
     suspend fun deleteExpensesOf(receiptId: Long) {
@@ -157,14 +210,33 @@ class ExpenseRepository @Inject constructor(
         return dao.observeTotal(from, to)
     }
 
+    fun observeGroup(id: Long): Flow<ExpenseGroup?> = groupDao.observeById(id)
+    fun observeGroupItems(groupId: Long): Flow<List<Expense>> = dao.observeByGroupId(groupId)
+    fun observeExpense(id: Long): Flow<Expense?> = dao.observeById(id)
+    suspend fun updateGroup(group: ExpenseGroup) = groupDao.update(group)
+    suspend fun updateAll(expenses: List<Expense>) = dao.updateAll(expenses)
+
+    /** レシート画像のサムネイル・「レシートを開く」用。 */
+    suspend fun receipt(id: Long): Receipt? = db.receiptDao().getById(id)
+
+    /** 品目つきの手入力: グループと品目の支出を1つの処理で作る。groupId を返す。 */
+    suspend fun addPayment(group: ExpenseGroup, items: List<Expense>): Long = db.withTransaction {
+        val groupId = groupDao.insert(group)
+        dao.insertAll(items.map { it.copy(groupId = groupId) })
+        groupId
+    }
+
     suspend fun add(expense: Expense): Long = dao.insert(expense)
     suspend fun update(expense: Expense) = dao.update(expense)
     suspend fun delete(expense: Expense) = dao.delete(expense)
     suspend fun get(id: Long): Expense? = dao.getById(id)
 
     /** 支出が紐づくレシートの日時 "yyyy-MM-dd HH:mm"(レシートに時刻が無ければ "yyyy-MM-dd")。紐づかなければ null。 */
-    suspend fun linkedReceiptDateTime(expense: Expense): String? {
-        val receiptId = expense.receiptId ?: return null
+    suspend fun linkedReceiptDateTime(expense: Expense): String? = receiptDateTime(expense.receiptId)
+
+    /** レシートの日時 "yyyy-MM-dd HH:mm"(時刻が無ければ "yyyy-MM-dd")。receiptId が null や無いレシートなら null。 */
+    suspend fun receiptDateTime(receiptId: Long?): String? {
+        if (receiptId == null) return null
         val r = db.receiptDao().getById(receiptId) ?: return null
         val (date, time) = LedgerCalc.splitPurchasedAt(r.purchasedAt)
         return if (time.isEmpty()) date else "$date $time"

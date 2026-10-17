@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.util.UUID
 
 /** 日記(1日1件)。date は "yyyy-MM-dd"。 */
 @Entity(tableName = "diary_entries", indices = [Index(value = ["date"], unique = true)])
@@ -189,7 +190,22 @@ data class ExpenseGroup(
     val memo: String = "",
     val receiptId: Long? = null,
     val createdAt: Long,
+    /** 端末をまたいで変わらない識別子(バックアップの復元時の照合キー)。 */
+    @ColumnInfo(defaultValue = "''")
+    val uid: String = newUid(),
+    /** 金額・カテゴリ・メモ・日時を支払い側で変えたか。false の間だけ、レシートの再確定に追従する。 */
+    @ColumnInfo(defaultValue = "0")
+    val amountEdited: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val categoryEdited: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val memoEdited: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val timeEdited: Boolean = false,
 )
+
+/** 新しい uid(UUID)。 */
+fun newUid(): String = UUID.randomUUID().toString()
 
 /**
  * 家計簿の1行。amount は円で、支出は正の値。receiptId はレシート由来の場合のみ。
@@ -210,8 +226,14 @@ data class ExpenseGroup(
             childColumns = ["groupId"],
             onDelete = ForeignKey.CASCADE,
         ),
+        ForeignKey(
+            entity = ReceiptItem::class,
+            parentColumns = ["id"],
+            childColumns = ["receiptItemId"],
+            onDelete = ForeignKey.SET_NULL,
+        ),
     ],
-    indices = [Index("receiptId"), Index("date"), Index("groupId")],
+    indices = [Index("receiptId"), Index("date"), Index("groupId"), Index("receiptItemId")],
 )
 data class Expense(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -230,6 +252,22 @@ data class Expense(
      */
     @ColumnInfo(defaultValue = "0")
     val timeEdited: Boolean = false,
+    /** 元になったレシートの品目。レシートの再確定で、同じ品目の行を探すのに使う。手入力・古い行は null。 */
+    val receiptItemId: Long? = null,
+    /** 品名。 */
+    @ColumnInfo(defaultValue = "''")
+    val name: String = "",
+    /** 金額・カテゴリ・品名・メモを支払い側で変えたか。false の間だけ、レシートの再確定に追従する。 */
+    @ColumnInfo(defaultValue = "0")
+    val amountEdited: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val categoryEdited: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val nameEdited: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val memoEdited: Boolean = false,
+    /** 端末をまたいで変わらない識別子(バックアップの復元時の照合キー)。 */
+    val uid: String = newUid(),
 )
 
 /** 月別カテゴリ集計の結果行(Roomのクエリ結果としても使う)。 */

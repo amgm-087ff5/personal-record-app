@@ -332,7 +332,111 @@ object Migrations {
         }
     }
 
+    /**
+     * v9 の expenses の CREATE TABLE。Room が生成する 9.json の createSql(`${TABLE_NAME}` を表名にしたもの)と
+     * 完全に一致させること(SchemaMatchTest が検査する)。
+     */
+    fun expensesV9CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (" +
+            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+            "`date` TEXT NOT NULL, " +
+            "`time` TEXT NOT NULL DEFAULT '', " +
+            "`amount` INTEGER NOT NULL, " +
+            "`category` TEXT NOT NULL, " +
+            "`memo` TEXT NOT NULL, " +
+            "`receiptId` INTEGER, " +
+            "`createdAt` INTEGER NOT NULL, " +
+            "`groupId` INTEGER, " +
+            "`timeEdited` INTEGER NOT NULL DEFAULT 0, " +
+            "`receiptItemId` INTEGER, " +
+            "`name` TEXT NOT NULL DEFAULT '', " +
+            "`amountEdited` INTEGER NOT NULL DEFAULT 0, " +
+            "`categoryEdited` INTEGER NOT NULL DEFAULT 0, " +
+            "`nameEdited` INTEGER NOT NULL DEFAULT 0, " +
+            "`memoEdited` INTEGER NOT NULL DEFAULT 0, " +
+            "`uid` TEXT NOT NULL, " +
+            "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL , " +
+            "FOREIGN KEY(`groupId`) REFERENCES `expense_groups`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+            "FOREIGN KEY(`receiptItemId`) REFERENCES `receipt_items`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )"
+
+    /** v9 の expenses のインデックス(9.json の indices[].createSql と一致させる)。宣言順。 */
+    fun expensesV9IndexSqls(table: String): List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_expenses_receiptId` ON `$table` (`receiptId`)",
+        "CREATE INDEX IF NOT EXISTS `index_expenses_date` ON `$table` (`date`)",
+        "CREATE INDEX IF NOT EXISTS `index_expenses_groupId` ON `$table` (`groupId`)",
+        "CREATE INDEX IF NOT EXISTS `index_expenses_receiptItemId` ON `$table` (`receiptItemId`)",
+    )
+
+    /** v8 の expenses の列(v9 の表へコピーする)。 */
+    private const val EXPENSES_V8_COLUMNS =
+        "`id`, `date`, `time`, `amount`, `category`, `memo`, `receiptId`, `createdAt`, `groupId`, `timeEdited`"
+
+    /** v9 で expense_groups に ALTER TABLE ADD COLUMN で足す列(列名, 型, 既定値)。すべて NOT NULL。 */
+    data class AddedColumn(val name: String, val type: String, val default: String)
+
+    val GROUPS_V9_ADDED_COLUMNS: List<AddedColumn> = listOf(
+        AddedColumn("uid", "TEXT", "''"),
+        AddedColumn("amountEdited", "INTEGER", "0"),
+        AddedColumn("categoryEdited", "INTEGER", "0"),
+        AddedColumn("memoEdited", "INTEGER", "0"),
+        AddedColumn("timeEdited", "INTEGER", "0"),
+    )
+
+    fun groupsV9AddColumnSql(c: AddedColumn): String =
+        "ALTER TABLE `expense_groups` ADD COLUMN `${c.name}` ${c.type} NOT NULL DEFAULT ${c.default}"
+
+    /** 作り直しの前後で件数を比べる対象(expenses の件数と、expense_groups の件数)。 */
+    internal val V9_COUNT_QUERIES: List<Pair<String, String>> = listOf(
+        "expenses" to "SELECT COUNT(*) FROM `expenses`",
+        "expense_groups" to "SELECT COUNT(*) FROM `expense_groups`",
+        "receipt_items" to "SELECT COUNT(*) FROM `receipt_items`",
+    )
+
+    /**
+     * v8 -> v9: 支払いの品目化と「編集済み」の記録。
+     *  - expenses を作り直す(receiptItemId の外部キーを足すため)。expenses は子の表なので DROP しても他を壊さない。
+     *    既存行の receiptItemId は NULL(対応付けできない)。uid は乱数で埋める。
+     *  - expense_groups は親(expenses が参照する)ので作り直さず、ALTER TABLE ADD COLUMN で列を足す。
+     *    uid は DEFAULT '' で足してから UPDATE で乱数にする。
+     * 安全策: 作り直しの前後で expenses・expense_groups・receipt_items の件数を数え、違えば例外にする。
+     */
+    val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val before = V9_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+            val oldSeq = db.query("SELECT `seq` FROM `sqlite_sequence` WHERE `name` = 'expenses'")
+                .use { c -> if (c.moveToFirst()) c.getLong(0) else null }
+
+            // 親の表: 列を足すだけ
+            for (c in GROUPS_V9_ADDED_COLUMNS) db.execSQL(groupsV9AddColumnSql(c))
+            db.execSQL("UPDATE `expense_groups` SET `uid` = lower(hex(randomblob(16)))")
+
+            // 子の表: 作り直し
+            db.execSQL("DROP TABLE IF EXISTS `expenses_new`")
+            db.execSQL(expensesV9CreateSql("expenses_new"))
+            db.execSQL(
+                "INSERT INTO `expenses_new` ($EXPENSES_V8_COLUMNS, `uid`) " +
+                    "SELECT $EXPENSES_V8_COLUMNS, lower(hex(randomblob(16))) FROM `expenses`",
+            )
+            db.execSQL("DROP TABLE `expenses`")
+            db.execSQL("ALTER TABLE `expenses_new` RENAME TO `expenses`")
+            if (oldSeq != null) {
+                db.execSQL("UPDATE `sqlite_sequence` SET `seq` = MAX(`seq`, ?) WHERE `name` = 'expenses'", arrayOf<Any?>(oldSeq))
+            }
+            for (sql in expensesV9IndexSqls("expenses")) db.execSQL(sql)
+
+            val after = V9_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+            if (before != after) {
+                throw IllegalStateException("v9 への移行を中止しました: 件数が変わりました $before -> $after")
+            }
+            db.query("PRAGMA foreign_key_check").use { c ->
+                if (c.moveToFirst()) {
+                    throw IllegalStateException("v9 への移行を中止しました: 外部キーの整合性エラー(表 ${c.getString(0)})")
+                }
+            }
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
-        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
     )
 }

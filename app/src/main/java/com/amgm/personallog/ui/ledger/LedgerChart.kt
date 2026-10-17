@@ -101,9 +101,7 @@ object LedgerChart {
         val d = day.toString()
         return entries
             .filter { it.date == d && hourOf(it) == hour }
-            .groupBy { it.category }
-            .map { (c, list) -> ChartSegment(c, list.sumOf { it.amount }) }
-            .sortedByDescending { it.amount }
+            .let(::toSegments)
     }
 
     /**
@@ -124,10 +122,11 @@ object LedgerChart {
 
     /** start..end(両端含む)の支出をカテゴリごとに合計し、金額の多い順にする。 */
     fun segments(entries: List<LedgerEntry>, start: LocalDate, end: LocalDate): List<ChartSegment> =
-        inRange(entries, start, end)
-            .groupBy { it.category }
-            .map { (c, list) -> ChartSegment(c, list.sumOf { it.amount }) }
-            .sortedByDescending { it.amount }
+        toSegments(inRange(entries, start, end))
+
+    /** 行をカテゴリごとに合計して、金額の多い順の区切りにする。グループは品目ごとのカテゴリで数える。 */
+    private fun toSegments(entries: List<LedgerEntry>): List<ChartSegment> =
+        LedgerLogic.totalsByCategory(entries).map { ChartSegment(it.category, it.total) }
 
     /** date(yyyy-MM-dd)が start..end に入る行。ISO 形式なので文字列比較で足りる。 */
     fun inRange(entries: List<LedgerEntry>, start: LocalDate, end: LocalDate): List<LedgerEntry> {

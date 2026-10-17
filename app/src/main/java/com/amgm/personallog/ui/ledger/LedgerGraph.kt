@@ -2,18 +2,46 @@ package com.amgm.personallog.ui.ledger
 
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
+import androidx.navigation.navArgument
+import com.amgm.personallog.domain.PaymentKind
+import com.amgm.personallog.ui.receipt.ReceiptRoutes
 
 object LedgerRoutes {
     const val ROOT = "ledger"
     const val HOME = "ledger/home"
-    // 機能内の画面遷移はここにルートを足し、下の navigation { } に composable を追加する
+    const val PAYMENT = "ledger/payment/{kind}/{id}"
+
+    fun payment(kind: PaymentKind, id: Long) = "ledger/payment/${kind.key}/$id"
 }
 
 /** 家計簿機能のナビゲーショングラフ。AppNavHost から呼ばれるので、機能内の遷移はここで完結させる。 */
 fun NavGraphBuilder.ledgerGraph(navController: NavController) {
     navigation(route = LedgerRoutes.ROOT, startDestination = LedgerRoutes.HOME) {
-        composable(LedgerRoutes.HOME) { LedgerScreen() }
+        composable(LedgerRoutes.HOME) {
+            LedgerScreen(onOpenPayment = { kind, id -> navController.navigate(LedgerRoutes.payment(kind, id)) })
+        }
+        composable(
+            route = LedgerRoutes.PAYMENT,
+            arguments = listOf(
+                navArgument("kind") { type = NavType.StringType },
+                navArgument("id") { type = NavType.LongType },
+            ),
+        ) {
+            PaymentDetailScreen(
+                onBack = { navController.popBackStack() },
+                onOpenReceipt = { receiptId ->
+                    // レシートの詳細から来たなら、新しく積まずに戻る(行き来で履歴が伸びない)
+                    val prev = navController.previousBackStackEntry
+                    if (prev?.destination?.route == ReceiptRoutes.DETAIL && prev.arguments?.getLong("id") == receiptId) {
+                        navController.popBackStack()
+                    } else {
+                        navController.navigate(ReceiptRoutes.detail(receiptId))
+                    }
+                },
+            )
+        }
     }
 }

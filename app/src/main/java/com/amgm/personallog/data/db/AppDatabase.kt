@@ -16,7 +16,7 @@ import com.amgm.personallog.data.model.ReceiptNotDuplicate
  */
 @Database(
     entities = [DiaryEntry::class, DiaryPhoto::class, Receipt::class, ReceiptItem::class, Expense::class, ExpenseGroup::class, ReceiptNotDuplicate::class],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

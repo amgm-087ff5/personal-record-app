@@ -45,6 +45,7 @@ import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.Hairline
 import com.amgm.personallog.ui.design.InkButton
 import com.amgm.personallog.ui.design.InkButtonKind
+import com.amgm.personallog.domain.PaymentLink
 import com.amgm.personallog.ui.design.InkSheet
 import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.LeaderRow
@@ -91,6 +92,7 @@ private fun dashboardTotalStyle(): TextStyle = AppTheme.type.numeralXL.copy(
 fun ReceiptDetailScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenPayment: (PaymentLink) -> Unit = {},
     viewModel: ReceiptDetailViewModel = hiltViewModel(),
 ) {
     val s by viewModel.state.collectAsStateWithLifecycle()
@@ -130,6 +132,10 @@ fun ReceiptDetailScreen(
                         TextAction("読み取り直す", onClick = { sheet = SHEET_RESCAN }, enabled = !s.busy)
                     }
                 }
+            }
+
+            s.paymentLink?.takeIf { s.confirmed }?.let { link ->
+                item(key = "payment-link") { PaymentLinkRow(link, onClick = { onOpenPayment(link) }) }
             }
 
             if (s.loading) {
@@ -512,6 +518,10 @@ fun ReceiptDetailScreen(
             }
             TextAction("キャンセル", onClick = viewModel::dismissMissingTotal, color = AppTheme.colors.inkSoft)
         }
+    }
+
+    if (s.rebuildWarning) {
+        RebuildWarningSheet(onConfirm = viewModel::confirmRebuild, onDismiss = viewModel::dismissRebuildWarning)
     }
 
     if (s.duplicateWarning.isNotEmpty()) {
