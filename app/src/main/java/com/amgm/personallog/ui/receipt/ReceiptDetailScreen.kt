@@ -41,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.domain.TaxCalc
+import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptImageCodec
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.Hairline
@@ -102,6 +103,8 @@ fun ReceiptDetailScreen(
     var editGroupKey by rememberSaveable { mutableStateOf(0L) }
     var editUnitKey by rememberSaveable { mutableStateOf(0L) }
     var viewerOpen by rememberSaveable { mutableStateOf(false) }
+    var adjustOpen by rememberSaveable { mutableStateOf(false) }
+    var pendingRescanAdjust by rememberSaveable(stateSaver = ReceiptAdjustOrNullSaver) { mutableStateOf<ReceiptAdjust?>(null) }
     val groups = remember(s.items) { groupItemForms(s.items) }
 
     LaunchedEffect(s.finished) { if (s.finished) onBack() }
@@ -115,7 +118,17 @@ fun ReceiptDetailScreen(
             }
             if (hasImage) {
                 item(key = "image") {
-                    ReceiptImage(imagePath = s.imagePath, onClick = { viewerOpen = true })
+                    ReceiptImage(imagePath = s.imagePath, adjust = s.adjust, onClick = { viewerOpen = true })
+                }
+            }
+            if (hasImage) {
+                item(key = "adjustLink") {
+                    TextAction(
+                        "向き・範囲を調整",
+                        onClick = { adjustOpen = true },
+                        enabled = !s.busy,
+                        modifier = Modifier.padding(horizontal = Space.s),
+                    )
                 }
             }
             // 戻る・読み取り直すは画像の下の細い行
@@ -380,7 +393,34 @@ fun ReceiptDetailScreen(
     }
 
     if (viewerOpen) {
-        ReceiptImageViewer(relativePath = s.imagePath, onDismiss = { viewerOpen = false })
+        ReceiptImageViewer(relativePath = s.imagePath, onDismiss = { viewerOpen = false }, adjust = s.adjust)
+    }
+
+    // 向き・範囲の調整(画像1枚の編集)
+    if (adjustOpen) {
+        ReceiptAdjustSingleDialog(
+            imagePath = s.imagePath,
+            initial = s.adjust,
+            busy = s.busy,
+            onSave = { adjustOpen = false; viewModel.saveAdjust(it) },
+            // 読み取り直しは入力内容が置き換わるので、既存の確認を出してから実行する
+            onSaveAndRescan = { adjustOpen = false; pendingRescanAdjust = it },
+            onDismiss = { adjustOpen = false },
+        )
+    }
+    pendingRescanAdjust?.let { a ->
+        InkSheet(onDismiss = { pendingRescanAdjust = null }) {
+            SheetTitle("保存して読み取り直す")
+            Text(
+                "向き・範囲を保存し、その補正で読み取り直します。現在の入力内容は、新しい読み取り結果で置き換わります。画像をClaudeに再送信します。",
+                style = AppTheme.type.body,
+                color = AppTheme.colors.inkSoft,
+                modifier = Modifier.padding(bottom = Space.m),
+            )
+            TextAction("保存して読み取り直す", onClick = { pendingRescanAdjust = null; viewModel.saveAdjustAndRescan(a) })
+            TextAction("向き・範囲だけ保存", onClick = { pendingRescanAdjust = null; viewModel.saveAdjust(a) }, color = AppTheme.colors.inkSoft)
+            TextAction("キャンセル", onClick = { pendingRescanAdjust = null }, color = AppTheme.colors.inkSoft)
+        }
     }
 
     // 品目(まとまり)の編集シート
@@ -798,13 +838,15 @@ private fun UnitEditSheet(
 
 /** 原本画像。全幅・高さ固定で切り抜き、タップで拡大表示(ReceiptImageViewer)。 */
 @Composable
-private fun ReceiptImage(imagePath: String, onClick: () -> Unit) {
+private fun ReceiptImage(imagePath: String, adjust: ReceiptAdjust, onClick: () -> Unit) {
     val context = LocalContext.current
     // 表示用は 1024px まで。拡大表示(ReceiptImageViewer)は別に高解像度で読む。
-    val bitmap by produceState<ImageBitmap?>(initialValue = null, imagePath) {
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, imagePath, adjust) {
         value = withContext(Dispatchers.IO) {
             try {
-                ReceiptImageCodec.decodeScaled(File(context.filesDir, imagePath), 1024)?.asImageBitmap()
+                ReceiptImageCodec.decodeAdjusted(File(context.filesDir, imagePath), adjust, 1024)?.asImageBitmap()
+            } catch (e: OutOfMemoryError) {
+                null
             } catch (e: Exception) {
                 null
             }

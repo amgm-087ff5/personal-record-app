@@ -30,7 +30,7 @@ class ReceiptScanner @Inject constructor(
     private val store: ReceiptImageStore,
     private val client: ClaudeApiClient,
 ) {
-    suspend fun scan(imagePath: String): ScanOutcome {
+    suspend fun scan(imagePath: String, adjust: ReceiptAdjust = ReceiptAdjust.NONE): ScanOutcome {
         val s = settings.settings.first()
         if (s.anthropicApiKey.isBlank()) {
             return ScanOutcome.Failed("APIキーが未設定です。設定タブでAPIキーを入れてください。")
@@ -39,7 +39,7 @@ class ReceiptScanner @Inject constructor(
         if (!file.exists()) return ScanOutcome.Failed("画像ファイルが見つかりません。")
         return try {
             val body = withContext(Dispatchers.Default) {
-                val bytes = ReceiptImageCodec.prepareForUpload(file)
+                val bytes = ReceiptImageCodec.prepareForUpload(file, adjust)
                 ClaudeRequest.buildBody(s.claudeModelId, Base64.encodeToString(bytes, Base64.NO_WRAP))
             }
             val response = client.post(s.anthropicApiKey.trim(), body)
@@ -80,6 +80,7 @@ object ReceiptMapper {
         existingId: Long = 0,
         imageHash: String? = null,
         createdAt: Long = now,
+        adjust: ReceiptAdjust = ReceiptAdjust.NONE,
     ): Pair<Receipt, List<ReceiptItem>> = when (outcome) {
         is ScanOutcome.Parsed -> {
             val p = outcome.receipt
@@ -101,17 +102,24 @@ object ReceiptMapper {
                 status = ReceiptStatus.DRAFT,
                 createdAt = createdAt,
                 imageHash = imageHash,
+                rotationDegrees = adjust.rotationDegrees,
+                cropLeft = adjust.cropLeft, cropTop = adjust.cropTop,
+                cropRight = adjust.cropRight, cropBottom = adjust.cropBottom,
             ) to items
         }
         is ScanOutcome.Unparsable -> Receipt(
             id = existingId, purchasedAt = today, storeName = "", totalAmount = null,
             imagePath = imagePath, rawJson = outcome.raw, status = ReceiptStatus.DRAFT, createdAt = createdAt,
             imageHash = imageHash,
+            rotationDegrees = adjust.rotationDegrees,
+            cropLeft = adjust.cropLeft, cropTop = adjust.cropTop, cropRight = adjust.cropRight, cropBottom = adjust.cropBottom,
         ) to emptyList()
         is ScanOutcome.Failed -> Receipt(
             id = existingId, purchasedAt = today, storeName = "", totalAmount = null,
             imagePath = imagePath, rawJson = "", status = ReceiptStatus.DRAFT, createdAt = createdAt,
             imageHash = imageHash,
+            rotationDegrees = adjust.rotationDegrees,
+            cropLeft = adjust.cropLeft, cropTop = adjust.cropTop, cropRight = adjust.cropRight, cropBottom = adjust.cropBottom,
         ) to emptyList()
     }
 }

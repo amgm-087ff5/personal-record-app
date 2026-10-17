@@ -88,6 +88,13 @@ interface ReceiptDao {
     @Query("UPDATE receipts SET imageHash = :hash WHERE id = :id AND imageHash IS NULL")
     suspend fun setImageHashIfMissing(id: Long, hash: String): Int
 
+    /** 補正値(回転・トリミング)の列だけを更新する。 */
+    @Query(
+        "UPDATE receipts SET rotationDegrees = :rotation, cropLeft = :left, cropTop = :top, " +
+            "cropRight = :right, cropBottom = :bottom WHERE id = :id",
+    )
+    suspend fun setAdjust(id: Long, rotation: Float, left: Float, top: Float, right: Float, bottom: Float): Int
+
     @Insert
     suspend fun insert(receipt: Receipt): Long
 
