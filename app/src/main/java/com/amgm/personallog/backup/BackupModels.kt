@@ -6,6 +6,9 @@ import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.ReceiptNotDuplicate
+import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.domain.PricedLine
 import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.domain.legacyReceiptOwnYen
@@ -17,7 +20,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /** バックアップZIPのフォーマット版。互換性を壊す変更をしたら上げる。 */
-const val BACKUP_FORMAT_VERSION = 4
+const val BACKUP_FORMAT_VERSION = 5
 const val BACKUP_DATA_ENTRY = "data.json"
 const val BACKUP_FILES_PREFIX = "files/"
 
@@ -40,6 +43,8 @@ data class BackupData(
     val expenses: List<BackupExpense> = emptyList(),
     /** v4 以降。v3 以前のファイルには無いので空として読む。 */
     val expenseGroups: List<BackupExpenseGroup> = emptyList(),
+    /** v5 以降。「重複ではない」と判断したレシートの組。v4 以前のファイルには無いので空として読む。 */
+    val receiptNotDuplicates: List<BackupNotDuplicate> = emptyList(),
 )
 
 @Serializable
@@ -63,7 +68,8 @@ data class BackupReceipt(
     val id: Long,
     val purchasedAt: String,
     val storeName: String,
-    val totalAmount: Int,
+    /** v5 以降は null(未入力・下書きのみ)がありうる。v4 以前は常に値がある。 */
+    val totalAmount: Int? = null,
     val imagePath: String,
     val rawJson: String,
     val status: String,
@@ -72,6 +78,16 @@ data class BackupReceipt(
     val isAdvance: Boolean = false,
     /** v3で追加(レシート全体の自分の分・円)。無い古いバックアップは品目の値から求める。 */
     val ownAmount: Int? = null,
+    /** v5 以降。合計の出所(TotalSource)。無い古いバックアップは unknown。 */
+    val totalSource: String = TotalSource.UNKNOWN,
+    /** v5 以降。原本画像のSHA-256。復元(マージ)のレシート照合に使う。 */
+    val imageHash: String? = null,
+    /** v5 以降。画像の回転(時計回りの度)と、回転後の画像に対するトリミング範囲(0〜1)。 */
+    val rotationDegrees: Float = 0f,
+    val cropLeft: Float = 0f,
+    val cropTop: Float = 0f,
+    val cropRight: Float = 1f,
+    val cropBottom: Float = 1f,
 ) {
     /** items はこのレシートの品目(旧形式の自分の分を集計するため)。 */
     fun toEntity(items: List<BackupReceiptItem> = emptyList()): Receipt {
@@ -80,10 +96,78 @@ data class BackupReceipt(
                 PricedLine(it.amount, it.taxRate, it.priceIncludesTax, it.ownAmount)
             },
         )
-        return Receipt(id, purchasedAt, storeName, totalAmount, imagePath, rawJson, status, createdAt, isAdvance = isAdvance, ownAmount = own)
+        // 確定済みは合計が必須。合計の無い確定済みは下書きに戻して取り込む(家計簿を作らない)
+        val safeStatus = if (status == ReceiptStatus.CONFIRMED && totalAmount == null) ReceiptStatus.DRAFT else status
+        return Receipt(
+            id = id, purchasedAt = purchasedAt, storeName = storeName, totalAmount = totalAmount,
+            imagePath = imagePath, rawJson = rawJson, status = safeStatus, createdAt = createdAt,
+            imageHash = imageHash, isAdvance = isAdvance, ownAmount = own,
+            totalSource = totalSource,
+            rotationDegrees = rotationDegrees,
+            cropLeft = cropLeft, cropTop = cropTop, cropRight = cropRight, cropBottom = cropBottom,
+        )
     }
     companion object {
-        fun from(e: Receipt) = BackupReceipt(e.id, e.purchasedAt, e.storeName, e.totalAmount, e.imagePath, e.rawJson, e.status, e.createdAt, e.isAdvance, e.ownAmount)
+        fun from(e: Receipt) = BackupReceipt(
+            id = e.id, purchasedAt = e.purchasedAt, storeName = e.storeName, totalAmount = e.totalAmount,
+            imagePath = e.imagePath, rawJson = e.rawJson, status = e.status, createdAt = e.createdAt,
+            isAdvance = e.isAdvance, ownAmount = e.ownAmount,
+            totalSource = e.totalSource, imageHash = e.imageHash,
+            rotationDegrees = e.rotationDegrees,
+            cropLeft = e.cropLeft, cropTop = e.cropTop, cropRight = e.cropRight, cropBottom = e.cropBottom,
+        )
+    }
+}
+
+/** 「重複ではない」の組(v5 以降)。receiptIdLow < receiptIdHigh。 */
+@Serializable
+data class BackupNotDuplicate(val receiptIdLow: Long, val receiptIdHigh: Long, val createdAt: Long = 0) {
+    companion object {
+        fun from(e: ReceiptNotDuplicate) = BackupNotDuplicate(e.receiptIdLow, e.receiptIdHigh, e.createdAt)
+    }
+}
+
+/**
+ * 「重複ではない」の組を、復元後のレシート id に付け替える。idMap はバックアップ内の id -> 復元後の id。
+ * どちらかの対応が取れない組は捨てる。同じレシートどうしの組になったもの・重複した組も捨てる。
+ */
+fun remapNotDuplicates(pairs: List<BackupNotDuplicate>, idMap: Map<Long, Long>): List<ReceiptNotDuplicate> =
+    pairs.mapNotNull { p ->
+        val low = idMap[p.receiptIdLow] ?: return@mapNotNull null
+        val high = idMap[p.receiptIdHigh] ?: return@mapNotNull null
+        ReceiptNotDuplicate.of(low, high, p.createdAt)
+    }.distinctBy { it.receiptIdLow to it.receiptIdHigh }
+
+/**
+ * 復元(マージ)で、バックアップのレシートが既存のどのレシートに当たるかを探す(純Kotlin)。
+ * 照合キーは、imageHash があれば imageHash、無ければ従来のキー(日時・店名・合計・画像パス。合計は null もありうる)。
+ * 同じキーが複数あっても1対1で対応させる(同じ画像を「それでも追加」した2枚が1枚に潰れない)。
+ */
+class ReceiptMergeIndex(existing: List<Receipt>) {
+    private data class LegacyKey(val purchasedAt: String, val storeName: String, val totalAmount: Int?, val imagePath: String)
+
+    private val byHash = HashMap<String, ArrayDeque<Long>>()
+    private val byLegacy = HashMap<LegacyKey, ArrayDeque<Long>>()
+    private val used = HashSet<Long>()
+
+    init {
+        for (r in existing) {
+            r.imageHash?.takeIf { it.isNotEmpty() }?.let { byHash.getOrPut(it) { ArrayDeque() }.addLast(r.id) }
+            byLegacy.getOrPut(legacyKey(r)) { ArrayDeque() }.addLast(r.id)
+        }
+    }
+
+    private fun legacyKey(r: Receipt) = LegacyKey(r.purchasedAt, r.storeName, r.totalAmount, r.imagePath)
+
+    /** 対応する未使用の既存レシートの id。無ければ null。見つけた id は使用済みにする。 */
+    fun take(r: Receipt): Long? {
+        val hash = r.imageHash?.takeIf { it.isNotEmpty() }
+        val queue = if (hash != null) byHash[hash] else byLegacy[legacyKey(r)]
+        while (!queue.isNullOrEmpty()) {
+            val id = queue.removeFirst()
+            if (used.add(id)) return id
+        }
+        return null
     }
 }
 

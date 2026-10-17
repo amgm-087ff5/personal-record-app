@@ -10,7 +10,6 @@ import com.amgm.personallog.data.db.ExpenseDao
 import com.amgm.personallog.data.db.ExpenseGroupDao
 import com.amgm.personallog.data.db.ReceiptDao
 import com.amgm.personallog.data.model.ExpenseGroup
-import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.domain.LedgerCalc
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +60,7 @@ class BackupManager @Inject constructor(
                 receiptItems = items.map { BackupReceiptItem.from(it) },
                 expenses = expenses.map { BackupExpense.from(it) },
                 expenseGroups = groups.map { BackupExpenseGroup.from(it) },
+                receiptNotDuplicates = receiptDao.getAllNotDuplicates().map { BackupNotDuplicate.from(it) },
             )
             val json = BackupJson.encodeToString(BackupData.serializer(), data).toByteArray(Charsets.UTF_8)
             val files = collectFiles()
@@ -194,6 +194,8 @@ class BackupManager @Inject constructor(
         val replaceItems = data.receiptItems.flatMap { it.toEntities() }
         if (replaceItems.isNotEmpty()) receiptDao.insertItems(replaceItems)
         val receiptIds = data.receipts.map { it.id }.toSet()
+        // 「重複ではない」の組。replace は id をそのまま使うので、レシートが無い組だけ捨てる
+        receiptDao.insertNotDuplicates(remapNotDuplicates(data.receiptNotDuplicates, receiptIds.associateWith { it }))
         val times = receiptTimes(data)
         data.expenseGroups.forEach { g ->
             expenseGroupDao.insert(g.toEntity(linkedTime(g.receiptId, times)).copy(receiptId = g.receiptId?.takeIf { it in receiptIds }))
@@ -225,7 +227,6 @@ class BackupManager @Inject constructor(
 
     private fun linkedTime(receiptId: Long?, times: Map<Long, String>): String? = receiptId?.let { times[it] }
 
-    private data class ReceiptKey(val purchasedAt: String, val storeName: String, val totalAmount: Int, val imagePath: String)
     private data class ExpenseKey(
         val date: String,
         val amount: Int,
@@ -235,8 +236,6 @@ class BackupManager @Inject constructor(
         val groupId: Long?,
     )
     private data class ExpenseGroupKey(val date: String, val amount: Int, val category: String, val memo: String, val receiptId: Long?)
-
-    private fun receiptKey(r: Receipt) = ReceiptKey(r.purchasedAt, r.storeName, r.totalAmount, r.imagePath)
 
     private suspend fun mergeAll(data: BackupData, fileCount: Int): ImportResult {
         var skipped = 0
@@ -271,21 +270,19 @@ class BackupManager @Inject constructor(
             addedPhotos++
         }
 
-        // レシート(日時・店名・合計・画像パスで重複判定)
-        val receiptByKey = receiptDao.observeAll().first().associate { receiptKey(it) to it.id }.toMutableMap()
+        // レシート(画像ハッシュがあればハッシュで、無ければ日時・店名・合計・画像パスで照合)
+        val receiptIndex = ReceiptMergeIndex(receiptDao.observeAll().first())
         val receiptIdMap = HashMap<Long, Long>()
         val itemsByReceipt = data.receiptItems.groupBy { it.receiptId }
         for (r in data.receipts) {
             val entity = r.toEntity(itemsByReceipt[r.id].orEmpty())
-            val key = receiptKey(entity)
-            val existing = receiptByKey[key]
+            val existing = receiptIndex.take(entity)
             if (existing != null) {
                 receiptIdMap[r.id] = existing
                 skipped++
             } else {
                 val newId = receiptDao.insert(entity.copy(id = 0))
                 receiptIdMap[r.id] = newId
-                receiptByKey[key] = newId
                 val items = itemsByReceipt[r.id].orEmpty()
                 if (items.isNotEmpty()) {
                     receiptDao.insertItems(items.flatMap { it.toEntities() }.map { it.copy(id = 0, receiptId = newId) })
@@ -293,6 +290,9 @@ class BackupManager @Inject constructor(
                 addedReceipts++
             }
         }
+
+        // 「重複ではない」の組: 復元後のレシート id に付け替える。対応が取れない組は捨てる
+        receiptDao.insertNotDuplicates(remapNotDuplicates(data.receiptNotDuplicates, receiptIdMap))
 
         // 支払いグループ(日付・金額・カテゴリ・メモ・レシートで重複判定)。既存と重複したグループの品目は飛ばす
         val groupKeyOf = { g: ExpenseGroup -> ExpenseGroupKey(g.date, g.amount, g.category, g.memo, g.receiptId) }
