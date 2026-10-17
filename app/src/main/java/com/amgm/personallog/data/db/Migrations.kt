@@ -218,7 +218,7 @@ object Migrations {
     }
 
     /**
-     * v8 の receipts の CREATE TABLE。Room が生成する 8.json の createSql(`${TABLE_NAME}` を表名にしたもの)と
+     * v8 の receipts の CREATE TABLE。Room が生成する v8 の createSql(`${TABLE_NAME}` を表名にしたもの)と
      * 完全に一致させること(SchemaMatchTest が検査する)。一致しないと端末でアプリが起動時に落ちる。
      */
     fun receiptsV8CreateSql(table: String): String =
@@ -241,7 +241,7 @@ object Migrations {
             "`cropRight` REAL NOT NULL DEFAULT 1, " +
             "`cropBottom` REAL NOT NULL DEFAULT 1)"
 
-    /** v8 の receipt_not_duplicates の CREATE TABLE(8.json の createSql と一致させる)。 */
+    /** v8 の receipt_not_duplicates の CREATE TABLE(v8 の createSql と一致させる)。 */
     fun notDuplicatesV8CreateSql(table: String): String =
         "CREATE TABLE IF NOT EXISTS `$table` (" +
             "`receiptIdLow` INTEGER NOT NULL, " +
@@ -251,7 +251,7 @@ object Migrations {
             "FOREIGN KEY(`receiptIdLow`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
             "FOREIGN KEY(`receiptIdHigh`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
 
-    /** v8 の receipt_not_duplicates のインデックス(8.json の indices[].createSql と一致させる)。 */
+    /** v8 の receipt_not_duplicates のインデックス(v8 のテスト用資料 schemas-fixture/8.json の indices と一致させる)。 */
     fun notDuplicatesV8IndexSql(table: String): String =
         "CREATE INDEX IF NOT EXISTS `index_receipt_not_duplicates_receiptIdHigh` ON `$table` (`receiptIdHigh`)"
 

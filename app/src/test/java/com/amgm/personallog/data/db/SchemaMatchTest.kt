@@ -15,6 +15,8 @@ import java.io.File
  * Room が KSP でビルド時に生成する 9.json(app/schemas)と、Migrations.kt の v9 の SQL が一致するかを確かめる。
  * 一致しないと、端末でアプリが起動時に落ちる(Room の移行後の検証で "Migration didn't properly handle")。
  * 9.json は feat ブランチではコミットされないが、テストの前に KSP が生成する。7.json はコミット済み。
+ * 区別: app/schemas の下は Room の生成物だけを置く。手で作った v8 の資料は src/test/resources/schemas-fixture/8.json にあり、
+ * この検査には使わない(v8 の SQL は Migrations の定数と、生成された 9.json の同じ表との一致で確かめる)。
  */
 class SchemaMatchTest {
     private val dir = "schemas/com.amgm.personallog.data.db.AppDatabase"

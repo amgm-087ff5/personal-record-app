@@ -27,7 +27,7 @@ import java.io.File
 
 /**
  * v8 -> v9 の移行を、本物の SQLite(Robolectric)で実行する。
- * v8 の DB は app/schemas の 8.json の createSql・indices で作る。v7 は 7.json。
+ * v8 の DB はテスト用の資料 schemas-fixture/8.json(手作り)の createSql・indices で作る。v7 は app/schemas の 7.json(Room の生成物)。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
@@ -48,10 +48,22 @@ class MigrationV9RobolectricTest {
 
     private val dbFile: File get() = context.getDatabasePath(name)
 
+    /**
+     * 移行前の版の DB を作るための CREATE 文を JSON から読む。
+     * 区別: 7.json は Room が生成してコミットされた本物の生成物(app/schemas)。
+     * 8.json は手で作ったテスト用の資料(identityHash は仮の値)で、app/src/test/resources/schemas-fixture に置く。
+     * 生成物の置き場(app/schemas)に手作りの版を置くと、main の CI が生成する本物と衝突するため、分けてある。
+     */
     private fun schema(version: Int): List<String> {
-        val rel = "schemas/com.amgm.personallog.data.db.AppDatabase/$version.json"
-        val file = listOf(File(rel), File("app/$rel")).firstOrNull { it.isFile } ?: error("$version.json が見つかりません")
-        val entities = Json.parseToJsonElement(file.readText()).jsonObject["database"]!!.jsonObject["entities"]!!.jsonArray
+        val text: String = if (version == 8) {
+            val url = javaClass.classLoader!!.getResource("schemas-fixture/8.json") ?: error("schemas-fixture/8.json が見つかりません")
+            url.readText()
+        } else {
+            val rel = "schemas/com.amgm.personallog.data.db.AppDatabase/$version.json"
+            val file = listOf(File(rel), File("app/$rel")).firstOrNull { it.isFile } ?: error("$version.json が見つかりません")
+            file.readText()
+        }
+        val entities = Json.parseToJsonElement(text).jsonObject["database"]!!.jsonObject["entities"]!!.jsonArray
         val sqls = ArrayList<String>()
         for (e in entities) {
             val o = e.jsonObject
