@@ -43,7 +43,8 @@ data class Receipt(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val purchasedAt: String,
     val storeName: String,
-    val totalAmount: Int,
+    /** 合計(円・レシートの印字)。null は未入力で、下書きのときだけ許す(確定には必須)。 */
+    val totalAmount: Int?,
     val imagePath: String,
     /** Claude応答の原文(JSON文字列) */
     val rawJson: String,
@@ -56,11 +57,76 @@ data class Receipt(
     val isAdvance: Boolean = false,
     /** 立て替えのとき、レシート全体のうち自分が払う金額(円・税込)。null は支払総額の全額。 */
     val ownAmount: Int? = null,
+    /** 合計の出所。TotalSource の値。 */
+    @ColumnInfo(defaultValue = "'unknown'")
+    val totalSource: String = TotalSource.UNKNOWN,
+    /** 画像の回転(時計回りの度)。90度単位の回転と微調整の合計。 */
+    @ColumnInfo(defaultValue = "0")
+    val rotationDegrees: Float = 0f,
+    /** トリミング範囲(回転後の画像に対する0〜1の比率)。 */
+    @ColumnInfo(defaultValue = "0")
+    val cropLeft: Float = 0f,
+    @ColumnInfo(defaultValue = "0")
+    val cropTop: Float = 0f,
+    @ColumnInfo(defaultValue = "1")
+    val cropRight: Float = 1f,
+    @ColumnInfo(defaultValue = "1")
+    val cropBottom: Float = 1f,
 )
 
 object ReceiptStatus {
     const val DRAFT = "draft"
     const val CONFIRMED = "confirmed"
+}
+
+/** Receipt.totalSource の値。合計がどこから来たか。 */
+object TotalSource {
+    /** レシートの印字をLLMが読んだ値 */
+    const val PRINTED = "printed"
+
+    /** 品目の計算合計から入れた値 */
+    const val ITEMS = "items"
+
+    /** 手入力した値 */
+    const val MANUAL = "manual"
+
+    /** 不明(移行前のデータなど) */
+    const val UNKNOWN = "unknown"
+}
+
+/**
+ * 「重複ではない」と判断したレシートの組。小さい id を receiptIdLow に正規化して持つ。
+ * どちらかのレシートを削除すると組も消える(外部キーの CASCADE)。
+ */
+@Entity(
+    tableName = "receipt_not_duplicates",
+    primaryKeys = ["receiptIdLow", "receiptIdHigh"],
+    foreignKeys = [
+        ForeignKey(
+            entity = Receipt::class,
+            parentColumns = ["id"],
+            childColumns = ["receiptIdLow"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = Receipt::class,
+            parentColumns = ["id"],
+            childColumns = ["receiptIdHigh"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("receiptIdHigh")],
+)
+data class ReceiptNotDuplicate(
+    val receiptIdLow: Long,
+    val receiptIdHigh: Long,
+    val createdAt: Long,
+) {
+    companion object {
+        /** 2つの id から正規化した組を作る(小さい方が Low)。同じ id なら null。 */
+        fun of(a: Long, b: Long, createdAt: Long): ReceiptNotDuplicate? =
+            if (a == b) null else ReceiptNotDuplicate(minOf(a, b), maxOf(a, b), createdAt)
+    }
 }
 
 /**
