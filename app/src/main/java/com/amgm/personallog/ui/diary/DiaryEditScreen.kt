@@ -12,34 +12,27 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,8 +44,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -61,12 +58,24 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.data.model.DiaryPhoto
+import com.amgm.personallog.ui.design.AppTheme
+import com.amgm.personallog.ui.design.BareField
+import com.amgm.personallog.ui.design.Hairline
+import com.amgm.personallog.ui.design.InkButton
+import com.amgm.personallog.ui.design.InkButtonKind
+import com.amgm.personallog.ui.design.InkSheet
+import com.amgm.personallog.ui.design.Label
+import com.amgm.personallog.ui.design.PaperScreen
+import com.amgm.personallog.ui.design.Space
+import com.amgm.personallog.ui.design.TextAction
+import com.amgm.personallog.ui.design.tappable
 import java.io.File
 
 @Composable
 fun DiaryEditScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     val viewModel: DiaryEditViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val c = AppTheme.colors
 
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var showDeleteEntry by rememberSaveable { mutableStateOf(false) }
@@ -83,110 +92,131 @@ fun DiaryEditScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     BackHandler { viewModel.saveAndClose() }
 
     val importing = state.importing != null
+    val date = remember(state.date) { parseDiaryDate(state.date) }
 
-    Scaffold(
-        modifier = modifier,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
+    PaperScreen(modifier = modifier) {
+        Column(modifier = Modifier.fillMaxSize().imePadding()) {
+            // 上端の細い行: 閉じる / 保存
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = Space.s),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                TextButton(onClick = { viewModel.saveAndClose() }) { Text("戻る") }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { showDeleteEntry = true }, enabled = !state.loading) { Text("この日記を削除") }
-                    Button(onClick = { viewModel.saveAndClose() }, enabled = !state.loading) { Text("保存") }
+                TextAction(text = "閉じる", onClick = { viewModel.saveAndClose() }, color = c.inkSoft)
+                Spacer(Modifier.weight(1f))
+                TextAction(text = "保存", onClick = { viewModel.saveAndClose() }, enabled = !state.loading)
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = Space.edge),
+            ) {
+                // 巨大な日付。タップで日付選択
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .tappable { if (!importing && !state.loading) showDatePicker = true }
+                        .padding(vertical = Space.m),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    if (date != null) {
+                        Text(date.day.toString(), style = AppTheme.type.display, color = c.ink)
+                        Spacer(Modifier.width(Space.m))
+                        Column(modifier = Modifier.padding(bottom = Space.s)) {
+                            Label("${date.year}年${date.month}月")
+                            Label(date.weekdayLong, color = c.accent)
+                        }
+                    } else {
+                        Text(DiaryLogic.formatDateLabel(state.date), style = AppTheme.type.headline, color = c.ink)
+                    }
                 }
-            }
-        },
-    ) { padding ->
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            modifier = Modifier.fillMaxSize().padding(padding).imePadding().padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                OutlinedButton(
-                    onClick = { showDatePicker = true },
-                    enabled = !importing && !state.loading,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(DiaryLogic.formatDateLabel(state.date)) }
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                OutlinedTextField(
+                Hairline(color = c.ink)
+
+                // 本文: 枠なし、紙に直接書く
+                BareField(
                     value = viewModel.text,
                     onValueChange = viewModel::onTextChange,
-                    enabled = !state.loading,
-                    label = { Text("本文") },
-                    minLines = 6,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    textStyle = AppTheme.type.prose,
+                    placeholder = "今日のこと…",
+                    minLines = 8,
+                    readOnly = state.loading,
+                    modifier = Modifier.padding(top = Space.l),
                 )
-            }
-            state.error?.let { message ->
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+
+                state.error?.let { message ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = Space.m),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Text(
                             message,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = AppTheme.type.body,
+                            color = c.danger,
                             modifier = Modifier.weight(1f),
                         )
-                        TextButton(onClick = { viewModel.clearError() }) { Text("閉じる") }
+                        TextAction(text = "閉じる", onClick = { viewModel.clearError() }, color = c.inkSoft)
                     }
                 }
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
+
+                // 写真: フィルムストリップ
+                Spacer(Modifier.height(Space.l))
+                Hairline(dashed = true)
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = Space.m, bottom = Space.s),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Button(
-                        onClick = {
-                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        },
-                        enabled = !importing && !state.loading,
-                    ) {
-                        Icon(Icons.Filled.Add, contentDescription = null)
-                        Text("写真を追加")
-                    }
-                    Text("${state.photos.size}枚", style = MaterialTheme.typography.labelLarge)
-                }
-            }
-            state.importing?.let { p ->
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    androidx.compose.foundation.layout.Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        Text("写真を取り込み中… ${p.done} / ${p.total}", style = MaterialTheme.typography.bodySmall)
-                        LinearProgressIndicator(
-                            progress = { if (p.total == 0) 0f else p.done.toFloat() / p.total },
-                            modifier = Modifier.fillMaxWidth(),
+                    Label("写真 ${state.photos.size}枚")
+                    state.importing?.let { p ->
+                        Label(
+                            "  写真を取り込み中… ${p.done} / ${p.total}",
+                            color = c.accent,
                         )
                     }
                 }
-            }
-            items(state.photos, key = { it.id }) { photo ->
-                val index = state.photos.indexOf(photo)
-                PhotoThumb(
-                    relativePath = photo.filePath,
-                    reqPx = 360,
-                    modifier = Modifier
-                        .aspectRatio(1f)
-                        .combinedClickable(
-                            onClick = { viewerIndex = index },
-                            onLongClick = { pendingDeleteId = photo.id },
-                        ),
-                )
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                if (state.photos.isNotEmpty()) {
-                    Text(
-                        "写真をタップで拡大、長押しで削除",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    )
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Space.s),
+                ) {
+                    itemsIndexed(state.photos, key = { _, photo -> photo.id }) { index, photo ->
+                        PhotoThumb(
+                            relativePath = photo.filePath,
+                            reqPx = 360,
+                            modifier = Modifier
+                                .size(120.dp)
+                                .combinedClickable(
+                                    onClick = { viewerIndex = index },
+                                    onLongClick = { pendingDeleteId = photo.id },
+                                ),
+                        )
+                    }
+                    item(key = "add-tile") {
+                        AddPhotoTile(
+                            enabled = !importing && !state.loading,
+                            onClick = {
+                                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
+                        )
+                    }
                 }
+                if (state.photos.isNotEmpty()) {
+                    Label("タップで拡大、長押しで削除", modifier = Modifier.padding(top = Space.s))
+                }
+
+                // 削除は最下部に離して
+                Spacer(Modifier.height(Space.xl))
+                Hairline()
+                TextAction(
+                    text = "この日の記録を消す",
+                    onClick = { showDeleteEntry = true },
+                    color = c.danger,
+                    enabled = !state.loading,
+                )
+                Spacer(Modifier.height(Space.xl))
             }
         }
     }
@@ -196,17 +226,17 @@ fun DiaryEditScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = {
+                TextAction(text = "OK", onClick = {
                     pickerState.selectedDateMillis?.let { viewModel.changeDate(DiaryLogic.utcMillisToDate(it)) }
                     showDatePicker = false
-                }) { Text("OK") }
+                })
             },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("キャンセル") } },
+            dismissButton = { TextAction(text = "キャンセル", onClick = { showDatePicker = false }, color = c.inkSoft) },
         ) { DatePicker(state = pickerState) }
     }
 
     if (showDeleteEntry) {
-        ConfirmDialog(
+        ConfirmSheet(
             message = "この日の日記と写真(${state.photos.size}枚)をすべて削除します。元に戻せません。",
             confirmLabel = "削除",
             onConfirm = {
@@ -222,7 +252,7 @@ fun DiaryEditScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
         if (pendingPhoto == null) {
             pendingDeleteId = null
         } else {
-            ConfirmDialog(
+            ConfirmSheet(
                 message = "この写真を削除しますか?",
                 confirmLabel = "削除",
                 onConfirm = {
@@ -248,14 +278,49 @@ fun DiaryEditScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
+/** フィルムストリップ末尾の、破線枠の「＋」タイル。 */
 @Composable
-private fun ConfirmDialog(message: String, confirmLabel: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        text = { Text(message) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(confirmLabel) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("キャンセル") } },
-    )
+private fun AddPhotoTile(enabled: Boolean, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    val stroke = if (enabled) c.inkFaint else c.line
+    Box(
+        modifier = Modifier
+            .size(120.dp)
+            .drawBehind {
+                drawRoundRect(
+                    color = stroke,
+                    cornerRadius = CornerRadius(2.dp.toPx()),
+                    style = Stroke(
+                        width = 1.dp.toPx(),
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 5.dp.toPx())),
+                    ),
+                )
+            }
+            .tappable { if (enabled) onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("＋", style = AppTheme.type.numeralL, color = if (enabled) c.inkSoft else c.inkFaint)
+            Label("写真を追加")
+        }
+    }
+}
+
+@Composable
+private fun ConfirmSheet(message: String, confirmLabel: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    InkSheet(onDismiss = onDismiss) {
+        Text(message, style = AppTheme.type.prose, color = AppTheme.colors.ink)
+        Spacer(Modifier.height(Space.l))
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            InkButton(
+                text = "キャンセル",
+                onClick = onDismiss,
+                kind = InkButtonKind.Outline,
+                modifier = Modifier.weight(1f),
+            )
+            InkButton(text = confirmLabel, onClick = onConfirm, modifier = Modifier.weight(1f))
+        }
+    }
 }
 
 @Composable
@@ -288,26 +353,33 @@ private fun PhotoViewerDialog(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         } else {
-                            Text("読み込み中…", color = Color.White)
+                            Text("読み込み中…", style = AppTheme.type.body, color = Color.White)
                         }
                     }
                 }
             }
             Row(
-                modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = Space.s),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
                     "${pagerState.currentPage + 1} / ${photos.size}",
+                    style = AppTheme.type.numeral,
                     color = Color.White,
-                    modifier = Modifier.padding(start = 8.dp),
+                    modifier = Modifier.padding(start = Space.s),
                 )
                 Row {
-                    TextButton(onClick = {
-                        photos.getOrNull(pagerState.currentPage)?.let(onDelete)
-                    }) { Text("削除", color = Color.White) }
-                    TextButton(onClick = onDismiss) { Text("閉じる", color = Color.White) }
+                    TextAction(
+                        text = "削除",
+                        onClick = { photos.getOrNull(pagerState.currentPage)?.let(onDelete) },
+                        color = Color.White,
+                    )
+                    TextAction(text = "閉じる", onClick = onDismiss, color = Color.White)
                 }
             }
         }
