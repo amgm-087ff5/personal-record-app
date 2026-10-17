@@ -251,4 +251,15 @@ class ReceiptImageRobolectricTest {
             }
         }
     }
+
+    @Test
+    fun diagRegionDecoder() {
+        val f = makeJpeg(1)
+        @Suppress("DEPRECATION")
+        val d = android.graphics.BitmapRegionDecoder.newInstance(f.path, false)!!
+        val full = d.decodeRegion(android.graphics.Rect(0, 0, rawW, rawH), null)
+        val part = d.decodeRegion(android.graphics.Rect(64, 0, 128, 96), android.graphics.BitmapFactory.Options().apply { inSampleSize = 1 })
+        val info = "dec=${d.width}x${d.height} full=${full?.width}x${full?.height}${full?.let { dump(it) }} part=${part?.width}x${part?.height}${part?.let { dump(it) }} px=${part?.getPixel(5, 5)?.toString(16)}"
+        assertEquals(info, "x", "y")
+    }
 }
