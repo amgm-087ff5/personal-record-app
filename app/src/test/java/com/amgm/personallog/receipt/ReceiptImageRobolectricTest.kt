@@ -102,6 +102,22 @@ class ReceiptImageRobolectricTest {
         return sb.toString()
     }
 
+    /** 失敗時の手がかり: 画像を粗い格子(最大 16x12)の色の文字にして出す。 */
+    private fun dump(bmp: Bitmap): String {
+        val gw = minOf(16, bmp.width)
+        val gh = minOf(12, bmp.height)
+        val sb = StringBuilder("\n${bmp.width}x${bmp.height}\n")
+        for (j in 0 until gh) {
+            for (i in 0 until gw) sb.append(classify(bmp.getPixel((i + 0.5f).times(bmp.width) .div(gw).toInt(), (j + 0.5f).times(bmp.height).div(gh).toInt())))
+            sb.append('\n')
+        }
+        return sb.toString()
+    }
+
+    private fun assertCorners(msg: String, expected: String, bmp: Bitmap) {
+        assertEquals(msg + dump(bmp), expected, corners(bmp))
+    }
+
     /** 時計回りに90度回した四隅。 */
     private fun rot90(s: String): String = "${s[2]}${s[0]}${s[3]}${s[1]}"
 
@@ -137,7 +153,7 @@ class ReceiptImageRobolectricTest {
                 val (w, h) = if (times % 2 == 1) eh to ew else ew to eh
                 assertEquals("o=$o t=$times w", w, bmp!!.width)
                 assertEquals("o=$o t=$times h", h, bmp.height)
-                assertEquals("o=$o t=$times corners", rot(expectedByOrientation[o]!!, times), corners(bmp))
+                assertCorners("o=$o t=$times corners", rot(expectedByOrientation[o]!!, times), bmp)
                 bmp.recycle()
             }
         }
@@ -153,20 +169,20 @@ class ReceiptImageRobolectricTest {
             val right = ReceiptImageCodec.decodeAdjusted(f, ReceiptAdjust(0f, 0.5f, 0f, 1f, 1f), 4096)!!
             assertEquals("o=$o right w", ew / 2, right.width)
             assertEquals("o=$o right h", eh, right.height)
-            assertEquals("o=$o right", "${e[1]}${e[1]}${e[3]}${e[3]}", corners(right))
+            assertCorners("o=$o right", "${e[1]}${e[1]}${e[3]}${e[3]}", right)
             right.recycle()
             // 上半分
             val top = ReceiptImageCodec.decodeAdjusted(f, ReceiptAdjust(0f, 0f, 0f, 1f, 0.5f), 4096)!!
             assertEquals("o=$o top w", ew, top.width)
             assertEquals("o=$o top h", eh / 2, top.height)
-            assertEquals("o=$o top", "${e[0]}${e[1]}${e[0]}${e[1]}", corners(top))
+            assertCorners("o=$o top", "${e[0]}${e[1]}${e[0]}${e[1]}", top)
             top.recycle()
             // 右90度回転してから左半分: 回転後の左列(元の下の行)が残る
             val rotated = rot90(e)
             val rl = ReceiptImageCodec.decodeAdjusted(f, ReceiptAdjust(90f, 0f, 0f, 0.5f, 1f), 4096)!!
             assertEquals("o=$o rl w", eh / 2, rl.width)
             assertEquals("o=$o rl h", ew, rl.height)
-            assertEquals("o=$o rl", "${rotated[0]}${rotated[0]}${rotated[2]}${rotated[2]}", corners(rl))
+            assertCorners("o=$o rl", "${rotated[0]}${rotated[0]}${rotated[2]}${rotated[2]}", rl)
             rl.recycle()
         }
     }
@@ -180,7 +196,7 @@ class ReceiptImageRobolectricTest {
             val (bw, bh) = ReceiptGeometry.boundingSize(ew, eh, 10f)
             assertEquals("o=$o w", bw, bmp.width)
             assertEquals("o=$o h", bh, bmp.height)
-            assertEquals("o=$o corners", expectedByOrientation[o], corners(bmp))
+            assertCorners("o=$o corners", expectedByOrientation[o]!!, bmp)
             // 外接矩形の四隅の画素は、画像の外なので白
             assertEquals('W', classify(bmp.getPixel(1, 1)))
             assertEquals('W', classify(bmp.getPixel(bmp.width - 2, bmp.height - 2)))
@@ -194,7 +210,7 @@ class ReceiptImageRobolectricTest {
         val bmp = ReceiptImageCodec.decodeAdjusted(f, ReceiptAdjust(rotationDegrees = 90f), 64)!!
         assertEquals(64, maxOf(bmp.width, bmp.height))
         // 縮小しても向きは同じ
-        assertEquals(rot90(expectedByOrientation[6]!!), corners(bmp))
+        assertCorners("maxSide64", rot90(expectedByOrientation[6]!!), bmp)
         bmp.recycle()
     }
 
@@ -229,7 +245,7 @@ class ReceiptImageRobolectricTest {
                     if (classify(pr) == classify(pw)) same++
                 }
                 // 色の境目では縮小・回転の丸めで食い違うので、9割以上の一致を求める
-                assertTrue("$msg 一致 $same / $total", same >= total * 0.9)
+                assertTrue("$msg 一致 $same / $total 範囲読み:${dump(region)} 全体読み:${dump(whole)}", same >= total * 0.9)
                 region.recycle()
                 whole.recycle()
             }
