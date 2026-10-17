@@ -267,6 +267,25 @@ object Migrations {
         "expense_groups(receiptIdあり)" to "SELECT COUNT(*) FROM `expense_groups` WHERE `receiptId` IS NOT NULL",
     )
 
+    /** receipts を親とする外部キーを持つ子の表。 */
+    private val V8_CHILD_TABLES = listOf("receipt_items", "expenses", "expense_groups")
+
+    /**
+     * 子の表の外部キー違反のうち、親が receipts のものの件数。
+     * DB 全体への PRAGMA foreign_key_check は移行と無関係な古い不整合も拾って起動のたびに落ちるので、
+     * receipts に関係するものだけを数える(移行の前後で増えたときだけ異常とする)。
+     */
+    internal fun SupportSQLiteDatabase.receiptsFkViolations(): Long {
+        var n = 0L
+        for (t in V8_CHILD_TABLES) {
+            query("PRAGMA foreign_key_check(`$t`)").use { c ->
+                val parentIdx = c.getColumnIndex("parent").takeIf { it >= 0 } ?: 2
+                while (c.moveToNext()) if (c.getString(parentIdx) == "receipts") n++
+            }
+        }
+        return n
+    }
+
     private fun SupportSQLiteDatabase.count(sql: String): Long =
         query(sql).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
 
@@ -280,10 +299,21 @@ object Migrations {
      * 安全策: receipts は receipt_items(CASCADE)・expenses・expense_groups(SET NULL)の親。
      * Room は onUpgrade では外部キー検査を有効にしていない想定だが、もし有効なら DROP TABLE が子を消す。
      * そのため作り直しの前後で子の件数を数え、1つでも違えば例外にする(トランザクションが戻り、データは守られる)。
-     * 最後に PRAGMA foreign_key_check も流す。
+     * 最後に receipts を親とする外部キー違反(PRAGMA foreign_key_check(子の表))が増えていないかも確かめる。
+     * 移行の最初に PRAGMA foreign_keys が 1 なら、DROP の前に止める。
      */
     val MIGRATION_7_8: Migration = object : Migration(7, 8) {
         override fun migrate(db: SupportSQLiteDatabase) {
+            // 外部キーが有効なままだと DROP TABLE receipts が子(品目など)を連鎖で消す。PRAGMA はトランザクション内では
+            // 変えられないので、ここで止める(トランザクションが戻り、データは守られる)。
+            val fkOn = db.query("PRAGMA foreign_keys").use { c -> c.moveToFirst() && c.getInt(0) == 1 }
+            if (fkOn) {
+                throw IllegalStateException(
+                    "v8 への移行を中止しました: 外部キー(PRAGMA foreign_keys)が有効です。" +
+                        "有効なまま receipts を作り直すと、品目などの子のデータが連鎖で削除されるため、何も変更せずに止めました。",
+                )
+            }
+            val fkBefore = db.receiptsFkViolations()
             val before = V8_CHILD_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
             val oldSeq = db.query("SELECT `seq` FROM `sqlite_sequence` WHERE `name` = 'receipts'")
                 .use { c -> if (c.moveToFirst()) c.getLong(0) else null }
@@ -312,9 +342,13 @@ object Migrations {
 
             db.execSQL("DROP TABLE `receipts`")
             db.execSQL("ALTER TABLE `receipts_new` RENAME TO `receipts`")
-            // AUTOINCREMENT の採番を引き継ぐ(最大 id より後ろの採番を保つ)
-            if (oldSeq != null) {
-                db.execSQL("UPDATE `sqlite_sequence` SET `seq` = MAX(`seq`, ?) WHERE `name` = 'receipts'", arrayOf<Any?>(oldSeq))
+            // AUTOINCREMENT の採番を引き継ぐ。receipts が空だと新しい表の sqlite_sequence に行が無く UPDATE が効かないので、
+            // 行を消して(古い採番, 最大 id)の大きい方で入れ直す
+            val maxId = db.count("SELECT COALESCE(MAX(`id`), 0) FROM `receipts`")
+            val seq = maxOf(oldSeq ?: 0L, maxId)
+            db.execSQL("DELETE FROM `sqlite_sequence` WHERE `name` = 'receipts'")
+            if (seq > 0L) {
+                db.execSQL("INSERT INTO `sqlite_sequence` (`name`, `seq`) VALUES ('receipts', ?)", arrayOf<Any?>(seq))
             }
 
             db.execSQL(notDuplicatesV8CreateSql("receipt_not_duplicates"))
@@ -324,10 +358,9 @@ object Migrations {
             if (before != after) {
                 throw IllegalStateException("v8 への移行を中止しました: 件数が変わりました $before -> $after")
             }
-            db.query("PRAGMA foreign_key_check").use { c ->
-                if (c.moveToFirst()) {
-                    throw IllegalStateException("v8 への移行を中止しました: 外部キーの整合性エラー(表 ${c.getString(0)})")
-                }
+            val fkAfter = db.receiptsFkViolations()
+            if (fkAfter > fkBefore) {
+                throw IllegalStateException("v8 への移行を中止しました: receipts との外部キーの違反が増えました $fkBefore -> $fkAfter")
             }
         }
     }

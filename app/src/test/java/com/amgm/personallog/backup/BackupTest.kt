@@ -248,4 +248,32 @@ class BackupTest {
         // 同じ画像を2枚持つバックアップ: 2枚目は既存に対応が無いので新規
         assertNull(idx.take(entity(11, hash = "same")))
     }
+
+    @Test
+    fun mergeIndex_hashedBackupFindsExistingWithoutHashByLegacyKey() {
+        val idx = ReceiptMergeIndex(listOf(entity(1, hash = null), entity(2, hash = "other", path = "receipts/1.jpg")))
+        // 既存にハッシュが無ければ従来のキーで見つかる
+        assertEquals(1L, idx.take(entity(10, hash = "newhash", path = "receipts/1.jpg")))
+        // 既存に別のハッシュがあるものは別の画像
+        assertNull(idx.take(entity(11, hash = "newhash", path = "receipts/1.jpg")))
+    }
+
+    @Test
+    fun legacyFormat_decidesTotalAndSourceLikeTheMigration() {
+        fun r(total: Int, status: String, raw: String) = BackupReceipt(
+            id = 1, purchasedAt = "2026-10-09 18:32", storeName = "A", totalAmount = total, imagePath = "p",
+            rawJson = raw, status = status, createdAt = 1,
+        )
+        val noTotal = """{"date":"2026-10-09","store":"A","items":[{"name":"a","amount":198}]}"""
+        // 読み取り失敗の仮の0円(下書き)は合計に戻さない
+        val failed = r(0, "draft", "").toEntity(legacyFormat = true)
+        assertNull(failed.totalAmount)
+        assertEquals(TotalSource.UNKNOWN, failed.totalSource)
+        // 手で入れた値は残り、出所は manual
+        val manual = r(500, "draft", noTotal).toEntity(legacyFormat = true)
+        assertEquals(500, manual.totalAmount)
+        assertEquals(TotalSource.MANUAL, manual.totalSource)
+        // 形式5以降はそのまま
+        assertEquals(0, r(0, "draft", "").toEntity().totalAmount)
+    }
 }
