@@ -31,6 +31,9 @@ class LedgerCalcTest {
         assertEquals("スーパー", g.group.memo)
         assertEquals(9L, g.group.receiptId)
         assertEquals(listOf(200, 500), g.items.map { it.amount })
+        // 品名は name に、メモには品目のメモだけを入れる(店名と品名を連結しない)
+        assertEquals(listOf("牛乳", "洗剤"), g.items.map { it.name })
+        assertEquals(listOf("", ""), g.items.map { it.memo })
         assertTrue(g.items.all { it.receiptId == 9L && it.groupId == null })
     }
 

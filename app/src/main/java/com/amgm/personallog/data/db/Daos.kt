@@ -6,7 +6,6 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.DiaryEntry
 import com.amgm.personallog.data.model.DiaryPhoto
 import com.amgm.personallog.data.model.Expense
@@ -113,11 +112,20 @@ interface ReceiptDao {
     @Insert
     suspend fun insertItems(items: List<ReceiptItem>)
 
+    @Insert
+    suspend fun insertItem(item: ReceiptItem): Long
+
+    @Query("SELECT * FROM receipt_items ORDER BY id")
+    suspend fun getAllItems(): List<ReceiptItem>
+
     @Update
     suspend fun updateItem(item: ReceiptItem)
 
     @Delete
     suspend fun deleteItem(item: ReceiptItem)
+
+    @Query("DELETE FROM receipt_items WHERE id = :id")
+    suspend fun deleteItemById(id: Long)
 
     @Query("DELETE FROM receipt_items WHERE receiptId = :receiptId")
     suspend fun deleteItemsByReceipt(receiptId: Long)
@@ -151,8 +159,37 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE receiptId = :receiptId ORDER BY id")
     suspend fun getByReceiptId(receiptId: Long): List<Expense>
 
+    @Query("SELECT * FROM expenses WHERE receiptId = :receiptId ORDER BY id")
+    fun observeByReceiptId(receiptId: Long): Flow<List<Expense>>
+
+    @Query("SELECT * FROM expenses WHERE id = :id")
+    fun observeById(id: Long): Flow<Expense?>
+
+    @Query("SELECT * FROM expenses WHERE groupId = :groupId ORDER BY id")
+    fun observeByGroupId(groupId: Long): Flow<List<Expense>>
+
+    @Query("SELECT * FROM expenses WHERE groupId = :groupId ORDER BY id")
+    suspend fun getByGroupId(groupId: Long): List<Expense>
+
+    @Update
+    suspend fun updateAll(expenses: List<Expense>)
+
+    @Query("DELETE FROM expenses WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
+
+    /** 品目が消えたとき、その品目から作った支出も消す(外部キーの SET NULL で古い行と区別が付かなくなるのを防ぐ)。 */
+    @Query("DELETE FROM expenses WHERE receiptItemId IN (:itemIds)")
+    suspend fun deleteByReceiptItemIds(itemIds: List<Long>)
+
     @Insert
     suspend fun insert(expense: Expense): Long
+
+    /** 家計簿で消した印だけを更新する(他の欄を古い値で上書きしない)。 */
+    @Query("UPDATE expenses SET deletedByUser = :flag WHERE id = :id")
+    suspend fun setDeletedByUser(id: Long, flag: Boolean)
+
+    @Query("SELECT * FROM expenses ORDER BY id")
+    suspend fun getAll(): List<Expense>
 
     @Insert
     suspend fun insertAll(expenses: List<Expense>)
@@ -173,15 +210,29 @@ interface ExpenseDao {
     @Query("DELETE FROM expenses WHERE groupId = :groupId")
     suspend fun deleteByGroupId(groupId: Long)
 
-    /** 月別(期間別)のカテゴリ集計。支出の多い順。 */
+    /**
+     * 家計簿の画面用: 単独の支出は支出の日付で、品目(groupId あり)はグループの日付で期間に入れる。
+     * 品目の日付が古いままでも、グループが期間内ならその品目が入る(月をまたいだ二重計上を防ぐ)。
+     */
     @Query(
-        "SELECT category AS category, SUM(amount) AS total FROM expenses " +
-            "WHERE date BETWEEN :from AND :to GROUP BY category ORDER BY total DESC",
+        "SELECT * FROM expenses WHERE (groupId IS NULL AND date BETWEEN :from AND :to) " +
+            "OR groupId IN (SELECT id FROM expense_groups WHERE date BETWEEN :from AND :to) " +
+            "ORDER BY date DESC, id DESC",
     )
-    fun observeCategoryTotals(from: String, to: String): Flow<List<CategoryTotal>>
+    fun observeLedgerRows(from: String, to: String): Flow<List<Expense>>
 
-    @Query("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE date BETWEEN :from AND :to")
-    fun observeTotal(from: String, to: String): Flow<Long>
+    /** グループの日時が変わったとき、その品目の日時を合わせる。 */
+    @Query("UPDATE expenses SET date = :date, time = :time WHERE groupId = :groupId")
+    suspend fun syncGroupChildrenDateTime(groupId: Long, date: String, time: String)
+
+    /** レシート由来の全グループについて、品目の日時をグループの日時に合わせる(グループの日時が支払い側で変えられていても揃う)。 */
+    @Query(
+        "UPDATE expenses SET " +
+            "date = (SELECT g.date FROM expense_groups g WHERE g.id = expenses.groupId), " +
+            "time = (SELECT g.time FROM expense_groups g WHERE g.id = expenses.groupId) " +
+            "WHERE groupId IN (SELECT id FROM expense_groups WHERE receiptId = :receiptId)",
+    )
+    suspend fun syncChildrenOfReceiptGroups(receiptId: Long)
 }
 
 @Dao
@@ -193,12 +244,27 @@ interface ExpenseGroupDao {
     @Query("SELECT * FROM expense_groups WHERE date BETWEEN :from AND :to ORDER BY date DESC, id DESC")
     fun observeBetween(from: String, to: String): Flow<List<ExpenseGroup>>
 
-    /** レシートの日時が変わったとき、紐づく支払いグループの日時を追従させる(グループの日時は常にレシートに従う)。 */
-    @Query("UPDATE expense_groups SET date = :date, time = :time WHERE receiptId = :receiptId")
+    /** レシートの日時が変わったとき、紐づく支払いグループのうち日時を支払い側で変えていないものだけ追従させる。 */
+    @Query("UPDATE expense_groups SET date = :date, time = :time WHERE receiptId = :receiptId AND timeEdited = 0")
     suspend fun syncDateTimeFromReceipt(receiptId: Long, date: String, time: String)
+
+    @Query("SELECT * FROM expense_groups WHERE receiptId = :receiptId ORDER BY id")
+    suspend fun getByReceiptId(receiptId: Long): List<ExpenseGroup>
+
+    @Query("SELECT * FROM expense_groups WHERE receiptId = :receiptId ORDER BY id")
+    fun observeByReceiptId(receiptId: Long): Flow<List<ExpenseGroup>>
+
+    @Query("SELECT * FROM expense_groups WHERE id = :id")
+    fun observeById(id: Long): Flow<ExpenseGroup?>
+
+    @Query("SELECT * FROM expense_groups WHERE id = :id")
+    suspend fun getById(id: Long): ExpenseGroup?
 
     @Insert
     suspend fun insert(group: ExpenseGroup): Long
+
+    @Update
+    suspend fun update(group: ExpenseGroup)
 
     @Delete
     suspend fun delete(group: ExpenseGroup)

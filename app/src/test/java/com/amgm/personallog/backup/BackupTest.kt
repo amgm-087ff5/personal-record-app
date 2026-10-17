@@ -43,7 +43,7 @@ class BackupTest {
 
     @Test
     fun entityConversion_isLossless() {
-        val e = BackupExpense(3, "2026-01-01", "09:00", 10, "食費", "m", 7, 99)
+        val e = BackupExpense(3, "2026-01-01", "09:00", 10, "食費", "m", 7, 99, uid = "u-1")
         assertEquals(e, BackupExpense.from(e.toEntity()))
         val r = BackupReceipt(1, "2026-01-01", "s", 1, "receipts/x.jpg", "{}", "draft", 2)
         assertEquals(r, BackupReceipt.from(r.toEntity()))
@@ -120,15 +120,15 @@ class BackupTest {
     }
 
     @Test
-    fun formatVersionIsFive() {
-        assertEquals(5, BACKUP_FORMAT_VERSION)
+    fun formatVersionIsSix() {
+        assertEquals(6, BACKUP_FORMAT_VERSION)
     }
 
     @Test
-    fun format5_roundTrip_keepsNullTotalSourceCropAndNotDuplicates() {
+    fun format5Fields_roundTrip_keepsNullTotalSourceCropAndNotDuplicates() {
         val data = BackupData(
             formatVersion = BACKUP_FORMAT_VERSION,
-            dbVersion = 8,
+            dbVersion = 9,
             exportedAt = 1L,
             receipts = listOf(
                 BackupReceipt(

@@ -232,7 +232,7 @@ class MigrationV8RobolectricTest {
             .build()
         try {
             val db = room.openHelper.writableDatabase // 移行と Room の検証がここで走る。通らなければ例外
-            assertEquals(8, db.version)
+            assertEquals(AppDatabase.VERSION, db.version)
             assertEquals(5L, db.long("SELECT COUNT(*) FROM receipts"))
             assertEquals(3L, db.long("SELECT COUNT(*) FROM receipt_items"))
             assertEquals(0L, db.long("SELECT COUNT(*) FROM receipt_not_duplicates"))

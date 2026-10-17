@@ -38,7 +38,13 @@ data class ChartBar(
     val segments: List<ChartSegment>,
     val total: Long,
     val drillable: Boolean,
-)
+) {
+    /**
+     * 棒に描く高さの元になる額: 正の区切りの和。差額で負になったカテゴリは描かない(帯グラフと同じ)ので、
+     * 棒の高さは total ではなくこれで決める(負の区切りがあっても、棒が枠からはみ出さない)。表示する合計の数字は total のまま。
+     */
+    val drawnTotal: Long get() = segments.filter { it.amount > 0L }.sumOf { it.amount }
+}
 
 /** 積み上げ棒グラフ用の純粋ロジック(JVMでテスト可能)。 */
 object LedgerChart {
@@ -101,9 +107,7 @@ object LedgerChart {
         val d = day.toString()
         return entries
             .filter { it.date == d && hourOf(it) == hour }
-            .groupBy { it.category }
-            .map { (c, list) -> ChartSegment(c, list.sumOf { it.amount }) }
-            .sortedByDescending { it.amount }
+            .let(::toSegments)
     }
 
     /**
@@ -124,10 +128,11 @@ object LedgerChart {
 
     /** start..end(両端含む)の支出をカテゴリごとに合計し、金額の多い順にする。 */
     fun segments(entries: List<LedgerEntry>, start: LocalDate, end: LocalDate): List<ChartSegment> =
-        inRange(entries, start, end)
-            .groupBy { it.category }
-            .map { (c, list) -> ChartSegment(c, list.sumOf { it.amount }) }
-            .sortedByDescending { it.amount }
+        toSegments(inRange(entries, start, end))
+
+    /** 行をカテゴリごとに合計して、金額の多い順の区切りにする。グループは品目ごとのカテゴリで数える。 */
+    private fun toSegments(entries: List<LedgerEntry>): List<ChartSegment> =
+        LedgerLogic.totalsByCategory(entries).map { ChartSegment(it.category, it.total) }
 
     /** date(yyyy-MM-dd)が start..end に入る行。ISO 形式なので文字列比較で足りる。 */
     fun inRange(entries: List<LedgerEntry>, start: LocalDate, end: LocalDate): List<LedgerEntry> {

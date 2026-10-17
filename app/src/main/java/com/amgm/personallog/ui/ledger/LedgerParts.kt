@@ -141,7 +141,7 @@ internal fun StackedChart(
             TextAction("›", onClick = onNext, color = c.ink)
         }
 
-        val max = bars.maxOfOrNull { it.total }?.coerceAtLeast(1L) ?: 1L
+        val max = bars.maxOfOrNull { it.drawnTotal }?.coerceAtLeast(1L) ?: 1L
         if (bars.isNotEmpty()) {
             Spacer(Modifier.height(Space.s))
             Canvas(
@@ -222,6 +222,8 @@ internal fun StackedChart(
         if (legend.isNotEmpty()) {
             Spacer(Modifier.height(Space.m))
             CategoryLegend(legend)
+            Spacer(Modifier.height(Space.s))
+            Text(ALLOCATION_NOTE, style = AppTheme.type.caption, color = c.inkFaint)
         }
 
         Spacer(Modifier.height(Space.m))
@@ -265,7 +267,8 @@ internal fun DayBlock(
     day: DayGroup,
     expandedGroups: Map<Long, Boolean>,
     onToggleGroup: (Long) -> Unit,
-    onEdit: (Expense) -> Unit,
+    /** 行をタップ: 支払いの詳細画面を開く。 */
+    onOpen: (LedgerEntry) -> Unit,
     onDeleteGroup: (LedgerEntry.Group) -> Unit,
 ) {
     val c = AppTheme.colors
@@ -301,12 +304,12 @@ internal fun DayBlock(
                 day.items.forEachIndexed { index, entry ->
                     if (index > 0) Hairline()
                     when (entry) {
-                        is LedgerEntry.Single -> ExpenseLine(entry.expense, onClick = { onEdit(entry.expense) })
+                        is LedgerEntry.Single -> ExpenseLine(entry.expense, onClick = { onOpen(entry) })
                         is LedgerEntry.Group -> GroupLine(
                             entry = entry,
                             expanded = expandedGroups[entry.group.id] == true,
                             onToggle = { onToggleGroup(entry.group.id) },
-                            onItemClick = onEdit,
+                            onOpen = { onOpen(entry) },
                             onDelete = { onDeleteGroup(entry) },
                         )
                     }
@@ -319,10 +322,10 @@ internal fun DayBlock(
 @Composable
 private fun ExpenseLine(expense: Expense, onClick: () -> Unit) {
     val c = AppTheme.colors
-    val title = expense.memo.ifBlank { expense.category }
+    val title = listOf(expense.name, expense.memo).filter { it.isNotBlank() }.joinToString(" ").ifBlank { expense.category }
     val sub = listOfNotNull(
         expense.time.ifEmpty { null },
-        if (expense.memo.isNotBlank()) expense.category else null,
+        if (expense.name.isNotBlank() || expense.memo.isNotBlank()) expense.category else null,
         if (expense.receiptId != null) "レシート由来" else null,
     ).joinToString(" · ")
     Row(
@@ -345,7 +348,7 @@ private fun GroupLine(
     entry: LedgerEntry.Group,
     expanded: Boolean,
     onToggle: () -> Unit,
-    onItemClick: (Expense) -> Unit,
+    onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val c = AppTheme.colors
@@ -356,12 +359,17 @@ private fun GroupLine(
     ).joinToString(" · ")
     Column(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth().tappable(onToggle).padding(vertical = Space.s + Space.xs),
+            Modifier.fillMaxWidth().tappable(onOpen),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(if (expanded) "▾" else "▸", style = AppTheme.type.title, color = c.accent)
-            Spacer(Modifier.width(Space.s))
-            Column(Modifier.weight(1f)) {
+            // 開閉は矢印だけ。行のほかの場所をタップすると支払いの詳細画面を開く
+            Text(
+                if (expanded) "▾" else "▸",
+                style = AppTheme.type.title,
+                color = c.accent,
+                modifier = Modifier.tappable(onToggle).padding(end = Space.s, top = Space.s + Space.xs, bottom = Space.s + Space.xs),
+            )
+            Column(Modifier.weight(1f).padding(vertical = Space.s + Space.xs)) {
                 Text(
                     entry.group.memo.ifBlank { entry.category },
                     style = AppTheme.type.title,
@@ -378,7 +386,7 @@ private fun GroupLine(
             Column(Modifier.fillMaxWidth().padding(start = Space.m, bottom = Space.s)) {
                 entry.items.forEach { item ->
                     Hairline()
-                    ExpenseLine(item, onClick = { onItemClick(item) })
+                    ExpenseLine(item, onClick = onOpen)
                 }
                 Hairline(dashed = true)
                 Spacer(Modifier.height(Space.s))
@@ -438,8 +446,14 @@ internal fun ExpenseEditorSheet(
     /** 紐づくレシートの日時 "yyyy-MM-dd HH:mm"。紐づかなければ null。 */
     linkedReceiptAt: String?,
     onDismiss: () -> Unit,
-    onSave: (date: String, time: String, amount: Int, category: String, memo: String, done: (String?) -> Unit) -> Unit,
+    onSave: (date: String, time: String, amount: Int, category: String, name: String, memo: String, done: (String?) -> Unit) -> Unit,
     onDelete: (() -> Unit)?,
+    /** 見出し。null なら「支出を追加/編集」。 */
+    title: String? = null,
+    /** 品名の欄を出すか(支払い=グループの編集では出さない)。 */
+    showName: Boolean = true,
+    /** 日時の欄を出すか。支払いグループの品目の日時はグループに従うので、品目の編集では出さない。 */
+    showDateTime: Boolean = true,
 ) {
     val c = AppTheme.colors
     var dateText by remember { mutableStateOf(initialDate) }
@@ -448,6 +462,7 @@ internal fun ExpenseEditorSheet(
     var amountText by remember { mutableStateOf(original?.amount?.toString() ?: "") }
     var category by remember { mutableStateOf(original?.category) }
     var memo by remember { mutableStateOf(original?.memo ?: "") }
+    var name by remember { mutableStateOf(original?.name ?: "") }
     var validation by remember { mutableStateOf<ExpenseValidation?>(null) }
     var saveError by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
@@ -463,7 +478,7 @@ internal fun ExpenseEditorSheet(
 
     fun doSave(v: ExpenseValidation) {
         saving = true
-        onSave(v.date!!, v.time!!, v.amount!!, v.category!!, memo) { err ->
+        onSave(v.date!!, v.time!!, v.amount!!, v.category!!, name, memo) { err ->
             saving = false
             if (err == null) onDismiss() else saveError = err
         }
@@ -474,10 +489,10 @@ internal fun ExpenseEditorSheet(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding(),
             verticalArrangement = Arrangement.spacedBy(Space.m),
         ) {
-            Label(if (original == null) "支出を追加" else "支出を編集")
+            Label(title ?: if (original == null) "支出を追加" else "支出を編集")
             if (original?.receiptId != null) {
                 Text(
-                    "レシート由来の支出です" + (linkedReceiptAt?.let { "(レシート日時 $it)" } ?: ""),
+                    "レシート由来です" + (linkedReceiptAt?.let { "(レシート日時 $it)" } ?: ""),
                     style = AppTheme.type.caption,
                     color = c.accent,
                 )
@@ -507,10 +522,28 @@ internal fun ExpenseEditorSheet(
 
             // 日時: タップできる文字
             Label("日時")
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextAction(dateChip(dateText), onClick = { showDatePicker = true }, color = c.ink)
-                TextAction(timeText.ifBlank { "時刻を選ぶ" }, onClick = { showTimePicker = true }, color = c.ink)
-                Text("タップで変更", style = AppTheme.type.caption, color = c.inkFaint)
+            if (showDateTime) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextAction(dateChip(dateText), onClick = { showDatePicker = true }, color = c.ink)
+                    TextAction(timeText.ifBlank { "時刻を選ぶ" }, onClick = { showTimePicker = true }, color = c.ink)
+                    Text("タップで変更", style = AppTheme.type.caption, color = c.inkFaint)
+                }
+            } else {
+                Text(
+                    "${dateChip(dateText)} ${timeText}(支払いの日時に従います。直すときは支払いの日時を直してください)",
+                    style = AppTheme.type.caption,
+                    color = c.inkFaint,
+                )
+            }
+
+            if (showName) {
+                Label("品名")
+                BareField(
+                    value = name,
+                    onValueChange = { name = it },
+                    underline = true,
+                    placeholder = "品名",
+                )
             }
 
             // メモ

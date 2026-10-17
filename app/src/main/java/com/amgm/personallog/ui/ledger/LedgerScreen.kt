@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -28,8 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.domain.PaymentKind
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.Hairline
 import com.amgm.personallog.ui.design.InkButton
@@ -46,11 +45,16 @@ import java.time.YearMonth
 
 /** 家計簿タブのトップ画面。 */
 @Composable
-fun LedgerScreen(modifier: Modifier = Modifier, viewModel: LedgerViewModel = hiltViewModel()) {
+fun LedgerScreen(
+    modifier: Modifier = Modifier,
+    onOpenPayment: (PaymentKind, Long) -> Unit = { _, _ -> },
+    viewModel: LedgerViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val c = AppTheme.colors
-    var editing by remember { mutableStateOf<Expense?>(null) }
+    var choosing by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
+    var creatingPayment by remember { mutableStateOf(false) }
     val expandedGroups = remember { mutableStateMapOf<Long, Boolean>() }
     var deletingGroup by remember { mutableStateOf<ExpenseGroup?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
@@ -124,6 +128,8 @@ fun LedgerScreen(modifier: Modifier = Modifier, viewModel: LedgerViewModel = hil
                             )
                             Spacer(Modifier.height(Space.m))
                             CategoryLegend(state.shares)
+                            Spacer(Modifier.height(Space.s))
+                            Text(ALLOCATION_NOTE, style = AppTheme.type.caption, color = c.inkFaint)
                         }
                     }
                 }
@@ -161,7 +167,12 @@ fun LedgerScreen(modifier: Modifier = Modifier, viewModel: LedgerViewModel = hil
                         day = day,
                         expandedGroups = expandedGroups,
                         onToggleGroup = { id -> expandedGroups[id] = expandedGroups[id] != true },
-                        onEdit = { editing = it },
+                        onOpen = { entry ->
+                            when (entry) {
+                                is LedgerEntry.Single -> onOpenPayment(PaymentKind.EXPENSE, entry.expense.id)
+                                is LedgerEntry.Group -> onOpenPayment(PaymentKind.GROUP, entry.group.id)
+                            }
+                        },
                         onDeleteGroup = { deletingGroup = it.group },
                     )
                 }
@@ -169,7 +180,7 @@ fun LedgerScreen(modifier: Modifier = Modifier, viewModel: LedgerViewModel = hil
 
             InkButton(
                 text = "＋ 記録",
-                onClick = { creating = true },
+                onClick = { choosing = true },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(Space.m),
             )
         }
@@ -215,32 +226,34 @@ fun LedgerScreen(modifier: Modifier = Modifier, viewModel: LedgerViewModel = hil
             initialTime = LedgerLogic.defaultTime(initialDate, LocalDate.now(), LocalTime.now()),
             linkedReceiptAt = null,
             onDismiss = { creating = false },
-            onSave = { date, time, amount, category, memo, done ->
-                viewModel.saveExpense(null, date, time, amount, category, memo, done)
+            onSave = { date, time, amount, category, name, memo, done ->
+                viewModel.saveExpense(null, date, time, amount, category, name, memo, done)
             },
             onDelete = null,
         )
     }
-    editing?.let { target ->
-        // レシートに紐づく支出なら、そのレシートの日時を取っておき、日時を変えたときの警告に使う
-        var linkedAt by remember(target) { mutableStateOf<String?>(null) }
-        LaunchedEffect(target) { linkedAt = viewModel.linkedReceiptDateTime(target) }
-        ExpenseEditorSheet(
-            original = target,
-            initialDate = target.date,
-            initialTime = target.time,
-            linkedReceiptAt = linkedAt,
-            onDismiss = { editing = null },
-            onSave = { date, time, amount, category, memo, done ->
-                viewModel.saveExpense(target, date, time, amount, category, memo, done)
+    if (choosing) {
+        AddKindSheet(
+            onDismiss = { choosing = false },
+            onSingle = {
+                choosing = false
+                creating = true
             },
-            onDelete = {
-                viewModel.deleteExpense(target)
-                editing = null
+            onWithItems = {
+                choosing = false
+                creatingPayment = true
             },
         )
     }
-
+    if (creatingPayment) {
+        val initialDate = LedgerLogic.defaultDate(state.month, LocalDate.now())
+        ManualPaymentSheet(
+            initialDate = initialDate,
+            initialTime = LedgerLogic.defaultTime(initialDate, LocalDate.now(), LocalTime.now()),
+            onDismiss = { creatingPayment = false },
+            onSave = { group, items, done -> viewModel.addPayment(group, items, done) },
+        )
+    }
     deletingGroup?.let { target ->
         ConfirmSheet(
             title = "グループを削除",
