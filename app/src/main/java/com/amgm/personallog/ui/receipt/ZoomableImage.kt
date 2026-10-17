@@ -9,11 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,10 +27,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.amgm.personallog.receipt.ReceiptImageCodec
+import com.amgm.personallog.ui.design.AppTheme
+import com.amgm.personallog.ui.design.Label
+import com.amgm.personallog.ui.design.Space
+import com.amgm.personallog.ui.design.TextAction
 import com.amgm.personallog.ui.common.ZoomMath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -68,12 +67,14 @@ fun ReceiptImageViewer(relativePath: String, onDismiss: () -> Unit) {
     ) {
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
             when (val s = load) {
-                ViewerLoad.Loading -> CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
+                ViewerLoad.Loading -> Label(
+                    "読み込み中…",
                     color = Color.White,
+                    modifier = Modifier.align(Alignment.Center),
                 )
                 ViewerLoad.Failed -> Text(
                     "画像を表示できません",
+                    style = AppTheme.type.body,
                     color = Color.White,
                     modifier = Modifier.align(Alignment.Center),
                 )
@@ -83,18 +84,17 @@ fun ReceiptImageViewer(relativePath: String, onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            TextButton(
+            TextAction(
+                "閉じる",
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
-                modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(8.dp),
-            ) {
-                Text("閉じる")
-            }
+                color = Color.White,
+                modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(Space.s),
+            )
             Text(
                 "二本指で拡大・縮小 / ダブルタップで拡大",
                 color = Color.White,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                style = AppTheme.type.caption,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Space.m),
             )
         }
     }

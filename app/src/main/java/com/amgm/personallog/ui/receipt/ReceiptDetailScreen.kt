@@ -1,34 +1,23 @@
 package com.amgm.personallog.ui.receipt
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,23 +31,49 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.receipt.ReceiptImageCodec
+import com.amgm.personallog.ui.design.AppTheme
+import com.amgm.personallog.ui.design.Hairline
+import com.amgm.personallog.ui.design.InkButton
+import com.amgm.personallog.ui.design.InkButtonKind
+import com.amgm.personallog.ui.design.InkSheet
+import com.amgm.personallog.ui.design.Label
+import com.amgm.personallog.ui.design.LeaderRow
+import com.amgm.personallog.ui.design.PaperScreen
+import com.amgm.personallog.ui.design.Pill
+import com.amgm.personallog.ui.design.Pills
+import com.amgm.personallog.ui.design.Space
+import com.amgm.personallog.ui.design.Stamp
+import com.amgm.personallog.ui.design.StampTone
+import com.amgm.personallog.ui.design.TextAction
+import com.amgm.personallog.ui.design.tappable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/** 税率の即選択ボタン。よく使う 8%(軽減)と 10%(標準)。それ以外は下の入力欄に直接打つ。 */
+/** 税率の即選択。よく使う 8%(軽減)と 10%(標準)。それ以外は数字で直接入力する。 */
 private val PRESET_TAX_RATES = listOf("8", "10")
+
+/** 原本画像の高さ。 */
+private val IMAGE_HEIGHT = 220.dp
+
+/** 開いている編集シートの種類(rememberSaveable に文字列で持つ)。 */
+private const val SHEET_NONE = ""
+private const val SHEET_SHOP = "shop"
+private const val SHEET_TOTAL = "total"
+private const val SHEET_OWN = "own"
+private const val SHEET_DELETE = "delete"
+private const val SHEET_RESCAN = "rescan"
 
 /**
  * レシートの確認・修正画面。
- * 長いフォームを LazyColumn にして、画面外の品目は描画しない(スクロールを軽くするため)。
+ * 原本画像 → 紙面(店名・合計) → 品目の行 → 支払いまとめ → 操作。品目の編集は行をタップして開くシートで行う。
  */
 @Composable
 fun ReceiptDetailScreen(
@@ -67,184 +82,210 @@ fun ReceiptDetailScreen(
     viewModel: ReceiptDetailViewModel = hiltViewModel(),
 ) {
     val s by viewModel.state.collectAsStateWithLifecycle()
-    var showDelete by rememberSaveable { mutableStateOf(false) }
-    var showRescan by rememberSaveable { mutableStateOf(false) }
-    var bigImage by rememberSaveable { mutableStateOf(false) }
+    val c = AppTheme.colors
+    var sheet by rememberSaveable { mutableStateOf(SHEET_NONE) }
+    var editGroupKey by rememberSaveable { mutableStateOf(0L) }
+    var editUnitKey by rememberSaveable { mutableStateOf(0L) }
     var viewerOpen by rememberSaveable { mutableStateOf(false) }
     val groups = remember(s.items) { groupItemForms(s.items) }
 
     LaunchedEffect(s.finished) { if (s.finished) onBack() }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().imePadding(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "header") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onBack) { Text("戻る") }
-                    Text("レシートの確認", style = MaterialTheme.typography.titleLarge)
+    PaperScreen(modifier = modifier) {
+        LazyColumn(modifier = Modifier.fillMaxSize().imePadding()) {
+            val hasImage = !s.loading && !s.notFound && s.imagePath.isNotBlank()
+            if (hasImage) {
+                item(key = "image") {
+                    ReceiptImage(imagePath = s.imagePath, onClick = { viewerOpen = true })
+                }
+            }
+            // 戻る・読み取り直すは画像の下の細い行
+            item(key = "nav") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (hasImage) Modifier else Modifier.statusBarsPadding())
+                        .padding(horizontal = Space.s),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextAction("戻る", onClick = onBack, color = c.inkSoft)
+                    Box(modifier = Modifier.weight(1f))
+                    if (hasImage) {
+                        TextAction("読み取り直す", onClick = { sheet = SHEET_RESCAN }, enabled = !s.busy)
+                    }
                 }
             }
 
             if (s.loading) {
-                item(key = "loading") { CircularProgressIndicator() }
-            } else if (s.notFound) {
-                item(key = "notFound") { Text("レシートが見つかりません。") }
-            } else {
-                if (s.imagePath.isNotBlank()) {
-                    item(key = "image") {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ReceiptImage(imagePath = s.imagePath, big = bigImage, onClick = { viewerOpen = true })
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(onClick = { bigImage = !bigImage }) { Text(if (bigImage) "画像を小さく" else "画像を大きく") }
-                                OutlinedButton(enabled = !s.busy, onClick = { showRescan = true }) { Text("読み取り直す") }
-                            }
-                        }
-                    }
+                item(key = "loading") {
+                    Label("読み込み中…", modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.m))
                 }
-
+            } else if (s.notFound) {
+                item(key = "notFound") {
+                    Text(
+                        "レシートが見つかりません。",
+                        style = AppTheme.type.body,
+                        color = c.inkSoft,
+                        modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.m),
+                    )
+                }
+            } else {
                 if (s.scanning) {
                     item(key = "scanning") {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            CircularProgressIndicator()
-                            Text("読み取り中です…(最大1〜2分)")
+                        Column(modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.s)) {
+                            Label("読み取り中", color = c.accent)
+                            Text("読み取り中です…(最大1〜2分)", style = AppTheme.type.caption, color = c.inkSoft)
                         }
                     }
                 }
 
                 s.error?.let { msg ->
                     item(key = "error") {
-                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text(msg, color = MaterialTheme.colorScheme.onErrorContainer)
-                                TextButton(onClick = viewModel::dismissError) { Text("閉じる") }
-                            }
+                        Column(modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.s)) {
+                            Text(msg, style = AppTheme.type.body, color = c.danger)
+                            TextAction("閉じる", onClick = viewModel::dismissError, color = c.danger)
                         }
                     }
                 }
                 s.info?.let { msg ->
                     item(key = "info") {
-                        Card {
-                            Column(Modifier.padding(12.dp)) {
-                                Text(msg)
-                                TextButton(onClick = viewModel::dismissInfo) { Text("閉じる") }
-                            }
+                        Column(modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.s)) {
+                            Text(msg, style = AppTheme.type.body, color = c.moss)
+                            TextAction("閉じる", onClick = viewModel::dismissInfo, color = c.inkSoft)
                         }
                     }
                 }
 
-                s.possibleDuplicate?.let { original ->
-                    item(key = "duplicate") {
-                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-                            Column(Modifier.padding(12.dp)) {
+                // 紙面: 店名・日付・状態、合計
+                item(key = "paper") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(c.paperRaised)
+                            .padding(horizontal = Space.edge)
+                            .padding(top = Space.m),
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth().tappable { sheet = SHEET_SHOP }) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Label(
+                                    listOf(s.date, s.time).filter { it.isNotBlank() }.joinToString(" ").ifBlank { "日付未入力" },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (s.confirmed) {
+                                    Stamp("確定済み", tone = StampTone.Moss)
+                                } else {
+                                    Stamp("未確定(下書き)", tone = StampTone.Accent)
+                                }
+                            }
+                            Text(
+                                s.store.ifBlank { "(店名未入力)" },
+                                style = AppTheme.type.headline,
+                                color = c.ink,
+                                modifier = Modifier.padding(top = Space.xs),
+                            )
+                            if (s.isAdvance) {
+                                Text("立て替えの支払い", style = AppTheme.type.caption, color = c.inkSoft)
+                            }
+                            Label("タップして店名・日付を編集", modifier = Modifier.padding(top = Space.xs))
+                        }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = Space.m)
+                                .tappable { sheet = SHEET_TOTAL },
+                        ) {
+                            Label("合計")
+                            Text(
+                                formatYen((s.total.toLongOrNull() ?: s.itemsSum)),
+                                style = AppTheme.type.numeralXL,
+                                color = c.ink,
+                            )
+                        }
+                        if (s.confirmed) {
+                            Text(
+                                "確定済み(編集して「再確定」すると家計簿も更新されます)",
+                                style = AppTheme.type.caption,
+                                color = c.inkSoft,
+                                modifier = Modifier.padding(top = Space.s),
+                            )
+                        }
+                        s.possibleDuplicate?.let { original ->
+                            Column(modifier = Modifier.padding(top = Space.m)) {
+                                Stamp("重複の可能性", tone = StampTone.Danger)
                                 Text(
-                                    "重複の可能性: 同じ内容(日付・店名・合計)のレシートが既にあります。\n$original",
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    "同じ内容(日付・店名・合計)のレシートが既にあります。\n$original",
+                                    style = AppTheme.type.caption,
+                                    color = c.danger,
+                                    modifier = Modifier.padding(top = Space.xs),
                                 )
                             }
                         }
+                        Box(modifier = Modifier.height(Space.m))
+                        Hairline(dashed = true)
                     }
                 }
 
-                item(key = "status") {
-                    if (s.confirmed) {
-                        Text("確定済み(編集して「再確定」すると家計簿も更新されます)", color = MaterialTheme.colorScheme.primary)
-                    } else {
-                        Text("未確定(下書き)", color = MaterialTheme.colorScheme.tertiary)
-                    }
-                }
-
-                // 店の情報: 日付・時刻・店名・立て替え
-                item(key = "shop") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = s.date,
-                                onValueChange = viewModel::setDate,
-                                label = { Text("日付 yyyy-MM-dd") },
-                                singleLine = true,
-                                modifier = Modifier.weight(1.6f),
-                            )
-                            OutlinedTextField(
-                                value = s.time,
-                                onValueChange = viewModel::setTime,
-                                label = { Text("時刻 HH:mm") },
-                                singleLine = true,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        OutlinedTextField(
-                            value = s.store,
-                            onValueChange = viewModel::setStore,
-                            label = { Text("店名") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = s.isAdvance, onCheckedChange = viewModel::setAdvance)
-                            Text("自分が立て替えた支払い(他の人の分を含む)")
-                        }
-                    }
-                }
-
-                // 品目: 1個ずつカード。同じ品目はまとめて1枚にし、その中に1個ずつのカードを並べる。
+                // 品目
                 item(key = "itemsTitle") {
-                    Text("品目", style = MaterialTheme.typography.titleMedium)
+                    Label("品目", modifier = Modifier.padding(start = Space.edge, end = Space.edge, top = Space.l, bottom = Space.s))
                 }
                 items(groups, key = { it.head.key }) { group ->
-                    ItemGroupCard(group = group, isAdvance = s.isAdvance, viewModel = viewModel)
+                    ItemGroupRows(
+                        group = group,
+                        isAdvance = s.isAdvance,
+                        onEditGroup = { editGroupKey = group.head.key },
+                        onEditUnit = { editUnitKey = it },
+                    )
                 }
                 item(key = "addItem") {
-                    OutlinedButton(onClick = viewModel::addItem) { Text("品目を追加") }
+                    TextAction(
+                        "＋ 品目を追加",
+                        onClick = {
+                            viewModel.addItem()
+                        },
+                        modifier = Modifier.padding(horizontal = Space.s),
+                    )
                 }
 
-                // 合計と割り勘(レシート全体)
-                item(key = "total") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = s.total,
-                            onValueChange = viewModel::setTotal,
-                            label = { Text("合計(円・レシートの印字)") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Card {
-                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text("税込の支払合計: ${formatYen(s.itemsSum)}", style = MaterialTheme.typography.bodyMedium)
-                                if (s.isAdvance) {
-                                    OutlinedTextField(
-                                        value = s.ownAmount,
-                                        onValueChange = viewModel::setOwnAmount,
-                                        label = { Text("自分が払う分(円・税込)") },
-                                        placeholder = { Text("空欄は全額 ${formatYen(s.itemsSum)}") },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                    Text(
-                                        "品目の「自分の分に含める」にチェックすると、その税込合計がここに入ります。手で直接入力も可。",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    Text("自分が払う分: ${formatYen(s.ownTotal)}", style = MaterialTheme.typography.bodyMedium)
-                                    Text("貰う分(他の人の分): ${formatYen(s.theirTotal)}", style = MaterialTheme.typography.bodyMedium)
-                                }
-                                Text("小数点以下は合計で切り捨てています。", style = MaterialTheme.typography.bodySmall)
-                            }
+                // 支払いまとめ
+                item(key = "summary") {
+                    Column(modifier = Modifier.padding(horizontal = Space.edge).padding(top = Space.l)) {
+                        Hairline()
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = Space.m),
+                            horizontalArrangement = Arrangement.spacedBy(Space.s),
+                        ) {
+                            SummaryColumn("印字合計", formatYen(s.total.toLongOrNull() ?: s.itemsSum), Modifier.weight(1f))
+                            SummaryColumn("税込合計", formatYen(s.itemsSum), Modifier.weight(1f))
+                            SummaryColumn(
+                                "自分の負担",
+                                formatYen(s.ownTotal),
+                                Modifier.weight(1f).then(if (s.isAdvance) Modifier.tappable { sheet = SHEET_OWN } else Modifier),
+                            )
                         }
-                    }
-                }
-                s.mismatch?.let { diff ->
-                    item(key = "mismatch") {
-                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
-                            Column(Modifier.padding(12.dp)) {
+                        if (s.isAdvance) {
+                            Text(
+                                "貰う分(他の人の分): ${formatYen(s.theirTotal)}。「自分の負担」をタップして金額を直接入力できます。",
+                                style = AppTheme.type.caption,
+                                color = c.inkSoft,
+                            )
+                        }
+                        Text(
+                            "小数点以下は合計で切り捨てています。",
+                            style = AppTheme.type.caption,
+                            color = c.inkFaint,
+                            modifier = Modifier.padding(top = Space.xs),
+                        )
+                        s.mismatch?.let { diff ->
+                            Column(modifier = Modifier.padding(top = Space.m)) {
+                                Stamp("不一致", tone = StampTone.Danger)
                                 Text(
-                                    "合計欄と税込の支払合計が一致しません(合計欄 - 支払合計 = ${formatYen(diff)})。読み取りミスか、端数の差の可能性があります。",
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    "印字合計と税込合計が一致しません(印字合計 - 税込合計 = ${formatYen(diff)})。読み取りミスか、端数の差の可能性があります。",
+                                    style = AppTheme.type.caption,
+                                    color = c.danger,
+                                    modifier = Modifier.padding(top = Space.xs),
                                 )
-                                TextButton(onClick = viewModel::useItemsSumAsTotal) { Text("合計欄を支払合計に合わせる") }
+                                TextAction("合計欄を支払合計に合わせる", onClick = viewModel::useItemsSumAsTotal)
                             }
                         }
                     }
@@ -252,26 +293,47 @@ fun ReceiptDetailScreen(
 
                 if (s.rawJson.isNotBlank() && s.items.isEmpty()) {
                     item(key = "raw") {
-                        Column {
-                            Text("Claudeの応答原文(解釈できなかった場合の参考)", style = MaterialTheme.typography.labelMedium)
+                        Column(modifier = Modifier.padding(horizontal = Space.edge).padding(top = Space.l)) {
+                            Label("Claudeの応答原文(解釈できなかった場合の参考)")
                             SelectionContainer {
-                                Text(s.rawJson, style = MaterialTheme.typography.bodySmall)
+                                Text(s.rawJson, style = AppTheme.type.caption, color = c.inkSoft)
                             }
                         }
                     }
                 }
 
+                // 操作は最下部に離して置く
                 item(key = "actions") {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Space.edge)
+                            .padding(top = Space.xl, bottom = Space.xl),
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Space.s), modifier = Modifier.fillMaxWidth()) {
                             if (!s.confirmed) {
-                                OutlinedButton(enabled = !s.busy, onClick = viewModel::saveDraft) { Text("下書き保存") }
+                                InkButton(
+                                    "下書き保存",
+                                    onClick = viewModel::saveDraft,
+                                    kind = InkButtonKind.Outline,
+                                    enabled = !s.busy,
+                                    modifier = Modifier.weight(1f),
+                                )
                             }
-                            Button(enabled = !s.busy, onClick = viewModel::confirm) { Text(if (s.confirmed) "再確定" else "確定") }
+                            InkButton(
+                                if (s.confirmed) "再確定" else "確定",
+                                onClick = viewModel::confirm,
+                                enabled = !s.busy,
+                                modifier = Modifier.weight(1f),
+                            )
                         }
-                        TextButton(enabled = !s.busy, onClick = { showDelete = true }) {
-                            Text("このレシートを削除", color = MaterialTheme.colorScheme.error)
-                        }
+                        TextAction(
+                            "このレシートを削除",
+                            onClick = { sheet = SHEET_DELETE },
+                            color = c.danger,
+                            enabled = !s.busy,
+                            modifier = Modifier.padding(top = Space.l),
+                        )
                     }
                 }
             }
@@ -282,207 +344,313 @@ fun ReceiptDetailScreen(
         ReceiptImageViewer(relativePath = s.imagePath, onDismiss = { viewerOpen = false })
     }
 
-    s.duplicateWarning?.let { existing ->
-        AlertDialog(
-            onDismissRequest = viewModel::dismissDuplicateWarning,
-            title = { Text("重複の確認") },
-            text = { Text("既に同じレシートがあります。追加しますか?\n\n$existing") },
-            confirmButton = { TextButton(onClick = viewModel::confirmAnyway) { Text("追加する") } },
-            dismissButton = { TextButton(onClick = viewModel::dismissDuplicateWarning) { Text("キャンセル") } },
-        )
+    // 品目(まとまり)の編集シート
+    if (editGroupKey != 0L) {
+        val group = groups.firstOrNull { editGroupKey in it.keys }
+        if (group == null) {
+            LaunchedEffect(Unit) { editGroupKey = 0L }
+        } else {
+            GroupEditSheet(
+                group = group,
+                isAdvance = s.isAdvance,
+                viewModel = viewModel,
+                onEditUnit = { editUnitKey = it },
+                onDismiss = { editGroupKey = 0L },
+            )
+        }
     }
 
-    if (showDelete) {
-        AlertDialog(
-            onDismissRequest = { showDelete = false },
-            title = { Text("レシートを削除") },
-            text = { Text("レシート画像も端末から削除されます。このレシートから作った家計簿の行はどうしますか?") },
-            confirmButton = {
-                Column(horizontalAlignment = Alignment.End) {
-                    TextButton(onClick = { showDelete = false; viewModel.delete(alsoExpenses = true) }) { Text("家計簿の行も消す") }
-                    TextButton(onClick = { showDelete = false; viewModel.delete(alsoExpenses = false) }) { Text("家計簿の行は残す") }
-                    TextButton(onClick = { showDelete = false }) { Text("キャンセル") }
-                }
-            },
-        )
+    // 1個ごとの編集シート
+    if (editUnitKey != 0L) {
+        val unit = s.items.firstOrNull { it.key == editUnitKey }
+        if (unit == null) {
+            LaunchedEffect(Unit) { editUnitKey = 0L }
+        } else {
+            UnitEditSheet(
+                unit = unit,
+                number = groups.firstOrNull { editUnitKey in it.keys }?.units?.indexOfFirst { it.key == editUnitKey }?.plus(1),
+                isAdvance = s.isAdvance,
+                viewModel = viewModel,
+                onDismiss = { editUnitKey = 0L },
+            )
+        }
     }
-    if (showRescan) {
-        AlertDialog(
-            onDismissRequest = { showRescan = false },
-            title = { Text("読み取り直す") },
-            text = { Text("現在の入力内容は、新しい読み取り結果で置き換わります。画像をClaudeに再送信します。") },
-            confirmButton = {
-                TextButton(onClick = { showRescan = false; viewModel.rescan() }) { Text("読み取り直す") }
-            },
-            dismissButton = { TextButton(onClick = { showRescan = false }) { Text("キャンセル") } },
-        )
+
+    when (sheet) {
+        SHEET_SHOP -> InkSheet(onDismiss = { sheet = SHEET_NONE }, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
+            SheetTitle("店名・日付")
+            SheetField("店名", s.store, viewModel::setStore)
+            SheetField("日付 yyyy-MM-dd", s.date, viewModel::setDate)
+            SheetField("時刻 HH:mm", s.time, viewModel::setTime)
+            SheetChoice("支払い") {
+                Pill(
+                    text = "自分が立て替えた支払い(他の人の分を含む)",
+                    selected = s.isAdvance,
+                    onClick = { viewModel.setAdvance(!s.isAdvance) },
+                )
+            }
+            TextAction("閉じる", onClick = { sheet = SHEET_NONE })
+        }
+        SHEET_TOTAL -> InkSheet(onDismiss = { sheet = SHEET_NONE }, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
+            SheetTitle("合計")
+            SheetField("合計(円・レシートの印字)", s.total, viewModel::setTotal, numeric = true)
+            TextAction("閉じる", onClick = { sheet = SHEET_NONE })
+        }
+        SHEET_OWN -> InkSheet(onDismiss = { sheet = SHEET_NONE }, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
+            SheetTitle("自分が払う分")
+            SheetField(
+                "自分が払う分(円・税込)",
+                s.ownAmount,
+                viewModel::setOwnAmount,
+                placeholder = "空欄は全額 ${formatYen(s.itemsSum)}",
+                numeric = true,
+            )
+            Text(
+                "品目の「自分の分に含める」を選ぶと、その税込合計がここに入ります。手で直接入力も可。",
+                style = AppTheme.type.caption,
+                color = AppTheme.colors.inkSoft,
+                modifier = Modifier.padding(bottom = Space.m),
+            )
+            TextAction("閉じる", onClick = { sheet = SHEET_NONE })
+        }
+        SHEET_DELETE -> InkSheet(onDismiss = { sheet = SHEET_NONE }) {
+            SheetTitle("レシートを削除")
+            Text(
+                "レシート画像も端末から削除されます。このレシートから作った家計簿の行はどうしますか?",
+                style = AppTheme.type.body,
+                color = AppTheme.colors.inkSoft,
+                modifier = Modifier.padding(bottom = Space.m),
+            )
+            TextAction(
+                "家計簿の行も消す",
+                onClick = { sheet = SHEET_NONE; viewModel.delete(alsoExpenses = true) },
+                color = AppTheme.colors.danger,
+            )
+            TextAction(
+                "家計簿の行は残す",
+                onClick = { sheet = SHEET_NONE; viewModel.delete(alsoExpenses = false) },
+                color = AppTheme.colors.danger,
+            )
+            TextAction("キャンセル", onClick = { sheet = SHEET_NONE }, color = AppTheme.colors.inkSoft)
+        }
+        SHEET_RESCAN -> InkSheet(onDismiss = { sheet = SHEET_NONE }) {
+            SheetTitle("読み取り直す")
+            Text(
+                "現在の入力内容は、新しい読み取り結果で置き換わります。画像をClaudeに再送信します。",
+                style = AppTheme.type.body,
+                color = AppTheme.colors.inkSoft,
+                modifier = Modifier.padding(bottom = Space.m),
+            )
+            TextAction("読み取り直す", onClick = { sheet = SHEET_NONE; viewModel.rescan() })
+            TextAction("キャンセル", onClick = { sheet = SHEET_NONE }, color = AppTheme.colors.inkSoft)
+        }
+    }
+
+    s.duplicateWarning?.let { existing ->
+        InkSheet(onDismiss = viewModel::dismissDuplicateWarning) {
+            SheetTitle("重複の確認")
+            Stamp("重複の可能性", tone = StampTone.Danger)
+            Text(
+                "既に同じレシートがあります。追加しますか?\n\n$existing",
+                style = AppTheme.type.body,
+                color = AppTheme.colors.inkSoft,
+                modifier = Modifier.padding(vertical = Space.m),
+            )
+            TextAction("追加する", onClick = viewModel::confirmAnyway)
+            TextAction("キャンセル", onClick = viewModel::dismissDuplicateWarning, color = AppTheme.colors.inkSoft)
+        }
     }
 }
 
-/**
- * 同じ品目のまとまり1つ分のカード。
- * 常に見える: 品名・金額(+税込/税抜)・割り勘の補助チェック。税抜のときは税込価格も出す。
- * 詳細: 税率・カテゴリ・メモ。個数が2以上のときは、1個ずつのカード(金額・メモ・割り勘・削除)を並べる。
- */
+/** 支払いまとめの1列: 小さな見出しと大きめの数字。 */
 @Composable
-private fun ItemGroupCard(group: ItemGroup, isAdvance: Boolean, viewModel: ReceiptDetailViewModel) {
+private fun SummaryColumn(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Label(label)
+        Text(value, style = AppTheme.type.numeralL, color = AppTheme.colors.ink)
+    }
+}
+
+/** 品目のまとまり1つ分: 品名 ······ 税込額 の行、補足の caption、2個以上なら字下げした1個ずつの行。 */
+@Composable
+private fun ItemGroupRows(
+    group: ItemGroup,
+    isAdvance: Boolean,
+    onEditGroup: () -> Unit,
+    onEditUnit: (Long) -> Unit,
+) {
+    val c = AppTheme.colors
+    val head = group.head
+    val count = group.units.size
+    val paid = TaxCalc.paidYen(group.units.map { it.toItemModel() })
+    val allPicked = group.units.all { it.picked }
+    val note = buildString {
+        append(if (head.priceIncludesTax) "税込" else "税抜")
+        append(' ').append(head.taxRate).append('%')
+        append(" ・ ").append(head.category)
+        if (count > 1) append(" ・ 1個 ").append(yenText(head.amount))
+        else if (!head.priceIncludesTax) append(" ・ 税込 ").append(TaxCalc.paidYenText(head.toItemModel())).append('円')
+        if (head.memo.isNotBlank() && count == 1) append(" ・ ").append(head.memo)
+        if (isAdvance) append(if (allPicked) " ・ 自分の分" else " ・ 相手の分")
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .tappable(onClick = onEditGroup)
+                .padding(horizontal = Space.edge, vertical = Space.s),
+        ) {
+            LeaderRow(
+                label = head.name.ifBlank { "(品名未入力)" } + if (count > 1) " ×$count" else "",
+                value = formatYen(paid),
+            )
+            Text(note, style = AppTheme.type.caption, color = c.inkSoft)
+        }
+        if (count > 1) {
+            group.units.forEachIndexed { index, unit ->
+                Text(
+                    "${index + 1}個目  ${yenText(unit.amount)}" +
+                        (if (unit.memo.isNotBlank()) "  ${unit.memo}" else "") +
+                        (if (isAdvance) (if (unit.picked) "  自分の分" else "") else ""),
+                    style = AppTheme.type.caption,
+                    color = c.inkSoft,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .tappable { onEditUnit(unit.key) }
+                        .padding(start = Space.edge + Space.l, end = Space.edge, top = Space.xs, bottom = Space.xs),
+                )
+            }
+        }
+        Hairline(modifier = Modifier.padding(horizontal = Space.edge))
+    }
+}
+
+/** 品目(まとまり)の編集シート。品名・金額は罫線つき、税率・税込税抜・カテゴリ・負担は丸薬で選ぶ。 */
+@Composable
+private fun GroupEditSheet(
+    group: ItemGroup,
+    isAdvance: Boolean,
+    viewModel: ReceiptDetailViewModel,
+    onEditUnit: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
     val head = group.head
     val keys = group.keys
     val count = group.units.size
-    var expanded by rememberSaveable(head.key) { mutableStateOf(false) }
-    val headModel = head.toItemModel()
     val allPicked = group.units.all { it.picked }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = head.name,
-                    onValueChange = { viewModel.setGroupName(keys, it) },
-                    label = { Text("品名") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                )
-                if (count > 1) {
-                    Text("×$count", style = MaterialTheme.typography.titleMedium)
-                }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = head.amount,
-                    onValueChange = { viewModel.setGroupAmount(keys, it) },
-                    label = { Text(if (count > 1) "金額(1個・円)" else "金額(円)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = { viewModel.toggleGroupTaxIncluded(keys) }) {
-                    Text(if (head.priceIncludesTax) "税込 ${head.taxRate}%" else "税抜 ${head.taxRate}%")
-                }
-            }
-            if (!head.priceIncludesTax) {
-                Text(
-                    "→ 税込 ${TaxCalc.paidYenText(headModel)}円",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            if (isAdvance) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = allPicked, onCheckedChange = { viewModel.togglePicked(keys) })
-                    Text(if (count > 1) "自分の分に含める(全部)" else "自分の分に含める")
-                }
-            }
-            TextButton(onClick = { expanded = !expanded }) {
-                Text(if (expanded) "詳細を閉じる" else "詳細(税率・カテゴリ・メモ)")
-            }
-            if (expanded) {
-                TaxRateRow(current = head.taxRate, onPick = { viewModel.setGroupTaxRate(keys, it) })
-                CategoryPicker(value = head.category, onChange = { viewModel.setGroupCategory(keys, it) })
-                if (count == 1) {
-                    OutlinedTextField(
-                        value = head.memo,
-                        onValueChange = { viewModel.setUnitMemo(head.key, it) },
-                        label = { Text("メモ") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    TextButton(onClick = { viewModel.removeGroup(keys) }) {
-                        Text("この品目を削除", color = MaterialTheme.colorScheme.error)
-                    }
-                } else {
-                    group.units.forEachIndexed { index, unit ->
-                        UnitCard(
-                            number = index + 1,
-                            unit = unit,
-                            isAdvance = isAdvance,
-                            viewModel = viewModel,
-                        )
-                    }
-                    OutlinedButton(onClick = { viewModel.addSameItem(head.key) }) { Text("同じ品目をもう1個追加") }
-                }
-            }
-        }
-    }
-}
-
-/** 2個以上の品目の、1個ぶんのカード。金額・メモ・割り勘の補助・削除を持つ。 */
-@Composable
-private fun UnitCard(number: Int, unit: ItemForm, isAdvance: Boolean, viewModel: ReceiptDetailViewModel) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("${number}個目", style = MaterialTheme.typography.titleSmall)
-            OutlinedTextField(
-                value = unit.amount,
-                onValueChange = { viewModel.setUnitAmount(unit.key, it) },
-                label = { Text("この1個の金額(円)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = unit.memo,
-                onValueChange = { viewModel.setUnitMemo(unit.key, it) },
-                label = { Text("メモ") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (isAdvance) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = unit.picked, onCheckedChange = { viewModel.togglePicked(setOf(unit.key)) })
-                    Text("この1個を自分の分に含める")
-                }
-            }
-            TextButton(onClick = { viewModel.removeUnit(unit.key) }) {
-                Text("この1個を削除", color = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
-}
-
-/** 税率: 8%・10%の即選択ボタンと、任意の値を入れる欄。 */
-@Composable
-private fun TaxRateRow(current: String, onPick: (String) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        PRESET_TAX_RATES.forEach { rate ->
-            if (current == rate) {
-                Button(onClick = { onPick(rate) }) { Text("$rate%") }
-            } else {
-                OutlinedButton(onClick = { onPick(rate) }) { Text("$rate%") }
-            }
-        }
-        OutlinedTextField(
-            value = current,
-            onValueChange = onPick,
-            label = { Text("税率(%)") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.weight(1f),
+    InkSheet(onDismiss = onDismiss, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
+        SheetTitle(if (count > 1) "品目(同じもの×$count)" else "品目")
+        SheetField("品名", head.name, { viewModel.setGroupName(keys, it) })
+        SheetField(
+            if (count > 1) "金額(1個・円)" else "金額(円)",
+            head.amount,
+            { viewModel.setGroupAmount(keys, it) },
+            numeric = true,
         )
-    }
-}
-
-@Composable
-private fun CategoryPicker(value: String, onChange: (String) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        OutlinedButton(onClick = { open = true }) { Text("カテゴリ: $value") }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            val options = if (value in Categories.DEFAULTS) Categories.DEFAULTS else Categories.DEFAULTS + value
-            options.forEach { c ->
-                DropdownMenuItem(text = { Text(c) }, onClick = { onChange(c); open = false })
+        SheetChoice("税込・税抜") {
+            Pills(
+                options = listOf(true, false),
+                selected = head.priceIncludesTax,
+                onSelect = { if (it != head.priceIncludesTax) viewModel.toggleGroupTaxIncluded(keys) },
+                label = { if (it) "税込" else "税抜" },
+            )
+        }
+        SheetChoice("税率") {
+            Pills(
+                options = PRESET_TAX_RATES,
+                selected = head.taxRate,
+                onSelect = { viewModel.setGroupTaxRate(keys, it) },
+                label = { "$it%" },
+            )
+        }
+        SheetField("税率(%)を直接入力", head.taxRate, { viewModel.setGroupTaxRate(keys, it) }, numeric = true)
+        SheetChoice("カテゴリ") {
+            Pills(
+                options = if (head.category in Categories.DEFAULTS) Categories.DEFAULTS else Categories.DEFAULTS + head.category,
+                selected = head.category,
+                onSelect = { viewModel.setGroupCategory(keys, it) },
+                label = { it },
+            )
+        }
+        if (isAdvance) {
+            SheetChoice("負担") {
+                Pills(
+                    options = listOf(true, false),
+                    selected = allPicked,
+                    onSelect = { if (it != allPicked) viewModel.togglePicked(keys) },
+                    label = { if (it) (if (count > 1) "自分の分に含める(全部)" else "自分の分に含める") else "含めない" },
+                )
             }
+        }
+        if (count == 1) {
+            SheetField("メモ", head.memo, { viewModel.setUnitMemo(head.key, it) })
+        } else {
+            SheetChoice("1個ごとに編集") {
+                group.units.forEachIndexed { index, unit ->
+                    Text(
+                        "${index + 1}個目  ${yenText(unit.amount)}" + if (unit.memo.isNotBlank()) "  ${unit.memo}" else "",
+                        style = AppTheme.type.body,
+                        color = AppTheme.colors.ink,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .tappable { onEditUnit(unit.key) }
+                            .padding(vertical = Space.s),
+                    )
+                    Hairline()
+                }
+            }
+            TextAction("同じ品目をもう1個追加", onClick = { viewModel.addSameItem(head.key) })
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextAction(
+                "この品目を削除",
+                onClick = { viewModel.removeGroup(keys); onDismiss() },
+                color = AppTheme.colors.danger,
+            )
+            TextAction("閉じる", onClick = onDismiss)
         }
     }
 }
 
+/** 2個以上の品目の、1個ぶんの編集シート。金額・メモ・負担・削除。 */
 @Composable
-private fun ReceiptImage(imagePath: String, big: Boolean, onClick: () -> Unit) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    // 一覧用の表示は 1024px まで。拡大表示(ReceiptImageViewer)は別に高解像度で読む。
+private fun UnitEditSheet(
+    unit: ItemForm,
+    number: Int?,
+    isAdvance: Boolean,
+    viewModel: ReceiptDetailViewModel,
+    onDismiss: () -> Unit,
+) {
+    InkSheet(onDismiss = onDismiss, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
+        SheetTitle(if (number != null) "${unit.name.ifBlank { "品目" }} ${number}個目" else unit.name.ifBlank { "品目" })
+        SheetField("この1個の金額(円)", unit.amount, { viewModel.setUnitAmount(unit.key, it) }, numeric = true)
+        SheetField("メモ", unit.memo, { viewModel.setUnitMemo(unit.key, it) })
+        if (isAdvance) {
+            SheetChoice("負担") {
+                Pills(
+                    options = listOf(true, false),
+                    selected = unit.picked,
+                    onSelect = { if (it != unit.picked) viewModel.togglePicked(setOf(unit.key)) },
+                    label = { if (it) "この1個を自分の分に含める" else "含めない" },
+                )
+            }
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextAction(
+                "この1個を削除",
+                onClick = { viewModel.removeUnit(unit.key); onDismiss() },
+                color = AppTheme.colors.danger,
+            )
+            TextAction("閉じる", onClick = onDismiss)
+        }
+    }
+}
+
+/** 原本画像。全幅・高さ固定で切り抜き、タップで拡大表示(ReceiptImageViewer)。 */
+@Composable
+private fun ReceiptImage(imagePath: String, onClick: () -> Unit) {
+    val context = LocalContext.current
+    // 表示用は 1024px まで。拡大表示(ReceiptImageViewer)は別に高解像度で読む。
     val bitmap by produceState<ImageBitmap?>(initialValue = null, imagePath) {
         value = withContext(Dispatchers.IO) {
             try {
@@ -494,16 +662,25 @@ private fun ReceiptImage(imagePath: String, big: Boolean, onClick: () -> Unit) {
     }
     val bmp = bitmap
     if (bmp == null) {
-        Text("(画像を表示できません)", style = MaterialTheme.typography.bodySmall)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IMAGE_HEIGHT)
+                .background(AppTheme.colors.paperRaised)
+                .statusBarsPadding(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Label("(画像を表示できません)")
+        }
     } else {
         Image(
             bitmap = bmp,
             contentDescription = "レシート画像(タップで拡大表示)",
-            contentScale = ContentScale.Fit,
+            contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = if (big) 640.dp else 220.dp)
-                .clickable(onClick = onClick),
+                .height(IMAGE_HEIGHT)
+                .tappable(onClick = onClick),
         )
     }
 }
