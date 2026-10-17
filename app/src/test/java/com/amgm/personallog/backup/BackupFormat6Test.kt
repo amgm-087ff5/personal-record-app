@@ -2,6 +2,7 @@ package com.amgm.personallog.backup
 
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.data.model.ReceiptItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -118,8 +119,23 @@ class BackupFormat6Test {
         // 別の端末で確定して uid が違うだけの、同じレシートの支払いは二重に登録しない
         val idx = GroupMergeIndex(listOf(group.copy(id = 100, uid = "device-b")))
         assertEquals(100L, idx.find("g-uid-1", group.copy(id = 0)))
-        // 従来のキーも違えば別の支払い
-        assertNull(idx.find("g-uid-1", group.copy(id = 0, amount = 1)))
+        // 従来のキーが違っても、そのレシートに支払いグループが既にあれば追加しない(同じレシートにグループが二重になるのを防ぐ)
+        assertEquals(100L, idx.find("g-uid-1", group.copy(id = 0, amount = 1, memo = "直した")))
+        // 別のレシートのグループなら別の支払い
+        assertNull(idx.find("g-uid-1", group.copy(id = 0, amount = 1, receiptId = 6)))
+    }
+
+    @Test
+    fun matchExistingItems_pairsSameContentOneToOne() {
+        fun bi(id: Long, name: String, amount: Int, rate: Int = 10) =
+            BackupReceiptItem(id = id, receiptId = 5, name = name, amount = amount, category = "食費", taxRate = rate)
+        fun ri(id: Long, name: String, amount: Int, rate: Int = 10) =
+            ReceiptItem(id = id, receiptId = 77, name = name, amount = amount, category = "食費", taxRate = rate)
+        val m = matchExistingItems(
+            listOf(bi(1, "牛乳", 200), bi(2, "牛乳", 200), bi(3, "洗剤", 500), bi(4, "パン", 100, rate = 8)),
+            listOf(ri(71, "牛乳", 200), ri(72, "洗剤", 500), ri(73, "牛乳", 200), ri(74, "パン", 100, rate = 10)),
+        )
+        assertEquals(mapOf(1L to 71L, 2L to 73L, 3L to 72L), m) // 税率が違うパンは対応させない
     }
 
     @Test
@@ -139,8 +155,8 @@ class BackupFormat6Test {
 
     @Test
     fun groupMerge_oldFormatWithoutUid_usesLegacyKey() {
-        val idx = GroupMergeIndex(listOf(group.copy(id = 100, uid = "whatever")))
-        val sameKey = group.copy(id = 0, uid = "generated")
+        val idx = GroupMergeIndex(listOf(group.copy(id = 100, uid = "whatever", receiptId = null)))
+        val sameKey = group.copy(id = 0, uid = "generated", receiptId = null)
         assertEquals(100L, idx.find("", sameKey))
         assertNull(idx.find("", sameKey.copy(amount = 701)))
         // 新しく入れた行も登録され、同じバックアップ内の重複に効く

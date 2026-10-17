@@ -252,4 +252,64 @@ class ReceiptPaymentFlowRobolectricTest {
         assertFalse(g2.timeEdited)
         assertTrue(children(r.id).all { it.date == "2026-10-31" && it.time == "20:00" })
     }
+
+    @Test
+    fun roundTripThroughAdvance_doesNotReviveDeletedItems() {
+        val (r, items) = confirmedReceipt()
+        val soap = children(r.id)[1]
+        runBlocking { expenses.delete(soap) }
+        // 立て替えにする: 確認は「作り直す」で、消した品目は消したまま残ると知らせる
+        val advance = r.copy(isAdvance = true, ownAmount = 300)
+        val impact = runBlocking { receipts.confirmImpact(advance, items) }
+        assertTrue(impact.rebuild)
+        assertEquals(1, impact.keptDeleted)
+        assertEquals(0, impact.lostEdited)
+        runBlocking { receipts.saveAndConfirm(advance, items) }
+        val whileAdvance = children(r.id)
+        assertEquals(1, whileAdvance.count { !it.deletedByUser })
+        assertEquals(300, whileAdvance.single { !it.deletedByUser }.amount)
+        assertTrue(whileAdvance.single { it.deletedByUser }.groupId == null)
+        // 立て替えをやめて通常に戻す: 洗剤は復活しない
+        runBlocking { receipts.saveAndConfirm(advance.copy(isAdvance = false, ownAmount = null), items) }
+        val back = children(r.id)
+        assertEquals(2, back.size)
+        val gid = runBlocking { db.expenseGroupDao().getByReceiptId(r.id) }.single().id
+        assertTrue(back.all { it.groupId == gid })
+        assertEquals(listOf("洗剤"), back.filter { it.deletedByUser }.map { it.name })
+        assertEquals(listOf("牛乳"), back.filter { !it.deletedByUser }.map { it.name })
+        // 元に戻せる
+        runBlocking { expenses.restore(back.single { it.deletedByUser }) }
+        assertTrue(children(r.id).none { it.deletedByUser })
+    }
+
+    @Test
+    fun revertSingleRow_ofAdvanceReceiptWithSeveralItems_usesOwnAmount() {
+        val id = runBlocking {
+            receipts.saveAndConfirm(
+                receipt().copy(isAdvance = true, ownAmount = 300), listOf(item("牛乳", 200), item("洗剤", 500)),
+            )
+        }
+        val single = children(id).single()
+        assertEquals(300, single.amount)
+        runBlocking { expenses.update(PaymentEdit.editExpense(single, single.date, single.time, 999, single.category, single.name, "自分で")) }
+        assertTrue(runBlocking { expenses.revertExpenseField(single.id, PaymentField.AMOUNT) })
+        assertTrue(runBlocking { expenses.revertExpenseField(single.id, PaymentField.MEMO) })
+        val after = children(id).single()
+        assertEquals(300, after.amount)
+        assertFalse(after.amountEdited)
+        assertEquals("店", after.memo)
+        assertFalse(after.memoEdited)
+    }
+
+    @Test
+    fun setDeletedByUser_touchesOnlyTheFlag() {
+        val (r, _) = confirmedReceipt()
+        val milk = children(r.id)[0]
+        runBlocking { expenses.update(PaymentEdit.editExpense(milk, milk.date, milk.time, 250, milk.category, milk.name, milk.memo)) }
+        runBlocking { db.expenseDao().setDeletedByUser(milk.id, true) }
+        val after = children(r.id)[0]
+        assertTrue(after.deletedByUser)
+        assertEquals(250, after.amount)
+        assertTrue(after.amountEdited)
+    }
 }

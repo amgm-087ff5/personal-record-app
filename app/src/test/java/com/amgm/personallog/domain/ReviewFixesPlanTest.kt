@@ -86,10 +86,48 @@ class ReviewFixesPlanTest {
     }
 
     @Test
-    fun carryOver_doesNotMatchWhenAmountTaxOrNameDiffer() {
+    fun carryOver_prefersSameCategory_thenSameContent() {
+        val prev = listOf(
+            form(1, 11, "牛乳", 200).copy(category = "外食"),
+            form(2, 12, "牛乳", 200).copy(category = "食費"),
+        )
+        // 読み取り直しの1つ目は食費。内容もカテゴリも同じ 12 を優先する
+        val next = listOf(form(10, 0, "牛乳", 200).copy(category = "食費"), form(11, 0, "牛乳", 200).copy(category = "日用品"))
+        assertEquals(listOf(12L, 11L), carryOverItemIds(prev, next).map { it.id })
+    }
+
+    @Test
+    fun carryOver_leftoversAreMatchedByPosition_onlyWhenCountsAreEqual() {
         val prev = listOf(form(1, 11, "牛乳", 200), form(2, 12, "パン", 100, rate = 8), form(3, 13, "水", 100))
+        // 金額・税率・税込区分の読み違い: 内容は一致しないが、残りの数が同じなので位置で引き継ぐ
         val next = listOf(form(10, 0, "牛乳", 210), form(11, 0, "パン", 100, rate = 10), form(12, 0, "水", 100, incl = false))
-        assertEquals(listOf(0L, 0L, 0L), carryOverItemIds(prev, next).map { it.id })
+        assertEquals(listOf(11L, 12L, 13L), carryOverItemIds(prev, next).map { it.id })
+        // 残りの数が違うなら引き継がない
+        val next2 = listOf(form(10, 0, "牛乳", 210), form(11, 0, "パン", 100, rate = 10))
+        assertEquals(listOf(0L, 0L), carryOverItemIds(prev, next2).map { it.id })
+    }
+
+    @Test
+    fun rebuild_keepsDeletedItems_hiddenAndOutOfChildren() {
+        val milk = item(11, "牛乳", 200)
+        val soap = item(12, "洗剤", 500)
+        val first = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), emptyList(), true, 1) as ConfirmPlan.Rebuild
+        val g = first.group!!.copy(id = 5)
+        val children = first.children.mapIndexed { i, e -> e.copy(id = 100L + i, groupId = 5) }
+        val deleted = children[1].copy(deletedByUser = true)
+        // 立て替えにした: 単独の1行へ作り直す。消した品目は keepDeleted に残る
+        val toAdvance = ConfirmPlanner.plan(
+            receipt().copy(isAdvance = true, ownAmount = 300), listOf(milk, soap), listOf(g), listOf(children[0], deleted), true, 2,
+        ) as ConfirmPlan.Rebuild
+        assertEquals(null, toAdvance.group)
+        assertEquals(listOf(deleted), toAdvance.keepDeleted)
+        assertTrue(toAdvance.children.none { it.deletedByUser })
+        // 消した品目は「家計簿で直した」件数に入らない
+        assertEquals(0, ConfirmPlanner.lostEditedCount(toAdvance, listOf(g), listOf(children[0], deleted), emptyList()))
+        // 通常に戻した: グループへ作り直す。消した品目の行は children に入らない
+        val back = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), listOf(children[0].copy(groupId = null), deleted.copy(groupId = null)), true, 3) as ConfirmPlan.Rebuild
+        assertEquals(listOf(11L), back.children.map { it.receiptItemId })
+        assertEquals(listOf(12L), back.keepDeleted.map { it.receiptItemId })
     }
 
     @Test
