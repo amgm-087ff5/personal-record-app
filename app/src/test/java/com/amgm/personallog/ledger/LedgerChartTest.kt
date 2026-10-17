@@ -31,16 +31,37 @@ class LedgerChartTest {
         assertEquals(LocalDate.of(2026, 10, 4), bars.first().end)
         assertEquals(LocalDate.of(2026, 10, 26), bars.last().start)
         assertEquals(LocalDate.of(2026, 10, 31), bars.last().end)
+        assertEquals("9/28〜10/4", bars.first().label)
+        assertEquals("10/26〜11/1", bars.last().label)
         assertEquals(true, bars.all { it.drillable })
     }
 
     @Test
-    fun yearBars_twelveMonths_drillToMonth() {
+    fun yearBars_sixMonthsEndingAtFocus_oldestFirst_drillToMonth() {
         val bars = LedgerChart.bars(ChartLevel.YEAR, oct14, emptyList())
-        assertEquals(12, bars.size)
-        assertEquals("10月", bars[9].label)
-        assertEquals(LocalDate.of(2026, 10, 1), bars[9].start)
-        assertEquals(LocalDate.of(2026, 10, 31), bars[9].end)
+        assertEquals(6, bars.size)
+        assertEquals(listOf("5月", "6月", "7月", "8月", "9月", "10月"), bars.map { it.label })
+        assertEquals(LocalDate.of(2026, 5, 1), bars.first().start)
+        assertEquals(LocalDate.of(2026, 10, 31), bars.last().end)
+        assertEquals(true, bars.all { it.drillable })
+    }
+
+    @Test
+    fun yearWindow_isSixMonthsEndingAtFocusMonth() {
+        assertEquals(
+            LocalDate.of(2026, 5, 1) to LocalDate.of(2026, 10, 31),
+            LedgerChart.containerRange(ChartLevel.YEAR, oct14),
+        )
+    }
+
+    @Test
+    fun containerLabel_yearShowsEndMonthOnly() {
+        assertEquals("〜2026年10月", LedgerChart.containerLabel(ChartLevel.YEAR, oct14))
+    }
+
+    @Test
+    fun containerLabel_monthShowsFullWeekRange() {
+        assertEquals("9/28週〜11/1週", LedgerChart.containerLabel(ChartLevel.MONTH, oct14))
     }
 
     @Test
@@ -61,7 +82,7 @@ class LedgerChartTest {
         val bars = LedgerChart.bars(ChartLevel.WEEK, oct14, emptyList())
         assertEquals(7, bars.size)
         assertEquals(LocalDate.of(2026, 10, 12), bars.first().start)
-        assertEquals("12(月)", bars.first().label)
+        assertEquals("10/12(月)", bars.first().label)
         assertEquals(true, bars.all { it.drillable })
     }
 
@@ -75,7 +96,7 @@ class LedgerChartTest {
 
     @Test
     fun shift_movesByLevelUnit() {
-        assertEquals(LocalDate.of(2027, 10, 14), LedgerChart.shift(ChartLevel.YEAR, oct14, 1))
+        assertEquals(LocalDate.of(2027, 4, 14), LedgerChart.shift(ChartLevel.YEAR, oct14, 1))
         assertEquals(LocalDate.of(2026, 11, 14), LedgerChart.shift(ChartLevel.MONTH, oct14, 1))
         assertEquals(LocalDate.of(2026, 10, 21), LedgerChart.shift(ChartLevel.WEEK, oct14, 1))
         assertEquals(LocalDate.of(2026, 10, 13), LedgerChart.shift(ChartLevel.DAY, oct14, -1))
@@ -112,6 +133,8 @@ class LedgerChartTest {
         )
         val bars = LedgerChart.bars(ChartLevel.DAY, oct14, list)
         assertEquals(24, bars.size)
+        assertEquals("0:", bars[0].label)
+        assertEquals("23:", bars[23].label)
         assertEquals(false, bars.all { it.drillable })
         assertEquals(500L, bars[9].total)
         assertEquals(listOf("食費", "外食"), bars[9].segments.map { it.category })

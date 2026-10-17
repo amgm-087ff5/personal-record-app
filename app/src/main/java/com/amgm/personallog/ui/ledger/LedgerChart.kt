@@ -7,7 +7,7 @@ import java.time.temporal.TemporalAdjusters
 
 /**
  * 積み上げ棒グラフの階層。上の階層の棒をタップすると1段下の階層の棒に分解される。
- * 年: 1年の中の12か月 / 月: その月の週(月曜始まり・週内に1日でも含まれれば表示、月内の日だけで集計) /
+ * 年: 直近6か月(表示の終わりの月まで、古い順) / 月: その月の週(月曜始まり・週内に1日でも含まれれば表示、棒の集計は月内の日だけ) /
  * 週: その週の7日 / 日: その日の24時間(支払った時刻で振り分け)。
  */
 enum class ChartLevel(val label: String) {
@@ -44,9 +44,18 @@ data class ChartBar(
 object LedgerChart {
     private const val WEEKDAY_CHARS = "月火水木金土日"
 
-    /** focus を含む階層の期間(両端含む)。 */
+    /** 直近の月の数(年の階層で表示する月数)。終わりの月を含めて6か月。 */
+    private const val YEAR_WINDOW_MONTHS = 6
+
+    /**
+     * focus を含む階層の期間(両端含む)。
+     * 年: focus の月から5か月前の1日 〜 focus の月の末日(直近6か月)。
+     */
     fun containerRange(level: ChartLevel, focus: LocalDate): Pair<LocalDate, LocalDate> = when (level) {
-        ChartLevel.YEAR -> LocalDate.of(focus.year, 1, 1) to LocalDate.of(focus.year, 12, 31)
+        ChartLevel.YEAR -> {
+            val last = YearMonth.from(focus)
+            last.minusMonths((YEAR_WINDOW_MONTHS - 1).toLong()).atDay(1) to last.atEndOfMonth()
+        }
         ChartLevel.MONTH -> YearMonth.from(focus).atDay(1) to YearMonth.from(focus).atEndOfMonth()
         ChartLevel.WEEK -> {
             val mon = focus.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
@@ -55,43 +64,59 @@ object LedgerChart {
         ChartLevel.DAY -> focus to focus
     }
 
-    /** 階層ごとの前後移動。◀▶ ボタン用。 */
+    /** 階層ごとの前後移動。◀▶ ボタン用。年は6か月ずつ動く。 */
     fun shift(level: ChartLevel, focus: LocalDate, delta: Long): LocalDate = when (level) {
-        ChartLevel.YEAR -> focus.plusYears(delta)
+        ChartLevel.YEAR -> focus.plusMonths(YEAR_WINDOW_MONTHS * delta)
         ChartLevel.MONTH -> focus.plusMonths(delta)
         ChartLevel.WEEK -> focus.plusWeeks(delta)
         ChartLevel.DAY -> focus.plusDays(delta)
     }
 
-    /** 表示中の期間の見出し。 */
+    /**
+     * 表示中の期間の見出し。
+     * 年: 終わりの月のみ("〜2026年10月")。月: 週の範囲("9/28週〜11/1週"、週は月曜〜日曜の全体)。
+     */
     fun containerLabel(level: ChartLevel, focus: LocalDate): String {
         val (s, e) = containerRange(level, focus)
         return when (level) {
-            ChartLevel.YEAR -> "${s.year}年"
-            ChartLevel.MONTH -> "${s.year}年${s.monthValue}月"
+            ChartLevel.YEAR -> "〜${focus.year}年${focus.monthValue}月"
+            ChartLevel.MONTH -> {
+                val firstFullMon = s.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                val lastFullSun = e.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).plusDays(6)
+                "${md(firstFullMon)}週〜${md(lastFullSun)}週"
+            }
             ChartLevel.WEEK -> "${md(s)}〜${md(e)}"
             ChartLevel.DAY -> LedgerLogic.dayLabel(focus.toString())
         }
     }
 
-    /** 階層 level を focus の期間で表示したときの棒の並び。 */
+    /**
+     * 階層 level を focus の期間で表示したときの棒の並び。
+     * 年: 直近6か月を古い順に(終わりの月が最後)。月: 月内の週(週の範囲ラベル、期間は月内に切り詰め)。
+     * 週: 月曜から日曜の7日。日: 0時〜23時の24本(分解不可)。
+     */
     fun bars(level: ChartLevel, focus: LocalDate, entries: List<LedgerEntry>): List<ChartBar> {
         val (cs, ce) = containerRange(level, focus)
         return when (level) {
-            ChartLevel.YEAR -> (1..12).map { m ->
-                val s = LocalDate.of(cs.year, m, 1)
-                bar("${m}月", s, YearMonth.of(cs.year, m).atEndOfMonth(), entries, drillable = true)
+            ChartLevel.YEAR -> {
+                val last = YearMonth.from(focus)
+                (YEAR_WINDOW_MONTHS - 1 downTo 0).map { k ->
+                    val month = last.minusMonths(k.toLong())
+                    bar("${month.monthValue}月", month.atDay(1), month.atEndOfMonth(), entries, drillable = true)
+                }
             }
             ChartLevel.MONTH -> weeksOf(cs, ce).map { (s, e) ->
-                bar(md(s), s, e, entries, drillable = true)
+                val fullMon = s.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                val fullSun = fullMon.plusDays(6)
+                bar("${md(fullMon)}〜${md(fullSun)}", s, e, entries, drillable = true)
             }
             ChartLevel.WEEK -> (0..6).map { i ->
                 val d = cs.plusDays(i.toLong())
-                bar("${d.dayOfMonth}(${WEEKDAY_CHARS[i]})", d, d, entries, drillable = true)
+                bar("${md(d)}(${WEEKDAY_CHARS[i]})", d, d, entries, drillable = true)
             }
             ChartLevel.DAY -> (0..23).map { h ->
                 val segs = hourSegments(entries, cs, h)
-                ChartBar("${h}時", cs, cs, segs, segs.sumOf { it.amount }, drillable = false)
+                ChartBar("${h}:", cs, cs, segs, segs.sumOf { it.amount }, drillable = false)
             }
         }
     }
@@ -141,7 +166,10 @@ object LedgerChart {
         return ChartBar(label, s, e, segs, segs.sumOf { it.amount }, drillable)
     }
 
-    /** 月内の週(月曜始まり)。週内に月の日が1日でも含まれれば対象。期間は月の範囲に切り詰める。 */
+    /**
+     * 月内の週(月曜始まり)。週内に月の日が1日でも含まれれば対象。
+     * 返す期間は月の範囲に切り詰めたもの(集計用)。ラベル用の全体の週は bars 側で求める。
+     */
     private fun weeksOf(monthStart: LocalDate, monthEnd: LocalDate): List<Pair<LocalDate, LocalDate>> {
         val out = mutableListOf<Pair<LocalDate, LocalDate>>()
         var mon = monthStart.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
