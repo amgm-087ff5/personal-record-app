@@ -74,6 +74,18 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        // Robolectric(本物の SQLite で移行を試すテスト)がリソース・マニフェストを使う
+        unitTests.isIncludeAndroidResources = true
+        // 失敗の理由(期待値と実際の値)を CI のログにそのまま出す
+        unitTests.all { test ->
+            test.testLogging {
+                events("failed")
+                exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+            }
+        }
+    }
 }
 
 ksp {
@@ -107,4 +119,5 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
 }

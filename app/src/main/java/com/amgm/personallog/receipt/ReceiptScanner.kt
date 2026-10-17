@@ -4,6 +4,7 @@ import android.util.Base64
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.settings.SettingsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +30,7 @@ class ReceiptScanner @Inject constructor(
     private val store: ReceiptImageStore,
     private val client: ClaudeApiClient,
 ) {
-    suspend fun scan(imagePath: String): ScanOutcome {
+    suspend fun scan(imagePath: String, adjust: ReceiptAdjust = ReceiptAdjust.NONE): ScanOutcome {
         val s = settings.settings.first()
         if (s.anthropicApiKey.isBlank()) {
             return ScanOutcome.Failed("APIキーが未設定です。設定タブでAPIキーを入れてください。")
@@ -38,7 +39,7 @@ class ReceiptScanner @Inject constructor(
         if (!file.exists()) return ScanOutcome.Failed("画像ファイルが見つかりません。")
         return try {
             val body = withContext(Dispatchers.Default) {
-                val bytes = ReceiptImageCodec.prepareForUpload(file)
+                val bytes = ReceiptImageCodec.prepareForUpload(file, adjust)
                 ClaudeRequest.buildBody(s.claudeModelId, Base64.encodeToString(bytes, Base64.NO_WRAP))
             }
             val response = client.post(s.anthropicApiKey.trim(), body)
@@ -65,6 +66,12 @@ object ReceiptMapper {
     fun purchasedAt(date: String, time: String?): String =
         if (time.isNullOrBlank()) date else "$date $time"
 
+    /** 保存してある Claude 応答(rawJson)から、LLM が読んだ印字の合計を取り出す。読めなければ null。 */
+    fun printedTotal(rawJson: String): Int? {
+        if (rawJson.isBlank()) return null
+        return (ReceiptParser.parse(rawJson) as? ParseResult.Success)?.receipt?.total
+    }
+
     fun draftReceipt(
         outcome: ScanOutcome,
         imagePath: String,
@@ -73,6 +80,7 @@ object ReceiptMapper {
         existingId: Long = 0,
         imageHash: String? = null,
         createdAt: Long = now,
+        adjust: ReceiptAdjust = ReceiptAdjust.NONE,
     ): Pair<Receipt, List<ReceiptItem>> = when (outcome) {
         is ScanOutcome.Parsed -> {
             val p = outcome.receipt
@@ -86,23 +94,32 @@ object ReceiptMapper {
                 id = existingId,
                 purchasedAt = purchasedAt(p.date ?: today, p.time),
                 storeName = p.store,
-                totalAmount = p.total ?: ReceiptCalc.itemsSum(p.items.map { it.amount }).toInt(),
+                // 合計は読めたときだけ入れる。読めなければ null(品目の合計で補完しない)
+                totalAmount = p.total,
+                totalSource = if (p.total != null) TotalSource.PRINTED else TotalSource.UNKNOWN,
                 imagePath = imagePath,
                 rawJson = outcome.raw,
                 status = ReceiptStatus.DRAFT,
                 createdAt = createdAt,
                 imageHash = imageHash,
+                rotationDegrees = adjust.rotationDegrees,
+                cropLeft = adjust.cropLeft, cropTop = adjust.cropTop,
+                cropRight = adjust.cropRight, cropBottom = adjust.cropBottom,
             ) to items
         }
         is ScanOutcome.Unparsable -> Receipt(
-            id = existingId, purchasedAt = today, storeName = "", totalAmount = 0,
+            id = existingId, purchasedAt = today, storeName = "", totalAmount = null,
             imagePath = imagePath, rawJson = outcome.raw, status = ReceiptStatus.DRAFT, createdAt = createdAt,
             imageHash = imageHash,
+            rotationDegrees = adjust.rotationDegrees,
+            cropLeft = adjust.cropLeft, cropTop = adjust.cropTop, cropRight = adjust.cropRight, cropBottom = adjust.cropBottom,
         ) to emptyList()
         is ScanOutcome.Failed -> Receipt(
-            id = existingId, purchasedAt = today, storeName = "", totalAmount = 0,
+            id = existingId, purchasedAt = today, storeName = "", totalAmount = null,
             imagePath = imagePath, rawJson = "", status = ReceiptStatus.DRAFT, createdAt = createdAt,
             imageHash = imageHash,
+            rotationDegrees = adjust.rotationDegrees,
+            cropLeft = adjust.cropLeft, cropTop = adjust.cropTop, cropRight = adjust.cropRight, cropBottom = adjust.cropBottom,
         ) to emptyList()
     }
 }

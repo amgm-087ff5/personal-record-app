@@ -5,22 +5,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptDedup
 import com.amgm.personallog.receipt.ReceiptImageHash
 import com.amgm.personallog.receipt.ReceiptImageStore
 import com.amgm.personallog.receipt.ReceiptMapper
+import com.amgm.personallog.receipt.ReceiptOrphans
 import com.amgm.personallog.receipt.ReceiptScanner
 import com.amgm.personallog.receipt.ScanOutcome
+import com.amgm.personallog.receipt.adjust
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -54,6 +55,10 @@ enum class ImportPhase(val active: Boolean) {
     DUPLICATE_PENDING(true),
     /** 重複としてスキップ(起票せず、コピーした画像も削除済み) */
     DUPLICATE_SKIPPED(false),
+    /** コピーと重複確認が済み、向き・範囲の確認画面での補正待ち。解析はまだしていない */
+    ADJUST_PENDING(true),
+    /** 補正画面で取り消した(起票せず、コピーした画像も削除済み) */
+    CANCELLED(false),
 }
 
 data class ImportItem(
@@ -71,12 +76,28 @@ data class ImportItem(
     val addAnyway: Boolean = false,
     /** 1枚だけの取り込みなら、読み取り後に詳細画面を開く */
     val autoOpen: Boolean = false,
-)
+    /** 補正画面で決めた回転・トリミング。解析と下書き保存で使う */
+    val adjust: ReceiptAdjust = ReceiptAdjust.NONE,
+) {
+    /** 補正画面の前の段階(待機・コピー・重複確認)にいるか。解析済みの再試行は含まない。 */
+    val beforeAdjust: Boolean
+        get() = phase == ImportPhase.PREPARING || (phase == ImportPhase.WAITING && imagePath == null)
+}
 
 data class ReceiptListUiState(
     val imports: List<ImportItem> = emptyList(),
     val error: String? = null,
-)
+) {
+    /** 補正待ちの項目(取り込み順)。 */
+    val adjustItems: List<ImportItem> get() = imports.filter { it.phase == ImportPhase.ADJUST_PENDING }
+
+    /**
+     * 補正画面を出してよいか。重複の確認待ちが先に解決され、コピー中の項目も無くなってから出す。
+     */
+    val adjustReady: Boolean
+        get() = adjustItems.isNotEmpty() &&
+            imports.none { it.phase == ImportPhase.DUPLICATE_PENDING || it.beforeAdjust }
+}
 
 /** 取り込み元。写真ピッカーの Uri、または撮影で既に filesDir に保存した相対パス。 */
 private class ImportSource(val uri: Uri? = null, val relativePath: String? = null)
@@ -92,21 +113,33 @@ class ReceiptListViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** 同じ内容の別レシートがある「後から作られた側」 -> 原本。一覧の警告に使う。 */
-    val possibleDuplicates: StateFlow<Map<Long, Receipt>> = receipts
-        .map { ReceiptDedup.laterDuplicates(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+    val possibleDuplicates: StateFlow<Map<Long, Receipt>> =
+        combine(receipts, repository.observeNotDuplicates()) { list, notDup ->
+            // 「重複ではない」と判断した組は警告しない
+            ReceiptDedup.laterDuplicates(list, ReceiptDedup.notDuplicateSet(notDup))
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     private val _state = MutableStateFlow(ReceiptListUiState())
     val state: StateFlow<ReceiptListUiState> = _state.asStateFlow()
 
-    private val _openEvents = Channel<Long>(Channel.BUFFERED)
+    private val _pendingOpen = MutableStateFlow<Long?>(null)
 
-    /** 読み取り完了後に開くべきレシートID(1枚だけの取り込み)。 */
-    val openEvents = _openEvents.receiveAsFlow()
+    /**
+     * 読み取り完了後に開くべきレシートID(1枚だけの取り込み)。画面が受け取ったら [consumeOpen] で消す。
+     * イベントとして溜めず、常に高々1件。
+     */
+    val pendingOpen: StateFlow<Long?> = _pendingOpen.asStateFlow()
+
+    fun consumeOpen(id: Long) {
+        _pendingOpen.compareAndSet(id, null)
+    }
 
     // 以下は ViewModel のメインスレッドからのみ触る
     private var nextKey = 1L
     private val sources = HashMap<Long, ImportSource>()
+
+    /** 補正画面の表示中に読み取りが終わった、開き待ちのレシートID。補正画面が閉じたら開く。 */
+    private val deferredOpen = DeferredOpen()
 
     /** 処理中の写真ピッカーのUri。同じ選択の連打で二重に投入しないため。 */
     private val inFlightUris = HashSet<String>()
@@ -121,7 +154,34 @@ class ReceiptListViewModel @Inject constructor(
     private val checkLock = Mutex()
 
     /** 同じ選択内の重複検出用: 画像ハッシュ -> 予約している項目。保存が終われば外す。 */
-    private val claimedHashes = HashMap<String, Long>()
+    private val claimedHashes = HashClaims()
+
+    init {
+        cleanupOrphanImages()
+    }
+
+    /**
+     * 補正待ちの間にプロセスが終了すると、コピーした画像がどのレシートにも載らないまま残る。
+     * filesDir/receipts のうち、どのレシートからも参照されておらず、作られてから1時間以上経ち、
+     * 今取り込み中でもないファイルを消す。
+     */
+    private fun cleanupOrphanImages() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val files = store.listStored()
+                if (files.isEmpty()) return@launch
+                val referenced = repository.allReceipts().map { it.imagePath }
+                // 取り込み中の項目は、DB を読んだ後に確認する(読んでいる間に増えた分も守る)
+                val inUse = _state.value.imports.mapNotNull { it.imagePath }
+                val targets = ReceiptOrphans.select(files, referenced, inUse, System.currentTimeMillis())
+                targets.forEach { store.delete(it) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // 掃除は付随の処理。失敗しても取り込みには影響させない
+            }
+        }
+    }
 
     fun newCameraPath(): String = store.newRelativePath()
 
@@ -167,8 +227,11 @@ class ReceiptListViewModel @Inject constructor(
         for (item in pending) {
             val rel = item.imagePath
             if (addChecked && item.addAnyway && rel != null) {
-                patchItem(item.key) { it.copy(addAnyway = false, duplicateNote = null) }
-                launchAnalyze(item.key, rel, item.imageHash)
+                // 「それでも追加」も補正画面を通してから解析する。同じ選択内の他の項目に対しては、これも予約する
+                item.imageHash?.let { claimedHashes.claimAnyway(it, item.key) }
+                patchItem(item.key) {
+                    it.copy(addAnyway = false, duplicateNote = null, phase = ImportPhase.ADJUST_PENDING)
+                }
             } else {
                 sources.remove(item.key)
                 patchItem(item.key) {
@@ -177,6 +240,54 @@ class ReceiptListViewModel @Inject constructor(
                 if (rel != null) viewModelScope.launch(Dispatchers.IO) { store.delete(rel) }
             }
         }
+    }
+
+    /** 補正画面で1枚の補正値を変える(補正待ちの項目だけ)。 */
+    fun setAdjust(key: Long, adjust: ReceiptAdjust) {
+        patchItem(key) { if (it.phase == ImportPhase.ADJUST_PENDING) it.copy(adjust = adjust.sanitized()) else it }
+    }
+
+    /** 「この補正で解析」: 補正待ちの全項目を、それぞれの補正で解析へ進める。 */
+    fun analyzeAdjusted() = startAnalysis(clearAdjust = false)
+
+    /** 「補正なしで全部解析」: 補正値を捨てて、補正待ちの全項目を解析へ進める。 */
+    fun analyzeWithoutAdjust() = startAnalysis(clearAdjust = true)
+
+    private fun startAnalysis(clearAdjust: Boolean) {
+        val pending = _state.value.adjustItems.filter { it.imagePath != null }
+        val keys = pending.map { it.key }.toSet()
+        // 補正画面が途中で崩れないよう、全項目を一度に待機へ移す
+        _state.update { s ->
+            s.copy(imports = s.imports.map {
+                if (it.key in keys) {
+                    it.copy(phase = ImportPhase.WAITING, adjust = if (clearAdjust) ReceiptAdjust.NONE else it.adjust)
+                } else it
+            })
+        }
+        for (item in pending) {
+            val rel = item.imagePath ?: continue
+            launchAnalyze(item.key, rel, item.imageHash)
+        }
+        flushDeferredOpens()
+    }
+
+    /** 補正画面が閉じていれば、保留していた詳細画面への移動を実行する。 */
+    private fun flushDeferredOpens() {
+        if (_state.value.adjustItems.isNotEmpty()) return
+        deferredOpen.release(adjustActive = false)?.let { _pendingOpen.value = it }
+    }
+
+    /** 「取り消し」: 補正待ちの全項目の取り込みをやめ、コピーした画像を消す。 */
+    fun cancelAdjust() {
+        val pending = _state.value.adjustItems
+        for (item in pending) {
+            val rel = item.imagePath
+            sources.remove(item.key)
+            claimedHashes.release(item.key)
+            patchItem(item.key) { it.copy(phase = ImportPhase.CANCELLED, imagePath = null) }
+            if (rel != null) viewModelScope.launch(Dispatchers.IO) { store.delete(rel) }
+        }
+        flushDeferredOpens()
     }
 
     /** 終わった項目を一覧から消す(処理中・確認待ちが無いときだけ呼ぶ想定)。 */
@@ -209,15 +320,17 @@ class ReceiptListViewModel @Inject constructor(
                     // 再試行: 既に保存済みの下書きを読み直す
                     analyze(key, rel, hash, existingId = savedId)
                 } else {
-                    val (path, h) = prepare(key, src) ?: return@launch
-                    analyze(key, path, h, existingId = 0L)
+                    // 重複確認まで済んだら、解析は補正画面の後(ADJUST_PENDING で止める)
+                    val (path, _) = prepare(key, src) ?: return@launch
+                    patchItem(key) { it.copy(phase = ImportPhase.ADJUST_PENDING, imagePath = path) }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 fail(key, "取り込み中にエラーが発生しました: ${e.message.orEmpty()}")
             } finally {
-                claimedHashes.values.remove(key)
+                // 補正待ちの間は同じ選択内の重複検出のため予約を残す(解析後・取り消しで外す)
+                if (find(key)?.phase != ImportPhase.ADJUST_PENDING) claimedHashes.release(key)
                 src.uri?.let { inFlightUris.remove(it.toString()) }
             }
         }
@@ -232,6 +345,8 @@ class ReceiptListViewModel @Inject constructor(
                 throw e
             } catch (e: Throwable) {
                 fail(key, "読み取り中にエラーが発生しました: ${e.message.orEmpty()}")
+            } finally {
+                claimedHashes.release(key)
             }
         }
     }
@@ -256,9 +371,9 @@ class ReceiptListViewModel @Inject constructor(
             val saved = findSavedByHash(hash)
             when {
                 saved != null -> "既存のレシート: ${ReceiptDedup.summary(saved)}"
-                claimedHashes.containsKey(hash) -> "今回の選択に同じ画像があります"
+                claimedHashes.isClaimed(hash) -> "今回の選択に同じ画像があります"
                 else -> {
-                    claimedHashes[hash] = key
+                    claimedHashes.claimIfAbsent(hash, key)
                     null
                 }
             }
@@ -291,9 +406,12 @@ class ReceiptListViewModel @Inject constructor(
     /** Claude で解析して下書きを保存する。existingId があればその下書きを上書きする(読み直し)。 */
     private suspend fun analyze(key: Long, rel: String, hash: String?, existingId: Long) {
         patchItem(key) { it.copy(phase = ImportPhase.WAITING, message = null) }
+        // 読み直しは、取り込み時の補正ではなく、下書き(existingId)に保存してある最新の補正を使う
+        val adjust = (if (existingId != 0L) repository.getReceipt(existingId)?.adjust() else null)
+            ?: find(key)?.adjust ?: ReceiptAdjust.NONE
         val (result, id) = scanLimiter.withPermit {
             patchItem(key) { it.copy(phase = ImportPhase.SCANNING) }
-            val scanned = scanner.scan(rel)
+            val scanned = scanner.scan(rel, adjust)
             val now = System.currentTimeMillis()
             val createdAt = if (existingId != 0L) (repository.getReceipt(existingId)?.createdAt ?: now) else now
             val (receipt, items) = ReceiptMapper.draftReceipt(
@@ -301,6 +419,7 @@ class ReceiptListViewModel @Inject constructor(
                 existingId = existingId,
                 imageHash = hash,
                 createdAt = createdAt,
+                adjust = adjust,
             )
             scanned to repository.save(receipt, items)
         }
@@ -315,7 +434,10 @@ class ReceiptListViewModel @Inject constructor(
         }
         val autoOpen = find(key)?.autoOpen == true
         patchItem(key) { it.copy(phase = phase, receiptId = id, message = message) }
-        if (autoOpen && outcome !is ScanOutcome.Failed) _openEvents.send(id)
+        if (autoOpen && outcome !is ScanOutcome.Failed) {
+            // 別の取り込みの補正画面を出している間は、詳細画面への移動を保留する(閉じた後に開く)
+            deferredOpen.offer(id, adjustActive = _state.value.adjustItems.isNotEmpty())?.let { _pendingOpen.value = it }
+        }
     }
 
     private fun fail(key: Long, message: String) {

@@ -31,6 +31,9 @@ class LedgerCalcTest {
         assertEquals("スーパー", g.group.memo)
         assertEquals(9L, g.group.receiptId)
         assertEquals(listOf(200, 500), g.items.map { it.amount })
+        // 品名は name に、メモには品目のメモだけを入れる(店名と品名を連結しない)
+        assertEquals(listOf("牛乳", "洗剤"), g.items.map { it.name })
+        assertEquals(listOf("", ""), g.items.map { it.memo })
         assertTrue(g.items.all { it.receiptId == 9L && it.groupId == null })
     }
 
@@ -110,5 +113,39 @@ class LedgerCalcTest {
         val rows = LedgerCalc.expensesFromReceipt(receipt, items, perItem = true, now = 1)
         assertTrue(rows.isNotEmpty())
         assertEquals(setOf("12:30"), rows.map { it.time }.toSet())
+    }
+
+    @Test
+    fun nullTotal_isRejectedExplicitly() {
+        val draft = Receipt(
+            id = 5, purchasedAt = "2026-10-05 12:30", storeName = "店", totalAmount = null,
+            imagePath = "", rawJson = "{}", createdAt = 0,
+        )
+        val items = listOf(ReceiptItem(receiptId = 5, name = "牛乳", amount = 300, category = "食費"))
+        // グループの支払い金額は合計を使うので、null は例外
+        try {
+            LedgerCalc.groupFromReceipt(draft, items, now = 1)
+            org.junit.Assert.fail("expected IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message!!.contains("合計"))
+        }
+        // 品目なしの支出も合計を使う
+        try {
+            LedgerCalc.expensesFromReceipt(draft, emptyList(), perItem = true, now = 1)
+            org.junit.Assert.fail("expected IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message!!.contains("合計"))
+        }
+        // 品目ごとの支出は品目の税込額で作るので、合計が null でも作られる(確定側で弾く)
+        assertTrue(LedgerCalc.expensesFromReceipt(draft, items, perItem = true, now = 1).isNotEmpty())
+    }
+
+    @Test
+    fun itemlessReceipt_usesPrintedTotal() {
+        val r = Receipt(
+            id = 6, purchasedAt = "2026-10-05", storeName = "店", totalAmount = 1234,
+            imagePath = "", rawJson = "{}", createdAt = 0,
+        )
+        assertEquals(listOf(1234), LedgerCalc.expensesFromReceipt(r, emptyList(), perItem = true, now = 1).map { it.amount })
     }
 }

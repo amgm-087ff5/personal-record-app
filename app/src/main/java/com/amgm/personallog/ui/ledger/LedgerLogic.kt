@@ -23,12 +23,19 @@ sealed interface LedgerEntry {
     val category: String
     val createdAt: Long
 
+    /**
+     * この行をカテゴリ別に数えるときの内訳(合計は amount と一致する)。
+     * 単独の支出は自分のカテゴリ。グループは品目ごとのカテゴリで数え、差額(支払い金額 − 品目の合計)はグループのカテゴリに入れる。
+     */
+    val categoryParts: List<CategoryTotal>
+
     data class Single(val expense: Expense) : LedgerEntry {
         override val date: String get() = expense.date
         override val time: String get() = expense.time
         override val amount: Long get() = expense.amount.toLong()
         override val category: String get() = expense.category
         override val createdAt: Long get() = expense.createdAt
+        override val categoryParts: List<CategoryTotal> get() = listOf(CategoryTotal(expense.category, amount))
     }
 
     /** items は品目(支出)。amount は支払い金額(正)。 */
@@ -38,6 +45,15 @@ sealed interface LedgerEntry {
         override val amount: Long get() = group.amount.toLong()
         override val category: String get() = group.category
         override val createdAt: Long get() = group.createdAt
+
+        override val categoryParts: List<CategoryTotal>
+            get() {
+                if (items.isEmpty()) return listOf(CategoryTotal(category, amount))
+                val sums = LinkedHashMap<String, Long>()
+                for (it in items) sums[it.category] = (sums[it.category] ?: 0L) + it.amount
+                if (difference != 0L) sums[category] = (sums[category] ?: 0L) + difference
+                return sums.filterValues { it != 0L }.map { (c, t) -> CategoryTotal(c, t) }
+            }
 
         /** 品目の合計。 */
         val itemSum: Long get() = items.sumOf { it.amount.toLong() }
@@ -68,6 +84,14 @@ data class ExpenseValidation(
     val isValid: Boolean get() = dateError == null && timeError == null && amountError == null && categoryError == null
 }
 
+/** 内訳(カテゴリ別)の注釈。品目ごとの金額は、レシート全体の端数を割り振った値であることを示す。 */
+const val ALLOCATION_NOTE =
+    "品目ごとの金額は、レシート全体の端数を品目に割り振った値です。品目単位では1円ほどずれることがありますが、合計は一致します。"
+
+/** 家計簿で消した品目の注釈。品目は一覧と品目の合計から外れるが、支払い金額は変わらない。 */
+const val DELETED_ITEMS_NOTE =
+    "家計簿で消した品目の金額は、差額として支払いのカテゴリに入ります(支払い金額は変わらないため)。元に戻すと品目に戻ります。"
+
 /** 家計簿画面用の純粋ロジック(JVMでテスト可能)。domain/LedgerCalc は変更せず、足りない分をここに置く。 */
 object LedgerLogic {
     /** "2026-10" に delta か月を足す。 */
@@ -85,15 +109,18 @@ object LedgerLogic {
 
     /**
      * 支出と支払いグループを一覧用の行にする。グループの品目は group の行に入り、単独の行には入らない
-     * (合計が二重にならない)。並びは日付の降順、同じ日は作成の新しい順。
+     * (合計が二重にならない)。groupId のある行は、グループが渡されていなくても単独の行としては数えない
+     * (グループが別の月に動いたとき、品目が元の月に単独で残って二重に数えられるのを防ぐ)。
+     * 月・日の振り分けはグループの日付に従う。並びは日付の降順、同じ日は作成の新しい順。
      */
     fun buildEntries(expenses: List<Expense>, groups: List<ExpenseGroup>): List<LedgerEntry> {
         val groupIds = groups.map { it.id }.toSet()
+        // 家計簿で消した品目(deletedByUser)は、一覧にも集計にも入れない
         val itemsByGroup = expenses
-            .filter { e -> e.groupId != null && e.groupId in groupIds }
+            .filter { e -> e.groupId != null && e.groupId in groupIds && !e.deletedByUser }
             .groupBy { it.groupId!! }
         val singles = expenses
-            .filter { e -> e.groupId == null || e.groupId !in groupIds }
+            .filter { e -> e.groupId == null && !e.deletedByUser }
             .map { LedgerEntry.Single(it) }
         val grouped = groups.map { LedgerEntry.Group(it, itemsByGroup[it.id].orEmpty().sortedBy { x -> x.id }) }
         return (singles + grouped).sortedWith(
@@ -109,15 +136,21 @@ object LedgerLogic {
 
     /** 行のカテゴリ別合計(金額の多い順)。 */
     fun totalsByCategory(entries: List<LedgerEntry>): List<CategoryTotal> =
-        entries.groupBy { it.category }
-            .map { (cat, list) -> CategoryTotal(cat, list.sumOf { it.amount }) }
+        sumByCategory(entries.flatMap { it.categoryParts })
+
+    /** カテゴリごとに合計し、金額の多い順にする。 */
+    fun sumByCategory(parts: List<CategoryTotal>): List<CategoryTotal> =
+        parts.groupBy { it.category }
+            .map { (cat, list) -> CategoryTotal(cat, list.sumOf { it.total }) }
             .sortedByDescending { it.total }
 
     /** カテゴリ別の割合(合計100%に丸める必要はなく、四捨五入)。合計0なら空。 */
     fun categoryShares(totals: List<CategoryTotal>): List<CategoryShare> {
-        val sum = totals.sumOf { it.total }
+        // 差額で負になったカテゴリは割合の表示から外す(帯グラフに負の幅は描けない)
+        val positive = totals.filter { it.total > 0L }
+        val sum = positive.sumOf { it.total }
         if (sum <= 0L) return emptyList()
-        return totals.sortedByDescending { it.total }
+        return positive.sortedByDescending { it.total }
             .map { CategoryShare(it.category, it.total, Math.round(it.total * 100.0 / sum).toInt()) }
     }
 

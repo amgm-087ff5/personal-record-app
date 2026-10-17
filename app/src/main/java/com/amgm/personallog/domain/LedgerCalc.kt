@@ -45,6 +45,10 @@ object LedgerCalc {
     /** レシート1枚ぶんの支払いグループ。items は品目ごとの支出(groupId は未設定)。 */
     data class ReceiptGroup(val group: ExpenseGroup, val items: List<Expense>)
 
+    /** グループのカテゴリの既定値: 税込でなく印字の金額が最も高い品目のカテゴリ。 */
+    fun groupCategory(items: List<ReceiptItem>): String =
+        items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED
+
     /**
      * 複数品目のレシートを1つの支払いグループにする。
      * 支払い金額(group.amount)はレシートの確定額(receipt.totalAmount)を正とし、品目は品目ごとの自分の払う分で持つ。
@@ -63,8 +67,10 @@ object LedgerCalc {
                     time = time,
                     amount = paid[i].toInt(),
                     category = it.category,
-                    memo = listOf(it.name, it.memo).filter { s -> s.isNotBlank() }.joinToString(" "),
+                    name = it.name,
+                    memo = it.memo,
                     receiptId = receipt.id,
+                    receiptItemId = it.id.takeIf { id -> id != 0L },
                     createdAt = now,
                 )
             }
@@ -73,8 +79,8 @@ object LedgerCalc {
         val group = ExpenseGroup(
             date = date,
             time = time,
-            amount = receipt.totalAmount,
-            category = items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED,
+            amount = requireNotNull(receipt.totalAmount) { "合計が未入力のレシートは家計簿にできません(id=${receipt.id})" },
+            category = groupCategory(items),
             memo = receipt.storeName,
             receiptId = receipt.id,
             createdAt = now,
@@ -94,8 +100,12 @@ object LedgerCalc {
         now: Long,
     ): List<Expense> {
         val (date, time) = splitPurchasedAt(receipt.purchasedAt)
-        val category = items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED
-        val paidTotal = if (items.isEmpty()) receipt.totalAmount.toLong() else TaxCalc.paidYen(items)
+        val category = groupCategory(items)
+        val paidTotal = if (items.isEmpty()) {
+            requireNotNull(receipt.totalAmount) { "合計が未入力のレシートは家計簿にできません(id=${receipt.id})" }.toLong()
+        } else {
+            TaxCalc.paidYen(items)
+        }
 
         if (!receipt.isAdvance && perItem && items.isNotEmpty()) {
             val paid = TaxCalc.paidYenPerItem(items)
@@ -108,8 +118,10 @@ object LedgerCalc {
                         time = time,
                         amount = paid[i].toInt(),
                         category = it.category,
-                        memo = listOf(receipt.storeName, it.name, it.memo).filter { s -> s.isNotBlank() }.joinToString(" "),
+                        name = it.name,
+                        memo = it.memo,
                         receiptId = receipt.id,
+                        receiptItemId = it.id.takeIf { id -> id != 0L },
                         createdAt = now,
                     )
                 }
