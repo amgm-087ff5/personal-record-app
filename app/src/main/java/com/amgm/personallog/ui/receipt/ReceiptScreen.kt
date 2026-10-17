@@ -41,7 +41,10 @@ import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.Stamp
 import com.amgm.personallog.ui.design.StampTone
 import com.amgm.personallog.ui.design.TextAction
+import com.amgm.personallog.ui.design.sheet
 import com.amgm.personallog.ui.design.tappable
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 /** 取り込みブロックの高さ。 */
@@ -161,14 +164,17 @@ fun ReceiptScreen(
                                 modifier = Modifier.padding(start = Space.edge, end = Space.edge, top = Space.l, bottom = Space.s),
                             )
                         }
-                        Column(modifier = Modifier.fillMaxWidth().background(AppTheme.colors.paperRaised)) {
-                            Hairline(dashed = true)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = Space.edge, vertical = Space.xs)
+                                .sheet(RoundedCornerShape(16.dp), depth = 10.dp),
+                        ) {
                             ReceiptSlip(
                                 r = e.receipt,
                                 isDuplicate = duplicates[e.receipt.id] != null,
                                 onClick = { onOpenReceipt(e.receipt.id) },
                             )
-                            if (e.lastOfMonth) Hairline(dashed = true)
                         }
                     }
                 }
@@ -188,20 +194,27 @@ fun ReceiptScreen(
     }
 }
 
-/** 横2分割の取り込みブロック。左は朱ベタ「撮る」、右は罫線ふち「選ぶ」。 */
+/** 横2分割の取り込みブロック。左は琥珀に灯る「撮る」、右は白い面の「選ぶ」。 */
 @Composable
 private fun CaptureBlocks(onCamera: () -> Unit, onGallery: () -> Unit) {
     val c = AppTheme.colors
-    val shape = RoundedCornerShape(4.dp)
+    val shape = RoundedCornerShape(22.dp)
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Space.edge),
-        horizontalArrangement = Arrangement.spacedBy(Space.s),
+        horizontalArrangement = Arrangement.spacedBy(Space.m),
     ) {
         Box(
             modifier = Modifier
                 .weight(1f)
                 .height(CAPTURE_BLOCK_HEIGHT)
-                .background(c.accent, shape)
+                .shadow(
+                    elevation = 14.dp,
+                    shape = shape,
+                    clip = false,
+                    ambientColor = c.glow.copy(alpha = 0.25f),
+                    spotColor = c.glow.copy(alpha = 0.60f),
+                )
+                .background(Brush.verticalGradient(listOf(c.accentTop, c.accent)), shape)
                 .tappable(onClick = onCamera)
                 .padding(Space.m),
             contentAlignment = Alignment.BottomStart,
@@ -215,7 +228,7 @@ private fun CaptureBlocks(onCamera: () -> Unit, onGallery: () -> Unit) {
             modifier = Modifier
                 .weight(1f)
                 .height(CAPTURE_BLOCK_HEIGHT)
-                .border(1.dp, c.ink, shape)
+                .sheet(shape, depth = 10.dp)
                 .tappable(onClick = onGallery)
                 .padding(Space.m),
             contentAlignment = Alignment.BottomStart,

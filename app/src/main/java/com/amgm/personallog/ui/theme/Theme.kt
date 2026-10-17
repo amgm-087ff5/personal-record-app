@@ -16,9 +16,9 @@ import com.amgm.personallog.ui.design.LocalAppType
 import com.amgm.personallog.ui.design.appColorsForSystem
 
 /**
- * テーマ「紙と墨」。動的カラーは使わない。
+ * テーマ「窓辺」。動的カラーは使わない。
  * 画面は AppTheme(ui/design)の値を直接使う。Material の部品(ダイアログ等)が混ざっても
- * 紙と墨の配色になるよう、ColorScheme/Typography にも同じ値を渡す。
+ * 窓辺の配色になるよう、ColorScheme/Typography にも同じ値を渡す。
  */
 @Composable
 fun PersonalLogTheme(content: @Composable () -> Unit) {

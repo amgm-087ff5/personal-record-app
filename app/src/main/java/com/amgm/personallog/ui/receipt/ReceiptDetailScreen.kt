@@ -52,7 +52,9 @@ import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.Stamp
 import com.amgm.personallog.ui.design.StampTone
 import com.amgm.personallog.ui.design.TextAction
+import com.amgm.personallog.ui.design.sheet
 import com.amgm.personallog.ui.design.tappable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -161,9 +163,10 @@ fun ReceiptDetailScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(c.paperRaised)
+                            .padding(horizontal = Space.m)
+                            .sheet(RoundedCornerShape(24.dp), depth = 16.dp)
                             .padding(horizontal = Space.edge)
-                            .padding(top = Space.m),
+                            .padding(top = Space.m, bottom = Space.m),
                     ) {
                         Column(modifier = Modifier.fillMaxWidth().tappable { sheet = SHEET_SHOP }) {
                             Row(verticalAlignment = Alignment.CenterVertically) {

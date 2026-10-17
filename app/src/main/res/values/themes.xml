@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 紙と墨: ウィンドウ背景も紙色にして、起動時の白/黒のちらつきを防ぐ -->
+    <!-- 窓辺: ウィンドウ背景も壁色にして、起動時の白/黒のちらつきを防ぐ -->
     <style name="Theme.PersonalLog" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/paper</item>
         <item name="android:statusBarColor">@android:color/transparent</item>

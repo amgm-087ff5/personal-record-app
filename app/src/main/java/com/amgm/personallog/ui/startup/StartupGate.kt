@@ -31,6 +31,9 @@ import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.PaperScreen
 import com.amgm.personallog.ui.design.Space
+import com.amgm.personallog.ui.design.sheet
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 
 /** 起動時にDBを開いて確認し、失敗したらクラッシュせず原因を画面に表示する。 */
 @Composable
@@ -76,7 +79,8 @@ private fun DbErrorScreen(detail: String) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(IntrinsicSize.Min)
-                .background(c.paperRaised),
+                .sheet(RoundedCornerShape(14.dp), depth = 8.dp)
+                .clip(RoundedCornerShape(14.dp)),
         ) {
             Box(
                 modifier = Modifier

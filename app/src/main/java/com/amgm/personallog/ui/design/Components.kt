@@ -33,9 +33,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
@@ -44,14 +49,87 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.max
 
 /*
- * 「紙と墨」の部品集。画面は Material の Card / OutlinedTextField / Button / FAB を直接並べず、
+ * 「窓辺」の部品集。画面は Material の Card / OutlinedTextField / Button / FAB を直接並べず、
  * ここの部品と、画面ごとに固有のレイアウトを組み合わせる。
+ * 光の表現は3つだけ: 壁への差し込み(PaperScreen)、主操作の灯り(InkButton)、面の影(sheet)。
  */
+
+/** 壁に差す自然光。左上に日だまり、斜めに一筋の光。夜は窓明かりが薄く灯る。 */
+private fun Modifier.windowLight(c: AppColors): Modifier = this.drawBehind {
+    drawRect(
+        brush = Brush.linearGradient(
+            colors = listOf(c.washTop, c.washBottom),
+            start = Offset(0f, 0f),
+            end = Offset(size.width, size.height),
+        ),
+    )
+    drawRect(
+        brush = Brush.radialGradient(
+            colors = listOf(c.glow.copy(alpha = if (c.isDark) 0.16f else 0.30f), Color.Transparent),
+            center = Offset(size.width * 0.08f, -size.height * 0.02f),
+            radius = size.width * 1.05f,
+        ),
+    )
+    val shaft = Path().apply {
+        moveTo(size.width * 0.30f, 0f)
+        lineTo(size.width * 0.62f, 0f)
+        lineTo(size.width * 1.05f, size.height * 0.75f)
+        lineTo(size.width * 0.55f, size.height * 0.75f)
+        close()
+    }
+    drawPath(
+        path = shaft,
+        brush = Brush.linearGradient(
+            colors = listOf(Color.White.copy(alpha = if (c.isDark) 0.05f else 0.35f), Color.Transparent),
+            start = Offset(size.width * 0.4f, 0f),
+            end = Offset(size.width * 0.9f, size.height * 0.7f),
+        ),
+    )
+}
 
 /** 画面全体の地。各画面のルートに置く。 */
 @Composable
 fun PaperScreen(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Box(modifier = modifier.fillMaxSize().background(AppTheme.colors.paper)) { content() }
+    val c = AppTheme.colors
+    Box(modifier = modifier.fillMaxSize().windowLight(c)) { content() }
+}
+
+/** やわらかい影。近くの締まった影と、遠くの広い影を重ねる。影の色は黒でなく青みを含む。 */
+@Composable
+fun Modifier.softShadow(shape: Shape, depth: Dp = 14.dp): Modifier {
+    val c = AppTheme.colors
+    val k = if (c.isDark) 2.2f else 1f
+    return this
+        .shadow(
+            elevation = 2.dp,
+            shape = shape,
+            clip = false,
+            ambientColor = c.shadow.copy(alpha = 0.08f * k),
+            spotColor = c.shadow.copy(alpha = 0.14f * k),
+        )
+        .shadow(
+            elevation = depth,
+            shape = shape,
+            clip = false,
+            ambientColor = c.shadow.copy(alpha = 0.05f * k),
+            spotColor = c.shadow.copy(alpha = 0.20f * k),
+        )
+}
+
+/** 壁から少し浮いた白い面。影+上端の細いハイライト。シート・スリップ・副ボタンに使う。 */
+@Composable
+fun Modifier.sheet(shape: Shape = RoundedCornerShape(16.dp), depth: Dp = 14.dp): Modifier {
+    val c = AppTheme.colors
+    return this
+        .softShadow(shape, depth)
+        .background(c.paperRaised, shape)
+        .border(
+            width = 1.dp,
+            brush = Brush.verticalGradient(
+                listOf(c.edge.copy(alpha = if (c.isDark) 0.10f else 0.95f), c.line.copy(alpha = 0.6f)),
+            ),
+            shape = shape,
+        )
 }
 
 /** 罫線。dashed=true でミシン目(レシートの切り取り線)。 */
@@ -72,7 +150,7 @@ fun Hairline(modifier: Modifier = Modifier, color: Color = AppTheme.colors.line,
     }
 }
 
-/** 小さな見出し(字間広め)。節の頭やプロパティ名に使う。 */
+/** 小さな見出し。節の頭やプロパティ名に使う。 */
 @Composable
 fun Label(text: String, modifier: Modifier = Modifier, color: Color = AppTheme.colors.inkFaint) {
     Text(text = text, style = AppTheme.type.label, color = color, modifier = modifier)
@@ -103,7 +181,7 @@ fun ScreenHeader(
 
 enum class StampTone { Neutral, Accent, Moss, Danger }
 
-/** 判子風の小さなラベル(状態表示)。 */
+/** 状態を示す小さなチップ。色付きの薄い面に同系の文字。 */
 @Composable
 fun Stamp(text: String, modifier: Modifier = Modifier, tone: StampTone = StampTone.Neutral, filled: Boolean = false) {
     val c = AppTheme.colors
@@ -113,20 +191,20 @@ fun Stamp(text: String, modifier: Modifier = Modifier, tone: StampTone = StampTo
         StampTone.Moss -> c.moss
         StampTone.Danger -> c.danger
     }
-    val shape = RoundedCornerShape(2.dp)
+    val shape = RoundedCornerShape(6.dp)
     Box(
         modifier = modifier
             .clip(shape)
-            .then(if (filled) Modifier.background(tint) else Modifier.border(1.dp, tint, shape))
-            .padding(horizontal = Space.s, vertical = 2.dp),
+            .background(if (filled) tint else tint.copy(alpha = 0.13f))
+            .padding(horizontal = Space.s, vertical = 3.dp),
     ) {
-        Text(text, style = AppTheme.type.label, color = if (filled) c.paper else tint)
+        Text(text, style = AppTheme.type.label, color = if (filled) c.paperRaised else tint)
     }
 }
 
 enum class InkButtonKind { Solid, Outline }
 
-/** 角の小さい大きなボタン。主要操作は Solid(朱)、副次は Outline。 */
+/** 主操作は Solid(琥珀に灯る)、副次は Outline(白い面)。 */
 @Composable
 fun InkButton(
     text: String,
@@ -136,15 +214,29 @@ fun InkButton(
     enabled: Boolean = true,
 ) {
     val c = AppTheme.colors
-    val shape = RoundedCornerShape(4.dp)
-    val bg = if (kind == InkButtonKind.Solid) (if (enabled) c.accent else c.line) else Color.Transparent
+    val shape = RoundedCornerShape(14.dp)
+    val base = modifier.heightIn(min = 52.dp)
+    val surface = if (kind == InkButtonKind.Solid) {
+        if (enabled) {
+            base
+                .shadow(
+                    elevation = 12.dp,
+                    shape = shape,
+                    clip = false,
+                    ambientColor = c.glow.copy(alpha = 0.25f),
+                    spotColor = c.glow.copy(alpha = 0.60f),
+                )
+                .background(Brush.verticalGradient(listOf(c.accentTop, c.accent)), shape)
+        } else {
+            base.background(c.line, shape)
+        }
+    } else {
+        base.sheet(shape, depth = 6.dp)
+    }
     val fg = if (kind == InkButtonKind.Solid) (if (enabled) c.onAccent else c.inkFaint) else (if (enabled) c.ink else c.inkFaint)
     Box(
-        modifier = modifier
-            .heightIn(min = 52.dp)
+        modifier = surface
             .clip(shape)
-            .background(bg)
-            .then(if (kind == InkButtonKind.Outline) Modifier.border(1.dp, if (enabled) c.ink else c.line, shape) else Modifier)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = Space.l),
         contentAlignment = Alignment.Center,
@@ -178,7 +270,7 @@ fun TextAction(
 }
 
 /**
- * 枠なしの入力。罫線も箱もなく、文字がそのまま紙に書かれたように見せる。
+ * 枠なしの入力。箱を作らず、文字がそのまま壁に書かれたように見せる。
  * underline=true のときだけ下に細い罫線を引く(設定のAPIキーなど、欄として明示したい所のみ)。
  */
 @Composable
@@ -219,11 +311,11 @@ fun BareField(
                 }
             },
         )
-        if (underline) Hairline(color = AppTheme.colors.ink)
+        if (underline) Hairline(color = AppTheme.colors.inkFaint)
     }
 }
 
-/** 選択肢の丸薬。入力欄の代わりに「選ぶ」操作へ置き換えるのに使う。 */
+/** 選択肢の丸薬。選択中は琥珀の薄い面+琥珀の縁。入力欄の代わりに「選ぶ」操作へ置き換えるのに使う。 */
 @Composable
 fun Pill(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = AppTheme.colors
@@ -232,13 +324,13 @@ fun Pill(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifie
         modifier = modifier
             .heightIn(min = 40.dp)
             .clip(shape)
-            .background(if (selected) c.ink else Color.Transparent)
-            .border(1.dp, if (selected) c.ink else c.line, shape)
+            .background(if (selected) c.accentWash else Color.Transparent)
+            .border(1.dp, if (selected) c.accent else c.line, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = Space.m),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = AppTheme.type.body, color = if (selected) c.paper else c.ink)
+        Text(text, style = AppTheme.type.body, color = c.ink)
     }
 }
 
@@ -296,13 +388,12 @@ fun LeaderRow(
     }
 }
 
-
 /** 割合を一本の帯で見せる(カテゴリ内訳など)。parts は (割合, 色)。 */
 @Composable
 fun ProportionBand(parts: List<Pair<Float, Color>>, modifier: Modifier = Modifier, height: Dp = 14.dp) {
     Row(
-        modifier = modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(2.dp)),
-        horizontalArrangement = Arrangement.spacedBy(1.dp),
+        modifier = modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(50)),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         parts.forEach { (share, color) ->
             Box(modifier = Modifier.weight(max(share, 0.0001f)).fillMaxSize().background(color))
@@ -325,13 +416,14 @@ fun InkSheet(
         sheetState = state,
         containerColor = c.paperRaised,
         contentColor = c.ink,
-        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        tonalElevation = 0.dp,
         dragHandle = {
             Box(
                 modifier = Modifier
                     .padding(vertical = Space.m)
-                    .width(36.dp)
-                    .height(3.dp)
+                    .width(40.dp)
+                    .height(4.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(c.line),
             )
