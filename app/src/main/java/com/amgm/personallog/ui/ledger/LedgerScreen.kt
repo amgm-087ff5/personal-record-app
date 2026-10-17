@@ -347,41 +347,21 @@ private fun StackedChart(
         }
 
         val max = bars.maxOfOrNull { it.total }?.coerceAtLeast(1L) ?: 1L
+        val listState = rememberLazyListState()
+        LaunchedEffect(level, label) { listState.scrollToItem(0) }
         if (bars.isNotEmpty()) {
-            Canvas(
-                Modifier.fillMaxWidth().height(160.dp).pointerInput(bars) {
-                    detectTapGestures { offset ->
-                        val slot = size.width.toFloat() / bars.size
-                        val i = (offset.x / slot).toInt().coerceIn(0, bars.lastIndex)
-                        onBarTap(bars[i])
-                    }
-                },
+            // 時間別(24本)は細く、金額は省く。それ以外は1本64dp。
+            val dense = level == ChartLevel.DAY
+            val itemWidth = if (dense) 20.dp else 64.dp
+            LazyRow(
+                state = listState,
+                flingBehavior = rememberSnapFlingBehavior(lazyListState = listState),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                val slot = size.width / bars.size
-                val barWidth = slot * 0.6f
-                bars.forEachIndexed { i, bar ->
-                    val x = slot * i + (slot - barWidth) / 2f
-                    var bottom = size.height
-                    bar.segments.forEach { seg ->
-                        val h = size.height * (seg.amount.toFloat() / max)
-                        if (h > 0f) {
-                            drawRect(
-                                color = categoryColor(seg.category),
-                                topLeft = Offset(x, bottom - h),
-                                size = Size(barWidth, h),
-                            )
-                            bottom -= h
-                        }
-                    }
-                }
-            }
-            // 棒が多い(時間別の24本)ときは、金額は省き、ラベルは3本おきに出す
-            val dense = bars.size > 12
-            Row(Modifier.fillMaxWidth()) {
-                bars.forEachIndexed { i, bar ->
+                itemsIndexed(bars) { i, bar ->
                     Column(
                         Modifier
-                            .weight(1f)
+                            .width(itemWidth)
                             .clickable(enabled = bar.drillable) { onBarTap(bar) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
@@ -393,12 +373,50 @@ private fun StackedChart(
                                 overflow = TextOverflow.Clip,
                             )
                         }
+                        Canvas(Modifier.fillMaxWidth().height(160.dp)) {
+                            val barWidth = size.width * 0.6f
+                            val x = (size.width - barWidth) / 2f
+                            var bottom = size.height
+                            bar.segments.forEach { seg ->
+                                val h = size.height * (seg.amount.toFloat() / max)
+                                if (h > 0f) {
+                                    drawRect(
+                                        color = categoryColor(seg.category),
+                                        topLeft = Offset(x, bottom - h),
+                                        size = Size(barWidth, h),
+                                    )
+                                    bottom -= h
+                                }
+                            }
+                        }
+                        // 「9/28〜10/4」は「〜」で2行に分ける。時間別は3時間おきだけ表示する。
+                        val twoLines = bar.label.contains("〜")
+                        val text = when {
+                            dense && i % 3 != 0 -> ""
+                            twoLines -> bar.label.replace("〜", "〜\n")
+                            else -> bar.label
+                        }
                         Text(
-                            if (!dense || i % 3 == 0) bar.label else "",
+                            text,
                             style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1,
+                            textAlign = TextAlign.Center,
+                            maxLines = if (twoLines) 2 else 1,
                             overflow = TextOverflow.Clip,
                         )
+                    }
+                }
+                if (dense) {
+                    // 時間別の終わりを示す 24: (タップ不可)
+                    item {
+                        Column(Modifier.width(itemWidth), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Spacer(Modifier.height(160.dp))
+                            Text(
+                                "24:",
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Clip,
+                            )
+                        }
                     }
                 }
             }
