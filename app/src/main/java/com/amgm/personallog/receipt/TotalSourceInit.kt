@@ -20,10 +20,17 @@ object TotalSourceInit {
             val printed = readable.receipt.total
             return when {
                 printed != null && printed == storedTotal -> TotalSourceDecision(storedTotal, TotalSource.PRINTED)
+                // 確定済みで印字と違う値は、手入力か旧ボタン(品目の合計)か区別できないので unknown
+                printed != null && status == ReceiptStatus.CONFIRMED -> TotalSourceDecision(storedTotal, TotalSource.UNKNOWN)
                 printed != null -> TotalSourceDecision(storedTotal, TotalSource.MANUAL)
-                // 読み取りで合計が無かった: 確定済みは以前の自動補完。下書きは空欄に戻して入れてもらう
+                // 読み取りで合計が無かった: 確定済みは以前の自動補完
                 status == ReceiptStatus.CONFIRMED -> TotalSourceDecision(storedTotal, TotalSource.ITEMS)
-                status == ReceiptStatus.DRAFT -> TotalSourceDecision(null, TotalSource.UNKNOWN)
+                // 下書き: 保存値が旧方式の補完値(品目の amount の単純合計)と同じなら空欄に戻す。違えば手入力なので残す
+                status == ReceiptStatus.DRAFT -> {
+                    val legacyFill = readable.receipt.items.sumOf { it.amount.toLong() }
+                    if (legacyFill == storedTotal.toLong()) TotalSourceDecision(null, TotalSource.UNKNOWN)
+                    else TotalSourceDecision(storedTotal, TotalSource.MANUAL)
+                }
                 else -> TotalSourceDecision(storedTotal, TotalSource.UNKNOWN)
             }
         }

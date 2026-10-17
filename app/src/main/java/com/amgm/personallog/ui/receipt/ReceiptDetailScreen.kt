@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.receipt.ReceiptImageCodec
@@ -435,6 +436,22 @@ fun ReceiptDetailScreen(
         SHEET_TOTAL -> InkSheet(onDismiss = { sheet = SHEET_NONE }, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
             SheetTitle("合計")
             SheetField("合計(円・レシートの印字)", s.total, viewModel::setTotal, numeric = true)
+            // 紙面と同じ: 品目の計算合計と、1タップで入れるボタン
+            Text(
+                "品目の計算合計 ${formatYen(s.itemsSum)}",
+                style = AppTheme.type.body,
+                color = AppTheme.colors.inkSoft,
+                modifier = Modifier.padding(bottom = Space.xs),
+            )
+            if (s.canUseItemsSum) {
+                TextAction(
+                    "${formatYen(s.itemsSum)} を合計に入れる",
+                    onClick = {
+                        if (s.useItemsSumNeedsConfirm) sheet = SHEET_USE_ITEMS_SUM
+                        else { viewModel.useItemsSumAsTotal(); sheet = SHEET_NONE }
+                    },
+                )
+            }
             TextAction("閉じる", onClick = { sheet = SHEET_NONE })
         }
         SHEET_OWN -> InkSheet(onDismiss = { sheet = SHEET_NONE }, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
@@ -477,9 +494,10 @@ fun ReceiptDetailScreen(
         SHEET_USE_ITEMS_SUM -> InkSheet(onDismiss = { sheet = SHEET_NONE }) {
             SheetTitle("合計を品目の計算合計に置き換えますか?")
             LeaderRow(
-                label = if (s.printedTotal != null) "印字の合計(読み取った値)" else "いまの合計",
-                value = formatYen((s.printedTotal ?: s.total.toIntOrNull() ?: 0).toLong()),
+                label = "印字の合計(読み取った値)",
+                value = s.printedTotal?.let { formatYen(it.toLong()) } ?: "なし",
             )
+            LeaderRow(label = "いまの合計", value = s.total.toLongOrNull()?.let { formatYen(it) } ?: "未入力")
             LeaderRow(label = "品目の計算合計", value = formatYen(s.itemsSum))
             Text(
                 "差は品目の読み違いかもしれません。置き換えると、印字の合計はこの画面から消えます(読み取り直すと戻せます)。",
@@ -568,7 +586,12 @@ private fun TotalDashboard(s: DetailUiState) {
         // 警告は合計の直下。一致なら何も出さない
         val diff = s.mismatch
         when {
-            total == null -> Text("合計を読み取れませんでした", style = AppTheme.type.body, color = c.danger)
+            // 手で消した(出所が manual)ときは「未入力です」。読み取りで合計が無かったときは「読み取れませんでした」
+            total == null -> Text(
+                if (s.totalSource == TotalSource.MANUAL) "合計が未入力です" else "合計を読み取れませんでした",
+                style = AppTheme.type.body,
+                color = c.danger,
+            )
             diff != null -> Text(
                 "合計と品目の合計が ${kotlin.math.abs(diff)} 円ちがいます",
                 style = AppTheme.type.body,

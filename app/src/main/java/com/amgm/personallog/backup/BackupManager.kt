@@ -190,7 +190,7 @@ class BackupManager @Inject constructor(
         data.diaryEntries.forEach { diaryDao.insert(it.toEntity()) }
         data.diaryPhotos.forEach { diaryDao.insertPhoto(it.toEntity()) }
         val replaceItemsByReceipt = data.receiptItems.groupBy { it.receiptId }
-        data.receipts.forEach { receiptDao.insert(it.toEntity(replaceItemsByReceipt[it.id].orEmpty())) }
+        data.receipts.forEach { receiptDao.insert(it.toEntity(replaceItemsByReceipt[it.id].orEmpty(), legacyFormat = data.formatVersion < 5)) }
         // 品目は1件ずつ入れて、バックアップ内の id -> 復元後の id を控える(支出の receiptItemId の付け替えに使う)
         val itemIdMap = HashMap<Long, Long>()
         for (bi in data.receiptItems) {
@@ -272,7 +272,7 @@ class BackupManager @Inject constructor(
         // バックアップ内の品目 id -> 復元後の品目 id。新しく入れたレシートの品目だけ対応が取れる(既存のレシートに当たったものは null になる)
         val itemIdMap = HashMap<Long, Long>()
         for (r in data.receipts) {
-            val entity = r.toEntity(itemsByReceipt[r.id].orEmpty())
+            val entity = r.toEntity(itemsByReceipt[r.id].orEmpty(), legacyFormat = data.formatVersion < 5)
             val existing = receiptIndex.take(entity)
             if (existing != null) {
                 receiptIdMap[r.id] = existing

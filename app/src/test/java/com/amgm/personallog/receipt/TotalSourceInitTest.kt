@@ -25,8 +25,19 @@ class TotalSourceInitTest {
 
     @Test
     fun printedTotalDiffersFromStored_isManual() {
-        assertEquals(TotalSourceDecision(750, TotalSource.MANUAL), TotalSourceInit.decide(confirmed, 750, raw("748")))
+        // 確定済みは、手入力か旧ボタン(品目の合計)か区別できないので unknown
+        assertEquals(TotalSourceDecision(750, TotalSource.UNKNOWN), TotalSourceInit.decide(confirmed, 750, raw("748")))
         assertEquals(TotalSourceDecision(750, TotalSource.MANUAL), TotalSourceInit.decide(draft, 750, raw("748")))
+    }
+
+    @Test
+    fun noPrintedTotal_draft_keepsManualValueThatDiffersFromLegacyFill() {
+        // 品目の単純合計は198。保存値500は手で入れた値なので残す
+        assertEquals(TotalSourceDecision(500, TotalSource.MANUAL), TotalSourceInit.decide(draft, 500, raw(null)))
+        // 品目が2つ(198+100)の補完値と同じなら空欄に戻す
+        val two = """{"date":"2026-10-09","store":"A","items":[{"name":"a","amount":198},{"name":"b","amount":100}]}"""
+        assertNull(TotalSourceInit.decide(draft, 298, two).totalAmount)
+        assertEquals(TotalSourceDecision(299, TotalSource.MANUAL), TotalSourceInit.decide(draft, 299, two))
     }
 
     @Test
