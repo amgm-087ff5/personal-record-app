@@ -105,4 +105,68 @@ class TaxCalcTest {
         val normal = receipt(advance = false, own = 200)
         assertEquals(listOf(129L, 500L), LedgerCalc.expensesFromReceipt(normal, items, perItem = true, now = 1).map { it.amount.toLong() })
     }
+
+    @Test
+    fun breakdown_taxIncludedItemsAreFlooredPerRateNotPerItem() {
+        // 8%の税込100円×2: 税抜は 200×100/108 = 185.18.. -> 185(1品ずつ切り捨てると184になってしまう)
+        val b = TaxCalc.breakdownByRate(listOf(item(100, 8), item(100, 8)))
+        assertEquals(1, b.lines.size)
+        assertEquals(185L, b.lines[0].netYen)
+        assertEquals(200L * TaxCalc.UNITS_PER_YEN - 185L * TaxCalc.UNITS_PER_YEN, b.lines[0].taxUnits)
+        assertEquals(15L, b.lines[0].taxYen)
+        assertEquals(185L, b.netYen)
+        assertEquals(15L, b.taxYen)
+    }
+
+    @Test
+    fun breakdown_perRate_sortedByRate() {
+        val b = TaxCalc.breakdownByRate(listOf(item(110, 10), item(108, 8)))
+        assertEquals(listOf(8, 10), b.lines.map { it.taxRate })
+        assertEquals(listOf(100L, 100L), b.lines.map { it.netYen })
+        assertEquals(listOf(8L, 10L), b.lines.map { it.taxYen })
+        assertEquals(200L, b.netYen)
+        assertEquals(18L, b.taxYen)
+    }
+
+    @Test
+    fun breakdown_taxExcludedItemKeepsPrintedNet() {
+        // 税抜100円・8%: 税抜は印字額そのまま、税額は8円
+        val b = TaxCalc.breakdownByRate(listOf(item(100, 8, included = false)))
+        assertEquals(100L, b.lines[0].netYen)
+        assertEquals(108L * TaxCalc.UNITS_PER_YEN, b.lines[0].grossUnits)
+        assertEquals(8L, b.lines[0].taxYen)
+    }
+
+    @Test
+    fun breakdown_fractionalTaxIsFlooredInTotals() {
+        // 税抜120円・8% = 税込129.6円、税額9.6円 -> 9円
+        val b = TaxCalc.breakdownByRate(listOf(item(120, 8, included = false)))
+        assertEquals(120L, b.netYen)
+        assertEquals(96_000L, b.lines[0].taxUnits)
+        assertEquals(9L, b.taxYen)
+    }
+
+    @Test
+    fun breakdown_mixedIncludedAndExcludedInOneRate() {
+        // 8%: 税込108円(税抜100) + 税抜100円(税込108) -> 税抜200、税込216、税額16
+        val b = TaxCalc.breakdownByRate(listOf(item(108, 8), item(100, 8, included = false)))
+        assertEquals(200L, b.netYen)
+        assertEquals(216L * TaxCalc.UNITS_PER_YEN, b.lines[0].grossUnits)
+        assertEquals(16L, b.taxYen)
+    }
+
+    @Test
+    fun breakdown_discountAndZeroRateAndEmpty() {
+        // 値引き(負)も同じ式。0%は税額0
+        val d = TaxCalc.breakdownByRate(listOf(item(1100, 10), item(-110, 10)))
+        assertEquals(900L, d.netYen)
+        assertEquals(90L, d.taxYen)
+        val z = TaxCalc.breakdownByRate(listOf(item(500, 0)))
+        assertEquals(500L, z.netYen)
+        assertEquals(0L, z.taxYen)
+        val e = TaxCalc.breakdownByRate(emptyList())
+        assertEquals(0L, e.netYen)
+        assertEquals(0L, e.taxYen)
+        assertEquals(true, e.lines.isEmpty())
+    }
 }

@@ -13,6 +13,7 @@ import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.ReceiptNotDuplicate
 import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.domain.LedgerCalc
 import kotlinx.coroutines.flow.Flow
@@ -75,6 +76,15 @@ class ReceiptRepository @Inject constructor(
         receiptDao.setImageHashIfMissing(id, hash)
     }
 
+    /** 「重複ではない」と判断した組を保存する(小さい id を Low に正規化。同じ id や保存済みの組は何もしない)。 */
+    suspend fun markNotDuplicate(idA: Long, idB: Long, now: Long = System.currentTimeMillis()) {
+        val pair = ReceiptNotDuplicate.of(idA, idB, now) ?: return
+        receiptDao.insertNotDuplicate(pair)
+    }
+
+    suspend fun notDuplicates(): List<ReceiptNotDuplicate> = receiptDao.getAllNotDuplicates()
+    fun observeNotDuplicates(): Flow<List<ReceiptNotDuplicate>> = receiptDao.observeNotDuplicates()
+
     /** レシートと品目を保存(id=0なら新規)。品目は丸ごと置き換える。receiptId を返す。 */
     suspend fun save(receipt: Receipt, items: List<ReceiptItem>): Long = db.withTransaction {
         val id = if (receipt.id == 0L) {
@@ -96,6 +106,8 @@ class ReceiptRepository @Inject constructor(
     suspend fun confirm(receiptId: Long, perItem: Boolean, now: Long = System.currentTimeMillis()) {
         db.withTransaction {
             val receipt = receiptDao.getById(receiptId) ?: return@withTransaction
+            // 合計は確定には必須。未入力なら家計簿を作らない(既存の家計簿も消さない)
+            checkNotNull(receipt.totalAmount) { "合計が未入力のため確定できません" }
             val items = receiptDao.getItems(receiptId)
             deleteExpensesOf(receiptId)
             val grouped = if (perItem) LedgerCalc.groupFromReceipt(receipt, items, now) else null
