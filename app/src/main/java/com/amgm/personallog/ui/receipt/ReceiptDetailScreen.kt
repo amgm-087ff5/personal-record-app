@@ -32,9 +32,13 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.receipt.ReceiptImageCodec
@@ -72,10 +76,19 @@ private const val SHEET_TOTAL = "total"
 private const val SHEET_OWN = "own"
 private const val SHEET_DELETE = "delete"
 private const val SHEET_RESCAN = "rescan"
+private const val SHEET_USE_ITEMS_SUM = "useItemsSum"
+
+/** 最上部の合計。大きく(36sp前後・太字)。 */
+@Composable
+private fun dashboardTotalStyle(): TextStyle = AppTheme.type.numeralXL.copy(
+    fontSize = 36.sp,
+    lineHeight = 42.sp,
+    fontWeight = FontWeight.Bold,
+)
 
 /**
  * レシートの確認・修正画面。
- * 原本画像 → 紙面(店名・合計) → 品目の行 → 支払いまとめ → 操作。品目の編集は行をタップして開くシートで行う。
+ * 合計のダッシュボード → 原本画像 → 紙面(店名・合計) → 品目の行 → 支払いまとめ → 操作。品目の編集は行をタップして開くシートで行う。
  */
 @Composable
 fun ReceiptDetailScreen(
@@ -96,6 +109,10 @@ fun ReceiptDetailScreen(
     PaperScreen(modifier = modifier) {
         LazyColumn(modifier = Modifier.fillMaxSize().imePadding()) {
             val hasImage = !s.loading && !s.notFound && s.imagePath.isNotBlank()
+            val showDashboard = !s.loading && !s.notFound
+            if (showDashboard) {
+                item(key = "dashboard") { TotalDashboard(s) }
+            }
             if (hasImage) {
                 item(key = "image") {
                     ReceiptImage(imagePath = s.imagePath, onClick = { viewerOpen = true })
@@ -106,7 +123,7 @@ fun ReceiptDetailScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (hasImage) Modifier else Modifier.statusBarsPadding())
+                        .then(if (hasImage || showDashboard) Modifier else Modifier.statusBarsPadding())
                         .padding(horizontal = Space.s),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -198,10 +215,27 @@ fun ReceiptDetailScreen(
                                 .tappable { sheet = SHEET_TOTAL },
                         ) {
                             Label("合計")
+                            val total = s.total.toLongOrNull()
                             Text(
-                                formatYen((s.total.toLongOrNull() ?: s.itemsSum)),
-                                style = AppTheme.type.numeralXL,
-                                color = c.ink,
+                                if (total != null) formatYen(total) else "未入力",
+                                style = AppTheme.type.numeralL,
+                                color = if (total != null) c.ink else c.danger,
+                            )
+                        }
+                        // 合計欄のすぐ下: 品目の計算合計(税込の支払合計)を常に表示
+                        Text(
+                            "品目の計算合計 ${formatYen(s.itemsSum)}",
+                            style = AppTheme.type.body,
+                            color = c.inkSoft,
+                            modifier = Modifier.padding(top = Space.xs),
+                        )
+                        if (s.canUseItemsSum) {
+                            TextAction(
+                                "${formatYen(s.itemsSum)} を合計に入れる",
+                                onClick = {
+                                    // 合計欄に値があるときは印字の値を消すので、確認を挟む
+                                    if (s.useItemsSumNeedsConfirm) sheet = SHEET_USE_ITEMS_SUM else viewModel.useItemsSumAsTotal()
+                                },
                             )
                         }
                         if (s.confirmed) {
@@ -212,15 +246,29 @@ fun ReceiptDetailScreen(
                                 modifier = Modifier.padding(top = Space.s),
                             )
                         }
-                        s.possibleDuplicate?.let { original ->
+                        if (s.possibleDuplicates.isNotEmpty()) {
                             Column(modifier = Modifier.padding(top = Space.m)) {
                                 Stamp("重複の可能性", tone = StampTone.Danger)
                                 Text(
-                                    "同じ内容(日付・店名・合計)のレシートが既にあります。\n$original",
+                                    "時刻が近く(5分以内)合計が同じレシートが既にあります。時刻が無いときは同じ日付・同じ合計です。",
                                     style = AppTheme.type.caption,
                                     color = c.danger,
                                     modifier = Modifier.padding(top = Space.xs),
                                 )
+                                s.possibleDuplicates.forEach { other ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(top = Space.xs),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            other.summary,
+                                            style = AppTheme.type.caption,
+                                            color = c.danger,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        TextAction("重複ではない", onClick = { viewModel.markNotDuplicate(other.id) }, color = c.inkSoft)
+                                    }
+                                }
                             }
                         }
                         Box(modifier = Modifier.height(Space.m))
@@ -258,7 +306,7 @@ fun ReceiptDetailScreen(
                             modifier = Modifier.fillMaxWidth().padding(vertical = Space.m),
                             horizontalArrangement = Arrangement.spacedBy(Space.s),
                         ) {
-                            SummaryColumn("印字合計", formatYen(s.total.toLongOrNull() ?: s.itemsSum), Modifier.weight(1f))
+                            SummaryColumn("印字合計", s.total.toLongOrNull()?.let { formatYen(it) } ?: "未入力", Modifier.weight(1f))
                             SummaryColumn("税込合計", formatYen(s.itemsSum), Modifier.weight(1f))
                             SummaryColumn(
                                 "自分の負担",
@@ -279,18 +327,6 @@ fun ReceiptDetailScreen(
                             color = c.inkFaint,
                             modifier = Modifier.padding(top = Space.xs),
                         )
-                        s.mismatch?.let { diff ->
-                            Column(modifier = Modifier.padding(top = Space.m)) {
-                                Stamp("不一致", tone = StampTone.Danger)
-                                Text(
-                                    "印字合計と税込合計が一致しません(印字合計 - 税込合計 = ${formatYen(diff)})。読み取りミスか、端数の差の可能性があります。",
-                                    style = AppTheme.type.caption,
-                                    color = c.danger,
-                                    modifier = Modifier.padding(top = Space.xs),
-                                )
-                                TextAction("合計欄を支払合計に合わせる", onClick = viewModel::useItemsSumAsTotal)
-                            }
-                        }
                     }
                 }
 
@@ -397,6 +433,22 @@ fun ReceiptDetailScreen(
         SHEET_TOTAL -> InkSheet(onDismiss = { sheet = SHEET_NONE }, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
             SheetTitle("合計")
             SheetField("合計(円・レシートの印字)", s.total, viewModel::setTotal, numeric = true)
+            // 紙面と同じ: 品目の計算合計と、1タップで入れるボタン
+            Text(
+                "品目の計算合計 ${formatYen(s.itemsSum)}",
+                style = AppTheme.type.body,
+                color = AppTheme.colors.inkSoft,
+                modifier = Modifier.padding(bottom = Space.xs),
+            )
+            if (s.canUseItemsSum) {
+                TextAction(
+                    "${formatYen(s.itemsSum)} を合計に入れる",
+                    onClick = {
+                        if (s.useItemsSumNeedsConfirm) sheet = SHEET_USE_ITEMS_SUM
+                        else { viewModel.useItemsSumAsTotal(); sheet = SHEET_NONE }
+                    },
+                )
+            }
             TextAction("閉じる", onClick = { sheet = SHEET_NONE })
         }
         SHEET_OWN -> InkSheet(onDismiss = { sheet = SHEET_NONE }, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
@@ -436,6 +488,23 @@ fun ReceiptDetailScreen(
             )
             TextAction("キャンセル", onClick = { sheet = SHEET_NONE }, color = AppTheme.colors.inkSoft)
         }
+        SHEET_USE_ITEMS_SUM -> InkSheet(onDismiss = { sheet = SHEET_NONE }) {
+            SheetTitle("合計を品目の計算合計に置き換えますか?")
+            LeaderRow(
+                label = "印字の合計(読み取った値)",
+                value = s.printedTotal?.let { formatYen(it.toLong()) } ?: "なし",
+            )
+            LeaderRow(label = "いまの合計", value = s.total.toLongOrNull()?.let { formatYen(it) } ?: "未入力")
+            LeaderRow(label = "品目の計算合計", value = formatYen(s.itemsSum))
+            Text(
+                "差は品目の読み違いかもしれません。置き換えると、印字の合計はこの画面から消えます(読み取り直すと戻せます)。",
+                style = AppTheme.type.caption,
+                color = AppTheme.colors.inkSoft,
+                modifier = Modifier.padding(vertical = Space.m),
+            )
+            TextAction("入れる", onClick = { sheet = SHEET_NONE; viewModel.useItemsSumAsTotal() })
+            TextAction("キャンセル", onClick = { sheet = SHEET_NONE }, color = AppTheme.colors.inkSoft)
+        }
         SHEET_RESCAN -> InkSheet(onDismiss = { sheet = SHEET_NONE }) {
             SheetTitle("読み取り直す")
             Text(
@@ -449,18 +518,96 @@ fun ReceiptDetailScreen(
         }
     }
 
-    s.duplicateWarning?.let { existing ->
+    if (s.missingTotalPrompt) {
+        InkSheet(onDismiss = viewModel::dismissMissingTotal) {
+            SheetTitle("合計が未入力です")
+            Text(
+                "確定するには合計が必要です。" +
+                    if (s.items.isNotEmpty()) "品目の計算合計を合計に入れて確定できます。" else "合計を入力してください。",
+                style = AppTheme.type.body,
+                color = AppTheme.colors.inkSoft,
+                modifier = Modifier.padding(bottom = Space.m),
+            )
+            if (s.items.isNotEmpty()) {
+                TextAction("品目の合計 ${formatYen(s.itemsSum)} を入れて確定", onClick = viewModel::confirmWithItemsSum)
+            }
+            TextAction("キャンセル", onClick = viewModel::dismissMissingTotal, color = AppTheme.colors.inkSoft)
+        }
+    }
+
+    if (s.duplicateWarning.isNotEmpty()) {
         InkSheet(onDismiss = viewModel::dismissDuplicateWarning) {
             SheetTitle("重複の確認")
             Stamp("重複の可能性", tone = StampTone.Danger)
             Text(
-                "既に同じレシートがあります。追加しますか?\n\n$existing",
+                "既に同じレシートがあります。追加しますか?\n\n" + s.duplicateWarning.joinToString("\n") { it.summary },
                 style = AppTheme.type.body,
                 color = AppTheme.colors.inkSoft,
                 modifier = Modifier.padding(vertical = Space.m),
             )
             TextAction("追加する", onClick = viewModel::confirmAnyway)
+            TextAction("重複ではない(今後表示しない)", onClick = viewModel::confirmMarkingNotDuplicate)
             TextAction("キャンセル", onClick = viewModel::dismissDuplicateWarning, color = AppTheme.colors.inkSoft)
+        }
+    }
+}
+
+/**
+ * 最上部のダッシュボード(画像より上)。合計を大きく出し、直下に警告、その下に補助の数字を小さく出す。
+ * 品目から計算した額は、合計の位置には出さない。
+ */
+@Composable
+private fun TotalDashboard(s: DetailUiState) {
+    val c = AppTheme.colors
+    val total = s.total.toLongOrNull()
+    val breakdown = s.taxBreakdown
+    val small = AppTheme.type.caption.copy(fontSize = 12.sp, lineHeight = 18.sp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(c.paperRaised)
+            .statusBarsPadding()
+            .padding(horizontal = Space.edge)
+            .padding(top = Space.s, bottom = Space.m),
+    ) {
+        Label("合計")
+        if (total != null) {
+            Text(formatYen(total), style = dashboardTotalStyle(), color = c.ink)
+        } else {
+            Text("合計 未入力", style = dashboardTotalStyle(), color = c.danger)
+        }
+        // 警告は合計の直下。一致なら何も出さない
+        val diff = s.mismatch
+        when {
+            // 手で消した(出所が manual)ときは「未入力です」。読み取りで合計が無かったときは「読み取れませんでした」
+            total == null -> Text(
+                if (s.totalSource == TotalSource.MANUAL) "合計が未入力です" else "合計を読み取れませんでした",
+                style = AppTheme.type.body,
+                color = c.danger,
+            )
+            diff != null -> Text(
+                "合計と品目の合計が ${kotlin.math.abs(diff)} 円ちがいます",
+                style = AppTheme.type.body,
+                color = c.danger,
+            )
+        }
+        Column(modifier = Modifier.padding(top = Space.xs)) {
+            val parts = buildList {
+                add("品目の計算合計 ${formatYen(s.itemsSum)}")
+                add("税抜合計 ${formatYen(breakdown.netYen)}")
+                add("消費税額 ${formatYen(breakdown.taxYen)}")
+            }
+            Text(parts.joinToString("  /  "), style = small, color = c.inkSoft)
+            if (breakdown.lines.isNotEmpty()) {
+                Text(
+                    "税率ごとの消費税  " + breakdown.lines.joinToString("・") { "${it.taxRate}% ${formatYen(it.taxYen)}" },
+                    style = small,
+                    color = c.inkSoft,
+                )
+            }
+            if (s.isAdvance) {
+                Text("自分が払う分 ${formatYen(s.ownTotal)}", style = small, color = c.inkSoft)
+            }
         }
     }
 }
@@ -669,8 +816,7 @@ private fun ReceiptImage(imagePath: String, onClick: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(IMAGE_HEIGHT)
-                .background(AppTheme.colors.paperRaised)
-                .statusBarsPadding(),
+                .background(AppTheme.colors.paperRaised),
             contentAlignment = Alignment.Center,
         ) {
             Label("(画像を表示できません)")

@@ -1,50 +1,89 @@
 package com.amgm.personallog.receipt
 
 import com.amgm.personallog.data.model.Receipt
-import java.text.Normalizer
+import com.amgm.personallog.data.model.ReceiptNotDuplicate
+import java.time.Duration
+import java.time.LocalDateTime
 import java.util.Locale
 
+/** 「重複ではない」の組を (小さい id, 大きい id) の集合にしたもの。 */
+typealias NotDuplicateSet = Set<Pair<Long, Long>>
+
 /**
- * レシートの重複判定(純Kotlin、JVMテスト可能)。
- * 判定キーは「日付(yyyy-MM-dd)+ 店名(正規化) + 合計金額」。店名が空・合計が0以下・日付不正のものは対象外。
+ * レシートの重複判定(純Kotlin、JVMテスト可能)。店名は表記揺れがあるので使わない。
+ *
+ * 候補の条件:
+ *  - 両方に時刻("yyyy-MM-dd HH:mm")があるとき: 差が [WINDOW_SECONDS] 秒(5分)以内(ちょうど5分を含む。日付またぎも計算する)で、合計が同じ。
+ *  - どちらかに時刻が無いとき: 同じ日付で、合計が同じ。
+ *  - 合計が null(下書きで未入力)のレシートは判定しない。
+ * ユーザーが「重複ではない」と判断した組([ReceiptNotDuplicate])は候補から除く。
  */
 object ReceiptDedup {
-    data class Key(val date: String, val store: String, val total: Int)
+    /** 時刻がある同士で重複とみなす差(秒)。5分ちょうどを含む。 */
+    const val WINDOW_SECONDS = 5 * 60L
 
-    /** 比較用の店名: 全角半角・半角カナを NFKC で揃え、空白を除き、英字は小文字にする(簡易)。 */
-    fun normalizeStore(name: String): String =
-        Normalizer.normalize(name, Normalizer.Form.NFKC)
-            .filterNot { it.isWhitespace() }
-            .lowercase(Locale.ROOT)
+    fun pairOf(a: Long, b: Long): Pair<Long, Long> = minOf(a, b) to maxOf(a, b)
 
-    fun keyOf(purchasedAt: String, storeName: String, totalAmount: Int): Key? {
-        val date = purchasedAt.take(10)
-        val store = normalizeStore(storeName)
-        if (store.isEmpty() || totalAmount <= 0 || !ReceiptCalc.isValidDate(date)) return null
-        return Key(date, store, totalAmount)
+    fun notDuplicateSet(pairs: Collection<ReceiptNotDuplicate>): NotDuplicateSet =
+        pairs.mapTo(HashSet()) { it.receiptIdLow to it.receiptIdHigh }
+
+    /** 購入日時を "yyyy-MM-dd HH:mm" として読む。時刻が無い・読めないときは null。 */
+    fun dateTimeOf(purchasedAt: String): LocalDateTime? {
+        if (purchasedAt.length < 16) return null
+        return try {
+            LocalDateTime.parse(purchasedAt.substring(0, 16).replace(' ', 'T'))
+        } catch (e: Exception) {
+            null
+        }
     }
 
-    fun keyOf(r: Receipt): Key? = keyOf(r.purchasedAt, r.storeName, r.totalAmount)
+    /** 2つの日時の差が5分以内か(ちょうど5分を含む。前後どちらでも、日付をまたいでも)。 */
+    fun withinWindow(a: LocalDateTime, b: LocalDateTime): Boolean =
+        Math.abs(Duration.between(a, b).seconds) <= WINDOW_SECONDS
+
+    /** 「重複ではない」の組を考えずに、2枚が内容として重複の候補か。 */
+    fun isCandidate(a: Receipt, b: Receipt): Boolean {
+        val ta = a.totalAmount ?: return false
+        val tb = b.totalAmount ?: return false
+        if (ta != tb) return false
+        val da = dateTimeOf(a.purchasedAt)
+        val db = dateTimeOf(b.purchasedAt)
+        if (da != null && db != null) return withinWindow(da, db)
+        val dateA = a.purchasedAt.take(10)
+        return ReceiptCalc.isValidDate(dateA) && dateA == b.purchasedAt.take(10)
+    }
+
+    /** 2枚が重複の候補で、かつ「重複ではない」と判断されていないか。 */
+    fun isDuplicate(a: Receipt, b: Receipt, notDuplicates: NotDuplicateSet = emptySet()): Boolean =
+        a.id != b.id && pairOf(a.id, b.id) !in notDuplicates && isCandidate(a, b)
 
     /**
-     * 同じ内容のレシートが複数ある場合、id の小さい方を原本とみなし、後から作られた側(id の大きい方)を
-     * 「重複の可能性」として返す。戻り値は [後の側のid -> 原本]。
+     * target より前に作られた(id が小さい)重複の候補。id の小さい順。詳細画面の警告に使う。
+     * 後から作られた側にだけ警告を出す(原本には出さない)。
      */
-    fun laterDuplicates(list: List<Receipt>): Map<Long, Receipt> =
-        list.mapNotNull { r -> keyOf(r)?.let { k -> k to r } }
-            .groupBy({ it.first }, { it.second })
-            .values
-            .flatMap { group ->
-                val sorted = group.sortedBy { it.id }
-                sorted.drop(1).map { it.id to sorted.first() }
-            }
-            .toMap()
+    fun earlierDuplicates(target: Receipt, list: List<Receipt>, notDuplicates: NotDuplicateSet = emptySet()): List<Receipt> =
+        list.filter { it.id < target.id && isDuplicate(target, it, notDuplicates) }.sortedBy { it.id }
 
-    /** 同じキーのレシート(excludeId 自身は除く)。 */
-    fun sameContent(key: Key, list: List<Receipt>, excludeId: Long): List<Receipt> =
-        list.filter { it.id != excludeId && keyOf(it) == key }
+    /**
+     * 一覧の警告: 重複の候補がある「後から作られた側」 -> 最も早い相手(原本)。
+     */
+    fun laterDuplicates(list: List<Receipt>, notDuplicates: NotDuplicateSet = emptySet()): Map<Long, Receipt> {
+        val sorted = list.sortedBy { it.id }
+        val result = LinkedHashMap<Long, Receipt>()
+        for ((i, r) in sorted.withIndex()) {
+            val original = (0 until i).asSequence().map { sorted[it] }.firstOrNull { isDuplicate(r, it, notDuplicates) }
+            if (original != null) result[r.id] = original
+        }
+        return result
+    }
 
-    /** 警告文に出す要約。例: "2026-10-09 スーパーA ¥748" */
-    fun summary(r: Receipt): String =
-        "${r.purchasedAt} ${r.storeName.ifBlank { "(店名なし)" }} ${String.format(Locale.JAPAN, "¥%,d", r.totalAmount)}"
+    /** 確定時の警告: target と重複の候補になる、確定済みの相手(target 自身は除く)。list には確定済みのレシートを渡す。 */
+    fun sameContent(target: Receipt, list: List<Receipt>, notDuplicates: NotDuplicateSet = emptySet()): List<Receipt> =
+        list.filter { isDuplicate(target, it, notDuplicates) }
+
+    /** 警告文に出す要約。例: "2026-10-09 スーパーA ¥748" 。合計が未入力なら「合計 未入力」。 */
+    fun summary(r: Receipt): String {
+        val total = r.totalAmount?.let { String.format(Locale.JAPAN, "¥%,d", it) } ?: "合計 未入力"
+        return "${r.purchasedAt} ${r.storeName.ifBlank { "(店名なし)" }} $total"
+    }
 }

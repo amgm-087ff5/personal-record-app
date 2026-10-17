@@ -3,6 +3,7 @@ package com.amgm.personallog.data.db
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.amgm.personallog.data.model.CategoryTotal
@@ -12,6 +13,7 @@ import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.ReceiptNotDuplicate
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -112,6 +114,19 @@ interface ReceiptDao {
 
     @Query("DELETE FROM receipt_items WHERE receiptId = :receiptId")
     suspend fun deleteItemsByReceipt(receiptId: Long)
+
+    /** 「重複ではない」の組を追加する。既にある組は何もしない。 */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertNotDuplicate(pair: ReceiptNotDuplicate)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertNotDuplicates(pairs: List<ReceiptNotDuplicate>)
+
+    @Query("SELECT * FROM receipt_not_duplicates ORDER BY receiptIdLow, receiptIdHigh")
+    suspend fun getAllNotDuplicates(): List<ReceiptNotDuplicate>
+
+    @Query("SELECT * FROM receipt_not_duplicates ORDER BY receiptIdLow, receiptIdHigh")
+    fun observeNotDuplicates(): Flow<List<ReceiptNotDuplicate>>
 }
 
 @Dao

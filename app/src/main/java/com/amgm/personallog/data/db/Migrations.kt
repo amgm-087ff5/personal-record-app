@@ -6,6 +6,7 @@ import com.amgm.personallog.domain.PricedLine
 import com.amgm.personallog.domain.legacyReceiptOwnYen
 import com.amgm.personallog.receipt.LegacyRow
 import com.amgm.personallog.receipt.ReceiptUnits
+import com.amgm.personallog.receipt.TotalSourceInit
 
 /**
  * ルール(更新エラー/データ消失の防止):
@@ -216,5 +217,155 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+    /**
+     * v8 の receipts の CREATE TABLE。Room が生成する 8.json の createSql(`${TABLE_NAME}` を表名にしたもの)と
+     * 完全に一致させること(SchemaMatchTest が検査する)。一致しないと端末でアプリが起動時に落ちる。
+     */
+    fun receiptsV8CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (" +
+            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+            "`purchasedAt` TEXT NOT NULL, " +
+            "`storeName` TEXT NOT NULL, " +
+            "`totalAmount` INTEGER, " +
+            "`imagePath` TEXT NOT NULL, " +
+            "`rawJson` TEXT NOT NULL, " +
+            "`status` TEXT NOT NULL, " +
+            "`createdAt` INTEGER NOT NULL, " +
+            "`imageHash` TEXT, " +
+            "`isAdvance` INTEGER NOT NULL DEFAULT 0, " +
+            "`ownAmount` INTEGER, " +
+            "`totalSource` TEXT NOT NULL DEFAULT 'unknown', " +
+            "`rotationDegrees` REAL NOT NULL DEFAULT 0, " +
+            "`cropLeft` REAL NOT NULL DEFAULT 0, " +
+            "`cropTop` REAL NOT NULL DEFAULT 0, " +
+            "`cropRight` REAL NOT NULL DEFAULT 1, " +
+            "`cropBottom` REAL NOT NULL DEFAULT 1)"
+
+    /** v8 の receipt_not_duplicates の CREATE TABLE(8.json の createSql と一致させる)。 */
+    fun notDuplicatesV8CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (" +
+            "`receiptIdLow` INTEGER NOT NULL, " +
+            "`receiptIdHigh` INTEGER NOT NULL, " +
+            "`createdAt` INTEGER NOT NULL, " +
+            "PRIMARY KEY(`receiptIdLow`, `receiptIdHigh`), " +
+            "FOREIGN KEY(`receiptIdLow`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+            "FOREIGN KEY(`receiptIdHigh`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+
+    /** v8 の receipt_not_duplicates のインデックス(8.json の indices[].createSql と一致させる)。 */
+    fun notDuplicatesV8IndexSql(table: String): String =
+        "CREATE INDEX IF NOT EXISTS `index_receipt_not_duplicates_receiptIdHigh` ON `$table` (`receiptIdHigh`)"
+
+    /** receipts から v8 の receipts へコピーする列(新しい列は既定値に任せる)。 */
+    private const val RECEIPTS_V7_COLUMNS =
+        "`id`, `purchasedAt`, `storeName`, `totalAmount`, `imagePath`, `rawJson`, `status`, `createdAt`, `imageHash`, `isAdvance`, `ownAmount`"
+
+    /** 親の表を作り直す前後で数える対象。減ったら外部キーの連鎖で子が消えたということ。 */
+    internal val V8_CHILD_COUNT_QUERIES: List<Pair<String, String>> = listOf(
+        "receipts" to "SELECT COUNT(*) FROM `receipts`",
+        "receipt_items" to "SELECT COUNT(*) FROM `receipt_items`",
+        "expenses(receiptIdあり)" to "SELECT COUNT(*) FROM `expenses` WHERE `receiptId` IS NOT NULL",
+        "expense_groups(receiptIdあり)" to "SELECT COUNT(*) FROM `expense_groups` WHERE `receiptId` IS NOT NULL",
+    )
+
+    /** receipts を親とする外部キーを持つ子の表。 */
+    private val V8_CHILD_TABLES = listOf("receipt_items", "expenses", "expense_groups")
+
+    /**
+     * 子の表の外部キー違反のうち、親が receipts のものの件数。
+     * DB 全体への PRAGMA foreign_key_check は移行と無関係な古い不整合も拾って起動のたびに落ちるので、
+     * receipts に関係するものだけを数える(移行の前後で増えたときだけ異常とする)。
+     */
+    internal fun SupportSQLiteDatabase.receiptsFkViolations(): Long {
+        var n = 0L
+        for (t in V8_CHILD_TABLES) {
+            query("PRAGMA foreign_key_check(`$t`)").use { c ->
+                val parentIdx = c.getColumnIndex("parent").takeIf { it >= 0 } ?: 2
+                while (c.moveToNext()) if (c.getString(parentIdx) == "receipts") n++
+            }
+        }
+        return n
+    }
+
+    private fun SupportSQLiteDatabase.count(sql: String): Long =
+        query(sql).use { c -> if (c.moveToFirst()) c.getLong(0) else 0L }
+
+    /**
+     * v7 -> v8: 合計の必須化と重複判定のための変更。
+     *  - receipts を作り直す(totalAmount の NOT NULL を外す。SQLite では制約だけ外せない)。同時に
+     *    totalSource と、回転・トリミングの列(次の作業で使う。今回は列だけ)を足す。
+     *  - 既存の totalSource は rawJson から決める(TotalSourceInit)。読み取れなかった下書きの合計は空欄(NULL)に戻す。
+     *  - receipt_not_duplicates(「重複ではない」の組)を追加する。
+     *
+     * 安全策: receipts は receipt_items(CASCADE)・expenses・expense_groups(SET NULL)の親。
+     * Room は onUpgrade では外部キー検査を有効にしていない想定だが、もし有効なら DROP TABLE が子を消す。
+     * そのため作り直しの前後で子の件数を数え、1つでも違えば例外にする(トランザクションが戻り、データは守られる)。
+     * 最後に receipts を親とする外部キー違反(PRAGMA foreign_key_check(子の表))が増えていないかも確かめる。
+     * 移行の最初に PRAGMA foreign_keys が 1 なら、DROP の前に止める。
+     */
+    val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // 外部キーが有効なままだと DROP TABLE receipts が子(品目など)を連鎖で消す。PRAGMA はトランザクション内では
+            // 変えられないので、ここで止める(トランザクションが戻り、データは守られる)。
+            val fkOn = db.query("PRAGMA foreign_keys").use { c -> c.moveToFirst() && c.getInt(0) == 1 }
+            if (fkOn) {
+                throw IllegalStateException(
+                    "v8 への移行を中止しました: 外部キー(PRAGMA foreign_keys)が有効です。" +
+                        "有効なまま receipts を作り直すと、品目などの子のデータが連鎖で削除されるため、何も変更せずに止めました。",
+                )
+            }
+            val fkBefore = db.receiptsFkViolations()
+            val before = V8_CHILD_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+            val oldSeq = db.query("SELECT `seq` FROM `sqlite_sequence` WHERE `name` = 'receipts'")
+                .use { c -> if (c.moveToFirst()) c.getLong(0) else null }
+
+            db.execSQL("DROP TABLE IF EXISTS `receipts_new`")
+            db.execSQL(receiptsV8CreateSql("receipts_new"))
+            db.execSQL(
+                "INSERT INTO `receipts_new` ($RECEIPTS_V7_COLUMNS) SELECT $RECEIPTS_V7_COLUMNS FROM `receipts`",
+            )
+
+            // 合計の出所を rawJson から決める(純Kotlinの TotalSourceInit)
+            class Row(val id: Long, val total: Int, val status: String, val rawJson: String)
+            val rows = ArrayList<Row>()
+            db.query("SELECT `id`, `totalAmount`, `status`, `rawJson` FROM `receipts_new` ORDER BY `id`").use { c ->
+                while (c.moveToNext()) {
+                    rows.add(Row(c.getLong(0), if (c.isNull(1)) 0 else c.getInt(1), c.getString(2), c.getString(3)))
+                }
+            }
+            for (r in rows) {
+                val d = TotalSourceInit.decide(r.status, r.total, r.rawJson)
+                db.execSQL(
+                    "UPDATE `receipts_new` SET `totalAmount` = ?, `totalSource` = ? WHERE `id` = ?",
+                    arrayOf<Any?>(d.totalAmount, d.totalSource, r.id),
+                )
+            }
+
+            db.execSQL("DROP TABLE `receipts`")
+            db.execSQL("ALTER TABLE `receipts_new` RENAME TO `receipts`")
+            // AUTOINCREMENT の採番を引き継ぐ。receipts が空だと新しい表の sqlite_sequence に行が無く UPDATE が効かないので、
+            // 行を消して(古い採番, 最大 id)の大きい方で入れ直す
+            val maxId = db.count("SELECT COALESCE(MAX(`id`), 0) FROM `receipts`")
+            val seq = maxOf(oldSeq ?: 0L, maxId)
+            db.execSQL("DELETE FROM `sqlite_sequence` WHERE `name` = 'receipts'")
+            if (seq > 0L) {
+                db.execSQL("INSERT INTO `sqlite_sequence` (`name`, `seq`) VALUES ('receipts', ?)", arrayOf<Any?>(seq))
+            }
+
+            db.execSQL(notDuplicatesV8CreateSql("receipt_not_duplicates"))
+            db.execSQL(notDuplicatesV8IndexSql("receipt_not_duplicates"))
+
+            val after = V8_CHILD_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+            if (before != after) {
+                throw IllegalStateException("v8 への移行を中止しました: 件数が変わりました $before -> $after")
+            }
+            val fkAfter = db.receiptsFkViolations()
+            if (fkAfter > fkBefore) {
+                throw IllegalStateException("v8 への移行を中止しました: receipts との外部キーの違反が増えました $fkBefore -> $fkAfter")
+            }
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(
+        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+    )
 }

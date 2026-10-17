@@ -1,5 +1,6 @@
 package com.amgm.personallog.receipt
 
+import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.model.ReceiptStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -133,5 +134,46 @@ class ReceiptParserTest {
         assertEquals("2026-01-01", r2.purchasedAt)
         assertEquals("oops", r2.rawJson)
         assertTrue(items2.isEmpty())
+    }
+
+    private val noTotal = """{"date":"2026-10-09","time":"18:32","store":"スーパーA","items":[{"name":"牛乳","amount":198,"category":"食費"}],"total":null}"""
+
+    @Test
+    fun mapperLeavesTotalNullWhenNotRead_andDoesNotFillFromItems() {
+        val parsed = success(noTotal)
+        assertNull(parsed.total)
+        val (r, items) = ReceiptMapper.draftReceipt(ScanOutcome.Parsed(parsed, noTotal), "receipts/a.jpg", 1L, today = "2026-01-01")
+        assertNull(r.totalAmount)
+        assertEquals(TotalSource.UNKNOWN, r.totalSource)
+        assertEquals(1, items.size)
+        // total のキーが無い場合も同じ
+        val missingKey = """{"date":"2026-10-09","store":"A","items":[{"name":"牛乳","amount":198}]}"""
+        val (r2, _) = ReceiptMapper.draftReceipt(ScanOutcome.Parsed(success(missingKey), missingKey), "a.jpg", 1L, today = "2026-01-01")
+        assertNull(r2.totalAmount)
+    }
+
+    @Test
+    fun mapperMarksReadTotalAsPrinted() {
+        val (r, _) = ReceiptMapper.draftReceipt(ScanOutcome.Parsed(success(sample), sample), "receipts/a.jpg", 1L, today = "2026-01-01")
+        assertEquals(748, r.totalAmount)
+        assertEquals(TotalSource.PRINTED, r.totalSource)
+    }
+
+    @Test
+    fun mapperUsesNullTotalForUnparsableAndFailed() {
+        val (u, _) = ReceiptMapper.draftReceipt(ScanOutcome.Unparsable("oops", "x"), "a.jpg", 1L, today = "2026-01-01")
+        assertNull(u.totalAmount)
+        assertEquals(TotalSource.UNKNOWN, u.totalSource)
+        val (f, _) = ReceiptMapper.draftReceipt(ScanOutcome.Failed("通信エラー"), "a.jpg", 1L, today = "2026-01-01")
+        assertNull(f.totalAmount)
+        assertEquals(TotalSource.UNKNOWN, f.totalSource)
+    }
+
+    @Test
+    fun printedTotalIsReadFromRawJson() {
+        assertEquals(748, ReceiptMapper.printedTotal(sample))
+        assertNull(ReceiptMapper.printedTotal(noTotal))
+        assertNull(ReceiptMapper.printedTotal(""))
+        assertNull(ReceiptMapper.printedTotal("not json"))
     }
 }

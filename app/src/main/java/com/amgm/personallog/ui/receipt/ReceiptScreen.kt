@@ -366,7 +366,13 @@ private fun ReceiptSlip(r: Receipt, isDuplicate: Boolean, onClick: () -> Unit) {
             )
         }
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-            Text(formatYen(r.totalAmount.toLong()), style = AppTheme.type.numeralL, color = AppTheme.colors.ink)
+            val total = r.totalAmount
+            if (total == null) {
+                // 合計が空(下書き)。0円と区別して警告色で出す
+                Text("合計 未入力", style = AppTheme.type.numeral, color = AppTheme.colors.danger)
+            } else {
+                Text(formatYen(total.toLong()), style = AppTheme.type.numeralL, color = AppTheme.colors.ink)
+            }
             if (isDuplicate) Stamp("重複の可能性", tone = StampTone.Danger)
             if (r.status == ReceiptStatus.DRAFT) {
                 Stamp("未確定", tone = StampTone.Accent)

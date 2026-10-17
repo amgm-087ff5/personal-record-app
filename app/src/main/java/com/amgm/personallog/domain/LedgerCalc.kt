@@ -73,7 +73,7 @@ object LedgerCalc {
         val group = ExpenseGroup(
             date = date,
             time = time,
-            amount = receipt.totalAmount,
+            amount = requireNotNull(receipt.totalAmount) { "合計が未入力のレシートは家計簿にできません(id=${receipt.id})" },
             category = items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED,
             memo = receipt.storeName,
             receiptId = receipt.id,
@@ -95,7 +95,11 @@ object LedgerCalc {
     ): List<Expense> {
         val (date, time) = splitPurchasedAt(receipt.purchasedAt)
         val category = items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED
-        val paidTotal = if (items.isEmpty()) receipt.totalAmount.toLong() else TaxCalc.paidYen(items)
+        val paidTotal = if (items.isEmpty()) {
+            requireNotNull(receipt.totalAmount) { "合計が未入力のレシートは家計簿にできません(id=${receipt.id})" }.toLong()
+        } else {
+            TaxCalc.paidYen(items)
+        }
 
         if (!receipt.isAdvance && perItem && items.isNotEmpty()) {
             val paid = TaxCalc.paidYenPerItem(items)

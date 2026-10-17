@@ -7,7 +7,9 @@ import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.domain.TaxBreakdown
 import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.receipt.ReceiptCalc
 import com.amgm.personallog.receipt.ReceiptDedup
@@ -93,6 +95,24 @@ private fun UnitRow.toForm(key: Long) = ItemForm(
     priceIncludesTax = priceIncludesTax,
 )
 
+/** 重複の相手(警告の表示と「重複ではない」の保存に使う)。 */
+data class DuplicateRef(val id: Long, val summary: String)
+
+/** items から求めた計算結果。 */
+private class ItemsCalc(val items: List<ItemForm>, val sum: Long, val breakdown: TaxBreakdown)
+
+/** 直近1件だけ覚える。copy() で items の参照が変わらない限り(合計欄や日付の入力など)、再計算しない。 */
+private object ItemsCalcCache {
+    @Volatile
+    private var last: ItemsCalc? = null
+
+    fun of(items: List<ItemForm>): ItemsCalc {
+        last?.let { if (it.items === items) return it }
+        val models = items.map { it.toItemModel() }
+        return ItemsCalc(items, TaxCalc.paidYen(models), TaxCalc.breakdownByRate(models)).also { last = it }
+    }
+}
+
 data class DetailUiState(
     val loading: Boolean = true,
     val notFound: Boolean = false,
@@ -103,7 +123,12 @@ data class DetailUiState(
     val date: String = "",
     val time: String = "",
     val store: String = "",
+    /** 合計欄の入力値。空文字は未入力(null)。 */
     val total: String = "",
+    /** 合計の出所(TotalSource)。合計欄を手で編集したら manual。 */
+    val totalSource: String = TotalSource.UNKNOWN,
+    /** 読み取り(rawJson)で LLM が読んだ印字の合計。上書きの確認で見せる。読めなければ null。 */
+    val printedTotal: Int? = null,
     val items: List<ItemForm> = emptyList(),
     /** 立て替え(自分が払った。他の人の分を含む)かどうか。 */
     val isAdvance: Boolean = false,
@@ -116,15 +141,15 @@ data class DetailUiState(
     val finished: Boolean = false,
     /** 原本画像のハッシュ。保存時に引き継ぐ(フォームからは変えない)。 */
     val imageHash: String? = null,
-    /** 同じ内容の別レシートがある場合、その要約(警告表示用)。 */
-    val possibleDuplicate: String? = null,
-    /** 確定時に同じ内容の確定済みレシートが見つかった場合、その要約(確認ダイアログ用)。 */
-    val duplicateWarning: String? = null,
+    /** 重複の可能性がある先行のレシート(「重複ではない」の組は除く)。警告カードに相手ごとに出す。 */
+    val possibleDuplicates: List<DuplicateRef> = emptyList(),
+    /** 確定時に重複の候補の確定済みレシートが見つかった場合、その相手(確認ダイアログ用)。空なら出さない。 */
+    val duplicateWarning: List<DuplicateRef> = emptyList(),
+    /** 確定しようとしたが合計が未入力のとき true(「合計が未入力です」の確認用)。 */
+    val missingTotalPrompt: Boolean = false,
 ) {
-    private val models: List<ReceiptItem> get() = items.map { it.toItemModel() }
-
-    /** 税込の支払総額(品目ごとの税込価格の合計、円は切り捨て)。 */
-    val itemsSum: Long get() = TaxCalc.paidYen(models)
+    /** 税込の支払総額(品目ごとの税込価格の合計、円は切り捨て)。items が変わったときだけ計算する。 */
+    val itemsSum: Long get() = ItemsCalcCache.of(items).sum
 
     /** 自分の払う分(円)。立て替えでなければ支払総額と同じ。立て替えで未入力なら支払総額の全額。 */
     val ownTotal: Long
@@ -140,6 +165,20 @@ data class DetailUiState(
             val diff = t.toLong() - itemsSum
             return if (diff == 0L) null else diff
         }
+
+    /** 合計欄が未入力(数字として読めない)か。 */
+    val totalMissing: Boolean get() = total.toIntOrNull() == null
+
+    /** 税率ごとの税抜・税額の内訳(最上部のダッシュボード用)。 */
+    val taxBreakdown: TaxBreakdown get() = ItemsCalcCache.of(items).breakdown
+
+    /**
+     * 「¥N を合計に入れる」ボタンを出すか。品目が1件以上あり、合計欄が空か、品目の計算合計と1円でも違うとき。
+     */
+    val canUseItemsSum: Boolean get() = items.isNotEmpty() && (totalMissing || mismatch != null)
+
+    /** ボタンを押したとき、印字の合計を上書きするので確認が要るか(合計欄に値があるとき)。 */
+    val useItemsSumNeedsConfirm: Boolean get() = !totalMissing
 }
 
 @HiltViewModel
@@ -153,6 +192,13 @@ class ReceiptDetailViewModel @Inject constructor(
     private val receiptId: Long = savedStateHandle.get<Long>("id") ?: 0L
     private var nextKey = 1L
 
+    /** 読み込んだレシート。フォームに無い列(回転・トリミングなど)を保存で失わないよう、これを土台にする。 */
+    private var loadedReceipt: Receipt? = null
+
+    /** 重複の判定に使う、このレシート以外の保存済みレシートと「重複ではない」の組(読み込み時に取得)。 */
+    private var otherReceipts: List<Receipt> = emptyList()
+    private var notDuplicateSet: MutableSet<Pair<Long, Long>> = HashSet()
+
     private val _state = MutableStateFlow(DetailUiState())
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
 
@@ -165,21 +211,27 @@ class ReceiptDetailViewModel @Inject constructor(
             }
             val items = repository.getItems(receiptId)
             val (d, t) = splitPurchasedAt(r.purchasedAt)
-            val original = ReceiptDedup.laterDuplicates(repository.allReceipts())[receiptId]
+            loadedReceipt = r
+            notDuplicateSet = HashSet(ReceiptDedup.notDuplicateSet(repository.notDuplicates()))
+            otherReceipts = repository.allReceipts().filter { it.id != r.id }
+            val earlier = ReceiptDedup.earlierDuplicates(r, otherReceipts, notDuplicateSet)
             _state.value = DetailUiState(
                 loading = false,
                 imagePath = r.imagePath,
                 rawJson = r.rawJson,
                 createdAt = r.createdAt,
                 imageHash = r.imageHash,
-                possibleDuplicate = original?.let { ReceiptDedup.summary(it) },
+                possibleDuplicates = earlier.map { DuplicateRef(it.id, ReceiptDedup.summary(it)) },
                 confirmed = r.status == ReceiptStatus.CONFIRMED,
                 isAdvance = r.isAdvance,
                 ownAmount = r.ownAmount?.toString().orEmpty(),
                 date = d,
                 time = t,
                 store = r.storeName,
-                total = r.totalAmount.toString(),
+                // 未入力(null)は空文字。"null" という文字列にしない
+                total = r.totalAmount?.toString().orEmpty(),
+                totalSource = r.totalSource,
+                printedTotal = ReceiptMapper.printedTotal(r.rawJson),
                 items = items.map { it.toForm(newKey()) },
             )
         }
@@ -187,13 +239,42 @@ class ReceiptDetailViewModel @Inject constructor(
 
     private fun newKey(): Long = nextKey++
 
+    /**
+     * 重複の警告を、いまの入力(日付・時刻・合計)で計算し直す。保存済みの「重複ではない」の組も考慮する。
+     * 読み込み前(loadedReceipt が null)は何もしない。
+     */
+    private fun recomputeDuplicates() {
+        val base = loadedReceipt ?: return
+        _state.update { s ->
+            val current = base.copy(
+                purchasedAt = ReceiptMapper.purchasedAt(s.date.trim(), s.time.trim()),
+                totalAmount = s.total.toIntOrNull(),
+            )
+            val earlier = ReceiptDedup.earlierDuplicates(current, otherReceipts, notDuplicateSet)
+            s.copy(possibleDuplicates = earlier.map { DuplicateRef(it.id, ReceiptDedup.summary(it)) })
+        }
+    }
+
     private fun splitPurchasedAt(s: String): Pair<String, String> =
         s.take(10) to s.drop(10).trim()
 
-    fun setDate(v: String) = _state.update { it.copy(date = v) }
-    fun setTime(v: String) = _state.update { it.copy(time = v) }
+    fun setDate(v: String) {
+        _state.update { it.copy(date = v) }
+        recomputeDuplicates()
+    }
+    fun setTime(v: String) {
+        _state.update { it.copy(time = v) }
+        recomputeDuplicates()
+    }
     fun setStore(v: String) = _state.update { it.copy(store = v) }
-    fun setTotal(v: String) = _state.update { it.copy(total = v.filter { c -> c.isDigit() || c == '-' }) }
+    /**
+     * 合計欄を手で編集した。出所は manual にする。空にしても manual のまま(画面の警告を
+     * 「読み取れませんでした」ではなく「未入力です」にするため。保存では空なら unknown に戻る)。
+     */
+    fun setTotal(v: String) {
+        _state.update { it.copy(total = v.filter { c -> c.isDigit() || c == '-' }, totalSource = TotalSource.MANUAL) }
+        recomputeDuplicates()
+    }
     fun setAdvance(v: Boolean) = _state.update { it.copy(isAdvance = v) }
     fun setOwnAmount(v: String) = _state.update { it.copy(ownAmount = v.filterAmount()) }
 
@@ -254,8 +335,11 @@ class ReceiptDetailViewModel @Inject constructor(
     /** 同じ品目のまとまりごと削除する。 */
     fun removeGroup(keys: Set<Long>) = _state.update { s -> s.copy(items = s.items.filterNot { it.key in keys }) }
 
-    /** 品目合計を total に反映する。 */
-    fun useItemsSumAsTotal() = _state.update { it.copy(total = it.itemsSum.toString()) }
+    /** 品目の計算合計(税込の支払合計)を合計に入れる。出所は items。 */
+    fun useItemsSumAsTotal() {
+        _state.update { it.copy(total = it.itemsSum.toString(), totalSource = TotalSource.ITEMS) }
+        recomputeDuplicates()
+    }
 
     fun dismissError() = _state.update { it.copy(error = null) }
     fun dismissInfo() = _state.update { it.copy(info = null) }
@@ -290,12 +374,18 @@ class ReceiptDetailViewModel @Inject constructor(
             return null
         }
         val items = s.items.map { it.toItemModel(receiptId) }
-        val total = s.total.toIntOrNull() ?: TaxCalc.paidYen(items).toInt()
-        val receipt = Receipt(
+        val base = loadedReceipt ?: run {
+            _state.update { it.copy(error = "レシートを読み込めていないため保存できません。") }
+            return null
+        }
+        // 合計は補完しない。空なら null のまま(下書きは保存できる。確定は startConfirm で止める)
+        val total = s.total.toIntOrNull()
+        val receipt = base.copy(
             id = receiptId,
             purchasedAt = ReceiptMapper.purchasedAt(date, time),
             storeName = s.store.trim(),
             totalAmount = total,
+            totalSource = if (total == null) TotalSource.UNKNOWN else s.totalSource,
             imagePath = s.imagePath,
             rawJson = s.rawJson,
             status = if (s.confirmed) ReceiptStatus.CONFIRMED else ReceiptStatus.DRAFT,
@@ -326,34 +416,84 @@ class ReceiptDetailViewModel @Inject constructor(
 
     /**
      * 確定: レシート・品目を保存し、家計簿(Expense)を作り直す。
-     * 同じ内容(日付・店名・合計)の確定済みレシートが既にあれば、確認ダイアログを出して止める(既定はキャンセル)。
+     * 合計が空なら確認(missingTotalPrompt)を出して止める。
+     * 重複の候補(時刻5分以内+同じ合計。「重複ではない」の組は除く)の確定済みレシートが既にあれば、確認を出して止める(既定はキャンセル)。
      */
     fun confirm() = startConfirm(checkDuplicate = true)
 
-    /** 重複確認ダイアログで「追加する」を選んだときの確定。 */
+    /** 重複確認で「追加する」を選んだときの確定。 */
     fun confirmAnyway() {
-        _state.update { it.copy(duplicateWarning = null) }
+        _state.update { it.copy(duplicateWarning = emptyList()) }
         startConfirm(checkDuplicate = false)
     }
 
-    fun dismissDuplicateWarning() = _state.update { it.copy(duplicateWarning = null) }
+    /** 重複確認で「重複ではない(今後表示しない)」を選んだとき: 組を保存して確定を続ける。 */
+    fun confirmMarkingNotDuplicate() {
+        val refs = _state.value.duplicateWarning
+        if (refs.isEmpty() || _state.value.busy) return
+        _state.update { it.copy(duplicateWarning = emptyList(), busy = true, error = null) }
+        viewModelScope.launch {
+            try {
+                refs.forEach {
+                    repository.markNotDuplicate(receiptId, it.id)
+                    notDuplicateSet.add(ReceiptDedup.pairOf(receiptId, it.id))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(busy = false, error = "保存に失敗しました: ${e.message.orEmpty()}") }
+                return@launch
+            }
+            _state.update { it.copy(busy = false) }
+            startConfirm(checkDuplicate = false)
+        }
+    }
+
+    fun dismissDuplicateWarning() = _state.update { it.copy(duplicateWarning = emptyList()) }
+
+    /** 「合計が未入力です」で「品目の合計 ¥N を入れて確定」を選んだとき。 */
+    fun confirmWithItemsSum() {
+        _state.update { it.copy(missingTotalPrompt = false) }
+        if (_state.value.items.isEmpty()) return
+        useItemsSumAsTotal()
+        startConfirm(checkDuplicate = true)
+    }
+
+    fun dismissMissingTotal() = _state.update { it.copy(missingTotalPrompt = false) }
+
+    /** 詳細画面の警告カードで「重複ではない」を押した: 相手との組を保存し、その警告を消す。 */
+    fun markNotDuplicate(otherId: Long) {
+        viewModelScope.launch {
+            try {
+                repository.markNotDuplicate(receiptId, otherId)
+                notDuplicateSet.add(ReceiptDedup.pairOf(receiptId, otherId))
+                _state.update { s -> s.copy(possibleDuplicates = s.possibleDuplicates.filterNot { it.id == otherId }) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = "保存に失敗しました: ${e.message.orEmpty()}") }
+            }
+        }
+    }
 
     private fun startConfirm(checkDuplicate: Boolean) {
         if (_state.value.busy) return
         val built = buildFromForm(strict = true) ?: return
+        if (built.first.totalAmount == null) {
+            _state.update { it.copy(missingTotalPrompt = true) }
+            return
+        }
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             try {
                 if (checkDuplicate) {
-                    val key = ReceiptDedup.keyOf(built.first)
-                    val dup = if (key == null) {
-                        null
-                    } else {
-                        val confirmed = repository.allReceipts().filter { it.status == ReceiptStatus.CONFIRMED }
-                        ReceiptDedup.sameContent(key, confirmed, receiptId).firstOrNull()
-                    }
-                    if (dup != null) {
-                        _state.update { it.copy(busy = false, duplicateWarning = ReceiptDedup.summary(dup)) }
+                    val notDup = ReceiptDedup.notDuplicateSet(repository.notDuplicates())
+                    val confirmed = repository.allReceipts().filter { it.status == ReceiptStatus.CONFIRMED }
+                    val dups = ReceiptDedup.sameContent(built.first, confirmed, notDup)
+                    if (dups.isNotEmpty()) {
+                        _state.update {
+                            it.copy(busy = false, duplicateWarning = dups.map { d -> DuplicateRef(d.id, ReceiptDedup.summary(d)) })
+                        }
                         return@launch
                     }
                 }
@@ -387,7 +527,10 @@ class ReceiptDetailViewModel @Inject constructor(
                             date = p.date ?: cur.date.ifBlank { LocalDate.now().toString() },
                             time = p.time.orEmpty(),
                             store = p.store,
-                            total = (p.total ?: ReceiptCalc.itemsSum(units.map { it.amount }).toInt()).toString(),
+                            // 合計は読めたときだけ入れる。読めなければ空(品目の合計で補完しない)
+                            total = p.total?.toString().orEmpty(),
+                            totalSource = if (p.total != null) TotalSource.PRINTED else TotalSource.UNKNOWN,
+                            printedTotal = p.total,
                             items = units.map { it.toForm(newKey()) },
                             info = "読み取りました。内容を確認してください。",
                         )
@@ -396,11 +539,13 @@ class ReceiptDetailViewModel @Inject constructor(
                         busy = false,
                         scanning = false,
                         rawJson = outcome.raw,
+                        printedTotal = null,
                         error = "読み取り結果を解釈できませんでした。手入力で修正してください。",
                     )
                     is ScanOutcome.Failed -> cur.copy(busy = false, scanning = false, error = outcome.message)
                 }
             }
+            recomputeDuplicates()
         }
     }
 
