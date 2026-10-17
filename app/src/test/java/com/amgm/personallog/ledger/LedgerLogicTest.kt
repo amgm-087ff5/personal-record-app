@@ -84,8 +84,9 @@ class LedgerLogicTest {
         assertEquals(listOf(11L, 12L), g.items.map { it.id })
         assertEquals(700L, g.itemSum)
         assertEquals(300L, g.difference)
+        // グループは品目ごとのカテゴリで数える: 食費400 + 日用品300、差額300はグループのカテゴリ(食費)へ
         assertEquals(
-            listOf("その他" to 50L, "食費" to 1000L),
+            listOf("その他" to 50L, "日用品" to 300L, "食費" to 700L),
             LedgerLogic.totalsByCategory(entries).map { it.category to it.total }.sortedBy { it.second },
         )
     }
