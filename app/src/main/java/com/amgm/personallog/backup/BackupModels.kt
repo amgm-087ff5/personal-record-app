@@ -358,6 +358,8 @@ fun remapReceiptItemId(backupItemId: Long?, itemIdMap: Map<Long, Long>): Long? =
 /**
  * 復元(マージ)で、バックアップの支払いグループが既存のどれに当たるかを探す(純Kotlin)。
  * uid があれば uid で照合する。uid が無い(形式5以前の)グループは従来のキー(日付・金額・カテゴリ・メモ・レシート)で照合する。
+ * uid が一致しなくても、同じレシートに属するグループ(entity.receiptId がある)は従来のキーでも照合する
+ * (別の端末で確定して uid が違うだけの同じ支払いを、二重に登録しない)。
  */
 class GroupMergeIndex(existing: List<ExpenseGroup>) {
     private data class Key(val date: String, val amount: Int, val category: String, val memo: String, val receiptId: Long?)
@@ -380,8 +382,12 @@ class GroupMergeIndex(existing: List<ExpenseGroup>) {
      * backup が既存に当たれば既存の id。当たらなければ null。
      * @param entity バックアップのグループを復元後のレシート id などに直した実体(uid は backupUid を入れておく)
      */
-    fun find(backupUid: String, entity: ExpenseGroup): Long? =
-        if (backupUid.isNotEmpty()) byUid[backupUid] else byKey[keyOf(entity)]
+    fun find(backupUid: String, entity: ExpenseGroup): Long? {
+        if (backupUid.isEmpty()) return byKey[keyOf(entity)]
+        byUid[backupUid]?.let { return it }
+        // uid は違うが同じレシートの支払い: 従来のキーでも照合する
+        return if (entity.receiptId != null) byKey[keyOf(entity)] else null
+    }
 
     /** 新しく入れたグループを登録する(同じバックアップ内の重複にも効く)。 */
     fun add(entity: ExpenseGroup, newId: Long) = register(entity, newId)
@@ -390,6 +396,7 @@ class GroupMergeIndex(existing: List<ExpenseGroup>) {
 /**
  * 復元(マージ)で、バックアップの支出が既存と重複しているかを判定する(純Kotlin)。
  * uid があれば uid で照合する。uid が無い(形式5以前の)支出は従来のキー(日付・金額・カテゴリ・メモ・レシート・グループ)の件数ベースで照合する。
+ * uid が一致しなくても、同じレシートに属する支出(復元後の receiptId がある)は従来のキーの件数ベースでも照合する。
  */
 class ExpenseMergeIndex(existing: List<Expense>) {
     private data class Key(
@@ -417,14 +424,24 @@ class ExpenseMergeIndex(existing: List<Expense>) {
      * @param mappedReceiptId / mappedGroupId 復元後の id に付け替えたもの
      */
     fun isDuplicate(e: BackupExpense, mappedReceiptId: Long?, mappedGroupId: Long?): Boolean {
-        if (e.uid.isNotEmpty()) return !uids.add(e.uid)
         val k = Key(e.date, e.amount, e.category, e.memo, mappedReceiptId, mappedGroupId)
-        val left = remaining[k] ?: 0
-        if (left > 0) {
-            remaining[k] = left - 1
-            return true
+        if (e.uid.isNotEmpty()) {
+            if (!uids.add(e.uid)) {
+                // 同じ uid の既存の行に当たった。その行は従来のキーの数からも1つ引く(別の uid の行が同じ行に当たらないように)
+                consume(k)
+                return true
+            }
+            // uid は初めて。ただし同じレシートの支払いなら、従来のキーの件数でも照合する
+            return mappedReceiptId != null && consume(k)
         }
-        return false
+        return consume(k)
+    }
+
+    private fun consume(k: Key): Boolean {
+        val left = remaining[k] ?: 0
+        if (left <= 0) return false
+        remaining[k] = left - 1
+        return true
     }
 }
 

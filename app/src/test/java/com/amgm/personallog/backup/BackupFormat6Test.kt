@@ -85,9 +85,33 @@ class BackupFormat6Test {
         // uid が同じなら、メモが違っても同じ支払い
         val incoming = group.copy(id = 0, memo = "スーパー")
         assertEquals(100L, idx.find("g-uid-1", incoming))
-        // uid が違えば、他の欄が全部同じでも別の支払い
-        val sameFields = group.copy(id = 0, memo = "別の名前に直した")
-        assertNull(idx.find("other", sameFields))
+        // uid が違えば、他の欄が全部同じでも別の支払い(レシートに属さない手入力のグループ)
+        val manual = GroupMergeIndex(listOf(group.copy(id = 100, receiptId = null, memo = "別の名前に直した")))
+        assertNull(manual.find("other", group.copy(id = 0, receiptId = null, memo = "別の名前に直した")))
+    }
+
+    @Test
+    fun groupMerge_differentUidButSameReceipt_fallsBackToLegacyKey() {
+        // 別の端末で確定して uid が違うだけの、同じレシートの支払いは二重に登録しない
+        val idx = GroupMergeIndex(listOf(group.copy(id = 100, uid = "device-b")))
+        assertEquals(100L, idx.find("g-uid-1", group.copy(id = 0)))
+        // 従来のキーも違えば別の支払い
+        assertNull(idx.find("g-uid-1", group.copy(id = 0, amount = 1)))
+    }
+
+    @Test
+    fun expenseMerge_differentUidButSameReceipt_fallsBackToLegacyKeyByCount() {
+        val ex = Expense(
+            date = "2026-10-05", time = "12:30", amount = 250, category = "食費", memo = "m", receiptId = 50, groupId = 60,
+            createdAt = 0, uid = "device-b-1",
+        )
+        val idx = ExpenseMergeIndex(listOf(ex, ex.copy(uid = "device-b-2")))
+        assertTrue(idx.isDuplicate(backupExpense("a-1"), 50, 60))
+        assertTrue(idx.isDuplicate(backupExpense("a-2"), 50, 60))
+        assertFalse(idx.isDuplicate(backupExpense("a-3"), 50, 60)) // 3件目は件数が足りず新規
+        // レシートに属さない(復元後の receiptId が無い)行は、uid が違えば別の行
+        val manual = ExpenseMergeIndex(listOf(ex.copy(receiptId = null, groupId = null)))
+        assertFalse(manual.isDuplicate(backupExpense("z"), null, null))
     }
 
     @Test
