@@ -178,6 +178,17 @@ fun ReceiptScreen(
         }
     }
 
+    // 重複の確認が済み、コピー中の項目も無くなったら、向き・範囲の確認画面(毎回出す)
+    if (pending.isEmpty() && state.adjustReady) {
+        ReceiptAdjustImportDialog(
+            items = state.adjustItems,
+            onChange = viewModel::setAdjust,
+            onAnalyze = viewModel::analyzeAdjusted,
+            onAnalyzeWithout = viewModel::analyzeWithoutAdjust,
+            onCancel = viewModel::cancelAdjust,
+        )
+    }
+
     if (pending.isNotEmpty()) {
         DuplicateSheet(
             pending = pending,
@@ -238,7 +249,7 @@ private fun ImportPanel(
 ) {
     val c = AppTheme.colors
     val total = imports.size
-    val done = imports.count { it.phase == ImportPhase.DONE || it.phase == ImportPhase.DUPLICATE_SKIPPED }
+    val done = imports.count { it.phase == ImportPhase.DONE || it.phase == ImportPhase.DUPLICATE_SKIPPED || it.phase == ImportPhase.CANCELLED }
     val failed = imports.count { it.phase == ImportPhase.FAILED }
     val anyActive = imports.any { it.phase.active }
     val fraction = if (total == 0) 0f else (done + failed).toFloat() / total
@@ -285,6 +296,8 @@ private fun statusText(item: ImportItem): String = when (item.phase) {
     ImportPhase.FAILED -> "失敗: ${item.message.orEmpty()}(タップで再試行)"
     ImportPhase.DUPLICATE_PENDING -> "重複の可能性(確認待ち)"
     ImportPhase.DUPLICATE_SKIPPED -> "重複スキップ"
+    ImportPhase.ADJUST_PENDING -> "向き・範囲の確認待ち"
+    ImportPhase.CANCELLED -> "取り消し"
 }
 
 /**

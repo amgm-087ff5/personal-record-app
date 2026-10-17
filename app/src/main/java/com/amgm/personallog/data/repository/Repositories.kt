@@ -76,6 +76,11 @@ class ReceiptRepository @Inject constructor(
         receiptDao.setImageHashIfMissing(id, hash)
     }
 
+    /** 補正値の列だけを更新する(他の項目は変えない)。 */
+    suspend fun setAdjust(id: Long, a: com.amgm.personallog.receipt.ReceiptAdjust) {
+        receiptDao.setAdjust(id, a.rotationDegrees, a.cropLeft, a.cropTop, a.cropRight, a.cropBottom)
+    }
+
     /** 「重複ではない」と判断した組を保存する(小さい id を Low に正規化。同じ id や保存済みの組は何もしない)。 */
     suspend fun markNotDuplicate(idA: Long, idB: Long, now: Long = System.currentTimeMillis()) {
         val pair = ReceiptNotDuplicate.of(idA, idB, now) ?: return

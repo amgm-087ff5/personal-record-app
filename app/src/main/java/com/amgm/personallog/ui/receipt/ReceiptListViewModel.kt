@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptDedup
 import com.amgm.personallog.receipt.ReceiptImageHash
 import com.amgm.personallog.receipt.ReceiptImageStore
@@ -54,6 +55,10 @@ enum class ImportPhase(val active: Boolean) {
     DUPLICATE_PENDING(true),
     /** 重複としてスキップ(起票せず、コピーした画像も削除済み) */
     DUPLICATE_SKIPPED(false),
+    /** コピーと重複確認が済み、向き・範囲の確認画面での補正待ち。解析はまだしていない */
+    ADJUST_PENDING(true),
+    /** 補正画面で取り消した(起票せず、コピーした画像も削除済み) */
+    CANCELLED(false),
 }
 
 data class ImportItem(
@@ -71,12 +76,28 @@ data class ImportItem(
     val addAnyway: Boolean = false,
     /** 1枚だけの取り込みなら、読み取り後に詳細画面を開く */
     val autoOpen: Boolean = false,
-)
+    /** 補正画面で決めた回転・トリミング。解析と下書き保存で使う */
+    val adjust: ReceiptAdjust = ReceiptAdjust.NONE,
+) {
+    /** 補正画面の前の段階(待機・コピー・重複確認)にいるか。解析済みの再試行は含まない。 */
+    val beforeAdjust: Boolean
+        get() = phase == ImportPhase.PREPARING || (phase == ImportPhase.WAITING && imagePath == null)
+}
 
 data class ReceiptListUiState(
     val imports: List<ImportItem> = emptyList(),
     val error: String? = null,
-)
+) {
+    /** 補正待ちの項目(取り込み順)。 */
+    val adjustItems: List<ImportItem> get() = imports.filter { it.phase == ImportPhase.ADJUST_PENDING }
+
+    /**
+     * 補正画面を出してよいか。重複の確認待ちが先に解決され、コピー中の項目も無くなってから出す。
+     */
+    val adjustReady: Boolean
+        get() = adjustItems.isNotEmpty() &&
+            imports.none { it.phase == ImportPhase.DUPLICATE_PENDING || it.beforeAdjust }
+}
 
 /** 取り込み元。写真ピッカーの Uri、または撮影で既に filesDir に保存した相対パス。 */
 private class ImportSource(val uri: Uri? = null, val relativePath: String? = null)
@@ -169,8 +190,10 @@ class ReceiptListViewModel @Inject constructor(
         for (item in pending) {
             val rel = item.imagePath
             if (addChecked && item.addAnyway && rel != null) {
-                patchItem(item.key) { it.copy(addAnyway = false, duplicateNote = null) }
-                launchAnalyze(item.key, rel, item.imageHash)
+                // 「それでも追加」も補正画面を通してから解析する
+                patchItem(item.key) {
+                    it.copy(addAnyway = false, duplicateNote = null, phase = ImportPhase.ADJUST_PENDING)
+                }
             } else {
                 sources.remove(item.key)
                 patchItem(item.key) {
@@ -178,6 +201,46 @@ class ReceiptListViewModel @Inject constructor(
                 }
                 if (rel != null) viewModelScope.launch(Dispatchers.IO) { store.delete(rel) }
             }
+        }
+    }
+
+    /** 補正画面で1枚の補正値を変える(補正待ちの項目だけ)。 */
+    fun setAdjust(key: Long, adjust: ReceiptAdjust) {
+        patchItem(key) { if (it.phase == ImportPhase.ADJUST_PENDING) it.copy(adjust = adjust.sanitized()) else it }
+    }
+
+    /** 「この補正で解析」: 補正待ちの全項目を、それぞれの補正で解析へ進める。 */
+    fun analyzeAdjusted() = startAnalysis(clearAdjust = false)
+
+    /** 「補正なしで全部解析」: 補正値を捨てて、補正待ちの全項目を解析へ進める。 */
+    fun analyzeWithoutAdjust() = startAnalysis(clearAdjust = true)
+
+    private fun startAnalysis(clearAdjust: Boolean) {
+        val pending = _state.value.adjustItems.filter { it.imagePath != null }
+        val keys = pending.map { it.key }.toSet()
+        // 補正画面が途中で崩れないよう、全項目を一度に待機へ移す
+        _state.update { s ->
+            s.copy(imports = s.imports.map {
+                if (it.key in keys) {
+                    it.copy(phase = ImportPhase.WAITING, adjust = if (clearAdjust) ReceiptAdjust.NONE else it.adjust)
+                } else it
+            })
+        }
+        for (item in pending) {
+            val rel = item.imagePath ?: continue
+            launchAnalyze(item.key, rel, item.imageHash)
+        }
+    }
+
+    /** 「取り消し」: 補正待ちの全項目の取り込みをやめ、コピーした画像を消す。 */
+    fun cancelAdjust() {
+        val pending = _state.value.adjustItems
+        for (item in pending) {
+            val rel = item.imagePath
+            sources.remove(item.key)
+            claimedHashes.values.remove(item.key)
+            patchItem(item.key) { it.copy(phase = ImportPhase.CANCELLED, imagePath = null) }
+            if (rel != null) viewModelScope.launch(Dispatchers.IO) { store.delete(rel) }
         }
     }
 
@@ -211,15 +274,17 @@ class ReceiptListViewModel @Inject constructor(
                     // 再試行: 既に保存済みの下書きを読み直す
                     analyze(key, rel, hash, existingId = savedId)
                 } else {
-                    val (path, h) = prepare(key, src) ?: return@launch
-                    analyze(key, path, h, existingId = 0L)
+                    // 重複確認まで済んだら、解析は補正画面の後(ADJUST_PENDING で止める)
+                    val (path, _) = prepare(key, src) ?: return@launch
+                    patchItem(key) { it.copy(phase = ImportPhase.ADJUST_PENDING, imagePath = path) }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 fail(key, "取り込み中にエラーが発生しました: ${e.message.orEmpty()}")
             } finally {
-                claimedHashes.values.remove(key)
+                // 補正待ちの間は同じ選択内の重複検出のため予約を残す(解析後・取り消しで外す)
+                if (find(key)?.phase != ImportPhase.ADJUST_PENDING) claimedHashes.values.remove(key)
                 src.uri?.let { inFlightUris.remove(it.toString()) }
             }
         }
@@ -234,6 +299,8 @@ class ReceiptListViewModel @Inject constructor(
                 throw e
             } catch (e: Throwable) {
                 fail(key, "読み取り中にエラーが発生しました: ${e.message.orEmpty()}")
+            } finally {
+                claimedHashes.values.remove(key)
             }
         }
     }
@@ -293,9 +360,10 @@ class ReceiptListViewModel @Inject constructor(
     /** Claude で解析して下書きを保存する。existingId があればその下書きを上書きする(読み直し)。 */
     private suspend fun analyze(key: Long, rel: String, hash: String?, existingId: Long) {
         patchItem(key) { it.copy(phase = ImportPhase.WAITING, message = null) }
+        val adjust = find(key)?.adjust ?: ReceiptAdjust.NONE
         val (result, id) = scanLimiter.withPermit {
             patchItem(key) { it.copy(phase = ImportPhase.SCANNING) }
-            val scanned = scanner.scan(rel)
+            val scanned = scanner.scan(rel, adjust)
             val now = System.currentTimeMillis()
             val createdAt = if (existingId != 0L) (repository.getReceipt(existingId)?.createdAt ?: now) else now
             val (receipt, items) = ReceiptMapper.draftReceipt(
@@ -303,6 +371,7 @@ class ReceiptListViewModel @Inject constructor(
                 existingId = existingId,
                 imageHash = hash,
                 createdAt = createdAt,
+                adjust = adjust,
             )
             scanned to repository.save(receipt, items)
         }

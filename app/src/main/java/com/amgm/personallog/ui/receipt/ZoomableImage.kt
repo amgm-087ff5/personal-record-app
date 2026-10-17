@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptImageCodec
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.Label
@@ -53,10 +54,14 @@ private sealed interface ViewerLoad {
  * 戻るボタン・「閉じる」で閉じる。拡大・移動は [ZoomableImage] 参照。
  */
 @Composable
-fun ReceiptImageViewer(relativePath: String, onDismiss: () -> Unit) {
+fun ReceiptImageViewer(
+    relativePath: String,
+    onDismiss: () -> Unit,
+    adjust: ReceiptAdjust = ReceiptAdjust.NONE,
+) {
     val context = LocalContext.current
-    val load by produceState<ViewerLoad>(initialValue = ViewerLoad.Loading, relativePath) {
-        value = loadViewerImage(File(context.filesDir, relativePath))
+    val load by produceState<ViewerLoad>(initialValue = ViewerLoad.Loading, relativePath, adjust) {
+        value = loadViewerImage(File(context.filesDir, relativePath), adjust)
             ?.let { ViewerLoad.Ready(it) }
             ?: ViewerLoad.Failed
     }
@@ -173,13 +178,13 @@ fun ZoomableImage(
 }
 
 /**
- * 原本を読み込む(IOスレッド)。長辺 2048px を上限に、EXIFの向きを補正して読む。
+ * 原本を読み込む(IOスレッド)。長辺 2048px を上限に、EXIFの向きと回転・トリミングを適用して読む。
  * メモリ不足(OutOfMemoryError)なら低い解像度で再試行する。失敗時 null。
  */
-private suspend fun loadViewerImage(file: File): ImageBitmap? = withContext(Dispatchers.IO) {
+private suspend fun loadViewerImage(file: File, adjust: ReceiptAdjust): ImageBitmap? = withContext(Dispatchers.IO) {
     for (side in VIEWER_MAX_SIDES) {
         try {
-            val bmp: Bitmap = ReceiptImageCodec.decodeScaled(file, side) ?: return@withContext null
+            val bmp: Bitmap = ReceiptImageCodec.decodeAdjusted(file, adjust, side) ?: return@withContext null
             return@withContext bmp.asImageBitmap()
         } catch (e: OutOfMemoryError) {
             // 次の低い解像度で再試行する

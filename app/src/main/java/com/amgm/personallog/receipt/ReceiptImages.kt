@@ -3,7 +3,10 @@ package com.amgm.personallog.receipt
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Matrix
+import android.graphics.Paint
 import android.media.ExifInterface
 import android.net.Uri
 import androidx.core.content.FileProvider
@@ -78,14 +81,66 @@ object ReceiptImageCodec {
     const val MAX_SIDE = 2048
     const val JPEG_QUALITY = 92
 
-    /** 送信用バイト列。閾値以下なら原本のまま、超えたら向きを補正して長辺 MAX_SIDE に縮小(メモリ上のみ)。 */
-    fun prepareForUpload(file: File): ByteArray {
-        if (file.length() <= RESIZE_THRESHOLD_BYTES) return file.readBytes()
-        val bmp = decodeScaled(file, MAX_SIDE) ?: return file.readBytes()
+    /**
+     * 送信用バイト列。次の3つをすべて満たすときだけ原本のバイト列をそのまま送る:
+     * EXIFの向きが通常 / 補正なし / 3.5MB以下。
+     * それ以外は「EXIF → 回転 → トリミング → 長辺 MAX_SIDE 以下」の順に変換してJPEG(品質92)にする(メモリ上のみ)。
+     */
+    fun prepareForUpload(file: File, adjust: ReceiptAdjust = ReceiptAdjust.NONE): ByteArray {
+        if (ReceiptGeometry.shouldSendOriginal(isExifNormal(file), adjust, file.length(), RESIZE_THRESHOLD_BYTES)) {
+            return file.readBytes()
+        }
+        val bmp = decodeAdjusted(file, adjust, MAX_SIDE) ?: return file.readBytes()
         val out = ByteArrayOutputStream()
         bmp.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
         bmp.recycle()
         return out.toByteArray()
+    }
+
+    /** EXIF の向きが通常(または記録なし)か。読めないときも通常として扱う。 */
+    fun isExifNormal(file: File): Boolean {
+        val o = exifOrientation(file)
+        return o == ExifInterface.ORIENTATION_NORMAL || o == ExifInterface.ORIENTATION_UNDEFINED
+    }
+
+    private fun exifOrientation(file: File): Int = try {
+        ExifInterface(file.path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+    } catch (e: Exception) {
+        ExifInterface.ORIENTATION_NORMAL
+    }
+
+    /**
+     * EXIFの向きを反映したうえで、回転・トリミングを適用したビットマップ(長辺 maxSide 以下)。
+     * 回転の基準は EXIF 適用後の画像で、二重にはかけない。90度単位以外の角度は外接矩形に描き、余白は白。
+     * 補正なしなら [decodeScaled] と同じ。失敗時 null。
+     */
+    fun decodeAdjusted(file: File, adjust: ReceiptAdjust, maxSide: Int): Bitmap? {
+        val a = adjust.sanitized()
+        if (a.isNone) return decodeScaled(file, maxSide)
+        val srcSide = if (a.isFullCrop) maxSide else minOf(maxSide * 2, 3072)
+        val src = decodeScaled(file, srcSide) ?: return null
+        try {
+            val (bw, bh) = ReceiptGeometry.boundingSize(src.width, src.height, a.rotationDegrees)
+            val r = ReceiptGeometry.cropToPixels(bw, bh, a.cropLeft, a.cropTop, a.cropRight, a.cropBottom)
+            val cw = r[2] - r[0]
+            val ch = r[3] - r[1]
+            val scale = minOf(1f, maxSide.toFloat() / maxOf(cw, ch))
+            val outW = maxOf(1, Math.round(cw * scale))
+            val outH = maxOf(1, Math.round(ch * scale))
+            val out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(out)
+            canvas.drawColor(Color.WHITE)
+            val m = Matrix()
+            m.postTranslate(-src.width / 2f, -src.height / 2f)
+            m.postRotate(a.rotationDegrees)
+            m.postTranslate(bw / 2f, bh / 2f)
+            m.postTranslate(-r[0].toFloat(), -r[1].toFloat())
+            m.postScale(outW.toFloat() / cw, outH.toFloat() / ch)
+            canvas.drawBitmap(src, m, Paint(Paint.FILTER_BITMAP_FLAG))
+            return out
+        } finally {
+            src.recycle()
+        }
     }
 
     /** EXIFの向きを反映し、長辺が maxSide を超えないように縮小したビットマップ。 */
@@ -104,12 +159,7 @@ object ReceiptImageCodec {
         val matrix = Matrix()
         val scale = maxSide.toFloat() / maxOf(bmp.width, bmp.height)
         if (scale < 1f) matrix.postScale(scale, scale)
-        val orientation = try {
-            ExifInterface(file.path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-        } catch (e: Exception) {
-            ExifInterface.ORIENTATION_NORMAL
-        }
-        when (orientation) {
+        when (exifOrientation(file)) {
             ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
             ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
             ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)

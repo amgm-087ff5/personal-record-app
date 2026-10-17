@@ -13,7 +13,9 @@ import com.amgm.personallog.domain.TaxBreakdown
 import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.receipt.ReceiptCalc
 import com.amgm.personallog.receipt.ReceiptDedup
+import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptImageStore
+import com.amgm.personallog.receipt.adjust
 import com.amgm.personallog.receipt.ReceiptMapper
 import com.amgm.personallog.receipt.ReceiptScanner
 import com.amgm.personallog.receipt.ReceiptUnits
@@ -132,6 +134,8 @@ data class DetailUiState(
     val duplicateWarning: List<DuplicateRef> = emptyList(),
     /** 確定しようとしたが合計が未入力のとき true(「合計が未入力です」の確認用)。 */
     val missingTotalPrompt: Boolean = false,
+    /** 保存してある画像の補正値(回転・トリミング)。 */
+    val adjust: ReceiptAdjust = ReceiptAdjust.NONE,
 ) {
     private val models: List<ReceiptItem> get() = items.map { it.toItemModel() }
 
@@ -215,6 +219,7 @@ class ReceiptDetailViewModel @Inject constructor(
                 totalSource = r.totalSource,
                 printedTotal = ReceiptMapper.printedTotal(r.rawJson),
                 items = items.map { it.toForm(newKey()) },
+                adjust = r.adjust(),
             )
         }
     }
@@ -347,6 +352,9 @@ class ReceiptDetailViewModel @Inject constructor(
             imageHash = s.imageHash,
             isAdvance = s.isAdvance,
             ownAmount = if (s.isAdvance) s.ownAmount.toIntOrNull() else null,
+            rotationDegrees = s.adjust.rotationDegrees,
+            cropLeft = s.adjust.cropLeft, cropTop = s.adjust.cropTop,
+            cropRight = s.adjust.cropRight, cropBottom = s.adjust.cropBottom,
         )
         return receipt to items
     }
@@ -458,13 +466,47 @@ class ReceiptDetailViewModel @Inject constructor(
         }
     }
 
+    /** 補正値(回転・トリミング)の列だけを保存する。フォームの入力内容は保存しない。 */
+    fun saveAdjust(adjust: ReceiptAdjust) {
+        persistAdjust(adjust, rescanAfter = false)
+    }
+
+    /** 補正値を保存してから、その補正で読み取り直す(フォームは結果で置き換わる)。 */
+    fun saveAdjustAndRescan(adjust: ReceiptAdjust) {
+        persistAdjust(adjust, rescanAfter = true)
+    }
+
+    private fun persistAdjust(adjust: ReceiptAdjust, rescanAfter: Boolean) {
+        if (_state.value.busy) return
+        val clean = adjust.sanitized()
+        _state.update { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            try {
+                repository.setAdjust(receiptId, clean)
+                loadedReceipt = loadedReceipt?.copy(
+                    rotationDegrees = clean.rotationDegrees,
+                    cropLeft = clean.cropLeft, cropTop = clean.cropTop,
+                    cropRight = clean.cropRight, cropBottom = clean.cropBottom,
+                )
+                _state.update {
+                    it.copy(busy = false, adjust = clean, info = if (rescanAfter) null else "向き・範囲を保存しました。")
+                }
+                if (rescanAfter) rescan()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(busy = false, error = "保存に失敗しました: ${e.message.orEmpty()}") }
+            }
+        }
+    }
+
     /** 画像をもう一度読み取り、フォームを結果で置き換える。 */
     fun rescan() {
         val s = _state.value
         if (s.busy || s.imagePath.isBlank()) return
         _state.update { it.copy(busy = true, scanning = true, error = null, info = null) }
         viewModelScope.launch {
-            val outcome = scanner.scan(s.imagePath)
+            val outcome = scanner.scan(s.imagePath, s.adjust)
             _state.update { cur ->
                 when (outcome) {
                     is ScanOutcome.Parsed -> {
