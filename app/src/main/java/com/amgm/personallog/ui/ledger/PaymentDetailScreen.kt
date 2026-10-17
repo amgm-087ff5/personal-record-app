@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,10 +64,13 @@ fun PaymentDetailScreen(
 ) {
     val s by viewModel.state.collectAsStateWithLifecycle()
     val c = AppTheme.colors
-    var editingGroup by remember { mutableStateOf(false) }
-    var editingItem by remember { mutableStateOf<Expense?>(null) }
-    var addingItem by remember { mutableStateOf(false) }
-    var deletingGroup by remember { mutableStateOf(false) }
+    // 編集中の状態は、画面の回転やプロセスの再生成でも失われないよう rememberSaveable で持つ
+    // (Expense は保存できないので id で持ち、表示のたびに最新の品目から引く)
+    var editingGroup by rememberSaveable { mutableStateOf(false) }
+    var editingItemId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var addingItem by rememberSaveable { mutableStateOf(false) }
+    var deletingGroup by rememberSaveable { mutableStateOf(false) }
+    val editingItem: Expense? = editingItemId?.let { id -> s.items.firstOrNull { it.id == id } }
 
     // 削除などで対象が無くなった(または開いた時点で無かった)ら戻る
     LaunchedEffect(s.finished, s.notFound) { if (s.finished || s.notFound) onBack() }
@@ -106,7 +110,7 @@ fun PaymentDetailScreen(
                     }
                 }
                 items(s.items.size, key = { "item-" + s.items[it].id }) { i ->
-                    ItemRow(s.items[i], onClick = { editingItem = s.items[i] })
+                    ItemRow(s.items[i], onClick = { editingItemId = s.items[i].id })
                 }
                 item(key = "sum") {
                     Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(top = Space.s)) {
@@ -151,7 +155,7 @@ fun PaymentDetailScreen(
                 }
             } else if (single != null) {
                 item(key = "single") {
-                    SingleBody(single, onEdit = { editingItem = single })
+                    SingleBody(single, onEdit = { editingItemId = single.id })
                 }
                 item(key = "receipt") {
                     ReceiptBlock(s.receipt?.imagePath, s.receipt?.id, onOpenReceipt)
@@ -191,13 +195,13 @@ fun PaymentDetailScreen(
             initialDate = target.date,
             initialTime = target.time,
             linkedReceiptAt = s.receiptAt?.takeIf { target.receiptId != null },
-            onDismiss = { editingItem = null },
+            onDismiss = { editingItemId = null },
             onSave = { date, time, amount, category, name, memo, done ->
                 viewModel.saveItem(group, target, date, time, amount, category, name, memo, done)
             },
             onDelete = {
                 viewModel.deleteItem(target)
-                editingItem = null
+                editingItemId = null
             },
             title = if (group != null) "品目を編集" else null,
         )
