@@ -274,6 +274,7 @@ fun LeaderRow(
     labelColor: Color = AppTheme.colors.ink,
     valueColor: Color = AppTheme.colors.ink,
 ) {
+    val leaderColor = AppTheme.colors.inkFaint.copy(alpha = 0.6f)
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
         Text(label, style = labelStyle, color = labelColor, modifier = Modifier.weight(1f, fill = false))
         Canvas(
@@ -284,7 +285,7 @@ fun LeaderRow(
                 .height(1.dp),
         ) {
             drawLine(
-                color = AppTheme.colors.inkFaint.copy(alpha = 0.6f),
+                color = leaderColor,
                 start = Offset(0f, 0f),
                 end = Offset(size.width, 0f),
                 strokeWidth = 1.dp.toPx(),
