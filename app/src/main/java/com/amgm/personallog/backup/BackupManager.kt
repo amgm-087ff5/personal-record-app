@@ -10,7 +10,6 @@ import com.amgm.personallog.data.db.ExpenseDao
 import com.amgm.personallog.data.db.ExpenseGroupDao
 import com.amgm.personallog.data.db.ReceiptDao
 import com.amgm.personallog.data.model.ExpenseGroup
-import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.domain.LedgerCalc
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +60,7 @@ class BackupManager @Inject constructor(
                 receiptItems = items.map { BackupReceiptItem.from(it) },
                 expenses = expenses.map { BackupExpense.from(it) },
                 expenseGroups = groups.map { BackupExpenseGroup.from(it) },
+                receiptNotDuplicates = receiptDao.getAllNotDuplicates().map { BackupNotDuplicate.from(it) },
             )
             val json = BackupJson.encodeToString(BackupData.serializer(), data).toByteArray(Charsets.UTF_8)
             val files = collectFiles()
@@ -190,10 +190,16 @@ class BackupManager @Inject constructor(
         data.diaryEntries.forEach { diaryDao.insert(it.toEntity()) }
         data.diaryPhotos.forEach { diaryDao.insertPhoto(it.toEntity()) }
         val replaceItemsByReceipt = data.receiptItems.groupBy { it.receiptId }
-        data.receipts.forEach { receiptDao.insert(it.toEntity(replaceItemsByReceipt[it.id].orEmpty())) }
-        val replaceItems = data.receiptItems.flatMap { it.toEntities() }
-        if (replaceItems.isNotEmpty()) receiptDao.insertItems(replaceItems)
+        data.receipts.forEach { receiptDao.insert(it.toEntity(replaceItemsByReceipt[it.id].orEmpty(), legacyFormat = data.formatVersion < 5)) }
+        // 品目は1件ずつ入れて、バックアップ内の id -> 復元後の id を控える(支出の receiptItemId の付け替えに使う)
+        val itemIdMap = HashMap<Long, Long>()
+        for (bi in data.receiptItems) {
+            val newIds = bi.toEntities().map { receiptDao.insertItem(it) }
+            newIds.firstOrNull()?.let { itemIdMap[bi.id] = it }
+        }
         val receiptIds = data.receipts.map { it.id }.toSet()
+        // 「重複ではない」の組。replace は id をそのまま使うので、レシートが無い組だけ捨てる
+        receiptDao.insertNotDuplicates(remapNotDuplicates(data.receiptNotDuplicates, receiptIds.associateWith { it }))
         val times = receiptTimes(data)
         data.expenseGroups.forEach { g ->
             expenseGroupDao.insert(g.toEntity(linkedTime(g.receiptId, times)).copy(receiptId = g.receiptId?.takeIf { it in receiptIds }))
@@ -205,6 +211,7 @@ class BackupManager @Inject constructor(
                     e.toEntity(linkedTime(e.receiptId, times)).copy(
                         receiptId = e.receiptId?.takeIf { it in receiptIds },
                         groupId = e.groupId?.takeIf { it in groupIds },
+                        receiptItemId = remapReceiptItemId(e.receiptItemId, itemIdMap),
                     )
                 },
             )
@@ -224,19 +231,6 @@ class BackupManager @Inject constructor(
         data.receipts.associate { it.id to LedgerCalc.splitPurchasedAt(it.purchasedAt).second }
 
     private fun linkedTime(receiptId: Long?, times: Map<Long, String>): String? = receiptId?.let { times[it] }
-
-    private data class ReceiptKey(val purchasedAt: String, val storeName: String, val totalAmount: Int, val imagePath: String)
-    private data class ExpenseKey(
-        val date: String,
-        val amount: Int,
-        val category: String,
-        val memo: String,
-        val receiptId: Long?,
-        val groupId: Long?,
-    )
-    private data class ExpenseGroupKey(val date: String, val amount: Int, val category: String, val memo: String, val receiptId: Long?)
-
-    private fun receiptKey(r: Receipt) = ReceiptKey(r.purchasedAt, r.storeName, r.totalAmount, r.imagePath)
 
     private suspend fun mergeAll(data: BackupData, fileCount: Int): ImportResult {
         var skipped = 0
@@ -271,39 +265,43 @@ class BackupManager @Inject constructor(
             addedPhotos++
         }
 
-        // レシート(日時・店名・合計・画像パスで重複判定)
-        val receiptByKey = receiptDao.observeAll().first().associate { receiptKey(it) to it.id }.toMutableMap()
+        // レシート(画像ハッシュがあればハッシュで、無ければ日時・店名・合計・画像パスで照合)
+        val receiptIndex = ReceiptMergeIndex(receiptDao.observeAll().first())
         val receiptIdMap = HashMap<Long, Long>()
         val itemsByReceipt = data.receiptItems.groupBy { it.receiptId }
+        // バックアップ内の品目 id -> 復元後の品目 id。新しく入れたレシートの品目だけ対応が取れる(既存のレシートに当たったものは null になる)
+        val itemIdMap = HashMap<Long, Long>()
         for (r in data.receipts) {
-            val entity = r.toEntity(itemsByReceipt[r.id].orEmpty())
-            val key = receiptKey(entity)
-            val existing = receiptByKey[key]
+            val entity = r.toEntity(itemsByReceipt[r.id].orEmpty(), legacyFormat = data.formatVersion < 5)
+            val existing = receiptIndex.take(entity)
             if (existing != null) {
                 receiptIdMap[r.id] = existing
+                // 既存のレシートの品目と照合して、支出の receiptItemId を付け替えられるようにする
+                itemIdMap.putAll(matchExistingItems(itemsByReceipt[r.id].orEmpty(), receiptDao.getItems(existing)))
                 skipped++
             } else {
                 val newId = receiptDao.insert(entity.copy(id = 0))
                 receiptIdMap[r.id] = newId
-                receiptByKey[key] = newId
-                val items = itemsByReceipt[r.id].orEmpty()
-                if (items.isNotEmpty()) {
-                    receiptDao.insertItems(items.flatMap { it.toEntities() }.map { it.copy(id = 0, receiptId = newId) })
+                for (bi in itemsByReceipt[r.id].orEmpty()) {
+                    val newIds = bi.toEntities().map { receiptDao.insertItem(it.copy(id = 0, receiptId = newId)) }
+                    newIds.firstOrNull()?.let { itemIdMap[bi.id] = it }
                 }
                 addedReceipts++
             }
         }
 
-        // 支払いグループ(日付・金額・カテゴリ・メモ・レシートで重複判定)。既存と重複したグループの品目は飛ばす
-        val groupKeyOf = { g: ExpenseGroup -> ExpenseGroupKey(g.date, g.amount, g.category, g.memo, g.receiptId) }
-        val groupByKey = expenseGroupDao.observeAll().first().associate { groupKeyOf(it) to it.id }.toMutableMap()
+        // 「重複ではない」の組: 復元後のレシート id に付け替える。対応が取れない組は捨てる
+        receiptDao.insertNotDuplicates(remapNotDuplicates(data.receiptNotDuplicates, receiptIdMap))
+
+        // 支払いグループ(uid があれば uid で、無い古い形式は日付・金額・カテゴリ・メモ・レシートで重複判定)。
+        // 既存と重複したグループの品目は飛ばす
+        val groupIndex = GroupMergeIndex(expenseGroupDao.observeAll().first())
         val groupIdMap = HashMap<Long, Long>()
         val duplicateGroups = HashSet<Long>()
         val times = receiptTimes(data)
         for (g in data.expenseGroups) {
             val entity = g.toEntity(linkedTime(g.receiptId, times)).copy(id = 0, receiptId = g.receiptId?.let { receiptIdMap[it] })
-            val key = groupKeyOf(entity)
-            val existing = groupByKey[key]
+            val existing = groupIndex.find(g.uid, entity)
             if (existing != null) {
                 groupIdMap[g.id] = existing
                 duplicateGroups.add(g.id)
@@ -311,31 +309,37 @@ class BackupManager @Inject constructor(
             } else {
                 val newId = expenseGroupDao.insert(entity)
                 groupIdMap[g.id] = newId
-                groupByKey[key] = newId
+                groupIndex.add(entity, newId)
             }
         }
 
-        // 支出(同一内容は件数ベースで重複判定。同じ日に同額の買い物が2件あっても保たれる)
-        val remaining = HashMap<ExpenseKey, Int>()
-        expenseDao.observeAll().first().forEach {
-            val k = ExpenseKey(it.date, it.amount, it.category, it.memo, it.receiptId, it.groupId)
-            remaining[k] = (remaining[k] ?: 0) + 1
-        }
+        // 支出(uid があれば uid で、無い古い形式は同一内容の件数ベースで重複判定。同じ日に同額の買い物が2件あっても保たれる)
+        val existingExpenses = expenseDao.observeAll().first()
+        val expenseIndex = ExpenseMergeIndex(existingExpenses)
+        val existingByUid = existingExpenses.filter { it.uid.isNotEmpty() }.associateBy { it.uid }
         val toInsert = ArrayList<com.amgm.personallog.data.model.Expense>()
         for (e in data.expenses) {
+            // 同じ uid の既存の行がある場合、他の欄は既存を優先するが、家計簿で消した印(deletedByUser)だけは取り込む(OR)
+            if (e.deletedByUser && e.uid.isNotEmpty()) {
+                existingByUid[e.uid]?.takeIf { !it.deletedByUser }?.let { expenseDao.setDeletedByUser(it.id, true) }
+            }
             if (e.groupId != null && e.groupId in duplicateGroups) {
                 skipped++
                 continue
             }
             val mappedReceipt = e.receiptId?.let { receiptIdMap[it] }
             val mappedGroup = e.groupId?.let { groupIdMap[it] }
-            val k = ExpenseKey(e.date, e.amount, e.category, e.memo, mappedReceipt, mappedGroup)
-            val left = remaining[k] ?: 0
-            if (left > 0) {
-                remaining[k] = left - 1
+            if (expenseIndex.isDuplicate(e, mappedReceipt, mappedGroup)) {
                 skipped++
             } else {
-                toInsert.add(e.toEntity(linkedTime(e.receiptId, times)).copy(id = 0, receiptId = mappedReceipt, groupId = mappedGroup))
+                toInsert.add(
+                    e.toEntity(linkedTime(e.receiptId, times)).copy(
+                        id = 0,
+                        receiptId = mappedReceipt,
+                        groupId = mappedGroup,
+                        receiptItemId = remapReceiptItemId(e.receiptItemId, itemIdMap),
+                    ),
+                )
                 addedExpenses++
             }
         }

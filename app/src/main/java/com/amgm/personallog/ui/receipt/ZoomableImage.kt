@@ -9,11 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,10 +27,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptImageCodec
+import com.amgm.personallog.ui.design.AppTheme
+import com.amgm.personallog.ui.design.Label
+import com.amgm.personallog.ui.design.Space
+import com.amgm.personallog.ui.design.TextAction
 import com.amgm.personallog.ui.common.ZoomMath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -54,10 +54,14 @@ private sealed interface ViewerLoad {
  * 戻るボタン・「閉じる」で閉じる。拡大・移動は [ZoomableImage] 参照。
  */
 @Composable
-fun ReceiptImageViewer(relativePath: String, onDismiss: () -> Unit) {
+fun ReceiptImageViewer(
+    relativePath: String,
+    onDismiss: () -> Unit,
+    adjust: ReceiptAdjust = ReceiptAdjust.NONE,
+) {
     val context = LocalContext.current
-    val load by produceState<ViewerLoad>(initialValue = ViewerLoad.Loading, relativePath) {
-        value = loadViewerImage(File(context.filesDir, relativePath))
+    val load by produceState<ViewerLoad>(initialValue = ViewerLoad.Loading, relativePath, adjust) {
+        value = loadViewerImage(File(context.filesDir, relativePath), adjust)
             ?.let { ViewerLoad.Ready(it) }
             ?: ViewerLoad.Failed
     }
@@ -68,12 +72,14 @@ fun ReceiptImageViewer(relativePath: String, onDismiss: () -> Unit) {
     ) {
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
             when (val s = load) {
-                ViewerLoad.Loading -> CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center),
+                ViewerLoad.Loading -> Label(
+                    "読み込み中…",
                     color = Color.White,
+                    modifier = Modifier.align(Alignment.Center),
                 )
                 ViewerLoad.Failed -> Text(
                     "画像を表示できません",
+                    style = AppTheme.type.body,
                     color = Color.White,
                     modifier = Modifier.align(Alignment.Center),
                 )
@@ -83,18 +89,17 @@ fun ReceiptImageViewer(relativePath: String, onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            TextButton(
+            TextAction(
+                "閉じる",
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
-                modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(8.dp),
-            ) {
-                Text("閉じる")
-            }
+                color = Color.White,
+                modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(Space.s),
+            )
             Text(
                 "二本指で拡大・縮小 / ダブルタップで拡大",
                 color = Color.White,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                style = AppTheme.type.caption,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Space.m),
             )
         }
     }
@@ -173,13 +178,13 @@ fun ZoomableImage(
 }
 
 /**
- * 原本を読み込む(IOスレッド)。長辺 2048px を上限に、EXIFの向きを補正して読む。
+ * 原本を読み込む(IOスレッド)。長辺 2048px を上限に、EXIFの向きと回転・トリミングを適用して読む。
  * メモリ不足(OutOfMemoryError)なら低い解像度で再試行する。失敗時 null。
  */
-private suspend fun loadViewerImage(file: File): ImageBitmap? = withContext(Dispatchers.IO) {
+private suspend fun loadViewerImage(file: File, adjust: ReceiptAdjust): ImageBitmap? = withContext(Dispatchers.IO) {
     for (side in VIEWER_MAX_SIDES) {
         try {
-            val bmp: Bitmap = ReceiptImageCodec.decodeScaled(file, side) ?: return@withContext null
+            val bmp: Bitmap = ReceiptImageCodec.decodeAdjusted(file, adjust, side) ?: return@withContext null
             return@withContext bmp.asImageBitmap()
         } catch (e: OutOfMemoryError) {
             // 次の低い解像度で再試行する

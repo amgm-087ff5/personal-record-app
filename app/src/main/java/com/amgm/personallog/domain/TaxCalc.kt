@@ -67,11 +67,49 @@ object TaxCalc {
     fun ownYenOfPicked(items: List<ReceiptItem>, picked: List<Boolean>): Long =
         floorYen(items.indices.filter { picked[it] }.sumOf { paidUnits(items[it]) })
 
+    /**
+     * 税率ごとの税抜額と税額。税込の品目の税抜は 金額×100/(100+税率) を小数のまま持ち、税率ごとの合計で切り捨てる
+     * (整数の合計に対する床除算なので誤差が出ない)。税抜の品目の税抜は印字額そのまま。
+     * 税額 = 税込(単位) − 税抜(単位)。値引き(負の金額)も同じ式で、税率が既定の10%なら税額がずれうる。
+     */
+    fun breakdownByRate(items: List<ReceiptItem>): TaxBreakdown {
+        val rates = items.map { normalizeTaxRate(it.taxRate) }.distinct().sorted()
+        val lines = rates.map { rate ->
+            val ofRate = items.filter { normalizeTaxRate(it.taxRate) == rate }
+            val inclusiveYen = ofRate.filter { it.priceIncludesTax }.sumOf { it.amount.toLong() }
+            val exclusiveYen = ofRate.filterNot { it.priceIncludesTax }.sumOf { it.amount.toLong() }
+            val netYen = Math.floorDiv(inclusiveYen * 100L, 100L + rate) + exclusiveYen
+            val grossUnits = ofRate.sumOf { paidUnits(it) }
+            TaxRateLine(
+                taxRate = rate,
+                grossUnits = grossUnits,
+                netYen = netYen,
+                taxUnits = grossUnits - netYen * UNITS_PER_YEN,
+            )
+        }
+        return TaxBreakdown(lines)
+    }
+
     /** 品目の税込価格の表示用(小数あり)。例: "129.6" / "120" */
     fun paidYenText(item: ReceiptItem): String = unitsToText(paidUnits(item))
 
     fun unitsToText(units: Long): String =
         BigDecimal.valueOf(units, 4).stripTrailingZeros().toPlainString()
+}
+
+/** 1つの税率ぶんの内訳。netYen は税抜(円・切り捨て済み)、taxUnits は税額(単位=1/10000円)。 */
+data class TaxRateLine(val taxRate: Int, val grossUnits: Long, val netYen: Long, val taxUnits: Long) {
+    /** 税額(円、切り捨て)。 */
+    val taxYen: Long get() = TaxCalc.floorYen(taxUnits)
+}
+
+/** 税率ごとの内訳(税率の小さい順)。 */
+data class TaxBreakdown(val lines: List<TaxRateLine>) {
+    /** 税抜合計(円)。税率ごとに切り捨てた税抜の合計。 */
+    val netYen: Long get() = lines.sumOf { it.netYen }
+
+    /** 消費税額の合計(円、切り捨て)。 */
+    val taxYen: Long get() = TaxCalc.floorYen(lines.sumOf { it.taxUnits })
 }
 
 /** 旧形式(品目ごとの自分の分を持っていた版)から、レシート全体の自分の分を求めるための1行。 */

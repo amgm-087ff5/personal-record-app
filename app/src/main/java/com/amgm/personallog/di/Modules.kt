@@ -10,6 +10,7 @@ import com.amgm.personallog.data.db.DiaryDao
 import com.amgm.personallog.data.db.ExpenseDao
 import com.amgm.personallog.data.db.ExpenseGroupDao
 import com.amgm.personallog.data.db.Migrations
+import com.amgm.personallog.data.db.PreMigrationBackup
 import com.amgm.personallog.data.db.ReceiptDao
 import dagger.Module
 import dagger.Provides
@@ -25,11 +26,14 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
 object AppModule {
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.NAME)
+    fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
+        // 移行に失敗しても元のデータが残るよう、Room を開く前に古い版の DB を複製しておく
+        PreMigrationBackup.backupIfNeeded(context, AppDatabase.NAME, AppDatabase.VERSION)
+        return Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.NAME)
             // fallbackToDestructiveMigration は使わない。version を上げたら Migrations.kt に追加する。
             .addMigrations(*Migrations.ALL)
             .build()
+    }
 
     @Provides fun provideDiaryDao(db: AppDatabase): DiaryDao = db.diaryDao()
     @Provides fun provideReceiptDao(db: AppDatabase): ReceiptDao = db.receiptDao()

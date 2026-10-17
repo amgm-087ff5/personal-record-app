@@ -84,17 +84,19 @@ class LedgerLogicTest {
         assertEquals(listOf(11L, 12L), g.items.map { it.id })
         assertEquals(700L, g.itemSum)
         assertEquals(300L, g.difference)
+        // グループは品目ごとのカテゴリで数える: 食費400 + 日用品300、差額300はグループのカテゴリ(食費)へ
         assertEquals(
-            listOf("その他" to 50L, "食費" to 1000L),
+            listOf("その他" to 50L, "日用品" to 300L, "食費" to 700L),
             LedgerLogic.totalsByCategory(entries).map { it.category to it.total }.sortedBy { it.second },
         )
     }
 
     @Test
-    fun buildEntries_orphanChildBecomesSingle() {
+    fun buildEntries_childWithoutItsGroupIsNotCountedAsSingle() {
+        // groupId のある行は、グループが渡されていなくても単独の行として数えない(月をまたいだ二重計上の防止)
         val orphan = Expense(id = 1, date = "2026-10-01", amount = 10, groupId = 99, createdAt = 1)
         val entries = LedgerLogic.buildEntries(listOf(orphan), emptyList())
-        assertTrue(entries.single() is LedgerEntry.Single)
+        assertTrue(entries.isEmpty())
     }
 
     @Test

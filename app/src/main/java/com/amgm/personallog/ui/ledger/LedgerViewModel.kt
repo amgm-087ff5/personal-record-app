@@ -11,6 +11,7 @@ import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.repository.ExpenseRepository
 import com.amgm.personallog.domain.LedgerCalc
+import com.amgm.personallog.domain.PaymentEdit
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -84,7 +85,7 @@ class LedgerViewModel @Inject constructor(
                 val me = LocalDate.parse(monthTo)
                 val from = (if (ms.isBefore(chartStart)) ms else chartStart).toString()
                 val to = (if (me.isAfter(chartEnd)) me else chartEnd).toString()
-                combine(repository.observeBetween(from, to), repository.observeGroupsBetween(from, to)) { all, groups ->
+                combine(repository.observeLedgerRows(from, to), repository.observeGroupsBetween(from, to)) { all, groups ->
                     snapshot(f, l, all, groups)
                 }
                     .catch { e ->
@@ -156,6 +157,7 @@ class LedgerViewModel @Inject constructor(
         time: String,
         amount: Int,
         category: String,
+        name: String,
         memo: String,
         onDone: (String?) -> Unit,
     ) {
@@ -168,23 +170,29 @@ class LedgerViewModel @Inject constructor(
                             time = time,
                             amount = amount,
                             category = category,
+                            name = name.trim(),
                             memo = memo.trim(),
                             createdAt = System.currentTimeMillis(),
                         ),
                     )
                 } else {
-                    val changed = date != original.date || time != original.time
-                    repository.update(
-                        original.copy(
-                            date = date,
-                            time = time,
-                            amount = amount,
-                            category = category,
-                            memo = memo.trim(),
-                            timeEdited = original.timeEdited || changed,
-                        ),
-                    )
+                    // 変わった欄の「編集済み」を立てる(日時の timeEdited を含む)
+                    repository.update(PaymentEdit.editExpense(original, date, time, amount, category, name, memo))
                 }
+                onDone(null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onDone("保存に失敗しました: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    /** 品目つきの手入力: グループと品目の支出を作る。onDone にはエラーメッセージ(成功なら null)を渡す。 */
+    fun addPayment(group: ExpenseGroup, items: List<Expense>, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.addPayment(group, items)
                 onDone(null)
             } catch (e: CancellationException) {
                 throw e
