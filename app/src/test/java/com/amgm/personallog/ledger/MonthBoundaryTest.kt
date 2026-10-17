@@ -73,4 +73,28 @@ class MonthBoundaryTest {
         assertEquals(500L, oct.total)
         assertEquals(700L, oct.drawnTotal)
     }
+
+    // ---- 家計簿で消した品目 ----
+
+    @Test
+    fun deletedItems_areLeftOutOfListAndSums_andBecomeDifference() {
+        val g = ExpenseGroup(id = 7, date = "2026-10-14", amount = 700, category = "日用品", createdAt = 1)
+        val kept = child(1, "2026-10-14", 200, "食費")
+        val gone = child(2, "2026-10-14", 500, "食費").copy(deletedByUser = true)
+        val entry = LedgerLogic.buildEntries(listOf(kept, gone), listOf(g)).single() as com.amgm.personallog.ui.ledger.LedgerEntry.Group
+        assertEquals(listOf(1L), entry.items.map { it.id })
+        assertEquals(500L, entry.difference)
+        // 消した品目の金額は、差額としてグループのカテゴリ(日用品)に入る。合計は支払い金額のまま
+        assertEquals(
+            mapOf("食費" to 200L, "日用品" to 500L),
+            entry.categoryParts.associate { it.category to it.total },
+        )
+        assertEquals(700L, entry.categoryParts.sumOf { it.total })
+    }
+
+    @Test
+    fun deletedItem_isNeverCountedAsSingle() {
+        val gone = child(2, "2026-10-14", 500, "食費").copy(deletedByUser = true, groupId = null)
+        assertEquals(0, LedgerLogic.buildEntries(listOf(gone), emptyList()).size)
+    }
 }

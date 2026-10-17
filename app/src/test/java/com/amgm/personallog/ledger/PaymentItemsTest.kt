@@ -4,6 +4,7 @@ import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.domain.PaymentKind
+import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentLink
 import com.amgm.personallog.ui.ledger.ChartLevel
 import com.amgm.personallog.ui.ledger.DraftItem
@@ -11,7 +12,6 @@ import com.amgm.personallog.ui.ledger.DraftPayment
 import com.amgm.personallog.ui.ledger.LedgerChart
 import com.amgm.personallog.ui.ledger.LedgerEntry
 import com.amgm.personallog.ui.ledger.LedgerLogic
-import com.amgm.personallog.ui.ledger.PaymentField
 import com.amgm.personallog.ui.ledger.PaymentMarks
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

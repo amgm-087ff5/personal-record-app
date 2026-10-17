@@ -41,6 +41,29 @@ class BackupFormat6Test {
     }
 
     @Test
+    fun format6_roundTrip_keepsDeletedByUser() {
+        val deleted = expense.copy(deletedByUser = true)
+        val data = BackupData(
+            formatVersion = BACKUP_FORMAT_VERSION,
+            dbVersion = 9,
+            expenseGroups = listOf(BackupExpenseGroup.from(group)),
+            expenses = listOf(BackupExpense.from(deleted), BackupExpense.from(expense.copy(id = 10, uid = "e-uid-2"))),
+        )
+        val text = BackupJson.encodeToString(BackupData.serializer(), data)
+        val back = BackupJson.decodeFromString(BackupData.serializer(), text)
+        assertEquals(data, back)
+        assertTrue(back.expenses[0].toEntity().deletedByUser)
+        assertFalse(back.expenses[1].toEntity().deletedByUser)
+        assertEquals(deleted, back.expenses[0].toEntity())
+        // deletedByUser の無い形式(5以前や古い6)は false として読む
+        val old = BackupJson.decodeFromString(
+            BackupData.serializer(),
+            """{"formatVersion":6,"expenses":[{"id":1,"date":"2026-10-05","amount":1,"category":"食費","createdAt":1}]}""",
+        )
+        assertFalse(old.expenses.single().deletedByUser)
+    }
+
+    @Test
     fun format5_isStillReadable_newColumnsGetDefaults_andUidIsGenerated() {
         val text = """{"formatVersion":5,"dbVersion":8,"exportedAt":1,
             "expenseGroups":[{"id":3,"date":"2026-10-05","time":"12:30","amount":700,"category":"食費","memo":"店","receiptId":5,"createdAt":40}],

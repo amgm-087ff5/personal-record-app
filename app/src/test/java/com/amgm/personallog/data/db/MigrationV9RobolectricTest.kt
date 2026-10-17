@@ -208,6 +208,8 @@ class MigrationV9RobolectricTest {
         for (col in listOf("amountEdited", "categoryEdited", "memoEdited", "timeEdited")) {
             assertEquals(col, 0L, db.long("SELECT COUNT(*) FROM expense_groups WHERE `$col` <> 0"))
         }
+        // 家計簿で消した品目の印(deletedByUser)は、既存の行ではすべて 0
+        assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses WHERE deletedByUser <> 0"))
         assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses WHERE receiptItemId IS NOT NULL"))
         assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses WHERE name <> ''"))
         db.close()
