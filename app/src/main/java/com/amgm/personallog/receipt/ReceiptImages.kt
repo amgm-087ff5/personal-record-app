@@ -84,6 +84,34 @@ class ReceiptImageStore @Inject constructor(
     }
 }
 
+/** 原本の一部だけを縮小して読む入り口。実機は BitmapRegionDecoder。テストでは Robolectric が対応しないので差し替える。 */
+interface RegionReader {
+    val width: Int
+    val height: Int
+
+    /** 原本の矩形を inSampleSize で読む。失敗は null。 */
+    fun read(rect: Rect, sampleSize: Int): Bitmap?
+
+    fun recycle()
+}
+
+@Suppress("DEPRECATION")
+internal fun openRegionReader(file: File): RegionReader? {
+    val d = try {
+        BitmapRegionDecoder.newInstance(file.path, false)
+    } catch (e: Exception) {
+        null
+    } ?: return null
+    return object : RegionReader {
+        override val width: Int get() = d.width
+        override val height: Int get() = d.height
+        override fun read(rect: Rect, sampleSize: Int): Bitmap? =
+            d.decodeRegion(rect, BitmapFactory.Options().apply { inSampleSize = sampleSize })
+
+        override fun recycle() = d.recycle()
+    }
+}
+
 object ReceiptImageCodec {
     const val RESIZE_THRESHOLD_BYTES = 3_500_000L
     const val MAX_SIDE = 2048
@@ -133,13 +161,13 @@ object ReceiptImageCodec {
      * 範囲読み版。範囲の計算は [ReceiptRegion.plan]。デコーダを作れないときなどは null。
      * 中間のビットマップは使い終わったら recycle する。メモリ不足は呼び出し側へ投げる。
      */
-    @Suppress("DEPRECATION")
-    fun decodeAdjustedRegion(file: File, adjust: ReceiptAdjust, maxSide: Int): Bitmap? {
-        val decoder = try {
-            BitmapRegionDecoder.newInstance(file.path, false)
-        } catch (e: Exception) {
-            null
-        } ?: return null
+    fun decodeAdjustedRegion(
+        file: File,
+        adjust: ReceiptAdjust,
+        maxSide: Int,
+        opener: (File) -> RegionReader? = ::openRegionReader,
+    ): Bitmap? {
+        val decoder = opener(file) ?: return null
         try {
             val orientation = exifOrientation(file)
             val plan = ReceiptRegion.plan(decoder.width, decoder.height, orientation, adjust, maxSide)
@@ -151,8 +179,7 @@ object ReceiptImageCodec {
                 canvas.drawColor(Color.WHITE)
                 val reg = plan.region
                 if (reg != null) {
-                    val opts = BitmapFactory.Options().apply { inSampleSize = plan.sampleSize }
-                    val part = decoder.decodeRegion(Rect(reg[0], reg[1], reg[2], reg[3]), opts) ?: return null
+                    val part = decoder.read(Rect(reg[0], reg[1], reg[2], reg[3]), plan.sampleSize) ?: return null
                     try {
                         // 読んだ画素 -> 原本 -> EXIF 後 -> 外接矩形(回転) -> 枠の左上を原点 -> 出力の大きさ
                         val m = Matrix()

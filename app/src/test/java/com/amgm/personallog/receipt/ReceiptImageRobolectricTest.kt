@@ -1,9 +1,11 @@
 package com.amgm.personallog.receipt
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Rect
 import android.media.ExifInterface
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -79,6 +81,29 @@ class ReceiptImageRobolectricTest {
         return f
     }
 
+    /**
+     * Robolectric の BitmapRegionDecoder は中身が空の画像を返す(対応する本物の実装が無い)ので、
+     * テストでは同じ約束(矩形を inSampleSize で読む)を、全体を読んで切り出す読み手に差し替える。
+     * 範囲の計算・行列・向きの扱いは本番と同じコードを通る。
+     */
+    private fun fakeOpener(file: File): RegionReader {
+        val full = BitmapFactory.decodeFile(file.path)
+        return object : RegionReader {
+            override val width: Int get() = full.width
+            override val height: Int get() = full.height
+            override fun read(rect: Rect, sampleSize: Int): Bitmap? {
+                val c0 = Bitmap.createBitmap(full, rect.left, rect.top, rect.width(), rect.height())
+                val crop = if (c0 === full) full.copy(Bitmap.Config.ARGB_8888, true) else c0
+                if (sampleSize <= 1) return crop
+                val w = maxOf(1, (rect.width() + sampleSize - 1) / sampleSize)
+                val h = maxOf(1, (rect.height() + sampleSize - 1) / sampleSize)
+                return Bitmap.createScaledBitmap(crop, w, h, true)
+            }
+
+            override fun recycle() = full.recycle()
+        }
+    }
+
     private fun classify(p: Int): Char {
         val palette = mapOf(
             'R' to intArrayOf(255, 0, 0),
@@ -127,6 +152,9 @@ class ReceiptImageRobolectricTest {
         return r
     }
 
+    private fun region(f: File, a: ReceiptAdjust, maxSide: Int): Bitmap? =
+        ReceiptImageCodec.decodeAdjustedRegion(f, a.sanitized(), maxSide, this::fakeOpener)
+
     private fun exifSize(o: Int): Pair<Int, Int> = if (o in 5..8) rawH to rawW else rawW to rawH
 
     @Test
@@ -147,7 +175,7 @@ class ReceiptImageRobolectricTest {
         for (o in 1..8) {
             val f = makeJpeg(o)
             for (times in 1..3) {
-                val bmp = ReceiptImageCodec.decodeAdjusted(f, ReceiptAdjust(rotationDegrees = 90f * times), 4096)
+                val bmp = region(f, ReceiptAdjust(rotationDegrees = 90f * times), 4096)
                 assertNotNull("o=$o t=$times", bmp)
                 val (ew, eh) = exifSize(o)
                 val (w, h) = if (times % 2 == 1) eh to ew else ew to eh
@@ -166,20 +194,20 @@ class ReceiptImageRobolectricTest {
             val e = expectedByOrientation[o]!!
             val (ew, eh) = exifSize(o)
             // 右半分(回転なし): 右の色が左右に並ぶ
-            val right = ReceiptImageCodec.decodeAdjusted(f, ReceiptAdjust(0f, 0.5f, 0f, 1f, 1f), 4096)!!
+            val right = region(f, ReceiptAdjust(0f, 0.5f, 0f, 1f, 1f), 4096)!!
             assertEquals("o=$o right w", ew / 2, right.width)
             assertEquals("o=$o right h", eh, right.height)
             assertCorners("o=$o right", "${e[1]}${e[1]}${e[3]}${e[3]}", right)
             right.recycle()
             // 上半分
-            val top = ReceiptImageCodec.decodeAdjusted(f, ReceiptAdjust(0f, 0f, 0f, 1f, 0.5f), 4096)!!
+            val top = region(f, ReceiptAdjust(0f, 0f, 0f, 1f, 0.5f), 4096)!!
             assertEquals("o=$o top w", ew, top.width)
             assertEquals("o=$o top h", eh / 2, top.height)
             assertCorners("o=$o top", "${e[0]}${e[1]}${e[0]}${e[1]}", top)
             top.recycle()
             // 右90度回転してから左半分: 回転後の左列(元の下の行)が残る
             val rotated = rot90(e)
-            val rl = ReceiptImageCodec.decodeAdjusted(f, ReceiptAdjust(90f, 0f, 0f, 0.5f, 1f), 4096)!!
+            val rl = region(f, ReceiptAdjust(90f, 0f, 0f, 0.5f, 1f), 4096)!!
             assertEquals("o=$o rl w", eh / 2, rl.width)
             assertEquals("o=$o rl h", ew, rl.height)
             assertCorners("o=$o rl", "${rotated[0]}${rotated[0]}${rotated[2]}${rotated[2]}", rl)
@@ -191,7 +219,7 @@ class ReceiptImageRobolectricTest {
     fun smallTiltKeepsOrientationAndAddsWhiteMargins() {
         for (o in intArrayOf(1, 6, 3, 8)) {
             val f = makeJpeg(o)
-            val bmp = ReceiptImageCodec.decodeAdjusted(f, ReceiptAdjust(rotationDegrees = 10f), 4096)!!
+            val bmp = region(f, ReceiptAdjust(rotationDegrees = 10f), 4096)!!
             val (ew, eh) = exifSize(o)
             val (bw, bh) = ReceiptGeometry.boundingSize(ew, eh, 10f)
             assertEquals("o=$o w", bw, bmp.width)
@@ -207,7 +235,7 @@ class ReceiptImageRobolectricTest {
     @Test
     fun outputIsReducedToMaxSide() {
         val f = makeJpeg(6)
-        val bmp = ReceiptImageCodec.decodeAdjusted(f, ReceiptAdjust(rotationDegrees = 90f), 64)!!
+        val bmp = region(f, ReceiptAdjust(rotationDegrees = 90f), 64)!!
         assertEquals(64, maxOf(bmp.width, bmp.height))
         // 縮小しても向きは同じ
         assertCorners("maxSide64", rot90(expectedByOrientation[6]!!), bmp)
@@ -227,7 +255,7 @@ class ReceiptImageRobolectricTest {
         for (maxSide in intArrayOf(4096, 64)) for (o in intArrayOf(1, 3, 5, 6, 8)) {
             val f = makeJpeg(o)
             for (a in adjusts) {
-                val region = ReceiptImageCodec.decodeAdjustedRegion(f, a.sanitized(), maxSide)
+                val region = ReceiptImageCodec.decodeAdjustedRegion(f, a.sanitized(), maxSide, this::fakeOpener)
                 assertNotNull("範囲読みが使えない o=$o a=$a", region)
                 val whole = ReceiptImageCodec.decodeAdjustedWhole(f, a.sanitized(), maxSide)!!
                 val msg = "maxSide=$maxSide o=$o a=$a"
@@ -250,16 +278,5 @@ class ReceiptImageRobolectricTest {
                 whole.recycle()
             }
         }
-    }
-
-    @Test
-    fun diagRegionDecoder() {
-        val f = makeJpeg(1)
-        @Suppress("DEPRECATION")
-        val d = android.graphics.BitmapRegionDecoder.newInstance(f.path, false)!!
-        val full = d.decodeRegion(android.graphics.Rect(0, 0, rawW, rawH), null)
-        val part = d.decodeRegion(android.graphics.Rect(64, 0, 128, 96), android.graphics.BitmapFactory.Options().apply { inSampleSize = 1 })
-        val info = "dec=${d.width}x${d.height} full=${full?.width}x${full?.height}${full?.let { dump(it) }} part=${part?.width}x${part?.height}${part?.let { dump(it) }} px=${part?.getPixel(5, 5)?.toString(16)}"
-        assertEquals(info, "x", "y")
     }
 }
