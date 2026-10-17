@@ -10,7 +10,12 @@ import com.amgm.personallog.data.model.ReceiptItem
  */
 sealed interface ConfirmPlan {
     /** 既存の行を全部消して作り直す。group が null なら children は単独の支出。 */
-    data class Rebuild(val group: ExpenseGroup?, val children: List<Expense>) : ConfirmPlan
+    data class Rebuild(
+        val group: ExpenseGroup?,
+        val children: List<Expense>,
+        /** 家計簿で消した品目(deletedByUser)の行。作り直しでも消したまま残す(children には含めない)。 */
+        val keepDeleted: List<Expense> = emptyList(),
+    ) : ConfirmPlan
 
     /** 同じ品目の行を更新する。編集済みの欄は残す。group は更新後の値(id は既存)。 */
     data class UpdateGroup(
@@ -39,21 +44,27 @@ object ConfirmPlanner {
         now: Long,
     ): ConfirmPlan {
         val fresh = if (perItem) LedgerCalc.groupFromReceipt(receipt, items, now) else null
+        // 家計簿で消した品目は、作り直しても復活させない。非表示のまま残す
+        val itemIds = items.map { it.id }.toSet()
+        val hidden = existingExpenses.filter { it.deletedByUser && it.receiptItemId != null && it.receiptItemId in itemIds }
+        val hiddenItemIds = hidden.mapTo(HashSet()) { it.receiptItemId }
         if (fresh == null) {
             val wanted = LedgerCalc.expensesFromReceipt(receipt, items, perItem, now)
-            val current = existingExpenses.singleOrNull()
+            val current = existingExpenses.filterNot { it.deletedByUser }.singleOrNull()
             // 単独1行のまま(立て替えなど)は、その行を更新して編集済みの欄を残す
             if (wanted.size == 1 && existingGroups.isEmpty() && current != null &&
                 current.groupId == null && current.receiptItemId == null
             ) {
                 return ConfirmPlan.UpdateSingle(mergeSingle(current, wanted[0]))
             }
-            return ConfirmPlan.Rebuild(null, wanted)
+            return ConfirmPlan.Rebuild(null, wanted, keepDeleted = hidden)
         }
 
         val group = existingGroups.singleOrNull()
         val canUpdate = group != null && existingExpenses.all { it.groupId == group.id && it.receiptItemId != null }
-        if (!canUpdate || group == null) return ConfirmPlan.Rebuild(fresh.group, fresh.items)
+        if (!canUpdate || group == null) {
+            return ConfirmPlan.Rebuild(fresh.group, fresh.items.filter { it.receiptItemId !in hiddenItemIds }, keepDeleted = hidden)
+        }
 
         val updatedGroup = mergeGroup(group, fresh.group)
         // 品目の日時はグループに従う(グループの日時を支払い側で直していても、品目はそれに合わせる)
@@ -79,7 +90,6 @@ object ConfirmPlanner {
             }
         }
         // レシートから消えた品目の支出
-        val itemIds = items.map { it.id }.toSet()
         for ((itemId, have) in existingByItem) if (itemId !in itemIds) deleteIds += have.map { it.id }
         return ConfirmPlan.UpdateGroup(updatedGroup, inserts, updates, deleteIds)
     }
@@ -88,9 +98,9 @@ object ConfirmPlanner {
     fun discardsExisting(plan: ConfirmPlan, existingGroups: List<ExpenseGroup>, existingExpenses: List<Expense>): Boolean =
         plan is ConfirmPlan.Rebuild && (existingGroups.isNotEmpty() || existingExpenses.isNotEmpty())
 
-    /** 家計簿で直した欄(または消した行)がある品目の支出か。再確定で作り直されると失われる内容。 */
+    /** 家計簿で直した欄がある品目の支出か(消した行は別扱い: 作り直しでも消したまま残す)。再確定で作り直されると失われる内容。 */
     fun hasUserChanges(e: Expense): Boolean =
-        e.deletedByUser || e.amountEdited || e.categoryEdited || e.nameEdited || e.memoEdited || (e.groupId == null && e.timeEdited)
+        e.amountEdited || e.categoryEdited || e.nameEdited || e.memoEdited || (e.groupId == null && e.timeEdited)
 
     /** 家計簿で直した欄があるグループか。 */
     fun hasUserChanges(g: ExpenseGroup): Boolean = g.amountEdited || g.categoryEdited || g.memoEdited || g.timeEdited

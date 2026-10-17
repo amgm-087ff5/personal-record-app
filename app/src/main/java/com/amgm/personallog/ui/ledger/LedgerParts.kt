@@ -452,6 +452,8 @@ internal fun ExpenseEditorSheet(
     title: String? = null,
     /** 品名の欄を出すか(支払い=グループの編集では出さない)。 */
     showName: Boolean = true,
+    /** 日時の欄を出すか。支払いグループの品目の日時はグループに従うので、品目の編集では出さない。 */
+    showDateTime: Boolean = true,
 ) {
     val c = AppTheme.colors
     var dateText by remember { mutableStateOf(initialDate) }
@@ -520,10 +522,18 @@ internal fun ExpenseEditorSheet(
 
             // 日時: タップできる文字
             Label("日時")
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextAction(dateChip(dateText), onClick = { showDatePicker = true }, color = c.ink)
-                TextAction(timeText.ifBlank { "時刻を選ぶ" }, onClick = { showTimePicker = true }, color = c.ink)
-                Text("タップで変更", style = AppTheme.type.caption, color = c.inkFaint)
+            if (showDateTime) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextAction(dateChip(dateText), onClick = { showDatePicker = true }, color = c.ink)
+                    TextAction(timeText.ifBlank { "時刻を選ぶ" }, onClick = { showTimePicker = true }, color = c.ink)
+                    Text("タップで変更", style = AppTheme.type.caption, color = c.inkFaint)
+                }
+            } else {
+                Text(
+                    "${dateChip(dateText)} ${timeText}(支払いの日時に従います。直すときは支払いの日時を直してください)",
+                    style = AppTheme.type.caption,
+                    color = c.inkFaint,
+                )
             }
 
             if (showName) {

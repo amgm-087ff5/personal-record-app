@@ -64,7 +64,7 @@ class DiaryRepository @Inject constructor(
 }
 
 /** 確定で家計簿の行がどうなるか(確認の表示用)。 */
-data class ConfirmImpact(val rebuild: Boolean, val lostEdited: Int) {
+data class ConfirmImpact(val rebuild: Boolean, val lostEdited: Int, val keptDeleted: Int = 0) {
     /** 知らせて確認を取るべきか。 */
     val needsWarning: Boolean get() = rebuild || lostEdited > 0
 
@@ -147,8 +147,16 @@ class ReceiptRepository @Inject constructor(
                     if (plan.group != null) {
                         val groupId = expenseGroupDao.insert(plan.group)
                         expenseDao.insertAll(plan.children.map { it.copy(groupId = groupId) })
+                        // 家計簿で消した品目は、消したまま新しいグループに付け替えて残す(立て替えとの往復で復活させない)
+                        if (plan.keepDeleted.isNotEmpty()) {
+                            expenseDao.insertAll(
+                                plan.keepDeleted.map { it.copy(groupId = groupId, date = plan.group.date, time = plan.group.time) },
+                            )
+                        }
                     } else {
                         expenseDao.insertAll(plan.children)
+                        // グループの無い間は、消した品目を非表示のまま残す(グループに戻ったときに付け替える)
+                        if (plan.keepDeleted.isNotEmpty()) expenseDao.insertAll(plan.keepDeleted.map { it.copy(groupId = null) })
                     }
                 }
                 is ConfirmPlan.UpdateGroup -> {
@@ -199,6 +207,7 @@ class ReceiptRepository @Inject constructor(
         return ConfirmImpact(
             rebuild = ConfirmPlanner.discardsExisting(p, groups, remaining),
             lostEdited = ConfirmPlanner.lostEditedCount(p, groups, remaining, removed),
+            keptDeleted = (p as? ConfirmPlan.Rebuild)?.keepDeleted?.size ?: 0,
         )
     }
 
@@ -271,14 +280,14 @@ class ExpenseRepository @Inject constructor(
      */
     suspend fun delete(expense: Expense) {
         if (expense.receiptItemId != null && expense.groupId != null) {
-            dao.update(expense.copy(deletedByUser = true))
+            dao.setDeletedByUser(expense.id, true)
         } else {
             dao.delete(expense)
         }
     }
 
     /** 家計簿で消した品目を元に戻す。 */
-    suspend fun restore(expense: Expense) = dao.update(expense.copy(deletedByUser = false))
+    suspend fun restore(expense: Expense) = dao.setDeletedByUser(expense.id, false)
 
     /**
      * 品目(または単独の支出)の1つの欄を、紐づくレシートの値に戻す(その欄の編集済みを下ろす)。

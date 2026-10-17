@@ -108,12 +108,31 @@ private fun UnitRow.toForm(key: Long) = ItemForm(
 internal fun carryOverItemIds(previous: List<ItemForm>, incoming: List<ItemForm>): List<ItemForm> {
     data class Key(val name: String, val amount: String, val taxRate: String, val includesTax: Boolean)
     fun ItemForm.key() = Key(name.trim(), amount.trim(), taxRate.trim(), priceIncludesTax)
-    val pool = HashMap<Key, ArrayDeque<Long>>()
-    for (p in previous) if (p.id != 0L) pool.getOrPut(p.key()) { ArrayDeque() }.addLast(p.id)
-    return incoming.map { f ->
-        val id = pool[f.key()]?.removeFirstOrNull()
-        if (id != null) f.copy(id = id) else f
+    val prevIds = previous.filter { it.id != 0L }
+    val usedPrev = HashSet<Long>() // 引き継ぎ済みの前の id
+    val result = arrayOfNulls<Long>(incoming.size) // incoming の添字 -> 引き継ぐ id
+
+    // 1段目: 内容(品名・金額・税率・税込区分)とカテゴリが同じものを優先。2段目: 内容だけが同じもの
+    fun pass(sameCategory: Boolean) {
+        for ((i, f) in incoming.withIndex()) {
+            if (result[i] != null) continue
+            val hit = prevIds.firstOrNull { p ->
+                p.id !in usedPrev && p.key() == f.key() && (!sameCategory || p.category == f.category)
+            } ?: continue
+            usedPrev.add(hit.id)
+            result[i] = hit.id
+        }
     }
+    pass(sameCategory = true)
+    pass(sameCategory = false)
+
+    // 3段目: 残りは位置で。残りの数が前後で同じときだけ(読み違えた行が同じ位置に来たと見なす)。数が違えば引き継がない
+    val restPrev = prevIds.filter { it.id !in usedPrev }
+    val restIdx = incoming.indices.filter { result[it] == null }
+    if (restPrev.isNotEmpty() && restPrev.size == restIdx.size) {
+        restIdx.forEachIndexed { n, i -> result[i] = restPrev[n].id }
+    }
+    return incoming.mapIndexed { i, f -> result[i]?.let { f.copy(id = it) } ?: f }
 }
 
 /** 重複の相手(警告の表示と「重複ではない」の保存に使う)。 */
@@ -174,6 +193,8 @@ data class DetailUiState(
     val rebuildRebuilds: Boolean = false,
     /** 警告の中身: 家計簿で直した行のうち消える件数。 */
     val lostEditedCount: Int = 0,
+    /** 警告の中身: 家計簿で消した品目のうち、消したまま残る件数。 */
+    val keptDeletedCount: Int = 0,
     /** このレシートに紐づく家計簿の支払い(グループか単独の支出)。無ければ null。 */
     val paymentLink: PaymentLink? = null,
 ) {
@@ -542,7 +563,7 @@ class ReceiptDetailViewModel @Inject constructor(
                 if (!rebuildAccepted) {
                     val impact = repository.confirmImpact(built.first, built.second)
                     if (impact.needsWarning) {
-                        _state.update { it.copy(busy = false, rebuildWarning = true, rebuildRebuilds = impact.rebuild, lostEditedCount = impact.lostEdited) }
+                        _state.update { it.copy(busy = false, rebuildWarning = true, rebuildRebuilds = impact.rebuild, lostEditedCount = impact.lostEdited, keptDeletedCount = impact.keptDeleted) }
                         return@launch
                     }
                 }

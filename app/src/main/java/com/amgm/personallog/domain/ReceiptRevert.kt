@@ -22,7 +22,8 @@ object ReceiptRevert {
         val want: Expense = if (itemId != null) {
             LedgerCalc.groupFromReceipt(receipt, items, 0L)?.items?.firstOrNull { it.receiptItemId == itemId }
         } else {
-            LedgerCalc.expensesFromReceipt(receipt, items, perItem = true, now = 0L).singleOrNull()
+            // 単独の支出は合計1行(支払総額、立て替えなら自分の分)。品目ごとの行ではない
+            LedgerCalc.expensesFromReceipt(receipt, items, perItem = false, now = 0L).singleOrNull()
         } ?: return null
         return when (field) {
             PaymentField.AMOUNT -> have.copy(amount = want.amount, amountEdited = false)

@@ -539,7 +539,7 @@ fun ReceiptDetailScreen(
     }
 
     if (s.rebuildWarning) {
-        RebuildWarningSheet(rebuilds = s.rebuildRebuilds, lostEdited = s.lostEditedCount, onConfirm = viewModel::confirmRebuild, onDismiss = viewModel::dismissRebuildWarning)
+        RebuildWarningSheet(rebuilds = s.rebuildRebuilds, lostEdited = s.lostEditedCount, keptDeleted = s.keptDeletedCount, onConfirm = viewModel::confirmRebuild, onDismiss = viewModel::dismissRebuildWarning)
     }
 
     if (s.duplicateWarning.isNotEmpty()) {

@@ -276,6 +276,8 @@ class BackupManager @Inject constructor(
             val existing = receiptIndex.take(entity)
             if (existing != null) {
                 receiptIdMap[r.id] = existing
+                // 既存のレシートの品目と照合して、支出の receiptItemId を付け替えられるようにする
+                itemIdMap.putAll(matchExistingItems(itemsByReceipt[r.id].orEmpty(), receiptDao.getItems(existing)))
                 skipped++
             } else {
                 val newId = receiptDao.insert(entity.copy(id = 0))
@@ -312,9 +314,15 @@ class BackupManager @Inject constructor(
         }
 
         // 支出(uid があれば uid で、無い古い形式は同一内容の件数ベースで重複判定。同じ日に同額の買い物が2件あっても保たれる)
-        val expenseIndex = ExpenseMergeIndex(expenseDao.observeAll().first())
+        val existingExpenses = expenseDao.observeAll().first()
+        val expenseIndex = ExpenseMergeIndex(existingExpenses)
+        val existingByUid = existingExpenses.filter { it.uid.isNotEmpty() }.associateBy { it.uid }
         val toInsert = ArrayList<com.amgm.personallog.data.model.Expense>()
         for (e in data.expenses) {
+            // 同じ uid の既存の行がある場合、他の欄は既存を優先するが、家計簿で消した印(deletedByUser)だけは取り込む(OR)
+            if (e.deletedByUser && e.uid.isNotEmpty()) {
+                existingByUid[e.uid]?.takeIf { !it.deletedByUser }?.let { expenseDao.setDeletedByUser(it.id, true) }
+            }
             if (e.groupId != null && e.groupId in duplicateGroups) {
                 skipped++
                 continue

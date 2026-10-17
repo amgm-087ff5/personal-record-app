@@ -354,6 +354,25 @@ data class BackupExpenseGroup(
     }
 }
 
+/**
+ * 復元(マージ)で既存のレシートに当たったとき、バックアップの品目 id -> 既存の品目 id の対応を作る(純Kotlin)。
+ * 品名・金額・税率・税込区分が同じ品目を、順番に1対1で対応させる。これで支出の receiptItemId を付け替えられる。
+ */
+fun matchExistingItems(backupItems: List<BackupReceiptItem>, existing: List<ReceiptItem>): Map<Long, Long> {
+    data class Key(val name: String, val amount: Int, val taxRate: Int, val includesTax: Boolean)
+    val pool = HashMap<Key, ArrayDeque<Long>>()
+    for (e in existing.sortedBy { it.id }) {
+        pool.getOrPut(Key(e.name.trim(), e.amount, e.taxRate, e.priceIncludesTax)) { ArrayDeque() }.addLast(e.id)
+    }
+    val out = HashMap<Long, Long>()
+    for (b in backupItems.sortedBy { it.id }) {
+        val u = b.toUnitRows().firstOrNull() ?: continue
+        val id = pool[Key(u.name.trim(), u.amount, u.taxRate, u.priceIncludesTax)]?.removeFirstOrNull() ?: continue
+        out[b.id] = id
+    }
+    return out
+}
+
 /** 支出の receiptItemId を、復元後の receipt_items の id に付け替える。対応が取れなければ null。 */
 fun remapReceiptItemId(backupItemId: Long?, itemIdMap: Map<Long, Long>): Long? =
     backupItemId?.let { itemIdMap[it] }
@@ -370,8 +389,14 @@ class GroupMergeIndex(existing: List<ExpenseGroup>) {
     private val byUid = HashMap<String, Long>()
     private val byKey = HashMap<Key, Long>()
 
+    /** 既存のレシートに紐づく支払いグループ(レシート id -> グループ id)。レシート1枚につきグループは1つ。 */
+    private val byReceipt = HashMap<Long, Long>()
+
     init {
-        existing.forEach { register(it, it.id) }
+        existing.forEach {
+            register(it, it.id)
+            it.receiptId?.let { rid -> byReceipt.putIfAbsent(rid, it.id) }
+        }
     }
 
     private fun keyOf(g: ExpenseGroup) = Key(g.date, g.amount, g.category, g.memo, g.receiptId)
@@ -386,10 +411,15 @@ class GroupMergeIndex(existing: List<ExpenseGroup>) {
      * @param entity バックアップのグループを復元後のレシート id などに直した実体(uid は backupUid を入れておく)
      */
     fun find(backupUid: String, entity: ExpenseGroup): Long? {
-        if (backupUid.isEmpty()) return byKey[keyOf(entity)]
-        byUid[backupUid]?.let { return it }
-        // uid は違うが同じレシートの支払い: 従来のキーでも照合する
-        return if (entity.receiptId != null) byKey[keyOf(entity)] else null
+        if (backupUid.isEmpty()) {
+            byKey[keyOf(entity)]?.let { return it }
+        } else {
+            byUid[backupUid]?.let { return it }
+            // uid は違うが同じレシートの支払い: 従来のキーでも照合する
+            if (entity.receiptId != null) byKey[keyOf(entity)]?.let { return it }
+        }
+        // 既存のレシートに支払いグループが既にあれば、バックアップのグループは追加しない(同じレシートにグループが二重になるのを防ぐ)
+        return entity.receiptId?.let { byReceipt[it] }
     }
 
     /** 新しく入れたグループを登録する(同じバックアップ内の重複にも効く)。 */

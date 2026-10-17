@@ -218,6 +218,7 @@ fun PaymentDetailScreen(
                 editingItemId = null
             },
             title = if (group != null) "品目を編集" else null,
+            showDateTime = group == null,
         )
     }
     if (addingItem && group != null) {
@@ -232,6 +233,7 @@ fun PaymentDetailScreen(
             },
             onDelete = null,
             title = "品目を追加",
+            showDateTime = false,
         )
     }
     if (deletingGroup && group != null) {

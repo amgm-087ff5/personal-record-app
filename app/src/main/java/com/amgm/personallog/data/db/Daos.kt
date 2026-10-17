@@ -177,6 +177,13 @@ interface ExpenseDao {
     @Insert
     suspend fun insert(expense: Expense): Long
 
+    /** 家計簿で消した印だけを更新する(他の欄を古い値で上書きしない)。 */
+    @Query("UPDATE expenses SET deletedByUser = :flag WHERE id = :id")
+    suspend fun setDeletedByUser(id: Long, flag: Boolean)
+
+    @Query("SELECT * FROM expenses ORDER BY id")
+    suspend fun getAll(): List<Expense>
+
     @Insert
     suspend fun insertAll(expenses: List<Expense>)
 
