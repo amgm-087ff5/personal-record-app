@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -92,9 +92,11 @@ class ReceiptListViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** 同じ内容の別レシートがある「後から作られた側」 -> 原本。一覧の警告に使う。 */
-    val possibleDuplicates: StateFlow<Map<Long, Receipt>> = receipts
-        .map { ReceiptDedup.laterDuplicates(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+    val possibleDuplicates: StateFlow<Map<Long, Receipt>> =
+        combine(receipts, repository.observeNotDuplicates()) { list, notDup ->
+            // 「重複ではない」と判断した組は警告しない
+            ReceiptDedup.laterDuplicates(list, ReceiptDedup.notDuplicateSet(notDup))
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     private val _state = MutableStateFlow(ReceiptListUiState())
     val state: StateFlow<ReceiptListUiState> = _state.asStateFlow()
