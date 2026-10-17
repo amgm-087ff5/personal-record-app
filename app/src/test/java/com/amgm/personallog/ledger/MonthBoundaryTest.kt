@@ -69,7 +69,7 @@ class MonthBoundaryTest {
         val items = listOf(child(1, "2026-10-14", 400, "食費"), child(2, "2026-10-14", 300, "食費"))
         val entries = LedgerLogic.buildEntries(items, listOf(g))
         val bars = LedgerChart.bars(ChartLevel.YEAR, LocalDate.of(2026, 10, 14), entries)
-        val oct = bars[9]
+        val oct = bars.last() // 年は直近6か月。終わりの月(10月)が最後
         assertEquals(500L, oct.total)
         assertEquals(700L, oct.drawnTotal)
     }
