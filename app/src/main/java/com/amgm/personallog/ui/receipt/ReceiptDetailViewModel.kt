@@ -100,6 +100,21 @@ private fun UnitRow.toForm(key: Long) = ItemForm(
 /** 重複の相手(警告の表示と「重複ではない」の保存に使う)。 */
 data class DuplicateRef(val id: Long, val summary: String)
 
+/** items から求めた計算結果。 */
+private class ItemsCalc(val items: List<ItemForm>, val sum: Long, val breakdown: TaxBreakdown)
+
+/** 直近1件だけ覚える。copy() で items の参照が変わらない限り(合計欄や日付の入力など)、再計算しない。 */
+private object ItemsCalcCache {
+    @Volatile
+    private var last: ItemsCalc? = null
+
+    fun of(items: List<ItemForm>): ItemsCalc {
+        last?.let { if (it.items === items) return it }
+        val models = items.map { it.toItemModel() }
+        return ItemsCalc(items, TaxCalc.paidYen(models), TaxCalc.breakdownByRate(models)).also { last = it }
+    }
+}
+
 data class DetailUiState(
     val loading: Boolean = true,
     val notFound: Boolean = false,
@@ -137,10 +152,8 @@ data class DetailUiState(
     /** 保存してある画像の補正値(回転・トリミング)。 */
     val adjust: ReceiptAdjust = ReceiptAdjust.NONE,
 ) {
-    private val models: List<ReceiptItem> get() = items.map { it.toItemModel() }
-
-    /** 税込の支払総額(品目ごとの税込価格の合計、円は切り捨て)。 */
-    val itemsSum: Long get() = TaxCalc.paidYen(models)
+    /** 税込の支払総額(品目ごとの税込価格の合計、円は切り捨て)。items が変わったときだけ計算する。 */
+    val itemsSum: Long get() = ItemsCalcCache.of(items).sum
 
     /** 自分の払う分(円)。立て替えでなければ支払総額と同じ。立て替えで未入力なら支払総額の全額。 */
     val ownTotal: Long
@@ -161,7 +174,7 @@ data class DetailUiState(
     val totalMissing: Boolean get() = total.toIntOrNull() == null
 
     /** 税率ごとの税抜・税額の内訳(最上部のダッシュボード用)。 */
-    val taxBreakdown: TaxBreakdown get() = TaxCalc.breakdownByRate(models)
+    val taxBreakdown: TaxBreakdown get() = ItemsCalcCache.of(items).breakdown
 
     /**
      * 「¥N を合計に入れる」ボタンを出すか。品目が1件以上あり、合計欄が空か、品目の計算合計と1円でも違うとき。
@@ -186,6 +199,10 @@ class ReceiptDetailViewModel @Inject constructor(
     /** 読み込んだレシート。フォームに無い列(回転・トリミングなど)を保存で失わないよう、これを土台にする。 */
     private var loadedReceipt: Receipt? = null
 
+    /** 重複の判定に使う、このレシート以外の保存済みレシートと「重複ではない」の組(読み込み時に取得)。 */
+    private var otherReceipts: List<Receipt> = emptyList()
+    private var notDuplicateSet: MutableSet<Pair<Long, Long>> = HashSet()
+
     private val _state = MutableStateFlow(DetailUiState())
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
 
@@ -199,8 +216,9 @@ class ReceiptDetailViewModel @Inject constructor(
             val items = repository.getItems(receiptId)
             val (d, t) = splitPurchasedAt(r.purchasedAt)
             loadedReceipt = r
-            val notDup = ReceiptDedup.notDuplicateSet(repository.notDuplicates())
-            val earlier = ReceiptDedup.earlierDuplicates(r, repository.allReceipts(), notDup)
+            notDuplicateSet = HashSet(ReceiptDedup.notDuplicateSet(repository.notDuplicates()))
+            otherReceipts = repository.allReceipts().filter { it.id != r.id }
+            val earlier = ReceiptDedup.earlierDuplicates(r, otherReceipts, notDuplicateSet)
             _state.value = DetailUiState(
                 loading = false,
                 imagePath = r.imagePath,
@@ -226,16 +244,41 @@ class ReceiptDetailViewModel @Inject constructor(
 
     private fun newKey(): Long = nextKey++
 
+    /**
+     * 重複の警告を、いまの入力(日付・時刻・合計)で計算し直す。保存済みの「重複ではない」の組も考慮する。
+     * 読み込み前(loadedReceipt が null)は何もしない。
+     */
+    private fun recomputeDuplicates() {
+        val base = loadedReceipt ?: return
+        _state.update { s ->
+            val current = base.copy(
+                purchasedAt = ReceiptMapper.purchasedAt(s.date.trim(), s.time.trim()),
+                totalAmount = s.total.toIntOrNull(),
+            )
+            val earlier = ReceiptDedup.earlierDuplicates(current, otherReceipts, notDuplicateSet)
+            s.copy(possibleDuplicates = earlier.map { DuplicateRef(it.id, ReceiptDedup.summary(it)) })
+        }
+    }
+
     private fun splitPurchasedAt(s: String): Pair<String, String> =
         s.take(10) to s.drop(10).trim()
 
-    fun setDate(v: String) = _state.update { it.copy(date = v) }
-    fun setTime(v: String) = _state.update { it.copy(time = v) }
+    fun setDate(v: String) {
+        _state.update { it.copy(date = v) }
+        recomputeDuplicates()
+    }
+    fun setTime(v: String) {
+        _state.update { it.copy(time = v) }
+        recomputeDuplicates()
+    }
     fun setStore(v: String) = _state.update { it.copy(store = v) }
-    /** 合計欄を手で編集した。値があれば manual。空にしたら出所も unknown に戻す。 */
-    fun setTotal(v: String) = _state.update {
-        val t = v.filter { c -> c.isDigit() || c == '-' }
-        it.copy(total = t, totalSource = if (t.toIntOrNull() == null) TotalSource.UNKNOWN else TotalSource.MANUAL)
+    /**
+     * 合計欄を手で編集した。出所は manual にする。空にしても manual のまま(画面の警告を
+     * 「読み取れませんでした」ではなく「未入力です」にするため。保存では空なら unknown に戻る)。
+     */
+    fun setTotal(v: String) {
+        _state.update { it.copy(total = v.filter { c -> c.isDigit() || c == '-' }, totalSource = TotalSource.MANUAL) }
+        recomputeDuplicates()
     }
     fun setAdvance(v: Boolean) = _state.update { it.copy(isAdvance = v) }
     fun setOwnAmount(v: String) = _state.update { it.copy(ownAmount = v.filterAmount()) }
@@ -298,7 +341,10 @@ class ReceiptDetailViewModel @Inject constructor(
     fun removeGroup(keys: Set<Long>) = _state.update { s -> s.copy(items = s.items.filterNot { it.key in keys }) }
 
     /** 品目の計算合計(税込の支払合計)を合計に入れる。出所は items。 */
-    fun useItemsSumAsTotal() = _state.update { it.copy(total = it.itemsSum.toString(), totalSource = TotalSource.ITEMS) }
+    fun useItemsSumAsTotal() {
+        _state.update { it.copy(total = it.itemsSum.toString(), totalSource = TotalSource.ITEMS) }
+        recomputeDuplicates()
+    }
 
     fun dismissError() = _state.update { it.copy(error = null) }
     fun dismissInfo() = _state.update { it.copy(info = null) }
@@ -396,7 +442,10 @@ class ReceiptDetailViewModel @Inject constructor(
         _state.update { it.copy(duplicateWarning = emptyList(), busy = true, error = null) }
         viewModelScope.launch {
             try {
-                refs.forEach { repository.markNotDuplicate(receiptId, it.id) }
+                refs.forEach {
+                    repository.markNotDuplicate(receiptId, it.id)
+                    notDuplicateSet.add(ReceiptDedup.pairOf(receiptId, it.id))
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -425,6 +474,7 @@ class ReceiptDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 repository.markNotDuplicate(receiptId, otherId)
+                notDuplicateSet.add(ReceiptDedup.pairOf(receiptId, otherId))
                 _state.update { s -> s.copy(possibleDuplicates = s.possibleDuplicates.filterNot { it.id == otherId }) }
             } catch (e: CancellationException) {
                 throw e
@@ -537,6 +587,7 @@ class ReceiptDetailViewModel @Inject constructor(
                     is ScanOutcome.Failed -> cur.copy(busy = false, scanning = false, error = outcome.message)
                 }
             }
+            recomputeDuplicates()
         }
     }
 

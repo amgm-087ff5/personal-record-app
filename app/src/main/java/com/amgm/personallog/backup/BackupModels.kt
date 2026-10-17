@@ -14,6 +14,7 @@ import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.domain.legacyReceiptOwnYen
 import com.amgm.personallog.receipt.LegacyRow
 import com.amgm.personallog.receipt.ReceiptUnits
+import com.amgm.personallog.receipt.TotalSourceInit
 import com.amgm.personallog.receipt.UnitRow
 import com.amgm.personallog.domain.LedgerCalc
 import kotlinx.serialization.Serializable
@@ -89,20 +90,27 @@ data class BackupReceipt(
     val cropRight: Float = 1f,
     val cropBottom: Float = 1f,
 ) {
-    /** items はこのレシートの品目(旧形式の自分の分を集計するため)。 */
-    fun toEntity(items: List<BackupReceiptItem> = emptyList()): Receipt {
+    /**
+     * items はこのレシートの品目(旧形式の自分の分を集計するため)。
+     * legacyFormat: 形式4以前のバックアップ。合計と出所を TotalSourceInit で決める
+     * (読み取り失敗の仮の0円を合計に戻さない。DB の v8 への移行と同じ判定)。
+     */
+    fun toEntity(items: List<BackupReceiptItem> = emptyList(), legacyFormat: Boolean = false): Receipt {
         val own = ownAmount ?: legacyReceiptOwnYen(
             items.flatMap { it.toUnitRows() }.map {
                 PricedLine(it.amount, it.taxRate, it.priceIncludesTax, it.ownAmount)
             },
         )
         // 確定済みは合計が必須。合計の無い確定済みは下書きに戻して取り込む(家計簿を作らない)
-        val safeStatus = if (status == ReceiptStatus.CONFIRMED && totalAmount == null) ReceiptStatus.DRAFT else status
+        val init = if (legacyFormat) TotalSourceInit.decide(status, totalAmount ?: 0, rawJson) else null
+        val total = if (init != null) init.totalAmount else totalAmount
+        val source = init?.totalSource ?: totalSource
+        val safeStatus = if (status == ReceiptStatus.CONFIRMED && total == null) ReceiptStatus.DRAFT else status
         return Receipt(
-            id = id, purchasedAt = purchasedAt, storeName = storeName, totalAmount = totalAmount,
+            id = id, purchasedAt = purchasedAt, storeName = storeName, totalAmount = total,
             imagePath = imagePath, rawJson = rawJson, status = safeStatus, createdAt = createdAt,
             imageHash = imageHash, isAdvance = isAdvance, ownAmount = own,
-            totalSource = totalSource,
+            totalSource = source,
             rotationDegrees = rotationDegrees,
             cropLeft = cropLeft, cropTop = cropTop, cropRight = cropRight, cropBottom = cropBottom,
         )
@@ -148,26 +156,43 @@ class ReceiptMergeIndex(existing: List<Receipt>) {
 
     private val byHash = HashMap<String, ArrayDeque<Long>>()
     private val byLegacy = HashMap<LegacyKey, ArrayDeque<Long>>()
+    private val hashOf = HashMap<Long, String>()
     private val used = HashSet<Long>()
 
     init {
         for (r in existing) {
-            r.imageHash?.takeIf { it.isNotEmpty() }?.let { byHash.getOrPut(it) { ArrayDeque() }.addLast(r.id) }
+            r.imageHash?.takeIf { it.isNotEmpty() }?.let {
+                byHash.getOrPut(it) { ArrayDeque() }.addLast(r.id)
+                hashOf[r.id] = it
+            }
             byLegacy.getOrPut(legacyKey(r)) { ArrayDeque() }.addLast(r.id)
         }
     }
 
     private fun legacyKey(r: Receipt) = LegacyKey(r.purchasedAt, r.storeName, r.totalAmount, r.imagePath)
 
-    /** 対応する未使用の既存レシートの id。無ければ null。見つけた id は使用済みにする。 */
-    fun take(r: Receipt): Long? {
-        val hash = r.imageHash?.takeIf { it.isNotEmpty() }
-        val queue = if (hash != null) byHash[hash] else byLegacy[legacyKey(r)]
-        while (!queue.isNullOrEmpty()) {
-            val id = queue.removeFirst()
-            if (used.add(id)) return id
+    private fun poll(queue: ArrayDeque<Long>?, accept: (Long) -> Boolean = { true }): Long? {
+        if (queue == null) return null
+        val it = queue.iterator()
+        while (it.hasNext()) {
+            val id = it.next()
+            if (id in used || !accept(id)) continue
+            it.remove()
+            used.add(id)
+            return id
         }
         return null
+    }
+
+    /**
+     * 対応する未使用の既存レシートの id。無ければ null。見つけた id は使用済みにする。
+     * ハッシュがあれば、まずハッシュで探す。無ければ従来のキーでも探す
+     * (既存側にハッシュが未記録の場合。既存側に別のハッシュがあるものは別の画像なので対応させない)。
+     */
+    fun take(r: Receipt): Long? {
+        val hash = r.imageHash?.takeIf { it.isNotEmpty() }
+        if (hash == null) return poll(byLegacy[legacyKey(r)])
+        return poll(byHash[hash]) ?: poll(byLegacy[legacyKey(r)]) { hashOf[it] == null }
     }
 }
 

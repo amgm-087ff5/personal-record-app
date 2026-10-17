@@ -16,7 +16,7 @@ import com.amgm.personallog.data.model.ReceiptNotDuplicate
  */
 @Database(
     entities = [DiaryEntry::class, DiaryPhoto::class, Receipt::class, ReceiptItem::class, Expense::class, ExpenseGroup::class, ReceiptNotDuplicate::class],
-    version = 8,
+    version = 8, // AppDatabase.VERSION と同じにする(テストで確認)
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,5 +27,8 @@ abstract class AppDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "personal_log.db"
+
+        /** Room の版。@Database の version と PreMigrationBackup が共有する。 */
+        const val VERSION = 8
     }
 }
