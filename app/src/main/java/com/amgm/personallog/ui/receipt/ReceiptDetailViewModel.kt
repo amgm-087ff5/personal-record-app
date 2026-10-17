@@ -100,6 +100,22 @@ private fun UnitRow.toForm(key: Long) = ItemForm(
     priceIncludesTax = priceIncludesTax,
 )
 
+/**
+ * 読み取り直しで品目を置き換えるとき、前の品目の id を新しい品目に引き継ぐ。
+ * 品名・金額・税率・税込/税抜が同じ前の品目を、順番に1対1で対応させる(同じ内容が複数あっても1つずつ)。
+ * 対応しなかった前の品目の id は引き継がない(保存でその品目と、その支出が消える)。
+ */
+internal fun carryOverItemIds(previous: List<ItemForm>, incoming: List<ItemForm>): List<ItemForm> {
+    data class Key(val name: String, val amount: String, val taxRate: String, val includesTax: Boolean)
+    fun ItemForm.key() = Key(name.trim(), amount.trim(), taxRate.trim(), priceIncludesTax)
+    val pool = HashMap<Key, ArrayDeque<Long>>()
+    for (p in previous) if (p.id != 0L) pool.getOrPut(p.key()) { ArrayDeque() }.addLast(p.id)
+    return incoming.map { f ->
+        val id = pool[f.key()]?.removeFirstOrNull()
+        if (id != null) f.copy(id = id) else f
+    }
+}
+
 /** 重複の相手(警告の表示と「重複ではない」の保存に使う)。 */
 data class DuplicateRef(val id: Long, val summary: String)
 
@@ -154,6 +170,10 @@ data class DetailUiState(
     val missingTotalPrompt: Boolean = false,
     /** 再確定で、家計簿の行が作り直される(家計簿で直した内容が消える)ときの確認用。 */
     val rebuildWarning: Boolean = false,
+    /** 警告の中身: 家計簿の行が作り直されるか(false なら、品目の削除で一部が消えるだけ)。 */
+    val rebuildRebuilds: Boolean = false,
+    /** 警告の中身: 家計簿で直した行のうち消える件数。 */
+    val lostEditedCount: Int = 0,
     /** このレシートに紐づく家計簿の支払い(グループか単独の支出)。無ければ null。 */
     val paymentLink: PaymentLink? = null,
 ) {
@@ -518,12 +538,16 @@ class ReceiptDetailViewModel @Inject constructor(
                     }
                 }
                 // 再確定で家計簿の行が作り直される(立て替えの切り替え・古い形式)なら、先に知らせる
-                if (!rebuildAccepted && repository.confirmWouldRebuild(built.first, built.second)) {
-                    _state.update { it.copy(busy = false, rebuildWarning = true) }
-                    return@launch
+                // 品目の削除で、家計簿で直した行が消える場合も知らせる
+                if (!rebuildAccepted) {
+                    val impact = repository.confirmImpact(built.first, built.second)
+                    if (impact.needsWarning) {
+                        _state.update { it.copy(busy = false, rebuildWarning = true, rebuildRebuilds = impact.rebuild, lostEditedCount = impact.lostEdited) }
+                        return@launch
+                    }
                 }
-                repository.save(built.first, built.second)
-                repository.confirm(receiptId, perItem = true)
+                // 保存と確定は1つのトランザクション(途中で失敗しても保存だけ残らない)
+                repository.saveAndConfirm(built.first, built.second, perItem = true)
                 _state.update { it.copy(busy = false, confirmed = true, finished = true) }
             } catch (e: CancellationException) {
                 throw e
@@ -556,7 +580,8 @@ class ReceiptDetailViewModel @Inject constructor(
                             total = p.total?.toString().orEmpty(),
                             totalSource = if (p.total != null) TotalSource.PRINTED else TotalSource.UNKNOWN,
                             printedTotal = p.total,
-                            items = units.map { it.toForm(newKey()) },
+                            // 前の品目の id を引き継ぐ(家計簿の行との対応と、家計簿で直した内容を保つ)
+                            items = carryOverItemIds(cur.items, units.map { it.toForm(newKey()) }),
                             info = "読み取りました。内容を確認してください。",
                         )
                     }

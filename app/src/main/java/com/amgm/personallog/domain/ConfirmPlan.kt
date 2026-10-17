@@ -68,7 +68,8 @@ object ConfirmPlanner {
             val want = wantedByItem[item.id]
             val have = existingByItem[item.id].orEmpty()
             if (want == null) {
-                deleteIds += have.map { it.id } // 0円の品目: 作らない。あれば消す
+                // 0円の品目: 作らない。あれば消す。ただし家計簿で金額を直した行(amountEdited)は消さずに残す
+                deleteIds += have.filterNot { it.amountEdited }.map { it.id }
             } else if (have.isEmpty()) {
                 inserts += want.followGroup()
             } else {
@@ -85,6 +86,31 @@ object ConfirmPlanner {
     /** 実行すると、家計簿に既にある行が作り直される(編集が消える)計画か。 */
     fun discardsExisting(plan: ConfirmPlan, existingGroups: List<ExpenseGroup>, existingExpenses: List<Expense>): Boolean =
         plan is ConfirmPlan.Rebuild && (existingGroups.isNotEmpty() || existingExpenses.isNotEmpty())
+
+    /** 家計簿で直した欄(または消した行)がある品目の支出か。再確定で作り直されると失われる内容。 */
+    fun hasUserChanges(e: Expense): Boolean =
+        e.amountEdited || e.categoryEdited || e.nameEdited || e.memoEdited || (e.groupId == null && e.timeEdited)
+
+    /** 家計簿で直した欄があるグループか。 */
+    fun hasUserChanges(g: ExpenseGroup): Boolean = g.amountEdited || g.categoryEdited || g.memoEdited || g.timeEdited
+
+    /**
+     * 実行すると失われる「家計簿で直した」件数。
+     * @param remaining 保存のあとも残る既存の支出(作り直す計画なら、これらが全部消える)
+     * @param removed 保存で品目が消えるために先に消える既存の支出
+     */
+    fun lostEditedCount(
+        plan: ConfirmPlan,
+        existingGroups: List<ExpenseGroup>,
+        remaining: List<Expense>,
+        removed: List<Expense>,
+    ): Int {
+        val lostByRemoval = removed.count { hasUserChanges(it) }
+        if (plan is ConfirmPlan.Rebuild) {
+            return existingGroups.count { hasUserChanges(it) } + remaining.count { hasUserChanges(it) } + lostByRemoval
+        }
+        return lostByRemoval
+    }
 
     /** 品目の支出: 編集済みでない欄だけレシート(want)の値にする。 */
     internal fun mergeItem(have: Expense, want: Expense): Expense = have.copy(

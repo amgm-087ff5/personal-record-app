@@ -61,6 +61,16 @@ class DiaryRepository @Inject constructor(
     suspend fun deletePhoto(photo: DiaryPhoto) = dao.deletePhoto(photo)
 }
 
+/** 確定で家計簿の行がどうなるか(確認の表示用)。 */
+data class ConfirmImpact(val rebuild: Boolean, val lostEdited: Int) {
+    /** 知らせて確認を取るべきか。 */
+    val needsWarning: Boolean get() = rebuild || lostEdited > 0
+
+    companion object {
+        val NONE = ConfirmImpact(rebuild = false, lostEdited = 0)
+    }
+}
+
 @Singleton
 class ReceiptRepository @Inject constructor(
     private val db: AppDatabase,
@@ -152,22 +162,47 @@ class ReceiptRepository @Inject constructor(
     }
 
     /**
-     * いま保存してある家計簿の行が、この内容での確定で作り直される(家計簿で直した内容が消える)か。
-     * 確認の文面に使う。items は画面の品目(新規は id=0)。
+     * 保存と確定を1つのトランザクションで行う。途中で失敗したら、保存した内容も含めてすべて戻る
+     * (保存だけ済んで確定に失敗した状態を残さない)。receiptId を返す。
      */
-    suspend fun confirmWouldRebuild(receipt: Receipt, items: List<ReceiptItem>, perItem: Boolean = true): Boolean {
-        if (receipt.id == 0L || receipt.totalAmount == null) return false
+    suspend fun saveAndConfirm(
+        receipt: Receipt,
+        items: List<ReceiptItem>,
+        perItem: Boolean = true,
+        now: Long = System.currentTimeMillis(),
+    ): Long = db.withTransaction {
+        val id = save(receipt, items)
+        confirm(id, perItem, now)
+        id
+    }
+
+    /**
+     * いま保存してある家計簿の行が、この内容での確定で失われるか(確認の文面に使う)。
+     * items は画面の品目(新規は id=0)。
+     *  - rebuild: 家計簿の行が作り直される(立て替えの切り替え、古い形式)。
+     *  - lostEdited: 家計簿で直した行のうち、作り直しまたは品目の削除で消える件数。
+     */
+    suspend fun confirmImpact(receipt: Receipt, items: List<ReceiptItem>, perItem: Boolean = true): ConfirmImpact {
+        if (receipt.id == 0L || receipt.totalAmount == null) return ConfirmImpact.NONE
         val groups = expenseGroupDao.getByReceiptId(receipt.id)
         val existing = expenseDao.getByReceiptId(receipt.id)
-        if (groups.isEmpty() && existing.isEmpty()) return false
+        if (groups.isEmpty() && existing.isEmpty()) return ConfirmImpact.NONE
         // 保存で消える品目の支出は、先に消えたものとして計画する
         val stored = receiptDao.getItems(receipt.id)
         val plan = ItemSaver.plan(receipt.id, stored, items)
         val deleted = plan.deleteIds.toSet()
+        val removed = existing.filter { it.receiptItemId != null && it.receiptItemId in deleted }
         val remaining = existing.filter { it.receiptItemId == null || it.receiptItemId !in deleted }
         val p = ConfirmPlanner.plan(receipt, items, groups, remaining, perItem, 0L)
-        return ConfirmPlanner.discardsExisting(p, groups, remaining)
+        return ConfirmImpact(
+            rebuild = ConfirmPlanner.discardsExisting(p, groups, remaining),
+            lostEdited = ConfirmPlanner.lostEditedCount(p, groups, remaining, removed),
+        )
     }
+
+    /** 互換用: 作り直されるか。 */
+    suspend fun confirmWouldRebuild(receipt: Receipt, items: List<ReceiptItem>, perItem: Boolean = true): Boolean =
+        confirmImpact(receipt, items, perItem).rebuild
 
     /** このレシートに紐づく家計簿の支払い(グループまたは単独の支出)。確定済みで無ければ null。 */
     fun observePaymentLink(receiptId: Long): Flow<PaymentLink?> =

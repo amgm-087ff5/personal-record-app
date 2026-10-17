@@ -39,18 +39,23 @@ internal fun PaymentLinkRow(link: PaymentLink, onClick: () -> Unit) {
 
 /** 再確定で家計簿の行が作り直されるときの確認。 */
 @Composable
-internal fun RebuildWarningSheet(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+internal fun RebuildWarningSheet(rebuilds: Boolean, lostEdited: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val c = AppTheme.colors
     InkSheet(onDismiss = onDismiss) {
-        SheetTitle("家計簿の行を作り直します")
+        SheetTitle(if (rebuilds) "家計簿の行を作り直します" else "家計簿で直した内容が消えます")
+        val lostNote = if (lostEdited > 0) "家計簿で直した${lostEdited}件が消えます。" else ""
         Text(
-            "立て替えと通常を切り替えたとき、または古い形式で確定した記録のときは、このレシートの家計簿の行を作り直します。" +
-                "家計簿で直した金額・カテゴリ・メモ・日時は消えます。",
+            if (rebuilds) {
+                "立て替えと通常を切り替えたとき、または古い形式で確定した記録のときは、このレシートの家計簿の行を作り直します。" +
+                    "家計簿で直した金額・カテゴリ・メモ・日時は消えます。$lostNote"
+            } else {
+                "レシートから消した品目に対応する家計簿の行は、品目といっしょに消えます。$lostNote"
+            },
             style = AppTheme.type.body,
             color = c.inkSoft,
             modifier = Modifier.padding(bottom = Space.m),
         )
-        TextAction("作り直して確定", onClick = onConfirm, color = c.danger)
+        TextAction(if (rebuilds) "作り直して確定" else "消して確定", onClick = onConfirm, color = c.danger)
         TextAction("キャンセル", onClick = onDismiss, color = c.inkSoft)
     }
 }
