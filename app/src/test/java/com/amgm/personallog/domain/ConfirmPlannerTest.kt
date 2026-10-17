@@ -101,13 +101,14 @@ class ConfirmPlannerTest {
     }
 
     @Test
-    fun itemEditedTime_staysWhileOthersFollow() {
+    fun itemDateTime_alwaysFollowsTheGroup() {
         val (g, children) = stored(first())
         val moved = children[0].copy(date = "2026-10-02", time = "07:00", timeEdited = true)
         val plan = ConfirmPlanner.plan(
             receipt(at = "2026-10-06 09:00"), listOf(milk, soap), listOf(g), listOf(moved, children[1]), perItem = true, now = 2,
         ) as ConfirmPlan.UpdateGroup
-        assertEquals("2026-10-02", plan.updates.single { it.receiptItemId == 11L }.date)
+        // 品目の日時はグループに従う(月・日の振り分けはグループの日付。品目だけ別の日にしない)
+        assertEquals("2026-10-06", plan.updates.single { it.receiptItemId == 11L }.date)
         assertEquals("2026-10-06", plan.updates.single { it.receiptItemId == 12L }.date)
     }
 
