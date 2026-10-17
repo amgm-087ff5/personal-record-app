@@ -6,7 +6,6 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.DiaryEntry
 import com.amgm.personallog.data.model.DiaryPhoto
 import com.amgm.personallog.data.model.Expense
@@ -197,15 +196,29 @@ interface ExpenseDao {
     @Query("DELETE FROM expenses WHERE groupId = :groupId")
     suspend fun deleteByGroupId(groupId: Long)
 
-    /** 月別(期間別)のカテゴリ集計。支出の多い順。 */
+    /**
+     * 家計簿の画面用: 単独の支出は支出の日付で、品目(groupId あり)はグループの日付で期間に入れる。
+     * 品目の日付が古いままでも、グループが期間内ならその品目が入る(月をまたいだ二重計上を防ぐ)。
+     */
     @Query(
-        "SELECT category AS category, SUM(amount) AS total FROM expenses " +
-            "WHERE date BETWEEN :from AND :to GROUP BY category ORDER BY total DESC",
+        "SELECT * FROM expenses WHERE (groupId IS NULL AND date BETWEEN :from AND :to) " +
+            "OR groupId IN (SELECT id FROM expense_groups WHERE date BETWEEN :from AND :to) " +
+            "ORDER BY date DESC, id DESC",
     )
-    fun observeCategoryTotals(from: String, to: String): Flow<List<CategoryTotal>>
+    fun observeLedgerRows(from: String, to: String): Flow<List<Expense>>
 
-    @Query("SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE date BETWEEN :from AND :to")
-    fun observeTotal(from: String, to: String): Flow<Long>
+    /** グループの日時が変わったとき、その品目の日時を合わせる。 */
+    @Query("UPDATE expenses SET date = :date, time = :time WHERE groupId = :groupId")
+    suspend fun syncGroupChildrenDateTime(groupId: Long, date: String, time: String)
+
+    /** レシート由来の全グループについて、品目の日時をグループの日時に合わせる(グループの日時が支払い側で変えられていても揃う)。 */
+    @Query(
+        "UPDATE expenses SET " +
+            "date = (SELECT g.date FROM expense_groups g WHERE g.id = expenses.groupId), " +
+            "time = (SELECT g.time FROM expense_groups g WHERE g.id = expenses.groupId) " +
+            "WHERE groupId IN (SELECT id FROM expense_groups WHERE receiptId = :receiptId)",
+    )
+    suspend fun syncChildrenOfReceiptGroups(receiptId: Long)
 }
 
 @Dao

@@ -92,10 +92,11 @@ class LedgerLogicTest {
     }
 
     @Test
-    fun buildEntries_orphanChildBecomesSingle() {
+    fun buildEntries_childWithoutItsGroupIsNotCountedAsSingle() {
+        // groupId のある行は、グループが渡されていなくても単独の行として数えない(月をまたいだ二重計上の防止)
         val orphan = Expense(id = 1, date = "2026-10-01", amount = 10, groupId = 99, createdAt = 1)
         val entries = LedgerLogic.buildEntries(listOf(orphan), emptyList())
-        assertTrue(entries.single() is LedgerEntry.Single)
+        assertTrue(entries.isEmpty())
     }
 
     @Test

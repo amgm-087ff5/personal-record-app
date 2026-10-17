@@ -56,6 +56,8 @@ object ConfirmPlanner {
         if (!canUpdate || group == null) return ConfirmPlan.Rebuild(fresh.group, fresh.items)
 
         val updatedGroup = mergeGroup(group, fresh.group)
+        // 品目の日時はグループに従う(グループの日時を支払い側で直していても、品目はそれに合わせる)
+        fun Expense.followGroup() = copy(date = updatedGroup.date, time = updatedGroup.time)
         val wantedByItem = fresh.items.associateBy { it.receiptItemId }
         val existingByItem = existingExpenses.groupBy { it.receiptItemId }
         val inserts = ArrayList<Expense>()
@@ -68,9 +70,9 @@ object ConfirmPlanner {
             if (want == null) {
                 deleteIds += have.map { it.id } // 0円の品目: 作らない。あれば消す
             } else if (have.isEmpty()) {
-                inserts += want
+                inserts += want.followGroup()
             } else {
-                updates += mergeItem(have[0], want)
+                updates += mergeItem(have[0], want).followGroup()
                 deleteIds += have.drop(1).map { it.id }
             }
         }

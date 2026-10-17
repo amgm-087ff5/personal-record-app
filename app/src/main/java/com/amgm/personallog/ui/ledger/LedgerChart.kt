@@ -38,7 +38,13 @@ data class ChartBar(
     val segments: List<ChartSegment>,
     val total: Long,
     val drillable: Boolean,
-)
+) {
+    /**
+     * 棒に描く高さの元になる額: 正の区切りの和。差額で負になったカテゴリは描かない(帯グラフと同じ)ので、
+     * 棒の高さは total ではなくこれで決める(負の区切りがあっても、棒が枠からはみ出さない)。表示する合計の数字は total のまま。
+     */
+    val drawnTotal: Long get() = segments.filter { it.amount > 0L }.sumOf { it.amount }
+}
 
 /** 積み上げ棒グラフ用の純粋ロジック(JVMでテスト可能)。 */
 object LedgerChart {

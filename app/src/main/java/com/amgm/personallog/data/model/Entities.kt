@@ -270,7 +270,7 @@ data class Expense(
     val uid: String = newUid(),
 )
 
-/** 月別カテゴリ集計の結果行(Roomのクエリ結果としても使う)。 */
+/** カテゴリ別の合計1行(画面の集計で使う)。 */
 data class CategoryTotal(
     val category: String,
     val total: Long,

@@ -6,7 +6,6 @@ import com.amgm.personallog.data.db.DiaryDao
 import com.amgm.personallog.data.db.ExpenseDao
 import com.amgm.personallog.data.db.ExpenseGroupDao
 import com.amgm.personallog.data.db.ReceiptDao
-import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.DiaryEntry
 import com.amgm.personallog.data.model.DiaryPhoto
 import com.amgm.personallog.data.model.Expense
@@ -113,6 +112,8 @@ class ReceiptRepository @Inject constructor(
         val (date, time) = LedgerCalc.splitPurchasedAt(receipt.purchasedAt)
         expenseDao.syncDateTimeFromReceipt(id, date, time)
         expenseGroupDao.syncDateTimeFromReceipt(id, date, time)
+        // 品目の日時はグループに従う(グループの日時を支払い側で変えていても揃える)
+        expenseDao.syncChildrenOfReceiptGroups(id)
         id
     }
 
@@ -192,6 +193,9 @@ class ExpenseRepository @Inject constructor(
 ) {
     fun observeAll(): Flow<List<Expense>> = dao.observeAll()
     fun observeBetween(from: String, to: String): Flow<List<Expense>> = dao.observeBetween(from, to)
+
+    /** 家計簿の画面用の行。品目はグループの日付で期間に入れる(月をまたいで二重に数えない)。 */
+    fun observeLedgerRows(from: String, to: String): Flow<List<Expense>> = dao.observeLedgerRows(from, to)
     fun observeGroupsBetween(from: String, to: String): Flow<List<ExpenseGroup>> = groupDao.observeBetween(from, to)
 
     /** yearMonth は "yyyy-MM"。 */
@@ -200,20 +204,15 @@ class ExpenseRepository @Inject constructor(
         return dao.observeBetween(from, to)
     }
 
-    fun observeMonthCategoryTotals(yearMonth: String): Flow<List<CategoryTotal>> {
-        val (from, to) = LedgerCalc.monthRange(yearMonth)
-        return dao.observeCategoryTotals(from, to)
-    }
-
-    fun observeMonthTotal(yearMonth: String): Flow<Long> {
-        val (from, to) = LedgerCalc.monthRange(yearMonth)
-        return dao.observeTotal(from, to)
-    }
-
     fun observeGroup(id: Long): Flow<ExpenseGroup?> = groupDao.observeById(id)
     fun observeGroupItems(groupId: Long): Flow<List<Expense>> = dao.observeByGroupId(groupId)
     fun observeExpense(id: Long): Flow<Expense?> = dao.observeById(id)
-    suspend fun updateGroup(group: ExpenseGroup) = groupDao.update(group)
+
+    /** グループを更新する。日時が変わったら品目の日時も合わせる(品目の日付がグループとずれて月をまたいで数えられるのを防ぐ)。 */
+    suspend fun updateGroup(group: ExpenseGroup) = db.withTransaction {
+        groupDao.update(group)
+        dao.syncGroupChildrenDateTime(group.id, group.date, group.time)
+    }
     suspend fun updateAll(expenses: List<Expense>) = dao.updateAll(expenses)
 
     /** レシート画像のサムネイル・「レシートを開く」用。 */

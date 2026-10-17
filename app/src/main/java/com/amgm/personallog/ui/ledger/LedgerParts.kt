@@ -141,7 +141,7 @@ internal fun StackedChart(
             TextAction("›", onClick = onNext, color = c.ink)
         }
 
-        val max = bars.maxOfOrNull { it.total }?.coerceAtLeast(1L) ?: 1L
+        val max = bars.maxOfOrNull { it.drawnTotal }?.coerceAtLeast(1L) ?: 1L
         if (bars.isNotEmpty()) {
             Spacer(Modifier.height(Space.s))
             Canvas(

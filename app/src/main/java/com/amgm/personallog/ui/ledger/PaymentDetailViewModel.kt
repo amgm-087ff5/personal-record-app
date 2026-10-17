@@ -131,13 +131,16 @@ class PaymentDetailViewModel @Inject constructor(
         memo: String,
         onDone: (String?) -> Unit,
     ) = run(onDone) {
+        // グループの品目の日時はグループに従う(月・日の振り分けはグループの日付)。品目の側では変えない
+        val d = group?.date ?: date
+        val t = group?.time ?: time
         if (original != null) {
-            repository.update(PaymentEdit.editExpense(original, date, time, amount, category, name, memo))
+            repository.update(PaymentEdit.editExpense(original, d, t, amount, category, name, memo))
         } else if (group != null) {
             // 手で足した品目はレシートの品目と対応しないので、receiptId も receiptItemId も付けない
             repository.add(
                 Expense(
-                    date = date, time = time, amount = amount, category = category,
+                    date = d, time = t, amount = amount, category = category,
                     name = name.trim(), memo = memo.trim(), createdAt = System.currentTimeMillis(), groupId = group.id,
                 ),
             )

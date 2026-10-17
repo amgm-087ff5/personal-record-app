@@ -85,7 +85,7 @@ class LedgerViewModel @Inject constructor(
                 val me = LocalDate.parse(monthTo)
                 val from = (if (ms.isBefore(chartStart)) ms else chartStart).toString()
                 val to = (if (me.isAfter(chartEnd)) me else chartEnd).toString()
-                combine(repository.observeBetween(from, to), repository.observeGroupsBetween(from, to)) { all, groups ->
+                combine(repository.observeLedgerRows(from, to), repository.observeGroupsBetween(from, to)) { all, groups ->
                     snapshot(f, l, all, groups)
                 }
                     .catch { e ->

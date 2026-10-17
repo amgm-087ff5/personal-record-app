@@ -105,7 +105,9 @@ object LedgerLogic {
 
     /**
      * 支出と支払いグループを一覧用の行にする。グループの品目は group の行に入り、単独の行には入らない
-     * (合計が二重にならない)。並びは日付の降順、同じ日は作成の新しい順。
+     * (合計が二重にならない)。groupId のある行は、グループが渡されていなくても単独の行としては数えない
+     * (グループが別の月に動いたとき、品目が元の月に単独で残って二重に数えられるのを防ぐ)。
+     * 月・日の振り分けはグループの日付に従う。並びは日付の降順、同じ日は作成の新しい順。
      */
     fun buildEntries(expenses: List<Expense>, groups: List<ExpenseGroup>): List<LedgerEntry> {
         val groupIds = groups.map { it.id }.toSet()
@@ -113,7 +115,7 @@ object LedgerLogic {
             .filter { e -> e.groupId != null && e.groupId in groupIds }
             .groupBy { it.groupId!! }
         val singles = expenses
-            .filter { e -> e.groupId == null || e.groupId !in groupIds }
+            .filter { e -> e.groupId == null }
             .map { LedgerEntry.Single(it) }
         val grouped = groups.map { LedgerEntry.Group(it, itemsByGroup[it.id].orEmpty().sortedBy { x -> x.id }) }
         return (singles + grouped).sortedWith(
