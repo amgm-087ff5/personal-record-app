@@ -34,7 +34,7 @@ class BackupFormat6Test {
         val text = BackupJson.encodeToString(BackupData.serializer(), data)
         val back = BackupJson.decodeFromString(BackupData.serializer(), text)
         assertEquals(data, back)
-        assertEquals(7, back.formatVersion)
+        assertEquals(8, back.formatVersion)
         assertEquals(group, back.expenseGroups.single().toEntity())
         assertEquals(expense, back.expenses.single().toEntity())
         assertTrue(text.contains("\"receiptItemId\":11"))
@@ -90,12 +90,13 @@ class BackupFormat6Test {
     }
 
     @Test
-    fun checkVersion_acceptsFiveSixAndSeven_rejectsEight() {
+    fun checkVersion_acceptsFiveSixSevenAndEight_rejectsNine() {
         BackupManager.checkVersion(5)
         BackupManager.checkVersion(6)
         BackupManager.checkVersion(7)
+        BackupManager.checkVersion(8)
         try {
-            BackupManager.checkVersion(8)
+            BackupManager.checkVersion(9)
             org.junit.Assert.fail("expected BackupException")
         } catch (e: BackupException) {
             assertTrue(e.message!!.contains("新しい"))

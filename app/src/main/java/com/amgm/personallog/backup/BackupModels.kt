@@ -13,7 +13,10 @@ import com.amgm.personallog.data.model.ReceiptNotDuplicate
 import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.model.ShareGroup
 import com.amgm.personallog.data.model.ShareGroupItem
+import com.amgm.personallog.data.model.ShareKind
+import com.amgm.personallog.data.model.SplitLabelAmount
 import com.amgm.personallog.data.model.SplitMode
+import com.amgm.personallog.data.model.SplitParticipant
 import com.amgm.personallog.data.model.SplitSheet
 import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.model.WholeShare
@@ -30,7 +33,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /** バックアップZIPのフォーマット版。互換性を壊す変更をしたら上げる。 */
-const val BACKUP_FORMAT_VERSION = 7
+const val BACKUP_FORMAT_VERSION = 8
 const val BACKUP_DATA_ENTRY = "data.json"
 const val BACKUP_FILES_PREFIX = "files/"
 
@@ -60,6 +63,10 @@ data class BackupData(
     val splitSheets: List<BackupSplitSheet> = emptyList(),
     val shareGroups: List<BackupShareGroup> = emptyList(),
     val shareGroupItems: List<BackupShareGroupItem> = emptyList(),
+    /** v8 以降。支払いごとの参加者・ラベル金額。形式7以前には無いので空として読む。 */
+    val participants: List<BackupParticipant> = emptyList(),
+    val labelAmounts: List<BackupLabelAmount> = emptyList(),
+    /** v8 以降、割当・支払内訳の参照先は人(personId)から参加者(participantId)に変わった。形式7以前のものは取り込まない(BackupItemShare の注釈も参照)。 */
     val itemShares: List<BackupItemShare> = emptyList(),
     val wholeShares: List<BackupWholeShare> = emptyList(),
     val paymentPayers: List<BackupPaymentPayer> = emptyList(),
@@ -517,12 +524,53 @@ data class BackupPerson(
     }
 }
 
-/** 割り勘シート(v7 以降)。receiptId はバックアップ内の支払い id。 */
+/**
+ * 割り勘シート(v7 以降。wholeKind・warnings は v8 以降で、無い形式は既定値)。receiptId はバックアップ内の支払い id。
+ */
 @Serializable
-data class BackupSplitSheet(val receiptId: Long, val mode: String = SplitMode.SELF) {
-    fun toEntity() = SplitSheet(receiptId, mode)
+data class BackupSplitSheet(
+    val receiptId: Long,
+    val mode: String = SplitMode.SELF,
+    val wholeKind: String = ShareKind.AMOUNT,
+    val warnings: String = "",
+) {
+    fun toEntity() = SplitSheet(receiptId, mode, wholeKind, warnings)
     companion object {
-        fun from(s: SplitSheet) = BackupSplitSheet(s.receiptId, s.mode)
+        fun from(s: SplitSheet) = BackupSplitSheet(s.receiptId, s.mode, s.wholeKind, s.warnings)
+    }
+}
+
+/**
+ * 支払いごとの参加者(v8 以降)。id・receiptId はバックアップ内の id。
+ * personId は人の id(バックアップ内)。無い参加者は「名前なし」。取り込み時に人の対応が無ければ null にする。
+ */
+@Serializable
+data class BackupParticipant(
+    val id: Long,
+    val receiptId: Long,
+    val personId: Long? = null,
+    val memo: String = "",
+    val label: String = "",
+    val isPayer: Boolean = false,
+    val sortOrder: Int = 0,
+) {
+    fun toEntity() = SplitParticipant(
+        id = id, receiptId = receiptId, personId = personId, memo = memo, label = label,
+        isPayer = isPayer, sortOrder = sortOrder,
+    )
+    companion object {
+        fun from(p: SplitParticipant) = BackupParticipant(
+            p.id, p.receiptId, p.personId, p.memo, p.label, p.isPayer, p.sortOrder,
+        )
+    }
+}
+
+/** ラベルごとの1人あたり金額(v8 以降)。receiptId はバックアップ内の支払い id。label が "" は「その他」。 */
+@Serializable
+data class BackupLabelAmount(val receiptId: Long, val label: String, val amount: Int) {
+    fun toEntity() = SplitLabelAmount(receiptId, label, amount)
+    companion object {
+        fun from(a: SplitLabelAmount) = BackupLabelAmount(a.receiptId, a.label, a.amount)
     }
 }
 
@@ -550,48 +598,58 @@ data class BackupShareGroupItem(val groupId: Long, val receiptItemId: Long) {
     }
 }
 
-/** 品目ごと方式の割当(v7 以降)。groupId と personId はバックアップ内の id。 */
+/**
+ * 品目ごと方式の割当(v8 以降)。groupId と participantId はバックアップ内の id。
+ * 形式7までは参照先が人(personId)で、参加者に付け替えられないため、personId は読むだけで捨てる(書き出しでは null)。
+ * 形式7のファイルの割当は、取り込み側で丸ごと捨てる(形式7の時点では画面から割り勘を使えなかったので実データは無い想定)。
+ */
 @Serializable
 data class BackupItemShare(
     val groupId: Long,
-    val personId: Long,
+    val participantId: Long = 0,
     val kind: String,
     val weight: Int? = null,
     val amount: Int? = null,
+    /** 形式7まで。読むだけで捨てる。 */
+    val personId: Long? = null,
 ) {
-    fun toEntity() = ItemShare(groupId, personId, kind, weight, amount)
+    fun toEntity() = ItemShare(groupId, participantId, kind, weight, amount)
     companion object {
-        fun from(s: ItemShare) = BackupItemShare(s.groupId, s.personId, s.kind, s.weight, s.amount)
+        fun from(s: ItemShare) = BackupItemShare(s.groupId, s.participantId, s.kind, s.weight, s.amount)
     }
 }
 
-/** 全体方式の割当(v7 以降)。receiptId と personId はバックアップ内の id。 */
+/** 全体方式の割当(v8 以降)。receiptId と participantId はバックアップ内の id。personId は形式7まで(読むだけで捨てる)。 */
 @Serializable
 data class BackupWholeShare(
     val receiptId: Long,
-    val personId: Long,
+    val participantId: Long = 0,
     val kind: String,
     val weight: Int? = null,
     val amount: Int? = null,
+    /** 形式7まで。読むだけで捨てる。 */
+    val personId: Long? = null,
 ) {
-    fun toEntity() = WholeShare(receiptId, personId, kind, weight, amount)
+    fun toEntity() = WholeShare(receiptId, participantId, kind, weight, amount)
     companion object {
-        fun from(s: WholeShare) = BackupWholeShare(s.receiptId, s.personId, s.kind, s.weight, s.amount)
+        fun from(s: WholeShare) = BackupWholeShare(s.receiptId, s.participantId, s.kind, s.weight, s.amount)
     }
 }
 
-/** 支払内訳(v7 以降)。id・receiptId・personId はバックアップ内の id。 */
+/** 支払内訳(v8 以降)。id・receiptId・participantId はバックアップ内の id。personId は形式7まで(読むだけで捨てる)。 */
 @Serializable
 data class BackupPaymentPayer(
     val id: Long,
     val receiptId: Long,
-    val personId: Long,
+    val participantId: Long = 0,
     val method: String = "",
     val amount: Int,
+    /** 形式7まで。読むだけで捨てる。 */
+    val personId: Long? = null,
 ) {
-    fun toEntity() = PaymentPayer(id, receiptId, personId, method, amount)
+    fun toEntity() = PaymentPayer(id, receiptId, participantId, method, amount)
     companion object {
-        fun from(p: PaymentPayer) = BackupPaymentPayer(p.id, p.receiptId, p.personId, p.method, p.amount)
+        fun from(p: PaymentPayer) = BackupPaymentPayer(p.id, p.receiptId, p.participantId, p.method, p.amount)
     }
 }
 
@@ -644,55 +702,83 @@ fun remapShareGroups(groups: List<BackupShareGroup>, receiptIdMap: Map<Long, Lon
         g.id to g.toEntity().copy(id = 0, receiptId = receiptId)
     }
 
-/** 割り勘の表(まとまり以外)を付け替えた結果。id は未採番(自動採番に任せる)。 */
+/**
+ * 割り勘の参加者を、復元後の支払い id・人 id に付け替える(純Kotlin)。返り値は (バックアップの参加者 id, 新しい行)。
+ * 新しい行の id は 0(自動採番に任せる)。支払いの対応が無い参加者は捨てる。
+ * 人の対応が無い参加者は残し、personId を null(名前なし・未登録扱い)にする。
+ * @param personIdMap バックアップの人 id -> 端末の人 id
+ */
+fun remapParticipants(
+    participants: List<BackupParticipant>,
+    receiptIdMap: Map<Long, Long>,
+    personIdMap: Map<Long, Long>,
+): List<Pair<Long, SplitParticipant>> =
+    participants.mapNotNull { p ->
+        val receiptId = receiptIdMap[p.receiptId] ?: return@mapNotNull null
+        val personId = p.personId?.let { personIdMap[it] }
+        p.id to p.toEntity().copy(id = 0, receiptId = receiptId, personId = personId)
+    }
+
+/** 割り勘の表(まとまり・参加者以外)を付け替えた結果。id は未採番(自動採番に任せる)。 */
 data class SplitRemapped(
     val sheets: List<SplitSheet>,
     val groupItems: List<ShareGroupItem>,
     val itemShares: List<ItemShare>,
     val wholeShares: List<WholeShare>,
     val payers: List<PaymentPayer>,
+    val labelAmounts: List<SplitLabelAmount>,
 )
 
 /**
  * 割り勘の表を、復元後の id に付け替える(純Kotlin)。参照先のどれかが対応しない行は捨てる。
- * 同じ主キーになる行は1つにまとめる(品目は1つのまとまりにしか入らない、人は1つの割当だけ、など)。
+ * 同じ主キーになる行は1つにまとめる(品目は1つのまとまりにしか入らない、参加者は1つの割当だけ、など)。
+ * 形式7以前のファイルの itemShares・wholeShares・paymentPayers は、参照先が人で参加者に付け替えられないので捨てる
+ * (形式7の時点では画面から割り勘を使えなかったため、実データは無い想定)。シート・まとまり・品目のまとまりは入れる。
  * @param receiptIdMap バックアップの支払い id -> 復元後の支払い id(取り込み対象の支払いだけ)
  * @param itemIdMap バックアップの品目 id -> 復元後の品目 id(取り込み対象の品目だけ)
- * @param personIdMap バックアップの人 id -> 端末の人 id
  * @param groupIdMap バックアップのまとまり id -> 復元後のまとまり id
+ * @param participantIdMap バックアップの参加者 id -> 復元後の参加者 id(取り込み対象の参加者だけ)
  */
 fun remapSplitRows(
     data: BackupData,
     receiptIdMap: Map<Long, Long>,
     itemIdMap: Map<Long, Long>,
-    personIdMap: Map<Long, Long>,
     groupIdMap: Map<Long, Long>,
-): SplitRemapped = SplitRemapped(
-    sheets = data.splitSheets.mapNotNull { s ->
-        val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
-        s.toEntity().copy(receiptId = r)
-    }.distinctBy { it.receiptId },
-    groupItems = data.shareGroupItems.mapNotNull { s ->
-        val g = groupIdMap[s.groupId] ?: return@mapNotNull null
-        val item = itemIdMap[s.receiptItemId] ?: return@mapNotNull null
-        s.toEntity().copy(groupId = g, receiptItemId = item)
-    }.distinctBy { it.receiptItemId },
-    itemShares = data.itemShares.mapNotNull { s ->
-        val g = groupIdMap[s.groupId] ?: return@mapNotNull null
-        val p = personIdMap[s.personId] ?: return@mapNotNull null
-        s.toEntity().copy(groupId = g, personId = p)
-    }.distinctBy { it.groupId to it.personId },
-    wholeShares = data.wholeShares.mapNotNull { s ->
-        val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
-        val p = personIdMap[s.personId] ?: return@mapNotNull null
-        s.toEntity().copy(receiptId = r, personId = p)
-    }.distinctBy { it.receiptId to it.personId },
-    payers = data.paymentPayers.mapNotNull { s ->
-        val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
-        val p = personIdMap[s.personId] ?: return@mapNotNull null
-        s.toEntity().copy(id = 0, receiptId = r, personId = p)
-    },
-)
+    participantIdMap: Map<Long, Long>,
+): SplitRemapped {
+    // 形式7以前の割当・支払内訳は捨てる(参照先が人のため)
+    val dropShares = data.formatVersion < 8
+    return SplitRemapped(
+        sheets = data.splitSheets.mapNotNull { s ->
+            val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
+            s.toEntity().copy(receiptId = r)
+        }.distinctBy { it.receiptId },
+        groupItems = data.shareGroupItems.mapNotNull { s ->
+            val g = groupIdMap[s.groupId] ?: return@mapNotNull null
+            val item = itemIdMap[s.receiptItemId] ?: return@mapNotNull null
+            s.toEntity().copy(groupId = g, receiptItemId = item)
+        }.distinctBy { it.receiptItemId },
+        itemShares = if (dropShares) emptyList() else data.itemShares.mapNotNull { s ->
+            val g = groupIdMap[s.groupId] ?: return@mapNotNull null
+            val p = participantIdMap[s.participantId] ?: return@mapNotNull null
+            s.toEntity().copy(groupId = g, participantId = p)
+        }.distinctBy { it.groupId to it.participantId },
+        wholeShares = if (dropShares) emptyList() else data.wholeShares.mapNotNull { s ->
+            val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
+            val p = participantIdMap[s.participantId] ?: return@mapNotNull null
+            s.toEntity().copy(receiptId = r, participantId = p)
+        }.distinctBy { it.receiptId to it.participantId },
+        payers = if (dropShares) emptyList() else data.paymentPayers.mapNotNull { s ->
+            val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
+            val p = participantIdMap[s.participantId] ?: return@mapNotNull null
+            s.toEntity().copy(id = 0, receiptId = r, participantId = p)
+        },
+        labelAmounts = data.labelAmounts.mapNotNull { s ->
+            val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
+            s.toEntity().copy(receiptId = r)
+        }.distinctBy { it.receiptId to it.label },
+    )
+}
 
 enum class ImportMode { MERGE, REPLACE }
 
