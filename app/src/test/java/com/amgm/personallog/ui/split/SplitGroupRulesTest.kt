@@ -45,7 +45,7 @@ class SplitGroupRulesTest {
     }
 
     @Test
-    fun 分けた後の新しいまとまりは個数が null で共通費も外れる() {
+    fun 分けた後の新しいまとまりは個数が_null_で共通費も外れる() {
         val g = newGroupAfterSplit(receiptId = 7L, sortOrder = 4)
         assertNull(g.pieceCount)
         assertFalse(g.isShared)
@@ -90,7 +90,7 @@ class SplitGroupRulesTest {
     }
 
     @Test
-    fun まとめる_残す先が未設定で他が同じ割当なら、その割当を残す先へ付ける() {
+    fun まとめる_残す先が未設定で他が同じ割当なら_その割当を残す先へ付ける() {
         val other = listOf(share(11L, 1L, ShareKind.AMOUNT, amount = 300), share(11L, 2L, ShareKind.AMOUNT, amount = 200))
         val r = mergeShareRows(keepGroupId = 10L, keepRows = emptyList(), otherRows = listOf(other))
         assertFalse(r.cleared)
@@ -98,7 +98,7 @@ class SplitGroupRulesTest {
     }
 
     @Test
-    fun まとめる_残す先に割当があり他が未設定なら、残す先の割当を残す() {
+    fun まとめる_残す先に割当があり他が未設定なら_残す先の割当を残す() {
         val keep = listOf(share(10L, 1L, ShareKind.ASSIGN))
         val r = mergeShareRows(keepGroupId = 10L, keepRows = keep, otherRows = listOf(emptyList()))
         assertFalse(r.cleared)
