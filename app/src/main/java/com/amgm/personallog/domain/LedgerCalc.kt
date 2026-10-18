@@ -6,6 +6,7 @@ import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.ReceiptStatus
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
@@ -171,10 +172,16 @@ object LedgerCalc {
     private fun itemPaidYen(items: List<ReceiptItem>, share: SelfShare?): List<Long> =
         if (share != null) items.map { share.perItem[it.id] ?: 0L } else TaxCalc.paidYenPerItem(items)
 
-    /** 品目が無いとき、または品目を1行にまとめるときの支払総額(品目があれば品目の税込合計、無ければ合計欄)。 */
+    /**
+     * 品目が無いとき、または品目を1行にまとめるときの支払総額(品目があれば品目の税込合計、無ければ合計欄)。
+     * 下書きで合計も品目も無いときは 0 円(下書きも家計簿に入れ、集計で下書きの件数に数える)。確定済みで合計が無いのは不正なので例外。
+     */
     private fun paidTotal(receipt: Receipt, items: List<ReceiptItem>): Long =
         if (items.isEmpty()) {
-            requireNotNull(receipt.totalAmount) { "合計が未入力のレシートは家計簿にできません(id=${receipt.id})" }.toLong()
+            receipt.totalAmount?.toLong() ?: run {
+                require(receipt.status == ReceiptStatus.DRAFT) { "合計が未入力のレシートは家計簿にできません(id=${receipt.id})" }
+                0L
+            }
         } else {
             TaxCalc.paidYen(items)
         }
