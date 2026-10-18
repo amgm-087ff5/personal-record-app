@@ -43,6 +43,10 @@ class ReceiptScanner @Inject constructor(
                 ClaudeRequest.buildBody(s.claudeModelId, Base64.encodeToString(bytes, Base64.NO_WRAP))
             }
             val response = client.post(s.anthropicApiKey.trim(), body)
+            // 出力上限で途中で切れた応答は JSON が欠けている。解析失敗(手入力)ではなく撮り直しを促す
+            if (ClaudeRequest.extractStopReason(response) == "max_tokens") {
+                return ScanOutcome.Failed("読み取り結果が長すぎて途中で切れました。画像をトリミングするか、分けて撮り直してください")
+            }
             val text = ClaudeRequest.extractText(response)
                 ?: return ScanOutcome.Unparsable(response, "応答に本文がありませんでした")
             when (val r = ReceiptParser.parse(text)) {
