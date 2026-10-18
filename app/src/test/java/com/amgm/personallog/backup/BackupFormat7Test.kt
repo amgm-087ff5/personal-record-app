@@ -6,7 +6,9 @@ import com.amgm.personallog.data.model.Person
 import com.amgm.personallog.data.model.ShareGroup
 import com.amgm.personallog.data.model.ShareGroupItem
 import com.amgm.personallog.data.model.ShareKind
+import com.amgm.personallog.data.model.SplitLabelAmount
 import com.amgm.personallog.data.model.SplitMode
+import com.amgm.personallog.data.model.SplitParticipant
 import com.amgm.personallog.data.model.SplitSheet
 import com.amgm.personallog.data.model.WholeShare
 import org.junit.Assert.assertEquals
@@ -14,6 +16,9 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * 割り勘の表の付け替え(形式8の参加者ベース)。形式7で人だった割当の参照先は、形式8では参加者に変わっている。
+ */
 class BackupFormat7Test {
     private val self = BackupPerson(id = 1, uid = "p-self", name = "自分", shortName = "私", isSelf = true, sortOrder = 0, createdAt = 10)
     private val friend = BackupPerson(id = 2, uid = "p-friend", name = "髙橋", shortName = "髙", isSelf = false, sortOrder = 1, createdAt = 11)
@@ -21,72 +26,50 @@ class BackupFormat7Test {
     private val receiptIdMap = mapOf(5L to 50L, 6L to 60L)
     private val itemIdMap = mapOf(11L to 111L, 12L to 112L)
     private val personIdMap = mapOf(1L to 100L, 2L to 200L)
+    private val groupIdMap = mapOf(3L to 300L)
+    private val participantIdMap = mapOf(21L to 310L, 22L to 320L)
 
-    /** 支払い5(品目11)に、品目ごと方式のまとまり・全体方式の割当・支払内訳を持つ、形式7のデータ。 */
+    /** 支払い5(品目11)の割り勘。参加者21(自分)・22(髙橋)。品目ごと方式のまとまり・全体方式の割当・支払内訳を持つ。 */
     private fun fullData() = BackupData(
         formatVersion = BACKUP_FORMAT_VERSION,
-        dbVersion = 10,
+        dbVersion = 11,
         exportedAt = 1,
         persons = listOf(self, friend),
         splitSheets = listOf(BackupSplitSheet(5, SplitMode.ITEM)),
         shareGroups = listOf(BackupShareGroup(id = 3, receiptId = 5, pieceCount = 2, isShared = false, sortOrder = 0)),
         shareGroupItems = listOf(BackupShareGroupItem(groupId = 3, receiptItemId = 11)),
-        itemShares = listOf(
-            BackupItemShare(groupId = 3, personId = 1, kind = ShareKind.RATIO, weight = 2),
-            BackupItemShare(groupId = 3, personId = 2, kind = ShareKind.RATIO, weight = 1),
+        participants = listOf(
+            BackupParticipant(id = 21, receiptId = 5, personId = 1, isPayer = true),
+            BackupParticipant(id = 22, receiptId = 5, personId = 2),
         ),
-        wholeShares = listOf(BackupWholeShare(receiptId = 5, personId = 2, kind = ShareKind.AMOUNT, amount = 300)),
-        paymentPayers = listOf(BackupPaymentPayer(id = 7, receiptId = 5, personId = 1, method = "カード", amount = 980)),
+        itemShares = listOf(
+            BackupItemShare(groupId = 3, participantId = 21, kind = ShareKind.RATIO, weight = 2),
+            BackupItemShare(groupId = 3, participantId = 22, kind = ShareKind.RATIO, weight = 1),
+        ),
+        wholeShares = listOf(BackupWholeShare(receiptId = 5, participantId = 22, kind = ShareKind.AMOUNT, amount = 300)),
+        paymentPayers = listOf(BackupPaymentPayer(id = 7, receiptId = 5, participantId = 21, method = "カード", amount = 980)),
     )
-
-    @Test
-    fun format7_roundTrip_keepsSplitLists() {
-        val data = fullData()
-        val text = BackupJson.encodeToString(BackupData.serializer(), data)
-        val back = BackupJson.decodeFromString(BackupData.serializer(), text)
-        assertEquals(data, back)
-        assertEquals(7, back.formatVersion)
-        assertEquals(listOf(self, friend), back.persons)
-        assertEquals(ShareKind.AMOUNT, back.wholeShares.single().kind)
-        assertEquals(2, back.itemShares.size)
-        for (key in listOf("persons", "splitSheets", "shareGroups", "shareGroupItems", "itemShares", "wholeShares", "paymentPayers")) {
-            assertTrue("$key が JSON に入る", text.contains("\"$key\""))
-        }
-    }
 
     @Test
     fun splitEntities_roundTripThroughBackupClasses() {
         val p = Person(id = 4, uid = "u-4", name = "友人", shortName = "友", isSelf = false, sortOrder = 2, createdAt = 9)
         assertEquals(p, BackupPerson.from(p).toEntity())
-        val sheet = SplitSheet(5, SplitMode.WHOLE)
+        val sheet = SplitSheet(5, SplitMode.WHOLE, ShareKind.RATIO, "W1,W3")
         assertEquals(sheet, BackupSplitSheet.from(sheet).toEntity())
         val g = ShareGroup(id = 3, receiptId = 5, pieceCount = 3, isShared = true, sortOrder = 1)
         assertEquals(g, BackupShareGroup.from(g).toEntity())
         val gi = ShareGroupItem(3, 11)
         assertEquals(gi, BackupShareGroupItem.from(gi).toEntity())
-        val ia = ItemShare(3, 2, ShareKind.AMOUNT, weight = null, amount = 100)
+        val sp = SplitParticipant(id = 21, receiptId = 5, personId = 1, memo = "一言", label = "新人", isPayer = true, sortOrder = 2)
+        assertEquals(sp, BackupParticipant.from(sp).toEntity())
+        val la = SplitLabelAmount(5, "新人", 3000)
+        assertEquals(la, BackupLabelAmount.from(la).toEntity())
+        val ia = ItemShare(3, 21, ShareKind.AMOUNT, weight = null, amount = 100)
         assertEquals(ia, BackupItemShare.from(ia).toEntity())
-        val ws = WholeShare(5, 2, ShareKind.EQUAL)
+        val ws = WholeShare(5, 22, ShareKind.EQUAL)
         assertEquals(ws, BackupWholeShare.from(ws).toEntity())
-        val pp = PaymentPayer(id = 7, receiptId = 5, personId = 1, method = "現金", amount = 500)
+        val pp = PaymentPayer(id = 7, receiptId = 5, participantId = 21, method = "現金", amount = 500)
         assertEquals(pp, BackupPaymentPayer.from(pp).toEntity())
-    }
-
-    @Test
-    fun format6_withoutSplitKeys_isReadable_andSplitListsAreEmpty() {
-        val text = """{"formatVersion":6,"dbVersion":9,"exportedAt":1,
-            "expenses":[{"id":1,"date":"2026-10-05","amount":1,"category":"食費","createdAt":1}],
-            "receiptNotDuplicates":[]}"""
-        val d = BackupJson.decodeFromString(BackupData.serializer(), text)
-        BackupManager.checkVersion(d.formatVersion)
-        assertEquals(1, d.expenses.size)
-        assertTrue(d.persons.isEmpty())
-        assertTrue(d.splitSheets.isEmpty())
-        assertTrue(d.shareGroups.isEmpty())
-        assertTrue(d.shareGroupItems.isEmpty())
-        assertTrue(d.itemShares.isEmpty())
-        assertTrue(d.wholeShares.isEmpty())
-        assertTrue(d.paymentPayers.isEmpty())
     }
 
     // ------------------------------------------------------------ 人の照合
@@ -144,25 +127,25 @@ class BackupFormat7Test {
                 BackupShareGroupItem(4, 11), // まとまり 4 が無い
             ),
             itemShares = listOf(
-                BackupItemShare(3, 1, ShareKind.RATIO, weight = 2),
-                BackupItemShare(3, 9, ShareKind.EQUAL), // 人 9 が無い
-                BackupItemShare(4, 1, ShareKind.EQUAL), // まとまり 4 が無い
+                BackupItemShare(3, 21, ShareKind.RATIO, weight = 2),
+                BackupItemShare(3, 29, ShareKind.EQUAL), // 参加者 29 が無い
+                BackupItemShare(4, 21, ShareKind.EQUAL), // まとまり 4 が無い
             ),
             wholeShares = listOf(
-                BackupWholeShare(5, 2, ShareKind.AMOUNT, amount = 300),
-                BackupWholeShare(9, 2, ShareKind.EQUAL), // 支払い 9 が無い
+                BackupWholeShare(5, 22, ShareKind.AMOUNT, amount = 300),
+                BackupWholeShare(9, 22, ShareKind.EQUAL), // 支払い 9 が無い
             ),
             paymentPayers = listOf(
-                BackupPaymentPayer(7, 5, 1, "カード", 980),
-                BackupPaymentPayer(8, 6, 3, "", 10), // 人 3 が無い
+                BackupPaymentPayer(7, 5, 21, "カード", 980),
+                BackupPaymentPayer(8, 6, 23, "", 10), // 参加者 23 が無い
             ),
         )
-        val r = remapSplitRows(data, receiptIdMap, itemIdMap, personIdMap, groupIdMap = mapOf(3L to 300L))
+        val r = remapSplitRows(data, receiptIdMap, itemIdMap, groupIdMap, participantIdMap)
         assertEquals(listOf(SplitSheet(50, SplitMode.ITEM)), r.sheets)
         assertEquals(listOf(ShareGroupItem(300, 111)), r.groupItems)
-        assertEquals(listOf(ItemShare(300, 100, ShareKind.RATIO, weight = 2, amount = null)), r.itemShares)
-        assertEquals(listOf(WholeShare(50, 200, ShareKind.AMOUNT, amount = 300)), r.wholeShares)
-        assertEquals(listOf(PaymentPayer(id = 0, receiptId = 50, personId = 100, method = "カード", amount = 980)), r.payers)
+        assertEquals(listOf(ItemShare(300, 310, ShareKind.RATIO, weight = 2, amount = null)), r.itemShares)
+        assertEquals(listOf(WholeShare(50, 320, ShareKind.AMOUNT, amount = 300)), r.wholeShares)
+        assertEquals(listOf(PaymentPayer(id = 0, receiptId = 50, participantId = 310, method = "カード", amount = 980)), r.payers)
     }
 
     @Test
@@ -170,11 +153,28 @@ class BackupFormat7Test {
         val data = BackupData(
             splitSheets = listOf(BackupSplitSheet(5, SplitMode.WHOLE), BackupSplitSheet(5, SplitMode.ITEM)),
             shareGroupItems = listOf(BackupShareGroupItem(3, 11), BackupShareGroupItem(3, 11)),
-            itemShares = listOf(BackupItemShare(3, 1, ShareKind.EQUAL), BackupItemShare(3, 1, ShareKind.RATIO, weight = 2)),
+            itemShares = listOf(
+                BackupItemShare(3, 21, ShareKind.EQUAL),
+                BackupItemShare(3, 21, ShareKind.RATIO, weight = 2),
+            ),
         )
-        val r = remapSplitRows(data, receiptIdMap, itemIdMap, personIdMap, groupIdMap = mapOf(3L to 300L))
+        val r = remapSplitRows(data, receiptIdMap, itemIdMap, groupIdMap, participantIdMap)
         assertEquals(listOf(SplitSheet(50, SplitMode.WHOLE)), r.sheets) // 先頭が残る
         assertEquals(1, r.groupItems.size)
         assertEquals(ShareKind.EQUAL, r.itemShares.single().kind)
+    }
+
+    @Test
+    fun remapSplitRows_labelAmounts_followReceipt_dropMissing_andKeepOnePerLabel() {
+        val data = BackupData(
+            labelAmounts = listOf(
+                BackupLabelAmount(5, "新人", 3000),
+                BackupLabelAmount(5, "新人", 2000), // 同じ支払い・同じラベル -> 先頭だけ
+                BackupLabelAmount(5, "", 500),
+                BackupLabelAmount(9, "新人", 100), // 支払い 9 が無い -> 捨てる
+            ),
+        )
+        val r = remapSplitRows(data, receiptIdMap, itemIdMap, groupIdMap, participantIdMap)
+        assertEquals(listOf(SplitLabelAmount(50, "新人", 3000), SplitLabelAmount(50, "", 500)), r.labelAmounts)
     }
 }

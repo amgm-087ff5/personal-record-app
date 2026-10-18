@@ -14,6 +14,8 @@ import com.amgm.personallog.data.model.PaymentPayer
 import com.amgm.personallog.data.model.Person
 import com.amgm.personallog.data.model.ShareGroup
 import com.amgm.personallog.data.model.ShareGroupItem
+import com.amgm.personallog.data.model.SplitLabelAmount
+import com.amgm.personallog.data.model.SplitParticipant
 import com.amgm.personallog.data.model.SplitSheet
 import com.amgm.personallog.data.model.WholeShare
 
@@ -26,8 +28,10 @@ import com.amgm.personallog.data.model.WholeShare
         DiaryEntry::class, DiaryPhoto::class, Receipt::class, ReceiptItem::class, Expense::class, ExpenseGroup::class, ReceiptNotDuplicate::class,
         // v10: 割り勘の表。人・割り勘シート・品目のまとまり・割当・支払内訳。注意: この注釈の中には丸括弧を書かない。SchemaVersionTest の正規表現が版を見つけられなくなる
         Person::class, SplitSheet::class, ShareGroup::class, ShareGroupItem::class, ItemShare::class, WholeShare::class, PaymentPayer::class,
+        // v11: 支払いごとの参加者・ラベルごとの金額。割当の参照先を参加者に変更
+        SplitParticipant::class, SplitLabelAmount::class,
     ],
-    version = 10, // AppDatabase.VERSION と同じにする(テストで確認)
+    version = 11, // AppDatabase.VERSION と同じにする(テストで確認)
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -41,6 +45,6 @@ abstract class AppDatabase : RoomDatabase() {
         const val NAME = "personal_log.db"
 
         /** Room の版。@Database の version と PreMigrationBackup が共有する。 */
-        const val VERSION = 10
+        const val VERSION = 11
     }
 }

@@ -34,6 +34,7 @@ object ConfirmPlanner {
      * @param items レシートの品目(DBの id を持つ)
      * @param existingGroups このレシートに紐づく既存の支払いグループ
      * @param existingExpenses このレシートに紐づく既存の支出(receiptId が一致するもの。手入力で足した品目は含まない)
+     * @param share 割り勘の自分の分。null なら従来どおり(全額が自分の分)
      */
     fun plan(
         receipt: Receipt,
@@ -42,14 +43,15 @@ object ConfirmPlanner {
         existingExpenses: List<Expense>,
         perItem: Boolean,
         now: Long,
+        share: SelfShare? = null,
     ): ConfirmPlan {
-        val fresh = if (perItem) LedgerCalc.groupFromReceipt(receipt, items, now) else null
+        val fresh = if (perItem) LedgerCalc.groupFromReceipt(receipt, items, now, share) else null
         // 家計簿で消した品目は、作り直しても復活させない。非表示のまま残す
         val itemIds = items.map { it.id }.toSet()
         val hidden = existingExpenses.filter { it.deletedByUser && it.receiptItemId != null && it.receiptItemId in itemIds }
         val hiddenItemIds = hidden.mapTo(HashSet()) { it.receiptItemId }
         if (fresh == null) {
-            val wanted = LedgerCalc.expensesFromReceipt(receipt, items, perItem, now)
+            val wanted = LedgerCalc.expensesFromReceipt(receipt, items, perItem, now, share)
             val current = existingExpenses.filterNot { it.deletedByUser }.singleOrNull()
             // 単独1行のまま(立て替えなど)は、その行を更新して編集済みの欄を残す
             if (wanted.size == 1 && existingGroups.isEmpty() && current != null &&

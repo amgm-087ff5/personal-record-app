@@ -21,6 +21,9 @@ import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentLink
 import com.amgm.personallog.domain.ReceiptRevert
+import com.amgm.personallog.domain.SelfShare
+import com.amgm.personallog.domain.SplitWarningCodes
+import com.amgm.personallog.domain.split.SplitCalculator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
@@ -63,6 +66,19 @@ class DiaryRepository @Inject constructor(
     suspend fun deletePhoto(photo: DiaryPhoto) = dao.deletePhoto(photo)
 }
 
+/** 割り勘から求めた家計簿用の結果。share は自分の分(割り勘が無い・自分だけなら null)、warnings は警告コード("W1,W3"。無ければ "")。 */
+internal data class SplitShare(val share: SelfShare?, val warnings: String)
+
+/** この支払いの割り勘を計算し、家計簿に使う自分の分と警告を求める。割り勘が無ければ share も warnings も空。 */
+internal suspend fun SplitRepository.shareOf(receiptId: Long, total: Int?, items: List<ReceiptItem>): SplitShare {
+    val build = buildFor(receiptId, total, items) ?: return SplitShare(null, "")
+    val result = SplitCalculator.calculate(build.input)
+    return SplitShare(
+        share = SelfShare.of(result, build.selfParticipantId, build.itemYen),
+        warnings = SplitWarningCodes.of(result.warnings),
+    )
+}
+
 /** 確定で家計簿の行がどうなるか(確認の表示用)。 */
 data class ConfirmImpact(val rebuild: Boolean, val lostEdited: Int, val keptDeleted: Int = 0) {
     /** 知らせて確認を取るべきか。 */
@@ -79,6 +95,7 @@ class ReceiptRepository @Inject constructor(
     private val receiptDao: ReceiptDao,
     private val expenseDao: ExpenseDao,
     private val expenseGroupDao: ExpenseGroupDao,
+    private val splitRepository: SplitRepository,
 ) {
     fun observeReceipts(): Flow<List<Receipt>> = receiptDao.observeAll()
     fun observeReceipt(id: Long): Flow<Receipt?> = receiptDao.observeById(id)
@@ -131,6 +148,9 @@ class ReceiptRepository @Inject constructor(
         expenseGroupDao.syncDateTimeFromReceipt(id, date, time)
         // 品目の日時はグループに従う(グループの日時を支払い側で変えていても揃える)
         expenseDao.syncChildrenOfReceiptGroups(id)
+        // 下書きも家計簿に入れる。品目のまとまりを揃えてから、割り勘を含めた家計簿の行を作る
+        splitRepository.ensureGroups(id)
+        applyLedger(id, perItem = true, now = System.currentTimeMillis())
         id
     }
 
@@ -143,35 +163,7 @@ class ReceiptRepository @Inject constructor(
             val receipt = receiptDao.getById(receiptId) ?: return@withTransaction
             // 合計は確定には必須。未入力なら家計簿を作らない(既存の家計簿も消さない)
             checkNotNull(receipt.totalAmount) { "合計が未入力のため確定できません" }
-            val items = receiptDao.getItems(receiptId)
-            val groups = expenseGroupDao.getByReceiptId(receiptId)
-            val existing = expenseDao.getByReceiptId(receiptId)
-            when (val plan = ConfirmPlanner.plan(receipt, items, groups, existing, perItem, now)) {
-                is ConfirmPlan.Rebuild -> {
-                    deleteExpensesOf(receiptId)
-                    if (plan.group != null) {
-                        val groupId = expenseGroupDao.insert(plan.group)
-                        expenseDao.insertAll(plan.children.map { it.copy(groupId = groupId) })
-                        // 家計簿で消した品目は、消したまま新しいグループに付け替えて残す(立て替えとの往復で復活させない)
-                        if (plan.keepDeleted.isNotEmpty()) {
-                            expenseDao.insertAll(
-                                plan.keepDeleted.map { it.copy(groupId = groupId, date = plan.group.date, time = plan.group.time) },
-                            )
-                        }
-                    } else {
-                        expenseDao.insertAll(plan.children)
-                        // グループの無い間は、消した品目を非表示のまま残す(グループに戻ったときに付け替える)
-                        if (plan.keepDeleted.isNotEmpty()) expenseDao.insertAll(plan.keepDeleted.map { it.copy(groupId = null) })
-                    }
-                }
-                is ConfirmPlan.UpdateGroup -> {
-                    expenseGroupDao.update(plan.group)
-                    if (plan.deleteIds.isNotEmpty()) expenseDao.deleteByIds(plan.deleteIds)
-                    if (plan.updates.isNotEmpty()) expenseDao.updateAll(plan.updates)
-                    if (plan.inserts.isNotEmpty()) expenseDao.insertAll(plan.inserts.map { it.copy(groupId = plan.group.id) })
-                }
-                is ConfirmPlan.UpdateSingle -> expenseDao.update(plan.expense)
-            }
+            applyLedger(receiptId, perItem, now)
             receiptDao.update(receipt.copy(status = ReceiptStatus.CONFIRMED))
         }
     }
@@ -208,7 +200,9 @@ class ReceiptRepository @Inject constructor(
         val deleted = plan.deleteIds.toSet()
         val removed = existing.filter { it.receiptItemId != null && it.receiptItemId in deleted }
         val remaining = existing.filter { it.receiptItemId == null || it.receiptItemId !in deleted }
-        val p = ConfirmPlanner.plan(receipt, items, groups, remaining, perItem, 0L)
+        // 割り勘があれば、確定後の行は自分の分になる(その内容で作り直すかを判定する)
+        val share = splitRepository.shareOf(receipt.id, receipt.totalAmount, items).share
+        val p = ConfirmPlanner.plan(receipt, items, groups, remaining, perItem, 0L, share)
         return ConfirmImpact(
             rebuild = ConfirmPlanner.discardsExisting(p, groups, remaining),
             lostEdited = ConfirmPlanner.lostEditedCount(p, groups, remaining, removed),
@@ -232,6 +226,72 @@ class ReceiptRepository @Inject constructor(
         expenseGroupDao.deleteByReceiptId(receiptId)
     }
 
+    /**
+     * 家計簿をこの支払いの今の内容に合わせる(下書きでも行う。状態は変えない)。割り勘があれば自分の分だけを家計簿にする。
+     * 合計も品目も無ければ何もしない(既存の家計簿も消さない)。
+     */
+    suspend fun syncLedger(receiptId: Long, now: Long = System.currentTimeMillis()) {
+        db.withTransaction { applyLedger(receiptId, perItem = true, now = now) }
+    }
+
+    /**
+     * 割り勘シートを保存し、家計簿を合わせる(1つのトランザクション)。保存後のシートを返す。
+     * 旧い立て替え(isAdvance・ownAmount)は割り勘シートに置き換わるので消す。
+     */
+    suspend fun saveSplit(
+        data: SplitSheetData,
+        names: Map<Long, String>,
+        now: Long = System.currentTimeMillis(),
+    ): SplitSheetData = db.withTransaction {
+        val saved = splitRepository.save(data, names, now)
+        receiptDao.getById(data.receiptId)?.let { r ->
+            if (r.isAdvance || r.ownAmount != null) receiptDao.update(r.copy(isAdvance = false, ownAmount = null))
+        }
+        syncLedger(data.receiptId, now)
+        saved
+    }
+
+    /**
+     * 家計簿の行を、いまの支払い(品目・合計・割り勘)に合わせて作る・直す。状態は変えない。
+     * 呼び出し側のトランザクションの中で使う。割り勘の警告コードも保存する。
+     */
+    private suspend fun applyLedger(receiptId: Long, perItem: Boolean, now: Long) {
+        val receipt = receiptDao.getById(receiptId) ?: return
+        val items = receiptDao.getItems(receiptId)
+        // 合計も品目も無ければ、家計簿に入れるものが無い
+        if (receipt.totalAmount == null && items.isEmpty()) return
+        val groups = expenseGroupDao.getByReceiptId(receiptId)
+        val existing = expenseDao.getByReceiptId(receiptId)
+        val split = splitRepository.shareOf(receiptId, receipt.totalAmount, items)
+        splitRepository.setWarnings(receiptId, split.warnings)
+        when (val plan = ConfirmPlanner.plan(receipt, items, groups, existing, perItem, now, split.share)) {
+            is ConfirmPlan.Rebuild -> {
+                deleteExpensesOf(receiptId)
+                if (plan.group != null) {
+                    val groupId = expenseGroupDao.insert(plan.group)
+                    expenseDao.insertAll(plan.children.map { it.copy(groupId = groupId) })
+                    // 家計簿で消した品目は、消したまま新しいグループに付け替えて残す(立て替えとの往復で復活させない)
+                    if (plan.keepDeleted.isNotEmpty()) {
+                        expenseDao.insertAll(
+                            plan.keepDeleted.map { it.copy(groupId = groupId, date = plan.group.date, time = plan.group.time) },
+                        )
+                    }
+                } else {
+                    expenseDao.insertAll(plan.children)
+                    // グループの無い間は、消した品目を非表示のまま残す(グループに戻ったときに付け替える)
+                    if (plan.keepDeleted.isNotEmpty()) expenseDao.insertAll(plan.keepDeleted.map { it.copy(groupId = null) })
+                }
+            }
+            is ConfirmPlan.UpdateGroup -> {
+                expenseGroupDao.update(plan.group)
+                if (plan.deleteIds.isNotEmpty()) expenseDao.deleteByIds(plan.deleteIds)
+                if (plan.updates.isNotEmpty()) expenseDao.updateAll(plan.updates)
+                if (plan.inserts.isNotEmpty()) expenseDao.insertAll(plan.inserts.map { it.copy(groupId = plan.group.id) })
+            }
+            is ConfirmPlan.UpdateSingle -> expenseDao.update(plan.expense)
+        }
+    }
+
     /** レシート削除。紐づく Expense は receiptId が NULL になって残る(家計簿は消さない)。 */
     suspend fun delete(receipt: Receipt) = receiptDao.delete(receipt)
 }
@@ -241,6 +301,7 @@ class ExpenseRepository @Inject constructor(
     private val dao: ExpenseDao,
     private val groupDao: ExpenseGroupDao,
     private val db: AppDatabase,
+    private val splitRepository: SplitRepository,
 ) {
     fun observeAll(): Flow<List<Expense>> = dao.observeAll()
     fun observeBetween(from: String, to: String): Flow<List<Expense>> = dao.observeBetween(from, to)
@@ -304,7 +365,9 @@ class ExpenseRepository @Inject constructor(
         val receipt = db.receiptDao().getById(receiptId) ?: return@withTransaction false
         val items = db.receiptDao().getItems(receiptId)
         val group = e.groupId?.let { groupDao.getById(it) }
-        val reverted = ReceiptRevert.expense(e, field, receipt, items, group) ?: return@withTransaction false
+        // 割り勘があれば、レシートの値の代わりに自分の分へ戻す
+        val share = splitRepository.shareOf(receiptId, receipt.totalAmount, items).share
+        val reverted = ReceiptRevert.expense(e, field, receipt, items, group, share) ?: return@withTransaction false
         dao.update(reverted)
         true
     }
@@ -315,7 +378,8 @@ class ExpenseRepository @Inject constructor(
         val receiptId = g.receiptId ?: return@withTransaction false
         val receipt = db.receiptDao().getById(receiptId) ?: return@withTransaction false
         val items = db.receiptDao().getItems(receiptId)
-        val reverted = ReceiptRevert.group(g, field, receipt, items) ?: return@withTransaction false
+        val share = splitRepository.shareOf(receiptId, receipt.totalAmount, items).share
+        val reverted = ReceiptRevert.group(g, field, receipt, items, share) ?: return@withTransaction false
         updateGroup(reverted)
         true
     }

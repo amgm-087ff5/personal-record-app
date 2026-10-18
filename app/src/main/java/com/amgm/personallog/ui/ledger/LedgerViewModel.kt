@@ -9,7 +9,10 @@ import com.amgm.personallog.backup.BackupProgress
 import com.amgm.personallog.backup.ImportMode
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.repository.ExpenseRepository
+import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentEdit
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,6 +49,14 @@ data class LedgerUiState(
     val chartBars: List<ChartBar> = emptyList(),
     /** グラフ表示期間全体のカテゴリ別内訳(円と割合)。 */
     val chartLegend: List<CategoryShare> = emptyList(),
+    /** この月の行のうち、下書きのレシートに紐づく件数(合計に入っている下書き)。 */
+    val draftCount: Int = 0,
+    /** この月の行のうち、割り勘に警告がある支払いの件数。 */
+    val warnCount: Int = 0,
+    /** 下書きのレシートの id(行の「下書き」の印に使う)。 */
+    val draftReceiptIds: Set<Long> = emptySet(),
+    /** 割り勘に警告があるレシートの id(行の「要確認」の印に使う)。 */
+    val warnReceiptIds: Set<Long> = emptySet(),
     val error: String? = null,
     val backup: BackupUiState = BackupUiState(),
 )
@@ -58,12 +69,18 @@ private data class Snapshot(
     val chartLabel: String,
     val chartBars: List<ChartBar>,
     val chartLegend: List<CategoryShare>,
+    val draftCount: Int,
+    val warnCount: Int,
+    val draftReceiptIds: Set<Long>,
+    val warnReceiptIds: Set<Long>,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class LedgerViewModel @Inject constructor(
     private val repository: ExpenseRepository,
+    private val receipts: ReceiptRepository,
+    private val splits: SplitRepository,
     private val backupManager: BackupManager,
 ) : ViewModel() {
 
@@ -85,8 +102,18 @@ class LedgerViewModel @Inject constructor(
                 val me = LocalDate.parse(monthTo)
                 val from = (if (ms.isBefore(chartStart)) ms else chartStart).toString()
                 val to = (if (me.isAfter(chartEnd)) me else chartEnd).toString()
-                combine(repository.observeLedgerRows(from, to), repository.observeGroupsBetween(from, to)) { all, groups ->
-                    snapshot(f, l, all, groups)
+                // 下書きの印と割り勘の警告も、家計簿の行と同じ期間で読む
+                combine(
+                    repository.observeLedgerRows(from, to),
+                    repository.observeGroupsBetween(from, to),
+                    receipts.observeReceipts(),
+                    splits.observeSheets(),
+                ) { all, groups, receiptList, sheets ->
+                    snapshot(
+                        f, l, all, groups,
+                        draftIds = receiptList.filter { it.status == ReceiptStatus.DRAFT }.mapTo(HashSet()) { it.id },
+                        warnIds = sheets.filter { it.warnings.isNotBlank() }.mapTo(HashSet()) { it.receiptId },
+                    )
                 }
                     .catch { e ->
                         _uiState.update { it.copy(loading = false, error = "家計簿の読み込みに失敗しました: ${e.message}") }
@@ -102,13 +129,24 @@ class LedgerViewModel @Inject constructor(
                         chartLabel = s.chartLabel,
                         chartBars = s.chartBars,
                         chartLegend = s.chartLegend,
+                        draftCount = s.draftCount,
+                        warnCount = s.warnCount,
+                        draftReceiptIds = s.draftReceiptIds,
+                        warnReceiptIds = s.warnReceiptIds,
                     )
                 }
             }
         }
     }
 
-    private fun snapshot(f: LocalDate, l: ChartLevel, all: List<Expense>, groups: List<ExpenseGroup>): Snapshot {
+    private fun snapshot(
+        f: LocalDate,
+        l: ChartLevel,
+        all: List<Expense>,
+        groups: List<ExpenseGroup>,
+        draftIds: Set<Long>,
+        warnIds: Set<Long>,
+    ): Snapshot {
         val ym = YearMonth.from(f).toString()
         val entries = LedgerLogic.buildEntries(all, groups)
         val current = entries.filter { it.date.startsWith(ym) }
@@ -120,6 +158,11 @@ class LedgerViewModel @Inject constructor(
             chartLabel = LedgerChart.containerLabel(l, f),
             chartBars = LedgerChart.bars(l, f, entries),
             chartLegend = LedgerChart.legend(entries, l, f),
+            // 下書き・要確認は支払い(レシート)単位のフラグ。支出の行数ではなく、今月の行に出てくる支払いの数で数える
+            draftCount = current.mapNotNull { it.receiptId }.distinct().count { it in draftIds },
+            warnCount = current.mapNotNull { it.receiptId }.distinct().count { it in warnIds },
+            draftReceiptIds = draftIds,
+            warnReceiptIds = warnIds,
         )
     }
 

@@ -4,6 +4,7 @@ import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.domain.LedgerCalc
+import com.amgm.personallog.domain.SelfShare
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -122,13 +123,9 @@ class LedgerCalcTest {
             imagePath = "", rawJson = "{}", createdAt = 0,
         )
         val items = listOf(ReceiptItem(receiptId = 5, name = "牛乳", amount = 300, category = "食費"))
-        // グループの支払い金額は合計を使うので、null は例外
-        try {
-            LedgerCalc.groupFromReceipt(draft, items, now = 1)
-            org.junit.Assert.fail("expected IllegalArgumentException")
-        } catch (e: IllegalArgumentException) {
-            assertTrue(e.message!!.contains("合計"))
-        }
+        // 下書き(合計が null)のグループは品目の合計で作る(下書きも家計簿に入れるため)
+        val g = LedgerCalc.groupFromReceipt(draft, items, now = 1)!!.group
+        assertEquals(300, g.amount)
         // 品目なしの支出も合計を使う
         try {
             LedgerCalc.expensesFromReceipt(draft, emptyList(), perItem = true, now = 1)
@@ -147,5 +144,70 @@ class LedgerCalcTest {
             imagePath = "", rawJson = "{}", createdAt = 0,
         )
         assertEquals(listOf(1234), LedgerCalc.expensesFromReceipt(r, emptyList(), perItem = true, now = 1).map { it.amount })
+    }
+
+    // ---- 割り勘(share)がある場合: 家計簿に入るのは自分の分
+
+    private val shareReceipt = Receipt(
+        id = 9, purchasedAt = "2026-10-05 12:30", storeName = "スーパー", totalAmount = 700,
+        imagePath = "", rawJson = "{}", createdAt = 0,
+    )
+    private val shareItems = listOf(
+        ReceiptItem(id = 1, receiptId = 9, name = "牛乳", amount = 200, category = "食費"),
+        ReceiptItem(id = 2, receiptId = 9, name = "洗剤", amount = 500, category = "日用品"),
+        ReceiptItem(id = 3, receiptId = 9, name = "お菓子", amount = 300, category = "食費"),
+    )
+
+    @Test
+    fun share_itemRowsAreSelfAmounts_andGroupIsSelfTotal() {
+        // 自分の分: 牛乳100・洗剤500。お菓子は自分の分が無い(行を作らない)
+        val share = SelfShare(perItem = mapOf(1L to 100L, 2L to 500L), total = 600L)
+        val g = LedgerCalc.groupFromReceipt(shareReceipt, shareItems, now = 3, share = share)!!
+        assertEquals(600, g.group.amount)
+        assertEquals(listOf(1L, 2L), g.items.map { it.receiptItemId })
+        assertEquals(listOf(100, 500), g.items.map { it.amount })
+    }
+
+    @Test
+    fun share_zeroYenItemHasNoRow() {
+        val share = SelfShare(perItem = mapOf(1L to 200L, 2L to 0L), total = 200L)
+        val g = LedgerCalc.groupFromReceipt(shareReceipt, shareItems, now = 3, share = share)!!
+        assertEquals(listOf(1L), g.items.map { it.receiptItemId })
+        assertEquals(200, g.group.amount)
+    }
+
+    @Test
+    fun share_ignoresAdvanceFlag() {
+        val advance = shareReceipt.copy(isAdvance = true, ownAmount = 999)
+        val share = SelfShare(perItem = mapOf(1L to 200L), total = 200L)
+        assertTrue(LedgerCalc.groupFromReceipt(advance, shareItems, now = 3, share = share) != null)
+        val rows = LedgerCalc.expensesFromReceipt(advance, shareItems, perItem = true, now = 3, share = share)
+        assertEquals(listOf(200), rows.map { it.amount })
+    }
+
+    @Test
+    fun share_withoutItems_isOneRowOfSelfTotal() {
+        val rows = LedgerCalc.expensesFromReceipt(shareReceipt, emptyList(), perItem = true, now = 3, share = SelfShare(emptyMap(), 300L))
+        assertEquals(listOf(300), rows.map { it.amount })
+        assertEquals(listOf<Long?>(null), rows.map { it.receiptItemId })
+    }
+
+    @Test
+    fun share_notPerItem_isOneRowOfSelfTotal() {
+        val share = SelfShare(perItem = mapOf(1L to 100L), total = 600L)
+        val rows = LedgerCalc.expensesFromReceipt(shareReceipt, shareItems, perItem = false, now = 3, share = share)
+        assertEquals(listOf(600), rows.map { it.amount })
+    }
+
+    @Test
+    fun share_zeroTotalWithoutItems_hasNoRow() {
+        assertTrue(LedgerCalc.expensesFromReceipt(shareReceipt, emptyList(), perItem = true, now = 3, share = SelfShare(emptyMap(), 0L)).isEmpty())
+    }
+
+    @Test
+    fun draftWithoutTotal_groupUsesItemSum() {
+        val draft = shareReceipt.copy(totalAmount = null)
+        val g = LedgerCalc.groupFromReceipt(draft, shareItems.take(2), now = 3)!!
+        assertEquals(700, g.group.amount)
     }
 }
