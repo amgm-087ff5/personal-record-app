@@ -4,11 +4,19 @@ import com.amgm.personallog.data.model.DiaryEntry
 import com.amgm.personallog.data.model.DiaryPhoto
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.data.model.ItemShare
+import com.amgm.personallog.data.model.PaymentPayer
+import com.amgm.personallog.data.model.Person
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptNotDuplicate
 import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.ShareGroup
+import com.amgm.personallog.data.model.ShareGroupItem
+import com.amgm.personallog.data.model.SplitMode
+import com.amgm.personallog.data.model.SplitSheet
 import com.amgm.personallog.data.model.TotalSource
+import com.amgm.personallog.data.model.WholeShare
 import com.amgm.personallog.data.model.newUid
 import com.amgm.personallog.domain.PricedLine
 import com.amgm.personallog.domain.TaxCalc
@@ -22,7 +30,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /** バックアップZIPのフォーマット版。互換性を壊す変更をしたら上げる。 */
-const val BACKUP_FORMAT_VERSION = 6
+const val BACKUP_FORMAT_VERSION = 7
 const val BACKUP_DATA_ENTRY = "data.json"
 const val BACKUP_FILES_PREFIX = "files/"
 
@@ -47,6 +55,14 @@ data class BackupData(
     val expenseGroups: List<BackupExpenseGroup> = emptyList(),
     /** v5 以降。「重複ではない」と判断したレシートの組。v4 以前のファイルには無いので空として読む。 */
     val receiptNotDuplicates: List<BackupNotDuplicate> = emptyList(),
+    /** v7 以降。以下の割り勘の表は、v7 以降のファイルにだけ入る。形式6以前のファイルには無いので空として読む。 */
+    val persons: List<BackupPerson> = emptyList(),
+    val splitSheets: List<BackupSplitSheet> = emptyList(),
+    val shareGroups: List<BackupShareGroup> = emptyList(),
+    val shareGroupItems: List<BackupShareGroupItem> = emptyList(),
+    val itemShares: List<BackupItemShare> = emptyList(),
+    val wholeShares: List<BackupWholeShare> = emptyList(),
+    val paymentPayers: List<BackupPaymentPayer> = emptyList(),
 )
 
 @Serializable
@@ -477,6 +493,206 @@ class ExpenseMergeIndex(existing: List<Expense>) {
         return true
     }
 }
+
+// ---------------------------------------------------------------- 割り勘の表(v7 以降)
+
+/** 人(v7 以降)。uid は端末をまたいで変わらない照合キー。id はバックアップ内の id(取り込み時に付け替える)。 */
+@Serializable
+data class BackupPerson(
+    val id: Long,
+    val uid: String = "",
+    val name: String,
+    val shortName: String = "",
+    val isSelf: Boolean = false,
+    val sortOrder: Int = 0,
+    val createdAt: Long = 0,
+) {
+    /** uid が空なら新しく振る(v7 では常に入る)。 */
+    fun toEntity() = Person(
+        id = id, uid = uid.ifBlank { newUid() }, name = name, shortName = shortName,
+        isSelf = isSelf, sortOrder = sortOrder, createdAt = createdAt,
+    )
+    companion object {
+        fun from(p: Person) = BackupPerson(p.id, p.uid, p.name, p.shortName, p.isSelf, p.sortOrder, p.createdAt)
+    }
+}
+
+/** 割り勘シート(v7 以降)。receiptId はバックアップ内の支払い id。 */
+@Serializable
+data class BackupSplitSheet(val receiptId: Long, val mode: String = SplitMode.SELF) {
+    fun toEntity() = SplitSheet(receiptId, mode)
+    companion object {
+        fun from(s: SplitSheet) = BackupSplitSheet(s.receiptId, s.mode)
+    }
+}
+
+/** 品目のまとまり(v7 以降)。id と receiptId はバックアップ内の id。 */
+@Serializable
+data class BackupShareGroup(
+    val id: Long,
+    val receiptId: Long,
+    val pieceCount: Int? = null,
+    val isShared: Boolean = false,
+    val sortOrder: Int = 0,
+) {
+    fun toEntity() = ShareGroup(id, receiptId, pieceCount, isShared, sortOrder)
+    companion object {
+        fun from(g: ShareGroup) = BackupShareGroup(g.id, g.receiptId, g.pieceCount, g.isShared, g.sortOrder)
+    }
+}
+
+/** まとまりに含まれる品目(v7 以降)。groupId と receiptItemId はバックアップ内の id。 */
+@Serializable
+data class BackupShareGroupItem(val groupId: Long, val receiptItemId: Long) {
+    fun toEntity() = ShareGroupItem(groupId, receiptItemId)
+    companion object {
+        fun from(s: ShareGroupItem) = BackupShareGroupItem(s.groupId, s.receiptItemId)
+    }
+}
+
+/** 品目ごと方式の割当(v7 以降)。groupId と personId はバックアップ内の id。 */
+@Serializable
+data class BackupItemShare(
+    val groupId: Long,
+    val personId: Long,
+    val kind: String,
+    val weight: Int? = null,
+    val amount: Int? = null,
+) {
+    fun toEntity() = ItemShare(groupId, personId, kind, weight, amount)
+    companion object {
+        fun from(s: ItemShare) = BackupItemShare(s.groupId, s.personId, s.kind, s.weight, s.amount)
+    }
+}
+
+/** 全体方式の割当(v7 以降)。receiptId と personId はバックアップ内の id。 */
+@Serializable
+data class BackupWholeShare(
+    val receiptId: Long,
+    val personId: Long,
+    val kind: String,
+    val weight: Int? = null,
+    val amount: Int? = null,
+) {
+    fun toEntity() = WholeShare(receiptId, personId, kind, weight, amount)
+    companion object {
+        fun from(s: WholeShare) = BackupWholeShare(s.receiptId, s.personId, s.kind, s.weight, s.amount)
+    }
+}
+
+/** 支払内訳(v7 以降)。id・receiptId・personId はバックアップ内の id。 */
+@Serializable
+data class BackupPaymentPayer(
+    val id: Long,
+    val receiptId: Long,
+    val personId: Long,
+    val method: String = "",
+    val amount: Int,
+) {
+    fun toEntity() = PaymentPayer(id, receiptId, personId, method, amount)
+    companion object {
+        fun from(p: PaymentPayer) = BackupPaymentPayer(p.id, p.receiptId, p.personId, p.method, p.amount)
+    }
+}
+
+/** 人の取り込み方(planPersons の結果)。 */
+sealed interface PersonPlan {
+    /** 端末の既存の人を使う(id は端末側の id)。 */
+    data class Existing(val id: Long) : PersonPlan
+
+    /** 新しく作る(person の id は使わず、自動採番に任せる)。 */
+    data class New(val person: BackupPerson) : PersonPlan
+}
+
+/**
+ * バックアップの人を、端末の人にどう対応させるかを決める(純Kotlin)。返り値は バックアップの人 id -> 取り込み方。
+ * - 同じ uid の人が端末にいれば、それを使う。
+ * - バックアップの自分(isSelf)は、端末の自分(selfId)に合わせる。端末に自分が無いときだけ、1人を自分として作る。
+ * - それ以外は新しく作る。同じ uid がバックアップ内で重複していたら先頭だけ取り込み、後ろは対応なし(参照は捨てる)。
+ * @param existingByUid 端末の人の uid -> id
+ * @param selfId 端末の自分の id(無ければ null)
+ */
+fun planPersons(persons: List<BackupPerson>, existingByUid: Map<String, Long>, selfId: Long?): Map<Long, PersonPlan> {
+    val out = HashMap<Long, PersonPlan>()
+    val plannedUids = HashSet<String>()
+    var selfPlanned = false
+    for (p in persons) {
+        val existingId = when {
+            p.isSelf && selfId != null -> selfId
+            p.uid.isNotEmpty() -> existingByUid[p.uid]
+            else -> null
+        }
+        if (existingId != null) {
+            out[p.id] = PersonPlan.Existing(existingId)
+            continue
+        }
+        if (p.uid.isNotEmpty() && !plannedUids.add(p.uid)) continue
+        val makeSelf = p.isSelf && selfId == null && !selfPlanned
+        if (makeSelf) selfPlanned = true
+        out[p.id] = PersonPlan.New(p.copy(isSelf = makeSelf))
+    }
+    return out
+}
+
+/**
+ * 割り勘のまとまりを、復元後の支払い id に付け替える(純Kotlin)。返り値は (バックアップのまとまり id, 新しい行)。
+ * 新しい行の id は 0(自動採番に任せる)。支払いの対応が無いまとまりは捨てる。
+ */
+fun remapShareGroups(groups: List<BackupShareGroup>, receiptIdMap: Map<Long, Long>): List<Pair<Long, ShareGroup>> =
+    groups.mapNotNull { g ->
+        val receiptId = receiptIdMap[g.receiptId] ?: return@mapNotNull null
+        g.id to g.toEntity().copy(id = 0, receiptId = receiptId)
+    }
+
+/** 割り勘の表(まとまり以外)を付け替えた結果。id は未採番(自動採番に任せる)。 */
+data class SplitRemapped(
+    val sheets: List<SplitSheet>,
+    val groupItems: List<ShareGroupItem>,
+    val itemShares: List<ItemShare>,
+    val wholeShares: List<WholeShare>,
+    val payers: List<PaymentPayer>,
+)
+
+/**
+ * 割り勘の表を、復元後の id に付け替える(純Kotlin)。参照先のどれかが対応しない行は捨てる。
+ * 同じ主キーになる行は1つにまとめる(品目は1つのまとまりにしか入らない、人は1つの割当だけ、など)。
+ * @param receiptIdMap バックアップの支払い id -> 復元後の支払い id(取り込み対象の支払いだけ)
+ * @param itemIdMap バックアップの品目 id -> 復元後の品目 id(取り込み対象の品目だけ)
+ * @param personIdMap バックアップの人 id -> 端末の人 id
+ * @param groupIdMap バックアップのまとまり id -> 復元後のまとまり id
+ */
+fun remapSplitRows(
+    data: BackupData,
+    receiptIdMap: Map<Long, Long>,
+    itemIdMap: Map<Long, Long>,
+    personIdMap: Map<Long, Long>,
+    groupIdMap: Map<Long, Long>,
+): SplitRemapped = SplitRemapped(
+    sheets = data.splitSheets.mapNotNull { s ->
+        val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
+        s.toEntity().copy(receiptId = r)
+    }.distinctBy { it.receiptId },
+    groupItems = data.shareGroupItems.mapNotNull { s ->
+        val g = groupIdMap[s.groupId] ?: return@mapNotNull null
+        val item = itemIdMap[s.receiptItemId] ?: return@mapNotNull null
+        s.toEntity().copy(groupId = g, receiptItemId = item)
+    }.distinctBy { it.receiptItemId },
+    itemShares = data.itemShares.mapNotNull { s ->
+        val g = groupIdMap[s.groupId] ?: return@mapNotNull null
+        val p = personIdMap[s.personId] ?: return@mapNotNull null
+        s.toEntity().copy(groupId = g, personId = p)
+    }.distinctBy { it.groupId to it.personId },
+    wholeShares = data.wholeShares.mapNotNull { s ->
+        val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
+        val p = personIdMap[s.personId] ?: return@mapNotNull null
+        s.toEntity().copy(receiptId = r, personId = p)
+    }.distinctBy { it.receiptId to it.personId },
+    payers = data.paymentPayers.mapNotNull { s ->
+        val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
+        val p = personIdMap[s.personId] ?: return@mapNotNull null
+        s.toEntity().copy(id = 0, receiptId = r, personId = p)
+    },
+)
 
 enum class ImportMode { MERGE, REPLACE }
 
