@@ -2,8 +2,10 @@ package com.amgm.personallog.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -19,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.amgm.personallog.ui.design.AppTheme
@@ -30,10 +33,18 @@ import com.amgm.personallog.ui.design.PaperScreen
 import com.amgm.personallog.ui.design.ScreenHeader
 import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.TextAction
+import com.amgm.personallog.ui.design.tappable
 
-/** 巻末の奥付(コロフォン)風の設定画面。 */
+/**
+ * 巻末の奥付(コロフォン)風の設定画面。
+ * onOpenMembers は「メンバー」の行を押したときの行き先(メンバー管理画面)。
+ */
 @Composable
-fun SettingsScreen(modifier: Modifier = Modifier, viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(
+    modifier: Modifier = Modifier,
+    viewModel: SettingsViewModel = hiltViewModel(),
+    onOpenMembers: () -> Unit = {},
+) {
     val context = LocalContext.current
     val info = remember { AppInfo.read(context) }
     val c = AppTheme.colors
@@ -85,6 +96,24 @@ fun SettingsScreen(modifier: Modifier = Modifier, viewModel: SettingsViewModel =
                         Text("保存しました", style = t.caption, color = c.moss)
                     }
                 }
+
+                Spacer(Modifier.height(Space.xl))
+
+                // 割り勘
+                Label("割り勘")
+                Spacer(Modifier.height(Space.s))
+                Hairline()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .tappable(onOpenMembers),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("メンバー", style = t.body, color = c.ink, modifier = Modifier.weight(1f))
+                    Text("›", style = t.body, color = c.inkFaint)
+                }
+                Hairline()
 
                 Spacer(Modifier.height(Space.xl))
 
