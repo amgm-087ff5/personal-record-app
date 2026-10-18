@@ -107,6 +107,23 @@ fun LedgerScreen(
                             style = AppTheme.type.numeralXL,
                             color = c.ink,
                         )
+                        // 下書きや割り勘の警告があると、合計にそのまま入っているので知らせる
+                        if (state.draftCount > 0) {
+                            Text(
+                                "下書き ${state.draftCount}件を含む",
+                                style = AppTheme.type.caption,
+                                color = c.accent,
+                                modifier = Modifier.padding(top = Space.xs),
+                            )
+                        }
+                        if (state.warnCount > 0) {
+                            Text(
+                                "要確認 ${state.warnCount}件(割り勘に警告があります)",
+                                style = AppTheme.type.caption,
+                                color = c.danger,
+                                modifier = Modifier.padding(top = Space.xs),
+                            )
+                        }
                     }
                 }
                 item(key = "cat") {
@@ -166,6 +183,8 @@ fun LedgerScreen(
                     DayBlock(
                         day = day,
                         expandedGroups = expandedGroups,
+                        draftReceiptIds = state.draftReceiptIds,
+                        warnReceiptIds = state.warnReceiptIds,
                         onToggleGroup = { id -> expandedGroups[id] = expandedGroups[id] != true },
                         onOpen = { entry ->
                             when (entry) {
@@ -256,8 +275,8 @@ fun LedgerScreen(
     }
     deletingGroup?.let { target ->
         ConfirmSheet(
-            title = "グループを削除",
-            message = "「${target.memo.ifBlank { target.category }}」の支払いと品目をすべて削除します。",
+            title = "支出を削除",
+            message = "「${target.memo.ifBlank { target.category }}」の支出と品目をすべて削除します。",
             confirmText = "削除",
             onDismiss = { deletingGroup = null },
             onConfirm = {

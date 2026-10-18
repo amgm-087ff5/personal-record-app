@@ -235,4 +235,52 @@ class ConfirmPlannerTest {
         val plan = ItemSaver.plan(1, listOf(milk, soap), emptyList())
         assertEquals(listOf(11L, 12L), plan.deleteIds)
     }
+
+    // ---- 割り勘(share)
+
+    @Test
+    fun share_firstConfirm_groupIsSelfTotal_andRowsAreSelfAmounts() {
+        val share = SelfShare(perItem = mapOf(11L to 100L, 12L to 500L), total = 600L)
+        val p = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), emptyList(), perItem = true, now = 1, share = share) as ConfirmPlan.Rebuild
+        assertEquals(600, p.group!!.amount)
+        assertEquals(listOf(100, 500), p.children.map { it.amount })
+        assertEquals(listOf(11L, 12L), p.children.map { it.receiptItemId })
+    }
+
+    @Test
+    fun share_ignoresAdvance() {
+        val share = SelfShare(perItem = mapOf(11L to 200L), total = 200L)
+        val p = ConfirmPlanner.plan(receipt(isAdvance = true), listOf(milk, soap), emptyList(), emptyList(), perItem = true, now = 1, share = share) as ConfirmPlan.Rebuild
+        assertTrue(p.group != null)
+        assertEquals(listOf(11L), p.children.map { it.receiptItemId })
+    }
+
+    @Test
+    fun share_allZero_leavesNoRows() {
+        val share = SelfShare(perItem = emptyMap(), total = 0L)
+        val p = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), emptyList(), perItem = true, now = 1, share = share) as ConfirmPlan.Rebuild
+        assertNull(p.group)
+        assertTrue(p.children.isEmpty())
+    }
+
+    @Test
+    fun share_switchingFromSingleRow_rebuildsWithGroup() {
+        val single = Expense(id = 50, date = "2026-10-05", amount = 700, receiptId = 1, createdAt = 0)
+        val share = SelfShare(perItem = mapOf(11L to 200L, 12L to 500L), total = 700L)
+        val p = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), listOf(single), perItem = true, now = 1, share = share)
+        assertTrue(p is ConfirmPlan.Rebuild && p.group != null)
+    }
+
+    @Test
+    fun share_reconfirm_updatesUneditedRowsAndGroupTotal() {
+        val first = first(
+            r = receipt(),
+            items = listOf(milk, soap),
+        )
+        val (g, children) = stored(first)
+        val share = SelfShare(perItem = mapOf(11L to 150L, 12L to 500L), total = 650L)
+        val p = ConfirmPlanner.plan(receipt(), listOf(milk, soap), listOf(g), children, perItem = true, now = 2, share = share) as ConfirmPlan.UpdateGroup
+        assertEquals(650, p.group.amount)
+        assertEquals(listOf(150), p.updates.filter { it.receiptItemId == 11L }.map { it.amount })
+    }
 }

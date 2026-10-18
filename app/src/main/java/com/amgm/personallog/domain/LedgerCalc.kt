@@ -52,12 +52,16 @@ object LedgerCalc {
     /**
      * 複数品目のレシートを1つの支払いグループにする。
      * 支払い金額(group.amount)はレシートの確定額(receipt.totalAmount)を正とし、品目は品目ごとの自分の払う分で持つ。
+     * 合計が未入力(下書き)のときは品目の合計を使う。
      * 立て替え・品目なし・品目がすべて0円のときは null(従来どおり単独の支出にする)。
+     * share(割り勘の自分の分)があるときは、品目の金額を share.perItem で置き換え、支払い金額は行の合計にする。
+     * その場合、立て替えの指定は無視する(割り勘が立て替えに置き換わる)。
      */
-    fun groupFromReceipt(receipt: Receipt, items: List<ReceiptItem>, now: Long): ReceiptGroup? {
-        if (receipt.isAdvance || items.isEmpty()) return null
+    fun groupFromReceipt(receipt: Receipt, items: List<ReceiptItem>, now: Long, share: SelfShare? = null): ReceiptGroup? {
+        if (items.isEmpty()) return null
+        if (share == null && receipt.isAdvance) return null
         val (date, time) = splitPurchasedAt(receipt.purchasedAt)
-        val paid = TaxCalc.paidYenPerItem(items)
+        val paid = itemPaidYen(items, share)
         val children = items.mapIndexedNotNull { i, it ->
             if (paid[i] == 0L) {
                 null
@@ -76,10 +80,16 @@ object LedgerCalc {
             }
         }
         if (children.isEmpty()) return null
+        val amount = if (share != null) {
+            // 割り勘: 支払い金額は自分の行の合計(家計簿に入るのは自分の分だけ)
+            children.sumOf { it.amount.toLong() }
+        } else {
+            receipt.totalAmount?.toLong() ?: TaxCalc.paidYen(items)
+        }
         val group = ExpenseGroup(
             date = date,
             time = time,
-            amount = requireNotNull(receipt.totalAmount) { "合計が未入力のレシートは家計簿にできません(id=${receipt.id})" },
+            amount = amount.toInt(),
             category = groupCategory(items),
             memo = receipt.storeName,
             receiptId = receipt.id,
@@ -92,23 +102,21 @@ object LedgerCalc {
      * レシート確定時の Expense 生成。家計簿に入るのは「自分の払う分」。
      *  - 立て替えでない: 全額が自分の分。perItem=true で品目があれば1個ずつの行、それ以外は合計1行。
      *  - 立て替え: レシート全体の自分の分(receipt.ownAmount)を合計1行。未入力なら支払総額の全額。
+     *  - share(割り勘の自分の分)があるとき: 品目ごとの行は share.perItem の金額。品目が無い・perItem=false なら share.total の1行。
+     *    0円なら行は作らない。立て替えの指定は無視する。
      */
     fun expensesFromReceipt(
         receipt: Receipt,
         items: List<ReceiptItem>,
         perItem: Boolean,
         now: Long,
+        share: SelfShare? = null,
     ): List<Expense> {
         val (date, time) = splitPurchasedAt(receipt.purchasedAt)
         val category = groupCategory(items)
-        val paidTotal = if (items.isEmpty()) {
-            requireNotNull(receipt.totalAmount) { "合計が未入力のレシートは家計簿にできません(id=${receipt.id})" }.toLong()
-        } else {
-            TaxCalc.paidYen(items)
-        }
 
-        if (!receipt.isAdvance && perItem && items.isNotEmpty()) {
-            val paid = TaxCalc.paidYenPerItem(items)
+        if ((share != null || !receipt.isAdvance) && perItem && items.isNotEmpty()) {
+            val paid = itemPaidYen(items, share)
             return items.mapIndexedNotNull { i, it ->
                 if (paid[i] == 0L) {
                     null
@@ -127,7 +135,25 @@ object LedgerCalc {
                 }
             }
         }
-        val amount = if (receipt.isAdvance) receipt.ownAmount?.toLong() ?: paidTotal else paidTotal
+        if (share != null) {
+            // 割り勘の自分の分が0円なら、家計簿には行を作らない
+            if (share.total == 0L) return emptyList()
+            return listOf(
+                Expense(
+                    date = date,
+                    time = time,
+                    amount = share.total.toInt(),
+                    category = category,
+                    memo = receipt.storeName,
+                    receiptId = receipt.id,
+                    createdAt = now,
+                ),
+            )
+        }
+        val amount = when {
+            receipt.isAdvance -> receipt.ownAmount?.toLong() ?: paidTotal(receipt, items)
+            else -> paidTotal(receipt, items)
+        }
         return listOf(
             Expense(
                 date = date,
@@ -140,4 +166,16 @@ object LedgerCalc {
             ),
         )
     }
+
+    /** 品目ごとの家計簿の金額。share があれば自分の分(無い品目は0)、無ければ税込の支払額。 */
+    private fun itemPaidYen(items: List<ReceiptItem>, share: SelfShare?): List<Long> =
+        if (share != null) items.map { share.perItem[it.id] ?: 0L } else TaxCalc.paidYenPerItem(items)
+
+    /** 品目が無いとき、または品目を1行にまとめるときの支払総額(品目があれば品目の税込合計、無ければ合計欄)。 */
+    private fun paidTotal(receipt: Receipt, items: List<ReceiptItem>): Long =
+        if (items.isEmpty()) {
+            requireNotNull(receipt.totalAmount) { "合計が未入力のレシートは家計簿にできません(id=${receipt.id})" }.toLong()
+        } else {
+            TaxCalc.paidYen(items)
+        }
 }

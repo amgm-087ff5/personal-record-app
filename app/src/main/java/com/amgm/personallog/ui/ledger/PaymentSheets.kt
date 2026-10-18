@@ -54,7 +54,7 @@ internal fun AddKindSheet(onDismiss: () -> Unit, onSingle: () -> Unit, onWithIte
         Spacer(Modifier.height(Space.s))
         Hairline()
         Text(
-            "品目つきの支払い",
+            "品目つきの支出",
             style = AppTheme.type.title,
             color = c.ink,
             modifier = Modifier.fillMaxWidth().tappable(onWithItems).padding(vertical = Space.m),
@@ -96,7 +96,7 @@ internal fun ManualPaymentSheet(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding(),
             verticalArrangement = Arrangement.spacedBy(Space.m),
         ) {
-            Label("品目つきの支払いを追加")
+            Label("品目つきの支出を追加")
 
             // 合計: 大きく中央。下に品目の合計と「合計に入れる」
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
