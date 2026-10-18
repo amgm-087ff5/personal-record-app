@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -210,6 +211,11 @@ fun ReceiptDetailScreen(
                                     listOf(s.date, s.time).filter { it.isNotBlank() }.joinToString(" ").ifBlank { "日付未入力" },
                                     modifier = Modifier.weight(1f),
                                 )
+                                // 画像の無い支払いは「手入力」(レシートの読み取り結果ではない)
+                                if (s.manualEntry) {
+                                    Stamp("手入力", tone = StampTone.Neutral)
+                                    Box(modifier = Modifier.width(Space.xs))
+                                }
                                 if (s.confirmed) {
                                     Stamp("確定済み", tone = StampTone.Moss)
                                 } else {
