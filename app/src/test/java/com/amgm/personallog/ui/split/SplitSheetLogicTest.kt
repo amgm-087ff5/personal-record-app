@@ -9,7 +9,7 @@ import org.junit.Test
 class SplitSheetLogicTest {
 
     @Test
-    fun 数字の解析は円記号・カンマ・全角を許す() {
+    fun 数字の解析は円記号・カンマ_全角を許す() {
         assertEquals(1234, parseAmountText("1,234"))
         assertEquals(1234, parseAmountText("¥1,234"))
         assertEquals(1234, parseAmountText("1234円"))
