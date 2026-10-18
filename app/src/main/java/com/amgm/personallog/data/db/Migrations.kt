@@ -19,6 +19,8 @@ import com.amgm.personallog.receipt.TotalSourceInit
  *
  * v11(割り勘の参加者・ラベル金額): split_participants・split_label_amounts を追加し、split_sheets に wholeKind・warnings を足す。
  * item_shares・whole_shares・payment_payers は参照先を persons から参加者(split_participants)に変えるため作り直す(MIGRATION_10_11)。
+ *
+ * v12(支出は支払いから作る): 支払いに属さない支出グループ・単独の支出を、手入力の支払い(receipts)に変える(MIGRATION_11_12)。表の形は変えない。
  */
 object Migrations {
     /**
@@ -856,8 +858,117 @@ object Migrations {
         }
     }
 
+    /** v12 の移行の前後で件数と金額の合計を比べる対象(支出と支出グループ)。 */
+    internal val V12_COUNT_QUERIES: List<Pair<String, String>> = listOf(
+        "expenses" to "SELECT COUNT(*) FROM `expenses`",
+        "expense_groups" to "SELECT COUNT(*) FROM `expense_groups`",
+        "expenses の金額の合計" to "SELECT COALESCE(SUM(`amount`), 0) FROM `expenses`",
+        "expense_groups の金額の合計" to "SELECT COALESCE(SUM(`amount`), 0) FROM `expense_groups`",
+    )
+
+    /** 手入力の支払いの表示用の日時: 時刻が無ければ日付だけ。 */
+    internal fun v12PurchasedAt(date: String, time: String): String = if (time.isEmpty()) date else "$date $time"
+
+    /** 直前に入れた行の id(同じ接続の last_insert_rowid)。 */
+    private fun SupportSQLiteDatabase.lastRowId(): Long = query("SELECT last_insert_rowid()").use { c -> c.moveToFirst(); c.getLong(0) }
+
+    /** 手入力の支払い(画像なし・確定済み・合計のみ)を receipts に1行作り、その id を返す。 */
+    private fun SupportSQLiteDatabase.insertV12ManualReceipt(purchasedAt: String, total: Long, createdAt: Long): Long {
+        execSQL(
+            "INSERT INTO `receipts` (`purchasedAt`, `storeName`, `totalAmount`, `imagePath`, `rawJson`, `status`, `createdAt`, `totalSource`) " +
+                "VALUES (?, '', ?, '', '{}', 'confirmed', ?, 'manual')",
+            arrayOf<Any?>(purchasedAt, total, createdAt),
+        )
+        return lastRowId()
+    }
+
+    /**
+     * v11 -> v12: 支払いに属さない支出を、手入力の支払い(receipts の行)に変える。支出は必ず支払いから作る、という規則に合わせる。
+     *  - 対象: receiptId が null の支出グループ(品目はグループの中の支出の行)と、groupId も receiptId も無い単独の支出。
+     *  - 支払いの行を対象ごとに1つ作る: imagePath='', rawJson='{}', status='confirmed', totalSource='manual', storeName=''。
+     *    purchasedAt は日付(時刻があれば "yyyy-MM-dd HH:mm")、totalAmount は支払いの金額、createdAt は既存の値。
+     *  - グループの品目は receipt_items に写す(name・amount・category・memo。税率は既定の10%、税込)。
+     *    品目の支出の行には receiptId と receiptItemId を張る。家計簿で消した品目(deletedByUser)も含め、すべての品目に対応を付ける
+     *    (対応が無い行は次の同期で作り直されるため)。
+     *  - グループには receiptId を張る。単独の支出は品目を作らず、receiptId だけ張る。
+     *  - 既存の支出・グループの id は変えない。新しい支出の行は作らない。金額・品名・カテゴリ・メモ・日時も変えない。
+     *  - storeName は空なので、次の同期でグループ・単独の支出のメモ(店名)とカテゴリが既定値に戻らないよう、
+     *    その2つは「編集済み」(memoEdited・categoryEdited)にしておく。
+     * 安全策: 移行の前後で、支出とグループの件数と金額の合計が変わったら止める(トランザクションが戻る)。
+     */
+    val MIGRATION_11_12: Migration = object : Migration(11, 12) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            class GroupRow(val id: Long, val date: String, val time: String, val amount: Long, val createdAt: Long)
+            class ChildRow(val id: Long, val name: String, val amount: Long, val category: String, val memo: String)
+            class SingleRow(val id: Long, val date: String, val time: String, val amount: Long, val createdAt: Long)
+
+            val before = V12_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+
+            // 1. 支払いに属さないグループ: 読み出しきってから書く
+            val groups = ArrayList<GroupRow>()
+            db.query(
+                "SELECT `id`, `date`, `time`, `amount`, `createdAt` FROM `expense_groups` WHERE `receiptId` IS NULL ORDER BY `id`",
+            ).use { c ->
+                while (c.moveToNext()) {
+                    groups += GroupRow(c.getLong(0), c.getString(1), c.getString(2), c.getLong(3), c.getLong(4))
+                }
+            }
+            for (g in groups) {
+                val rid = db.insertV12ManualReceipt(v12PurchasedAt(g.date, g.time), g.amount, g.createdAt)
+                db.execSQL(
+                    "UPDATE `expense_groups` SET `receiptId` = ?, `categoryEdited` = 1, `memoEdited` = 1 WHERE `id` = ?",
+                    arrayOf<Any?>(rid, g.id),
+                )
+                // 品目: グループの中の支出の行。写した品目の id を支出に張る
+                val children = ArrayList<ChildRow>()
+                db.query(
+                    "SELECT `id`, `name`, `amount`, `category`, `memo` FROM `expenses` WHERE `groupId` = ${g.id} ORDER BY `id`",
+                ).use { c ->
+                    while (c.moveToNext()) {
+                        children += ChildRow(c.getLong(0), c.getString(1), c.getLong(2), c.getString(3), c.getString(4))
+                    }
+                }
+                for (ch in children) {
+                    db.execSQL(
+                        "INSERT INTO `receipt_items` (`receiptId`, `name`, `amount`, `category`, `taxRate`, `priceIncludesTax`, `memo`) " +
+                            "VALUES (?, ?, ?, ?, 10, 1, ?)",
+                        arrayOf<Any?>(rid, ch.name, ch.amount, ch.category, ch.memo),
+                    )
+                    val itemId = db.lastRowId()
+                    db.execSQL(
+                        "UPDATE `expenses` SET `receiptId` = ?, `receiptItemId` = ? WHERE `id` = ?",
+                        arrayOf<Any?>(rid, itemId, ch.id),
+                    )
+                }
+            }
+
+            // 2. 単独の支出: 支払いの行を作り、支出に張る(品目は作らない)
+            val singles = ArrayList<SingleRow>()
+            db.query(
+                "SELECT `id`, `date`, `time`, `amount`, `createdAt` FROM `expenses` " +
+                    "WHERE `groupId` IS NULL AND `receiptId` IS NULL ORDER BY `id`",
+            ).use { c ->
+                while (c.moveToNext()) {
+                    singles += SingleRow(c.getLong(0), c.getString(1), c.getString(2), c.getLong(3), c.getLong(4))
+                }
+            }
+            for (s in singles) {
+                val rid = db.insertV12ManualReceipt(v12PurchasedAt(s.date, s.time), s.amount, s.createdAt)
+                db.execSQL(
+                    "UPDATE `expenses` SET `receiptId` = ?, `categoryEdited` = 1, `memoEdited` = 1 WHERE `id` = ?",
+                    arrayOf<Any?>(rid, s.id),
+                )
+            }
+
+            val after = V12_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+            if (before != after) {
+                throw IllegalStateException("v12 への移行を中止しました: 件数または金額の合計が変わりました $before -> $after")
+            }
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-        MIGRATION_9_10, MIGRATION_10_11,
+        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
     )
 }
