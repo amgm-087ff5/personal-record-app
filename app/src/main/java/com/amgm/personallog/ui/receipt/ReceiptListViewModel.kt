@@ -442,6 +442,8 @@ class ReceiptListViewModel @Inject constructor(
         if (saved.size != rows.size) return
         val hints = saved.zip(rows).associate { (item, row) -> item.id to row.shared }
         splitRepository.ensureGroups(receiptId, hints)
+        // まとまりを組み直したかもしれないので、家計簿を今の割り勘に合わせる(割り勘の自分の分を反映する)
+        repository.syncLedger(receiptId)
     }
 
     private suspend fun finish(key: Long, outcome: ScanOutcome, id: Long) {

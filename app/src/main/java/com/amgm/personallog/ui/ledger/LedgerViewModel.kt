@@ -158,8 +158,9 @@ class LedgerViewModel @Inject constructor(
             chartLabel = LedgerChart.containerLabel(l, f),
             chartBars = LedgerChart.bars(l, f, entries),
             chartLegend = LedgerChart.legend(entries, l, f),
-            draftCount = current.count { e -> e.receiptId?.let { it in draftIds } == true },
-            warnCount = current.count { e -> e.receiptId?.let { it in warnIds } == true },
+            // 下書き・要確認は支払い(レシート)単位のフラグ。支出の行数ではなく、今月の行に出てくる支払いの数で数える
+            draftCount = current.mapNotNull { it.receiptId }.distinct().count { it in draftIds },
+            warnCount = current.mapNotNull { it.receiptId }.distinct().count { it in warnIds },
             draftReceiptIds = draftIds,
             warnReceiptIds = warnIds,
         )
