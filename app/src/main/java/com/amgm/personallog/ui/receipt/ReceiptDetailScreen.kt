@@ -52,7 +52,6 @@ import com.amgm.personallog.ui.design.InkSheet
 import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.LeaderRow
 import com.amgm.personallog.ui.design.PaperScreen
-import com.amgm.personallog.ui.design.Pill
 import com.amgm.personallog.ui.design.Pills
 import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.Stamp
@@ -98,6 +97,7 @@ fun ReceiptDetailScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenPayment: (PaymentLink) -> Unit = {},
+    onOpenSplit: () -> Unit = {},
     viewModel: ReceiptDetailViewModel = hiltViewModel(),
 ) {
     val s by viewModel.state.collectAsStateWithLifecycle()
@@ -223,9 +223,6 @@ fun ReceiptDetailScreen(
                                 color = c.ink,
                                 modifier = Modifier.padding(top = Space.xs),
                             )
-                            if (s.isAdvance) {
-                                Text("立て替えの支払い", style = AppTheme.type.caption, color = c.inkSoft)
-                            }
                             Label("タップして店名・日付を編集", modifier = Modifier.padding(top = Space.xs))
                         }
                         Column(
@@ -468,11 +465,14 @@ fun ReceiptDetailScreen(
             SheetField("店名", s.store, viewModel::setStore)
             SheetField("日付 yyyy-MM-dd", s.date, viewModel::setDate)
             SheetField("時刻 HH:mm", s.time, viewModel::setTime)
-            SheetChoice("支払い") {
-                Pill(
-                    text = "自分が立て替えた支払い(他の人の分を含む)",
-                    selected = s.isAdvance,
-                    onClick = { viewModel.setAdvance(!s.isAdvance) },
+            SheetChoice("割り勘") {
+                // 「立て替え」の代わりに割り勘シートへ。割り勘の編集は別画面(戻ると支払い詳細に戻る)
+                TextAction(
+                    "割り勘を編集する",
+                    onClick = {
+                        sheet = SHEET_NONE
+                        onOpenSplit()
+                    },
                 )
             }
             TextAction("閉じる", onClick = { sheet = SHEET_NONE })
