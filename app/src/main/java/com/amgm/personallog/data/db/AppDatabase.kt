@@ -24,7 +24,7 @@ import com.amgm.personallog.data.model.WholeShare
 @Database(
     entities = [
         DiaryEntry::class, DiaryPhoto::class, Receipt::class, ReceiptItem::class, Expense::class, ExpenseGroup::class, ReceiptNotDuplicate::class,
-        // v10: 割り勘の表。人・割り勘シート・品目のまとまり・割当・支払内訳。注意: この注釈の中に丸括弧を書かない(SchemaVersionTest の正規表現が誤検出する)
+        // v10: 割り勘の表。人・割り勘シート・品目のまとまり・割当・支払内訳。注意: この注釈の中には丸括弧を書かない。SchemaVersionTest の正規表現が版を見つけられなくなる
         Person::class, SplitSheet::class, ShareGroup::class, ShareGroupItem::class, ItemShare::class, WholeShare::class, PaymentPayer::class,
     ],
     version = 10, // AppDatabase.VERSION と同じにする(テストで確認)
