@@ -3,16 +3,35 @@ package com.amgm.personallog.domain.split
 // 割り勘の入力・結果の型(純Kotlin。Room・Android に依存しない)。
 // 方式・割当の種類の文字列は com.amgm.personallog.data.model.SplitMode / ShareKind を使う。
 
-/** 割り勘の対象者。order は人の並び順(端数の配り順に使う)。 */
-data class SplitPerson(val id: Long, val isSelf: Boolean, val order: Int)
+/**
+ * 割り勘の対象者(支払いの参加者)。id は参加者の id。order は並び順(端数の配り順に使う)。
+ * isPayer は店に払った人(端数の1円は支払者でない人から配る)。誰も isPayer でなければ自分が払ったとみなす。
+ * label はその支払いだけのラベル(例: 新人)。全体方式・金額のとき SplitInput.labelAmounts で1人あたりの金額を一括で決める。
+ */
+data class SplitPerson(
+    val id: Long,
+    val isSelf: Boolean,
+    val order: Int,
+    val isPayer: Boolean = false,
+    val label: String = "",
+)
 
 /**
  * 品目のまとまり(割り勘の単位)。amount はその税込金額(負もあり)。
  * isShared は共通費(袋代など)。割当が無いときに参加者全員で均等に割る。
  */
-data class SplitGroupInput(val id: Long, val amount: Int, val isShared: Boolean = false)
+data class SplitGroupInput(
+    val id: Long,
+    val amount: Int,
+    val isShared: Boolean = false,
+    /** 「N個中M個」の N。割合の空欄(weight=null)の人は、残りの個数を均等に分ける。null なら空欄は1個ぶん。 */
+    val pieceCount: Int? = null,
+)
 
-/** 割当1件。kind は ShareKind の値。weight は割合、amount は金額指定に使う。 */
+/**
+ * 割当1件。kind は ShareKind の値。weight は割合、amount は金額指定に使う。
+ * 空欄(AMOUNT で amount=null、RATIO で weight=null)は「残りを均等」: 金額は残額を空欄の人で均等、割合は残りの個数(または1)。
+ */
 data class ShareInput(val personId: Long, val kind: String, val weight: Int? = null, val amount: Int? = null)
 
 /** 支払者と、その人が払った金額。 */
@@ -35,6 +54,12 @@ data class SplitInput(
     val itemShares: Map<Long, List<ShareInput>> = emptyMap(),
     val wholeShares: List<ShareInput> = emptyList(),
     val payers: List<PayerInput> = emptyList(),
+    /**
+     * 全体方式の入力の種類(ShareKind.AMOUNT / RATIO)。全体方式の対象者は people 全員で、wholeShares に行が無い人は空欄。
+     */
+    val wholeKind: String = com.amgm.personallog.data.model.ShareKind.AMOUNT,
+    /** 全体方式・金額のときの、ラベルごとの1人あたり金額。キー "" はラベルの無い人(その他)。本人の金額が空欄のときに使う。 */
+    val labelAmounts: Map<String, Int> = emptyMap(),
 )
 
 /** 1人ぶんの金額1行。groupId=null は残差・調整・仮計上の行。provisional=true は仮計上(警告の対象)。 */

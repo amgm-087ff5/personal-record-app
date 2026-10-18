@@ -233,6 +233,22 @@ class ReceiptRepository @Inject constructor(
     }
 
     /** レシート削除。紐づく Expense は receiptId が NULL になって残る(家計簿は消さない)。 */
+    /**
+     * 家計簿をこの支払いの今の内容に合わせる(下書きでも行う。状態は変えない)。割り勘があれば自分の分だけを家計簿にする。
+     * 実装はタスク B4(確定の処理から状態の変更を除いたもの)。
+     */
+    suspend fun syncLedger(receiptId: Long, now: Long = System.currentTimeMillis()): Unit = TODO("B4")
+
+    /**
+     * 割り勘シートを保存し、家計簿を合わせる(1つのトランザクション)。保存後のシートを返す。
+     * 旧い立て替え(isAdvance・ownAmount)は割り勘シートに置き換わるので消す。実装はタスク B4。
+     */
+    suspend fun saveSplit(
+        data: SplitSheetData,
+        names: Map<Long, String>,
+        now: Long = System.currentTimeMillis(),
+    ): SplitSheetData = TODO("B4")
+
     suspend fun delete(receipt: Receipt) = receiptDao.delete(receipt)
 }
 
