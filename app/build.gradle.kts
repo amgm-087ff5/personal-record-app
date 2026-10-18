@@ -121,3 +121,9 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
 }
+
+// DB の版を上げた直後、kspDebugKotlin と kspReleaseKotlin が同時に app/schemas へ同じ版の JSON を書き、
+// KSP が "Empty schema file" で落ちることがある(2026-10-18、v10 の CI で発生)。release の KSP は debug の後に動かす。
+tasks.configureEach {
+    if (name == "kspReleaseKotlin") mustRunAfter("kspDebugKotlin")
+}
