@@ -129,6 +129,23 @@ interface SplitDao {
     @Query("DELETE FROM share_group_items WHERE receiptItemId = :receiptItemId")
     suspend fun deleteGroupItemByItem(receiptItemId: Long)
 
+    /** 分けるとき: 品目を元のまとまりから新しいまとまりへ移す(品目の id は一意なので衝突しない)。 */
+    @Query("UPDATE share_group_items SET groupId = :toGroupId WHERE groupId = :fromGroupId AND receiptItemId IN (:itemIds)")
+    suspend fun moveItems(fromGroupId: Long, toGroupId: Long, itemIds: List<Long>)
+
+    /** まとめるとき: 消える側のまとまりの品目を、残す先へ全部移す。 */
+    @Query("UPDATE share_group_items SET groupId = :toGroupId WHERE groupId IN (:fromGroupIds)")
+    suspend fun moveAllItems(fromGroupIds: List<Long>, toGroupId: Long)
+
+    @Query("DELETE FROM item_shares WHERE groupId = :groupId")
+    suspend fun deleteItemSharesOfGroup(groupId: Long)
+
+    @Query("DELETE FROM item_shares WHERE groupId IN (:groupIds)")
+    suspend fun deleteItemSharesOfGroups(groupIds: List<Long>)
+
+    @Query("DELETE FROM share_groups WHERE id IN (:groupIds)")
+    suspend fun deleteGroupsByIds(groupIds: List<Long>)
+
     // 品目ごと方式の割当
     @Query(
         "SELECT item_shares.* FROM item_shares " +
