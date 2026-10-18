@@ -29,6 +29,7 @@ class SplitCalculatorTest {
         wholeShares: List<ShareInput> = emptyList(),
         payers: List<PayerInput> = emptyList(),
         people: List<SplitPerson> = this.people,
+        wholeKind: String = ShareKind.AMOUNT,
     ) = SplitInput(
         total = total,
         mode = mode,
@@ -37,6 +38,7 @@ class SplitCalculatorTest {
         itemShares = itemShares,
         wholeShares = wholeShares,
         payers = payers,
+        wholeKind = wholeKind,
     )
 
     private fun equal(vararg ids: Long) = ids.map { ShareInput(it, ShareKind.EQUAL) }
@@ -112,11 +114,14 @@ class SplitCalculatorTest {
     @Test
     fun wholeEqual3People_500() {
         // 支払い全体を3人で均等。166/167/167。
+        // 仕様変更: 全体方式の対象は people 全員。3人の場合は people を3人に絞り、旧データの EQUAL として扱う。
         val result = SplitCalculator.calculate(
             input(
                 SplitMode.WHOLE,
                 total = 500,
                 wholeShares = equal(1L, 2L, 3L),
+                people = people.take(3),
+                wholeKind = ShareKind.EQUAL,
             ),
         )
         assertEquals(500, result.total)
@@ -129,11 +134,14 @@ class SplitCalculatorTest {
     @Test
     fun wholeAmount_totalMismatchWarnsAndPutsDifferenceOnSelfAsProvisional() {
         // 合計505 に対し 山田300・佐藤200 で 500。差 5 は自分の仮計上。
+        // 仕様変更: 空欄(行が無い人)は残額を均等に割るため、この期待値を出すには全員に金額を入れる必要がある。
+        // 3人に絞り、自分は 0 円を指定する(空欄にしないため)。
         val result = SplitCalculator.calculate(
             input(
                 SplitMode.WHOLE,
                 total = 505,
-                wholeShares = amounts(2L to 300, 3L to 200),
+                wholeShares = amounts(1L to 0, 2L to 300, 3L to 200),
+                people = people.take(3),
             ),
         )
         assertEquals(505, result.total)
@@ -198,8 +206,10 @@ class SplitCalculatorTest {
 
     @Test
     fun itemResidual_splitsEquallyAndWarnsWhenAtLeastTwo() {
-        // 品目合計 500(全員均等)に対し合計 505。残差5は3人で均等(1/2/2)、W3(5)。
-        // 500 の内訳は 髙木166・山田167・佐藤167。残差を足すと 167/169/169。
+        // 品目合計 500(全員均等)に対し合計 505。W3(5)。
+        // 500 の内訳は 髙木166・山田167・佐藤167。
+        // 仕様変更: 残差の参加者 P は people 全員(5人)になったので、残差5は5人で1円ずつ。
+        // 旧期待値(3人で 1/2/2 → 167/169/169)から、167/168/168/1/1 に変更。
         val result = SplitCalculator.calculate(
             input(
                 SplitMode.ITEM,
@@ -211,14 +221,17 @@ class SplitCalculatorTest {
         assertEquals(505, result.total)
         assertEquals(listOf(SplitWarning.ItemsTotalMismatch(5)), result.warnings)
         assertEquals(167, result.totalOf(1L))
-        assertEquals(169, result.totalOf(2L))
-        assertEquals(169, result.totalOf(3L))
+        assertEquals(168, result.totalOf(2L))
+        assertEquals(168, result.totalOf(3L))
+        assertEquals(1, result.totalOf(4L))
+        assertEquals(1, result.totalOf(5L))
     }
 
     @Test
-    fun itemSharedCost_splitsAmongParticipants() {
-        // 袋代5円は割当なしの共通費。参加者は 自分 + 割当に出てくる山田(600円を山田へ)。
-        // 5 を2人で均等: 支払者の髙木が後回しで 髙木2・山田3。
+    fun itemSharedCost_splitsAmongAllPeople() {
+        // 袋代5円は割当なしの共通費。仕様変更で参加者 P は people 全員(5人)。
+        // 5 を5人で1円ずつ。割当は 600 円を山田(2)へ。
+        // 旧期待値(参加者 = 自分+山田の2人で 髙木2・山田603)から、髙木1・山田601・他3人1ずつ に変更。
         val result = SplitCalculator.calculate(
             input(
                 SplitMode.ITEM,
@@ -230,8 +243,9 @@ class SplitCalculatorTest {
             ),
         )
         assertEquals(605, result.total)
-        assertEquals(2, result.totalOf(1L))
-        assertEquals(603, result.totalOf(2L))
+        assertEquals(1, result.totalOf(1L))
+        assertEquals(601, result.totalOf(2L))
+        assertEquals(1, result.totalOf(3L))
         assertTrue(result.warnings.isEmpty())
     }
 
@@ -319,11 +333,14 @@ class SplitCalculatorTest {
         // 手計算: 800/7=114 余り2、1200/7=171 余り3、800/7=114 余り2。
         // 基本額の合計 399 で残り1円。非支払者で余りが最大の山田(余り3)へ。
         // よって 114 / 172 / 114。
+        // 仕様変更: 割合の対象は people 全員。3人に絞り、wholeKind を RATIO と明示する(期待値は不変)。
         val result = SplitCalculator.calculate(
             input(
                 SplitMode.WHOLE,
                 total = 400,
                 wholeShares = ratio(1L to 2, 2L to 3, 3L to 2),
+                people = people.take(3),
+                wholeKind = ShareKind.RATIO,
             ),
         )
         assertEquals(400, result.total)
