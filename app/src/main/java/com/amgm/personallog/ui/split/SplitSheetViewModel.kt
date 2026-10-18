@@ -8,15 +8,17 @@ import com.amgm.personallog.data.model.Person
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ShareKind
 import com.amgm.personallog.data.model.SplitLabelAmount
+import com.amgm.personallog.data.model.SplitMode
 import com.amgm.personallog.data.model.SplitParticipant
 import com.amgm.personallog.data.model.WholeShare
 import com.amgm.personallog.data.repository.PersonRepository
 import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.repository.SplitBuild
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.data.repository.SplitSheetData
 import com.amgm.personallog.data.repository.toBuild
-import com.amgm.personallog.domain.split.SplitBuild
 import com.amgm.personallog.domain.split.SplitCalculator
+import com.amgm.personallog.domain.split.SplitGroupInput
 import com.amgm.personallog.domain.split.SplitLedger
 import com.amgm.personallog.domain.split.SplitResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -50,6 +52,10 @@ data class SplitSheetUiState(
     val notFound: Boolean = false,
     /** 読み込んだ割り勘の中身(画面の入力欄の値を、ここから読む)。 */
     val data: SplitSheetData? = null,
+    /** 割り方(SplitMode の値)。画面のタブと表示の切り替えに使う。 */
+    val mode: String = SplitMode.SELF,
+    /** 全体方式の入力の種類(ShareKind.AMOUNT / RATIO)。 */
+    val wholeKind: String = ShareKind.AMOUNT,
     /** 支払いの合計。 */
     val total: Int? = null,
     /** 参加者(sortOrder 順)。 */
@@ -184,7 +190,9 @@ class SplitSheetViewModel @Inject constructor(
         }
 
         val groupNameMap = groupNames(d)
-        val groupAmounts = build?.input?.groups?.associate { it.id to it.amount }.orEmpty()
+        val groupAmounts: Map<Long, Int> = build?.input?.groups
+            ?.associate { g: SplitGroupInput -> g.id to g.amount }
+            .orEmpty()
         val groupUis = d.groups.map { gw ->
             GroupUi(
                 id = gw.group.id,
@@ -207,6 +215,8 @@ class SplitSheetViewModel @Inject constructor(
                 loading = false,
                 notFound = false,
                 data = d,
+                mode = d.mode,
+                wholeKind = d.wholeKind,
                 total = total,
                 participants = sorted,
                 selfId = selfId,
