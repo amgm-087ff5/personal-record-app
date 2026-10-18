@@ -75,7 +75,6 @@ private val IMAGE_HEIGHT = 220.dp
 private const val SHEET_NONE = ""
 private const val SHEET_SHOP = "shop"
 private const val SHEET_TOTAL = "total"
-private const val SHEET_OWN = "own"
 private const val SHEET_DELETE = "delete"
 private const val SHEET_RESCAN = "rescan"
 private const val SHEET_USE_ITEMS_SUM = "useItemsSum"
@@ -300,7 +299,6 @@ fun ReceiptDetailScreen(
                 items(groups, key = { it.head.key }) { group ->
                     ItemGroupRows(
                         group = group,
-                        isAdvance = s.isAdvance,
                         onEditGroup = { editGroupKey = group.head.key },
                         onEditUnit = { editUnitKey = it },
                     )
@@ -325,18 +323,7 @@ fun ReceiptDetailScreen(
                         ) {
                             SummaryColumn("印字合計", s.total.toLongOrNull()?.let { formatYen(it) } ?: "未入力", Modifier.weight(1f))
                             SummaryColumn("税込合計", formatYen(s.itemsSum), Modifier.weight(1f))
-                            SummaryColumn(
-                                "自分の負担",
-                                formatYen(s.ownTotal),
-                                Modifier.weight(1f).then(if (s.isAdvance) Modifier.tappable { sheet = SHEET_OWN } else Modifier),
-                            )
-                        }
-                        if (s.isAdvance) {
-                            Text(
-                                "貰う分(他の人の分): ${formatYen(s.theirTotal)}。「自分の負担」をタップして金額を直接入力できます。",
-                                style = AppTheme.type.caption,
-                                color = c.inkSoft,
-                            )
+                            SummaryColumn("自分の負担", formatYen(s.ownTotal), Modifier.weight(1f))
                         }
                         Text(
                             "小数点以下は合計で切り捨てています。",
@@ -435,7 +422,6 @@ fun ReceiptDetailScreen(
         } else {
             GroupEditSheet(
                 group = group,
-                isAdvance = s.isAdvance,
                 viewModel = viewModel,
                 onEditUnit = { editUnitKey = it },
                 onDismiss = { editGroupKey = 0L },
@@ -452,7 +438,6 @@ fun ReceiptDetailScreen(
             UnitEditSheet(
                 unit = unit,
                 number = groups.firstOrNull { editUnitKey in it.keys }?.units?.indexOfFirst { it.key == editUnitKey }?.plus(1),
-                isAdvance = s.isAdvance,
                 viewModel = viewModel,
                 onDismiss = { editUnitKey = 0L },
             )
@@ -466,7 +451,7 @@ fun ReceiptDetailScreen(
             SheetField("日付 yyyy-MM-dd", s.date, viewModel::setDate)
             SheetField("時刻 HH:mm", s.time, viewModel::setTime)
             SheetChoice("割り勘") {
-                // 「立て替え」の代わりに割り勘シートへ。割り勘の編集は別画面(戻ると支払い詳細に戻る)
+                // 割り勘の編集は割り勘シートで行う(戻ると、開いた画面に戻る)
                 TextAction(
                     "割り勘を編集する",
                     onClick = {
@@ -496,23 +481,6 @@ fun ReceiptDetailScreen(
                     },
                 )
             }
-            TextAction("閉じる", onClick = { sheet = SHEET_NONE })
-        }
-        SHEET_OWN -> InkSheet(onDismiss = { sheet = SHEET_NONE }, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
-            SheetTitle("自分が払う分")
-            SheetField(
-                "自分が払う分(円・税込)",
-                s.ownAmount,
-                viewModel::setOwnAmount,
-                placeholder = "空欄は全額 ${formatYen(s.itemsSum)}",
-                numeric = true,
-            )
-            Text(
-                "品目の「自分の分に含める」を選ぶと、その税込合計がここに入ります。手で直接入力も可。",
-                style = AppTheme.type.caption,
-                color = AppTheme.colors.inkSoft,
-                modifier = Modifier.padding(bottom = Space.m),
-            )
             TextAction("閉じる", onClick = { sheet = SHEET_NONE })
         }
         SHEET_DELETE -> InkSheet(onDismiss = { sheet = SHEET_NONE }) {
@@ -656,9 +624,6 @@ private fun TotalDashboard(s: DetailUiState) {
                     color = c.inkSoft,
                 )
             }
-            if (s.isAdvance) {
-                Text("自分が払う分 ${formatYen(s.ownTotal)}", style = small, color = c.inkSoft)
-            }
         }
     }
 }
@@ -676,7 +641,6 @@ private fun SummaryColumn(label: String, value: String, modifier: Modifier = Mod
 @Composable
 private fun ItemGroupRows(
     group: ItemGroup,
-    isAdvance: Boolean,
     onEditGroup: () -> Unit,
     onEditUnit: (Long) -> Unit,
 ) {
@@ -684,7 +648,6 @@ private fun ItemGroupRows(
     val head = group.head
     val count = group.units.size
     val paid = TaxCalc.paidYen(group.units.map { it.toItemModel() })
-    val allPicked = group.units.all { it.picked }
     val note = buildString {
         append(if (head.priceIncludesTax) "税込" else "税抜")
         append(' ').append(head.taxRate).append('%')
@@ -692,7 +655,6 @@ private fun ItemGroupRows(
         if (count > 1) append(" ・ 1個 ").append(yenText(head.amount))
         else if (!head.priceIncludesTax) append(" ・ 税込 ").append(TaxCalc.paidYenText(head.toItemModel())).append('円')
         if (head.memo.isNotBlank() && count == 1) append(" ・ ").append(head.memo)
-        if (isAdvance) append(if (allPicked) " ・ 自分の分" else " ・ 相手の分")
     }
     // 品目1つ分を影つきのスリップにする(一覧の枠と同じ窓辺の紙)
     Column(
@@ -718,8 +680,7 @@ private fun ItemGroupRows(
             group.units.forEachIndexed { index, unit ->
                 Text(
                     "${index + 1}個目  ${yenText(unit.amount)}" +
-                        (if (unit.memo.isNotBlank()) "  ${unit.memo}" else "") +
-                        (if (isAdvance) (if (unit.picked) "  自分の分" else "") else ""),
+                        (if (unit.memo.isNotBlank()) "  ${unit.memo}" else ""),
                     style = AppTheme.type.caption,
                     color = c.inkSoft,
                     modifier = Modifier
@@ -736,7 +697,6 @@ private fun ItemGroupRows(
 @Composable
 private fun GroupEditSheet(
     group: ItemGroup,
-    isAdvance: Boolean,
     viewModel: ReceiptDetailViewModel,
     onEditUnit: (Long) -> Unit,
     onDismiss: () -> Unit,
@@ -744,7 +704,6 @@ private fun GroupEditSheet(
     val head = group.head
     val keys = group.keys
     val count = group.units.size
-    val allPicked = group.units.all { it.picked }
     InkSheet(onDismiss = onDismiss, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
         SheetTitle(if (count > 1) "品目(同じもの×$count)" else "品目")
         SheetField("品名", head.name, { viewModel.setGroupName(keys, it) })
@@ -778,16 +737,6 @@ private fun GroupEditSheet(
                 onSelect = { viewModel.setGroupCategory(keys, it) },
                 label = { it },
             )
-        }
-        if (isAdvance) {
-            SheetChoice("負担") {
-                Pills(
-                    options = listOf(true, false),
-                    selected = allPicked,
-                    onSelect = { if (it != allPicked) viewModel.togglePicked(keys) },
-                    label = { if (it) (if (count > 1) "自分の分に含める(全部)" else "自分の分に含める") else "含めない" },
-                )
-            }
         }
         if (count == 1) {
             SheetField("メモ", head.memo, { viewModel.setUnitMemo(head.key, it) })
@@ -824,7 +773,6 @@ private fun GroupEditSheet(
 private fun UnitEditSheet(
     unit: ItemForm,
     number: Int?,
-    isAdvance: Boolean,
     viewModel: ReceiptDetailViewModel,
     onDismiss: () -> Unit,
 ) {
@@ -832,16 +780,6 @@ private fun UnitEditSheet(
         SheetTitle(if (number != null) "${unit.name.ifBlank { "品目" }} ${number}個目" else unit.name.ifBlank { "品目" })
         SheetField("この1個の金額(円)", unit.amount, { viewModel.setUnitAmount(unit.key, it) }, numeric = true)
         SheetField("メモ", unit.memo, { viewModel.setUnitMemo(unit.key, it) })
-        if (isAdvance) {
-            SheetChoice("負担") {
-                Pills(
-                    options = listOf(true, false),
-                    selected = unit.picked,
-                    onSelect = { if (it != unit.picked) viewModel.togglePicked(setOf(unit.key)) },
-                    label = { if (it) "この1個を自分の分に含める" else "含めない" },
-                )
-            }
-        }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextAction(
                 "この1個を削除",
