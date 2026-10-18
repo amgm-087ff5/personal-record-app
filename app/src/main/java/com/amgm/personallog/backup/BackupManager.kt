@@ -69,6 +69,8 @@ class BackupManager @Inject constructor(
                 splitSheets = splitDao.getAllSheets().map { BackupSplitSheet.from(it) },
                 shareGroups = splitDao.getAllGroups().map { BackupShareGroup.from(it) },
                 shareGroupItems = splitDao.getAllGroupItems().map { BackupShareGroupItem.from(it) },
+                participants = splitDao.getAllParticipants().map { BackupParticipant.from(it) },
+                labelAmounts = splitDao.getAllLabelAmounts().map { BackupLabelAmount.from(it) },
                 itemShares = splitDao.getAllItemShares().map { BackupItemShare.from(it) },
                 wholeShares = splitDao.getAllWholeShares().map { BackupWholeShare.from(it) },
                 paymentPayers = splitDao.getAllPayers().map { BackupPaymentPayer.from(it) },
@@ -411,8 +413,10 @@ class BackupManager @Inject constructor(
     }
 
     /**
-     * 割り勘の表を入れる。まとまりは先に入れて新しい id を控え、そのあと表の他の行を付け替えて入れる。
+     * 割り勘の表を入れる。順番は 参加者 -> まとまり -> (品目のまとまり・割当・全体の入力・支払内訳・ラベル金額・シート)。
+     * 参加者とまとまりは先に入れて新しい id を控え、そのあと他の行を付け替えて入れる。
      * receiptIdMap / itemIdMap は取り込み対象の分だけ渡す(既存に当たった支払いは渡さない)。
+     * personIdMap はバックアップの人 id -> 端末の人 id(対応が無い人は参加者の personId を null にする)。
      */
     private suspend fun importSplitRows(
         data: BackupData,
@@ -420,16 +424,21 @@ class BackupManager @Inject constructor(
         itemIdMap: Map<Long, Long>,
         personIdMap: Map<Long, Long>,
     ) {
+        val participantIdMap = HashMap<Long, Long>()
+        for ((backupParticipantId, participant) in remapParticipants(data.participants, receiptIdMap, personIdMap)) {
+            participantIdMap[backupParticipantId] = splitDao.insertParticipant(participant)
+        }
         val groupIdMap = HashMap<Long, Long>()
         for ((backupGroupId, group) in remapShareGroups(data.shareGroups, receiptIdMap)) {
             groupIdMap[backupGroupId] = splitDao.insertGroup(group)
         }
-        val rows = remapSplitRows(data, receiptIdMap, itemIdMap, personIdMap, groupIdMap)
+        val rows = remapSplitRows(data, receiptIdMap, itemIdMap, groupIdMap, participantIdMap)
         rows.sheets.forEach { splitDao.upsertSheet(it) }
         if (rows.groupItems.isNotEmpty()) splitDao.insertGroupItems(rows.groupItems)
         if (rows.itemShares.isNotEmpty()) splitDao.insertItemShares(rows.itemShares)
         if (rows.wholeShares.isNotEmpty()) splitDao.insertWholeShares(rows.wholeShares)
         if (rows.payers.isNotEmpty()) splitDao.insertPayers(rows.payers)
+        if (rows.labelAmounts.isNotEmpty()) splitDao.insertLabelAmounts(rows.labelAmounts)
     }
 
     /** 一時ディレクトリに展開済みの画像を filesDir へ移す。 */
