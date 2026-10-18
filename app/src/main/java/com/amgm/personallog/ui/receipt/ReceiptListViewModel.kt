@@ -435,6 +435,21 @@ class ReceiptListViewModel @Inject constructor(
         finish(key, result, id)
     }
 
+    /**
+     * 読み取りが共通費(割り勘の提案)とした品目を、割り勘のまとまりに反映する。
+     * 保存した品目(id順)と読み取りの行は同じ順に並ぶので、件数が合うときだけ対応させる。
+     */
+    private suspend fun suggestShared(receiptId: Long, outcome: ScanOutcome) {
+        val parsed = outcome as? ScanOutcome.Parsed ?: return
+        val rows = parsed.receipt.items.flatMap { ReceiptUnits.fromParsed(it) }
+        val saved = repository.getItems(receiptId)
+        if (saved.size != rows.size) return
+        val hints = saved.zip(rows).associate { (item, row) -> item.id to row.shared }
+        splitRepository.ensureGroups(receiptId, hints)
+        // まとまりを組み直したかもしれないので、家計簿を今の割り勘に合わせる(割り勘の自分の分を反映する)
+        repository.syncLedger(receiptId)
+    }
+
     private suspend fun finish(key: Long, outcome: ScanOutcome, id: Long) {
         val (phase, message) = when (outcome) {
             is ScanOutcome.Parsed -> ImportPhase.DONE to null
