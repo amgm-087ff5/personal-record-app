@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -29,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.data.model.ShareKind
 import com.amgm.personallog.data.model.SplitMode
 import com.amgm.personallog.data.model.SplitParticipant
+import com.amgm.personallog.data.repository.canSplitOutItems
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.BareField
 import com.amgm.personallog.ui.design.Hairline
@@ -62,6 +64,31 @@ fun SplitSheetScreen(
     var openMemberId by rememberSaveable { mutableStateOf(0L) }
     /** 開いているまとまり(割り方・対象者・共通費)。0 は無し。 */
     var openGroupId by rememberSaveable { mutableStateOf(0L) }
+    /** まとめる操作中か(まとまりを選ぶ)と、選んだまとまり。 */
+    var mergeMode by remember { mutableStateOf(false) }
+    var mergeSelection by remember { mutableStateOf(setOf<Long>()) }
+    /** 割当や品目が消える分割・結合の確認待ち。 */
+    var pendingOp by remember { mutableStateOf<GroupOp?>(null) }
+
+    fun executeGroupOp(op: GroupOp) {
+        when (op) {
+            is GroupOp.Split -> viewModel.splitGroupItems(op.groupId, op.itemIds)
+            is GroupOp.Merge -> {
+                viewModel.mergeGroups(op.groupIds)
+                mergeMode = false
+                mergeSelection = emptySet()
+            }
+        }
+    }
+
+    /** 分割・結合の要求。割当が外れる・まとまりが消えるときだけ確認を出す。 */
+    fun requestGroupOp(op: GroupOp) {
+        val needsConfirm = when (op) {
+            is GroupOp.Split -> viewModel.splitWouldEmpty(op.groupId, op.itemIds)
+            is GroupOp.Merge -> viewModel.mergeWouldClear(op.groupIds)
+        }
+        if (needsConfirm) pendingOp = op else executeGroupOp(op)
+    }
 
     LaunchedEffect(s.saved) { if (s.saved) onBack() }
 
@@ -211,7 +238,36 @@ fun SplitSheetScreen(
 
                     if (s.mode == SplitMode.ITEM) {
                         item(key = "groupsTitle") {
-                            Label("品目のまとまり", modifier = Modifier.padding(start = Space.edge, end = Space.edge, top = Space.l, bottom = Space.s))
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(start = Space.edge, end = Space.edge, top = Space.l, bottom = Space.s),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Label("品目のまとまり")
+                                Box(modifier = Modifier.weight(1f))
+                                TextAction(
+                                    if (mergeMode) "やめる" else "まとめる",
+                                    onClick = {
+                                        mergeMode = !mergeMode
+                                        mergeSelection = emptySet()
+                                    },
+                                )
+                            }
+                        }
+                        if (mergeMode) {
+                            item(key = "mergeAction") {
+                                Column(modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.xs)) {
+                                    Text(
+                                        "まとめるまとまりを2つ以上選びます。残すのは並びが一番早いまとまりです。",
+                                        style = AppTheme.type.caption,
+                                        color = c.inkFaint,
+                                    )
+                                    TextAction(
+                                        "${mergeSelection.size}件をまとめる",
+                                        onClick = { requestGroupOp(GroupOp.Merge(mergeSelection)) },
+                                        enabled = mergeSelection.size >= 2,
+                                    )
+                                }
+                            }
                         }
                         if (s.groups.isEmpty()) {
                             item(key = "noGroups") {
@@ -219,7 +275,15 @@ fun SplitSheetScreen(
                             }
                         }
                         items(s.groups, key = { "group-${it.id}" }) { g ->
-                            GroupCard(g = g, onOpen = { openGroupId = g.id })
+                            GroupCard(
+                                g = g,
+                                selecting = mergeMode,
+                                selected = g.id in mergeSelection,
+                                onOpen = { openGroupId = g.id },
+                                onSelect = {
+                                    mergeSelection = if (g.id in mergeSelection) mergeSelection - g.id else mergeSelection + g.id
+                                },
+                            )
                         }
                     }
                 }
@@ -250,11 +314,44 @@ fun SplitSheetScreen(
             onSetValue = { pid, text -> viewModel.setGroupValue(openGroup.id, pid, text) },
             onSetPieces = { viewModel.setPieceCount(openGroup.id, it) },
             onSetShared = { viewModel.setShared(openGroup.id, it) },
+            onSplit = { requestGroupOp(GroupOp.Split(openGroup.id, it)) },
             onDismiss = { openGroupId = 0L },
         )
     } else if (openGroupId != 0L) {
         // 開いていたまとまりが消えたら閉じる
         openGroupId = 0L
+    }
+
+    pendingOp?.let { op ->
+        GroupOpConfirm(
+            message = when (op) {
+                is GroupOp.Split -> "元のまとまりは品目が無くなるので消えます。そのまとまりの割当も消えます。"
+                is GroupOp.Merge -> "割当が揃わないため、まとめた後のまとまりは割当を外して未設定(自分)になります。"
+            },
+            onConfirm = {
+                pendingOp = null
+                executeGroupOp(op)
+            },
+            onDismiss = { pendingOp = null },
+        )
+    }
+}
+
+/** まとまりの分割・結合の要求(確認を出すかどうかは画面で決める)。 */
+private sealed interface GroupOp {
+    data class Split(val groupId: Long, val itemIds: Set<Long>) : GroupOp
+    data class Merge(val groupIds: Set<Long>) : GroupOp
+}
+
+/** 分割・結合の確認シート(割当や品目が消える場合だけ出す)。 */
+@Composable
+private fun GroupOpConfirm(message: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val c = AppTheme.colors
+    InkSheet(onDismiss = onDismiss) {
+        SheetTitle("確認")
+        Text(message, style = AppTheme.type.body, color = c.ink, modifier = Modifier.padding(bottom = Space.m))
+        TextAction("実行する", onClick = onConfirm, color = c.danger)
+        TextAction("やめる", onClick = onDismiss, color = c.inkSoft)
     }
 }
 
@@ -393,11 +490,12 @@ private fun LabelAmountRow(s: SplitSheetUiState, label: String, onSet: (String) 
     }
 }
 
-/** まとまり1つ分の行: 品名 ······ 金額、割り方・共通費・N個中の補足。タップで編集シート。 */
+/** まとまり1つ分の行: 品名 ······ 金額、割り方・共通費・N個中の補足。タップで編集シート(まとめる操作中は選択)。 */
 @Composable
-private fun GroupCard(g: GroupUi, onOpen: () -> Unit) {
+private fun GroupCard(g: GroupUi, selecting: Boolean, selected: Boolean, onOpen: () -> Unit, onSelect: () -> Unit) {
     val c = AppTheme.colors
     val note = buildString {
+        if (selecting && selected) append("選択中 ・ ")
         append(kindLabel(g.kind))
         if (g.pieceCount != null) append(" ・ ${g.pieceCount}個中")
         if (g.isShared) append(" ・ 共通費")
@@ -407,7 +505,7 @@ private fun GroupCard(g: GroupUi, onOpen: () -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = Space.edge, vertical = Space.xs)
             .sheet(RoundedCornerShape(16.dp), depth = 8.dp)
-            .tappable(onClick = onOpen)
+            .tappable(onClick = if (selecting) onSelect else onOpen)
             .padding(horizontal = Space.edge, vertical = Space.s),
     ) {
         LeaderRow(label = g.name + if (g.count > 1 && !g.name.contains("×")) " ×${g.count}" else "", value = formatYenText(g.amount))
@@ -425,10 +523,14 @@ private fun GroupSheet(
     onSetValue: (Long, String) -> Unit,
     onSetPieces: (String) -> Unit,
     onSetShared: (Boolean) -> Unit,
+    onSplit: (Set<Long>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val c = AppTheme.colors
     val rows = s.data?.itemShares.orEmpty().filter { it.groupId == g.id }
+    val groupItems = s.groupItems[g.id].orEmpty()
+    /** 分けるために選んだ品目。 */
+    var picks by remember(g.id) { mutableStateOf(setOf<Long>()) }
     InkSheet(onDismiss = onDismiss, modifier = Modifier.imePadding()) {
         SheetTitle(g.name)
         SheetChoice("割り方") {
@@ -478,6 +580,33 @@ private fun GroupSheet(
                             modifier = Modifier.weight(1f),
                         )
                     }
+                }
+            }
+        }
+        if (groupItems.size > 1) {
+            SheetChoice("品目を分ける") {
+                Column {
+                    Text(
+                        "選んだ品目を新しいまとまりにします。割当と共通費は引き継ぎません(未設定=自分)。",
+                        style = AppTheme.type.caption,
+                        color = c.inkSoft,
+                        modifier = Modifier.padding(bottom = Space.s),
+                    )
+                    groupItems.forEach { (itemId, name) ->
+                        Pill(
+                            text = name,
+                            selected = itemId in picks,
+                            onClick = { picks = if (itemId in picks) picks - itemId else picks + itemId },
+                        )
+                    }
+                    TextAction(
+                        "選んだ品目を分ける",
+                        onClick = {
+                            onSplit(picks)
+                            picks = emptySet()
+                        },
+                        enabled = canSplitOutItems(groupItems.map { it.first }.toSet(), picks),
+                    )
                 }
             }
         }

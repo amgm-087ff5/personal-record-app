@@ -283,4 +283,24 @@ class ConfirmPlannerTest {
         assertEquals(650, p.group.amount)
         assertEquals(listOf(150), p.updates.filter { it.receiptItemId == 11L }.map { it.amount })
     }
+
+    @Test
+    fun savedIdsInOrder_updatesKeepIdAndInsertsTakeNewIdsInInputOrder() {
+        // DBには 11(牛乳)と 13(消す品目)がある。画面は 新規(A)・牛乳(11)・新規(C) の順
+        val existing = listOf(milk, item(13, "消す", 100, "食費"))
+        val incoming = listOf(item(0, "A", 1, "食費"), milk, item(0, "C", 2, "食費"))
+        val plan = ItemSaver.plan(1, existing, incoming)
+        // 保存後: 11 は残り、新規は 14, 15 を採番される(挿入は順に採番される前提)
+        val ids = ItemSaver.savedIdsInOrder(incoming, plan, listOf(11L, 14L, 15L))
+        assertEquals(listOf(14L, 11L, 15L), ids)
+    }
+
+    @Test
+    fun savedIdsInOrder_sameIdTwiceSecondIsInsert() {
+        // 同じ id の品目が2つ来たら、1つ目だけ更新。2つ目は新規として扱う(ItemSaver.plan と同じ)
+        val incoming = listOf(milk, milk.copy(name = "コピー"))
+        val plan = ItemSaver.plan(1, listOf(milk), incoming)
+        val ids = ItemSaver.savedIdsInOrder(incoming, plan, listOf(11L, 20L))
+        assertEquals(listOf(11L, 20L), ids)
+    }
 }

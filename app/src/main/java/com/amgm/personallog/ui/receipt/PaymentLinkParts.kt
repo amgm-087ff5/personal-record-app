@@ -47,7 +47,7 @@ internal fun RebuildWarningSheet(rebuilds: Boolean, lostEdited: Int, keptDeleted
             (if (keptDeleted > 0) "家計簿で消した品目${keptDeleted}件は、消したまま残ります(支払い詳細から元に戻せます)。" else "")
         Text(
             if (rebuilds) {
-                "立て替えと通常を切り替えたとき、または古い形式で確定した記録のときは、このレシートの家計簿の行を作り直します。" +
+                "古い形式で確定した記録のときは、このレシートの家計簿の行を作り直します。" +
                     "家計簿で直した金額・カテゴリ・メモ・日時は消えます。$lostNote"
             } else {
                 "レシートから消した品目に対応する家計簿の行は、品目といっしょに消えます。$lostNote"

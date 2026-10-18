@@ -96,6 +96,55 @@ private data class ItemKey(val name: String, val amount: Int, val taxRate: Int, 
 
 private fun keyOf(item: ReceiptItem): ItemKey = ItemKey(item.name.trim(), item.amount, item.taxRate, item.priceIncludesTax)
 
+// ---- まとまりの分割・結合の判定(Android に依存しない純関数。テストは ui/split/SplitGroupRulesTest.kt) ----
+
+/** 品目を切り出せるか: 選んだ品目が空でなく、すべてそのまとまりに入っている。 */
+fun canSplitOutItems(groupItemIds: Set<Long>, selectedIds: Set<Long>): Boolean =
+    selectedIds.isNotEmpty() && groupItemIds.containsAll(selectedIds)
+
+/** 切り出すと元のまとまりに品目が残らないか(残らなければ元のまとまりは消える)。 */
+fun splitEmptiesSource(groupItemIds: Set<Long>, selectedIds: Set<Long>): Boolean =
+    canSplitOutItems(groupItemIds, selectedIds) && groupItemIds.all { it in selectedIds }
+
+/** まとめる先(残す先): 選んだまとまりのうち並び順(sortOrder)が一番早いもの。 */
+fun mergeKeepGroup(groups: List<ShareGroup>): ShareGroup? =
+    groups.minWithOrNull(compareBy<ShareGroup>({ it.sortOrder }, { it.id }))
+
+/** 割当をまとめた結果。rows は残す先のまとまりの割当(groupId は残す先)。cleared は、統合できず割当を外したとき true。 */
+data class MergedShares(val rows: List<ItemShare>, val cleared: Boolean)
+
+/**
+ * まとめるときの割当。残す先の割当を基準にする。割当が空(未設定)の側は判定に入れない。
+ *  - 割当のある側の種類(kind)と対象者が全部同じなら統合する(基準の行を残す。基準が空なら、残りの割当の1つを使う)。
+ *  - 1つでも種類か対象者が違えば統合せず、割当を全部外す(未設定にする。cleared = true)。
+ * keepRows は残す先の割当、otherRows は消える側のまとまりごとの割当。
+ */
+fun mergeShareRows(keepGroupId: Long, keepRows: List<ItemShare>, otherRows: List<List<ItemShare>>): MergedShares {
+    val sources = (listOf(keepRows) + otherRows).filter { it.isNotEmpty() }
+    if (sources.isEmpty()) return MergedShares(rows = emptyList(), cleared = false)
+    val base = sources.first()
+    val shape = shareShapeOf(base)
+    return if (sources.all { shareShapeOf(it) == shape }) {
+        MergedShares(rows = base.map { it.copy(groupId = keepGroupId) }, cleared = false)
+    } else {
+        MergedShares(rows = emptyList(), cleared = true)
+    }
+}
+
+/** 割当の形(種類の集合と対象者の集合)。同じなら統合できる。 */
+private data class ShareShape(val kinds: Set<String>, val participants: Set<Long>)
+
+private fun shareShapeOf(rows: List<ItemShare>): ShareShape =
+    ShareShape(kinds = rows.map { it.kind }.toSet(), participants = rows.map { it.participantId }.toSet())
+
+/** まとめた後のまとまり: 並び・個数は残す先のもの、共通費の印はどれか1つでも付いていれば付く。 */
+fun mergedGroupAttributes(keep: ShareGroup, all: List<ShareGroup>): ShareGroup =
+    keep.copy(isShared = all.any { it.isShared }, pieceCount = keep.pieceCount)
+
+/** 分けた後の新しいまとまり: 割当なし(未設定=自分)・共通費なし・個数は null。 */
+fun newGroupAfterSplit(receiptId: Long, sortOrder: Int): ShareGroup =
+    ShareGroup(receiptId = receiptId, pieceCount = null, isShared = false, sortOrder = sortOrder)
+
 /** 割り勘の表の読み書き。家計簿の更新は ReceiptRepository が行う(ここからは呼ばない)。 */
 @Singleton
 class SplitRepository @Inject constructor(
@@ -296,6 +345,50 @@ class SplitRepository @Inject constructor(
         for (g in groups) {
             if (g.id !in used) splitDao.deleteGroup(g)
         }
+    }
+
+    /**
+     * 品目を1つのまとまりから切り出し、新しいまとまりにする(1つのトランザクション)。
+     * 新しいまとまりは割当なし・共通費なし・個数 null。元のまとまりに品目が残らなければ消す(割当も消える)。
+     * 選び方が不正(空・そのまとまりに無い品目を含む)なら何もしない。家計簿は呼び出し側が syncLedger で合わせる。
+     */
+    suspend fun splitGroupItems(receiptId: Long, groupId: Long, itemIds: Set<Long>): Unit = db.withTransaction {
+        val groups = splitDao.getGroups(receiptId)
+        if (groups.none { it.id == groupId }) return@withTransaction
+        val membership = splitDao.getGroupItems(receiptId).filter { it.groupId == groupId }.map { it.receiptItemId }.toSet()
+        if (!canSplitOutItems(membership, itemIds)) return@withTransaction
+        val nextOrder = (groups.maxOfOrNull { it.sortOrder } ?: -1) + 1
+        val newId = splitDao.insertGroup(newGroupAfterSplit(receiptId, nextOrder))
+        splitDao.moveItems(fromGroupId = groupId, toGroupId = newId, itemIds = itemIds.toList())
+        if (splitEmptiesSource(membership, itemIds)) {
+            splitDao.deleteItemSharesOfGroup(groupId)
+            splitDao.deleteGroupsByIds(listOf(groupId))
+        }
+    }
+
+    /**
+     * 2つ以上のまとまりを1つにする(1つのトランザクション)。残す先は並びが一番早いもの。
+     * 品目は全部残す先に入る。個数は残す先の値、共通費はどれか付いていれば付く。割当は mergeShareRows で決める(統合、または外す)。
+     * 家計簿は呼び出し側が syncLedger で合わせる。
+     */
+    suspend fun mergeGroups(receiptId: Long, groupIds: Set<Long>): Unit = db.withTransaction {
+        val chosen = splitDao.getGroups(receiptId).filter { it.id in groupIds }
+        if (chosen.size < 2) return@withTransaction
+        val keep = mergeKeepGroup(chosen) ?: return@withTransaction
+        val others = chosen.filter { it.id != keep.id }
+        val allShares = splitDao.getItemShares(receiptId)
+        val merged = mergeShareRows(
+            keepGroupId = keep.id,
+            keepRows = allShares.filter { it.groupId == keep.id },
+            otherRows = others.map { o -> allShares.filter { it.groupId == o.id } },
+        )
+        val otherIds = others.map { it.id }
+        splitDao.moveAllItems(fromGroupIds = otherIds, toGroupId = keep.id)
+        splitDao.deleteItemSharesOfGroups(otherIds)
+        splitDao.deleteGroupsByIds(otherIds)
+        splitDao.deleteItemSharesOfGroup(keep.id)
+        if (merged.rows.isNotEmpty()) splitDao.insertItemShares(merged.rows)
+        splitDao.updateGroup(mergedGroupAttributes(keep, chosen))
     }
 
     /** 家計簿用: 割り勘があれば計算の入力を返す。シートが無い・自分だけなら null(従来どおり全額が自分)。 */

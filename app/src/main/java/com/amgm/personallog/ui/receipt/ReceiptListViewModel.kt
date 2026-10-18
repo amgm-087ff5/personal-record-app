@@ -186,6 +186,28 @@ class ReceiptListViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 手入力の支払いを下書きとして保存し、その詳細画面を開く(レシート画像は無い)。
+     * 不正な入力は保存せず、理由を返す(null なら保存を始めた)。品目は詳細画面で足す。
+     */
+    fun addManual(date: String, time: String, store: String, total: String): String? {
+        val receipt = when (val built = ManualReceipt.build(date, time, store, total, System.currentTimeMillis())) {
+            is ManualReceipt.Result.Invalid -> return built.message
+            is ManualReceipt.Result.Ok -> built.receipt
+        }
+        viewModelScope.launch {
+            try {
+                val id = repository.save(receipt, emptyList())
+                _pendingOpen.value = id
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(error = "保存に失敗しました: ${e.message.orEmpty()}") }
+            }
+        }
+        return null
+    }
+
     fun newCameraPath(): String = store.newRelativePath()
 
     fun cameraUri(relativePath: String): Uri = store.uriFor(relativePath)
@@ -394,6 +416,8 @@ class ReceiptListViewModel @Inject constructor(
      */
     private suspend fun findSavedByHash(hash: String): Receipt? {
         for (r in repository.receiptsWithoutImageHash()) {
+            // 手入力の支払いは画像が無い。空のパスは filesDir そのものを指すので、計算しない
+            if (r.imagePath.isBlank()) continue
             val h = withContext(Dispatchers.IO) {
                 try {
                     ReceiptImageHash.sha256Hex(store.file(r.imagePath))
@@ -424,8 +448,12 @@ class ReceiptListViewModel @Inject constructor(
                 createdAt = createdAt,
                 adjust = adjust,
             )
-            val savedId = repository.save(receipt, items)
-            suggestShared(savedId, scanned)
+            val sharedFlags = (scanned as? ScanOutcome.Parsed)?.let { parsed ->
+                parsed.receipt.items.flatMap { ReceiptUnits.fromParsed(it) }.map { it.shared }
+            }.orEmpty()
+            val savedId = repository.save(receipt, items, sharedFlags = sharedFlags)
+            // 共通費の提案は保存の中でまとまりに反映済み。家計簿を今の割り勘に合わせる
+            repository.syncLedger(savedId)
             scanned to savedId
         }
         finish(key, result, id)

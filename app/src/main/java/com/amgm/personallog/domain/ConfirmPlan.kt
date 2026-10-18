@@ -180,4 +180,18 @@ object ItemSaver {
         }
         return ItemSavePlan(inserts, updates, existingIds.filter { it !in kept })
     }
+
+    /**
+     * plan を保存したあとの品目 id を、incoming(画面の並び)と同じ順に返す。plan と同じ規則で、更新の行は id をそのまま使う。
+     * 新規の行は plan.inserts の順に、保存後に増えた id を小さい順に当てる(Room は挿入を順に採番するため)。
+     * savedIds は保存後にDBにある、このレシートの品目の id 全部。
+     */
+    fun savedIdsInOrder(incoming: List<ReceiptItem>, plan: ItemSavePlan, savedIds: List<Long>): List<Long> {
+        val updateIds = plan.updates.mapTo(HashSet()) { it.id }
+        val kept = HashSet<Long>()
+        val newIds = savedIds.filter { it !in updateIds }.sorted().iterator()
+        return incoming.map { item ->
+            if (item.id != 0L && item.id in updateIds && kept.add(item.id)) item.id else newIds.next()
+        }
+    }
 }

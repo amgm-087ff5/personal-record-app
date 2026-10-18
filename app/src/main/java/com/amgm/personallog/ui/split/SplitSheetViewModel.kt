@@ -16,6 +16,9 @@ import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.data.repository.SplitBuild
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.data.repository.SplitSheetData
+import com.amgm.personallog.data.repository.mergeKeepGroup
+import com.amgm.personallog.data.repository.mergeShareRows
+import com.amgm.personallog.data.repository.splitEmptiesSource
 import com.amgm.personallog.data.repository.toBuild
 import com.amgm.personallog.domain.split.SplitCalculator
 import com.amgm.personallog.domain.split.SplitGroupInput
@@ -74,6 +77,8 @@ data class SplitSheetUiState(
     /** 参加者 id → カテゴリ別の金額(品目の金額の比で按分した内訳)。 */
     val breakdown: Map<Long, List<Pair<String, Int>>> = emptyMap(),
     val groups: List<GroupUi> = emptyList(),
+    /** まとまり id → そこに入っている品目(品目 id と品名)。分けるときの選択に使う。 */
+    val groupItems: Map<Long, List<Pair<Long, String>>> = emptyMap(),
     /** 既存のラベル(空は除く・重複なし)。 */
     val labels: List<String> = emptyList(),
     /** ラベル → 1人あたり金額(全体・金額のとき)。 */
@@ -227,6 +232,7 @@ class SplitSheetViewModel @Inject constructor(
                 groupYen = groupYen,
                 breakdown = breakdown,
                 groups = groupUis,
+                groupItems = groupItemsOf(d),
                 labels = labelsOf(sorted),
                 labelAmounts = d.labelAmounts.associate { it.label to it.amount },
                 calcError = calcError,
@@ -247,6 +253,16 @@ class SplitSheetViewModel @Inject constructor(
         val base = itemNames.joinToString("・")
         val count = gw.itemIds.size
         gw.group.id to if (count > 1 && base.isNotEmpty()) "$base ×$count" else base
+    }
+
+    /** まとまり id → 品目(id と品名)。品名が空なら「(品名なし)」。 */
+    private fun groupItemsOf(d: SplitSheetData): Map<Long, List<Pair<Long, String>>> {
+        val itemsById = items.associateBy { it.id }
+        return d.groups.associate { gw ->
+            gw.group.id to gw.itemIds.map { id ->
+                id to (itemsById[id]?.name?.trim()?.ifEmpty { "(品名なし)" } ?: "(品名なし)")
+            }
+        }
     }
 
     /** 計算結果から、参加者 → まとまり → 金額を作る(まとまりに属さない行は含めない)。 */
@@ -474,6 +490,64 @@ class SplitSheetViewModel @Inject constructor(
                 },
             ),
         )
+    }
+
+    // ---- 操作: まとまりの分割・結合(その場で保存する) ----
+
+    /** 分けると元のまとまりが消えるか(画面で確認を出すか決める)。 */
+    fun splitWouldEmpty(groupId: Long, itemIds: Set<Long>): Boolean {
+        val d = data ?: return false
+        val members = d.groups.firstOrNull { it.group.id == groupId }?.itemIds?.toSet() ?: return false
+        return splitEmptiesSource(members, itemIds)
+    }
+
+    /** まとめると割当が外れるか(統合できない割当が混ざるとき。画面で確認を出すか決める)。 */
+    fun mergeWouldClear(groupIds: Set<Long>): Boolean {
+        val d = data ?: return false
+        val chosen = d.groups.map { it.group }.filter { it.id in groupIds }
+        val keep = mergeKeepGroup(chosen) ?: return false
+        val rows = d.itemShares
+        return mergeShareRows(
+            keepGroupId = keep.id,
+            keepRows = rows.filter { it.groupId == keep.id },
+            otherRows = chosen.filter { it.id != keep.id }.map { o -> rows.filter { it.groupId == o.id } },
+        ).cleared
+    }
+
+    /** 選んだ品目を新しいまとまりに分ける。元が空になれば消える(画面で確認済みである前提)。 */
+    fun splitGroupItems(groupId: Long, itemIds: Set<Long>) = runGroupOp {
+        splits.splitGroupItems(receiptId, groupId, itemIds)
+    }
+
+    /** 選んだまとまりを1つにまとめる(画面で確認済みである前提)。 */
+    fun mergeGroups(groupIds: Set<Long>) = runGroupOp {
+        splits.mergeGroups(receiptId, groupIds)
+    }
+
+    /**
+     * 分割・結合の共通の流れ: 未保存の編集を先に保存し(家計簿も合わせる)、操作し、家計簿を合わせて、読み直す。
+     * 参加者とまとまりの id が保存で変わるので、名前の入力も読み直した内容に作り直す。
+     */
+    private fun runGroupOp(op: suspend () -> Unit) {
+        val d = data ?: return
+        if (_state.value.busy) return
+        _state.update { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            try {
+                receipts.saveSplit(d, names)
+                op()
+                receipts.syncLedger(receiptId)
+                val fresh = splits.load(receiptId)
+                data = fresh
+                names = initialNames(fresh.participants, fresh.persons)
+                recompute()
+                _state.update { it.copy(busy = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _state.update { it.copy(busy = false, error = "まとまりを直せませんでした: ${e.message.orEmpty()}") }
+            }
+        }
     }
 
     // ---- 保存 ----

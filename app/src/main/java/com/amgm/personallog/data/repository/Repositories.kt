@@ -126,8 +126,10 @@ class ReceiptRepository @Inject constructor(
     /**
      * レシートと品目を保存(id=0なら新規)。品目は差分で保存する: id がある行は更新、無い行は追加、画面から消えた行は削除。
      * こうして品目の id を保ち、家計簿の行(receiptItemId)との対応を切らない。receiptId を返す。
+     * sharedFlags は共通費の提案(items と同じ並び。件数が合わなければ無視する)。新しいまとまりの共通費の印になる。
+     * 提案は品目の id が決まった後・まとまりを作る前に渡す。後から当てても、もうまとまりに入った品目は動かないため。
      */
-    suspend fun save(receipt: Receipt, items: List<ReceiptItem>): Long = db.withTransaction {
+    suspend fun save(receipt: Receipt, items: List<ReceiptItem>, sharedFlags: List<Boolean> = emptyList()): Long = db.withTransaction {
         val id = if (receipt.id == 0L) {
             receiptDao.insert(receipt)
         } else {
@@ -142,6 +144,12 @@ class ReceiptRepository @Inject constructor(
         }
         plan.updates.forEach { receiptDao.updateItem(it) }
         if (plan.inserts.isNotEmpty()) receiptDao.insertItems(plan.inserts)
+        // 保存後の品目 id に提案を対応させる(件数が違えば提案は無視)
+        val hints: Map<Long, Boolean> = if (sharedFlags.size == items.size) {
+            ItemSaver.savedIdsInOrder(items, plan, receiptDao.getItems(id).map { it.id }).zip(sharedFlags).toMap()
+        } else {
+            emptyMap<Long, Boolean>()
+        }
         // レシートの日時は家計簿側の初期値。支出側で日時を変えていない行だけ追従させる。
         val (date, time) = LedgerCalc.splitPurchasedAt(receipt.purchasedAt)
         expenseDao.syncDateTimeFromReceipt(id, date, time)
@@ -149,7 +157,7 @@ class ReceiptRepository @Inject constructor(
         // 品目の日時はグループに従う(グループの日時を支払い側で変えていても揃える)
         expenseDao.syncChildrenOfReceiptGroups(id)
         // 下書きも家計簿に入れる。品目のまとまりを揃えてから、割り勘を含めた家計簿の行を作る
-        splitRepository.ensureGroups(id)
+        splitRepository.ensureGroups(id, hints)
         applyLedger(id, perItem = true, now = System.currentTimeMillis())
         id
     }

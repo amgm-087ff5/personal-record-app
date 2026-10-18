@@ -12,9 +12,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import java.time.LocalDate
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,6 +89,8 @@ fun ReceiptScreen(
 
     // 撮影中の保存先(画面回転・プロセス再生成後も結果を受け取れるよう保存する)
     var pendingPath by rememberSaveable { mutableStateOf<String?>(null) }
+    // 手入力の支払い(レシート画像なし)のシート
+    var manualOpen by rememberSaveable { mutableStateOf(false) }
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val path = pendingPath
@@ -113,21 +119,28 @@ fun ReceiptScreen(
             item(key = "header") { ScreenHeader(kicker = "領収の記録", title = "レシート") }
 
             item(key = "capture") {
-                CaptureBlocks(
-                    onCamera = {
-                        try {
-                            val path = viewModel.newCameraPath()
-                            pendingPath = path
-                            takePicture.launch(viewModel.cameraUri(path))
-                        } catch (e: Exception) {
-                            pendingPath = null
-                            viewModel.showError("カメラを起動できませんでした。「選ぶ」をお使いください。")
-                        }
-                    },
-                    onGallery = {
-                        pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    },
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    CaptureBlocks(
+                        onCamera = {
+                            try {
+                                val path = viewModel.newCameraPath()
+                                pendingPath = path
+                                takePicture.launch(viewModel.cameraUri(path))
+                            } catch (e: Exception) {
+                                pendingPath = null
+                                viewModel.showError("カメラを起動できませんでした。「選ぶ」をお使いください。")
+                            }
+                        },
+                        onGallery = {
+                            pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        },
+                    )
+                    TextAction(
+                        "手入力で追加(レシート画像なし)",
+                        onClick = { manualOpen = true },
+                        modifier = Modifier.padding(horizontal = Space.s, vertical = Space.xs),
+                    )
+                }
             }
 
             if (state.imports.isNotEmpty()) {
@@ -153,7 +166,7 @@ fun ReceiptScreen(
             if (receipts.isEmpty()) {
                 item(key = "empty") {
                     Text(
-                        "まだレシートがありません。「撮る」または「選ぶ」から追加してください。",
+                        "まだレシートがありません。「撮る」「選ぶ」、または「手入力で追加」から追加してください。",
                         style = AppTheme.type.body,
                         color = AppTheme.colors.inkSoft,
                         modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.l),
@@ -206,6 +219,53 @@ fun ReceiptScreen(
             onToggle = viewModel::toggleAddAnyway,
             onResolve = viewModel::resolveDuplicates,
         )
+    }
+
+    if (manualOpen) {
+        ManualPaymentSheet(
+            onSubmit = { date, time, store, total ->
+                val error = viewModel.addManual(date, time, store, total)
+                // 保存を始めたらシートを閉じる。詳細画面へは pendingOpen で移る
+                if (error == null) manualOpen = false
+                error
+            },
+            onDismiss = { manualOpen = false },
+        )
+    }
+}
+
+/**
+ * 手入力の支払いを1件作るシート。日付は必須、時刻・店名・合計は任意。
+ * 品目は作ったあとの詳細画面で足す。合計は空でもよい(下書きとして作る)。
+ */
+@Composable
+private fun ManualPaymentSheet(
+    onSubmit: (date: String, time: String, store: String, total: String) -> String?,
+    onDismiss: () -> Unit,
+) {
+    var date by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    var time by rememberSaveable { mutableStateOf("") }
+    var store by rememberSaveable { mutableStateOf("") }
+    var total by rememberSaveable { mutableStateOf("") }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
+
+    InkSheet(onDismiss = onDismiss, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
+        SheetTitle("手入力で支払いを追加")
+        Text(
+            "レシートの画像なしで、支払いを1件作ります。品目は次の画面で追加できます。",
+            style = AppTheme.type.body,
+            color = AppTheme.colors.inkSoft,
+            modifier = Modifier.padding(bottom = Space.m),
+        )
+        SheetField("日付 yyyy-MM-dd", date, { date = it })
+        SheetField("時刻 HH:mm(任意)", time, { time = it })
+        SheetField("店名(任意)", store, { store = it })
+        SheetField("合計(円・任意)", total, { total = it.filter { c -> c.isDigit() } }, numeric = true)
+        error?.let {
+            Text(it, style = AppTheme.type.caption, color = AppTheme.colors.danger, modifier = Modifier.padding(bottom = Space.s))
+        }
+        TextAction("追加して開く", onClick = { error = onSubmit(date, time, store, total) })
+        TextAction("キャンセル", onClick = onDismiss, color = AppTheme.colors.inkSoft)
     }
 }
 
@@ -391,6 +451,8 @@ private fun ReceiptSlip(r: Receipt, isDuplicate: Boolean, onClick: () -> Unit) {
                 Text(formatYen(total.toLong()), style = AppTheme.type.numeralL, color = AppTheme.colors.ink)
             }
             if (isDuplicate) Stamp("重複の可能性", tone = StampTone.Danger)
+            // 画像の無い支払いは手入力
+            if (r.imagePath.isBlank()) Stamp("手入力", tone = StampTone.Neutral)
             if (r.status == ReceiptStatus.DRAFT) {
                 Stamp("未確定", tone = StampTone.Accent)
             } else {
