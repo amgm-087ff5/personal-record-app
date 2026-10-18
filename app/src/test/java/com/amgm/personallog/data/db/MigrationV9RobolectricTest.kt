@@ -272,7 +272,7 @@ class MigrationV9RobolectricTest {
             .build()
         try {
             val db = room.openHelper.writableDatabase // 移行と Room の検証がここで走る。通らなければ例外
-            assertEquals(9, db.version)
+            assertEquals(AppDatabase.VERSION, db.version) // v9 -> v10 も Migrations.ALL で続けて走る
             assertEquals(3L, db.long("SELECT COUNT(*) FROM expenses"))
             assertEquals(2L, db.long("SELECT COUNT(*) FROM expense_groups"))
             assertEquals(3L, db.long("SELECT COUNT(*) FROM receipt_items"))
@@ -311,7 +311,7 @@ class MigrationV9RobolectricTest {
             .build()
         try {
             val rdb = room.openHelper.writableDatabase
-            assertEquals(9, rdb.version)
+            assertEquals(AppDatabase.VERSION, rdb.version)
             assertEquals(3L, rdb.long("SELECT COUNT(*) FROM expenses"))
             assertEquals(0L, rdb.long("SELECT COUNT(*) FROM expenses WHERE uid = ''"))
         } finally {
@@ -327,10 +327,13 @@ class MigrationV9RobolectricTest {
         val dest = PreMigrationBackup.backupIfNeeded(dbFile, root, AppDatabase.VERSION)
         assertNotNull(dest)
         assertTrue(File(dest, name).isFile)
-        // 現行の版(v9)の DB は複製しない
+        // 現行の版(AppDatabase.VERSION)の DB は複製しない
         context.deleteDatabase(name)
         createV8()
-        migrate().close()
+        helper(AppDatabase.VERSION, onUpgrade = { db, _ ->
+            Migrations.MIGRATION_8_9.migrate(db)
+            Migrations.MIGRATION_9_10.migrate(db)
+        }).writableDatabase.close()
         File(root, "v9").deleteRecursively()
         assertNull(PreMigrationBackup.backupIfNeeded(dbFile, root, AppDatabase.VERSION))
         assertFalse(File(root, "v9").exists())

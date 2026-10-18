@@ -111,4 +111,35 @@ class SchemaMatchTest {
             assertEquals("$name のインデックス", indexSqls(e7, name), indexSqls(e9, name))
         }
     }
+
+    // ---- v10(割り勘の7表を追加)----
+
+    private val v10 get() = entities(load(10))
+
+    @Test
+    fun schema10_isVersion10() {
+        assertEquals(10, load(10)["version"]!!.jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun v10_tableSetIsV9PlusSplitTables() {
+        assertEquals(v9.keys + Migrations.SPLIT_V10_TABLES, v10.keys)
+    }
+
+    @Test
+    fun v10_existingTablesAreUnchangedFromV9() {
+        for (name in v9.keys) {
+            assertEquals("$name の createSql", createSql(v9.getValue(name), name), createSql(v10.getValue(name), name))
+            assertEquals("$name のインデックス", indexSqls(v9.getValue(name), name), indexSqls(v10.getValue(name), name))
+        }
+    }
+
+    @Test
+    fun v10_splitTables_createSqlAndIndicesMatchMigration() {
+        for (t in Migrations.SPLIT_V10_TABLES) {
+            val e = v10.getValue(t)
+            assertEquals("$t の createSql", Migrations.splitV10CreateSql(t), createSql(e, t))
+            assertEquals("$t のインデックス", Migrations.splitV10IndexSqls(t), indexSqls(e, t))
+        }
+    }
 }
