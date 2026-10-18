@@ -9,7 +9,9 @@ import com.amgm.personallog.data.db.DiaryDao
 import com.amgm.personallog.data.db.ExpenseDao
 import com.amgm.personallog.data.db.ExpenseGroupDao
 import com.amgm.personallog.data.db.ReceiptDao
+import com.amgm.personallog.data.db.SplitDao
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.data.model.Person
 import com.amgm.personallog.domain.LedgerCalc
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +38,7 @@ class BackupManager @Inject constructor(
     private val receiptDao: ReceiptDao,
     private val expenseDao: ExpenseDao,
     private val expenseGroupDao: ExpenseGroupDao,
+    private val splitDao: SplitDao,
 ) {
     private val filesDir: File get() = context.filesDir
 
@@ -50,6 +53,7 @@ class BackupManager @Inject constructor(
             val items = receipts.flatMap { receiptDao.getItems(it.id) }
             val expenses = expenseDao.observeAll().first()
             val groups = expenseGroupDao.observeAll().first()
+            val persons = splitDao.getPersons()
             val data = BackupData(
                 formatVersion = BACKUP_FORMAT_VERSION,
                 dbVersion = db.openHelper.readableDatabase.version,
@@ -61,6 +65,13 @@ class BackupManager @Inject constructor(
                 expenses = expenses.map { BackupExpense.from(it) },
                 expenseGroups = groups.map { BackupExpenseGroup.from(it) },
                 receiptNotDuplicates = receiptDao.getAllNotDuplicates().map { BackupNotDuplicate.from(it) },
+                persons = persons.map { BackupPerson.from(it) },
+                splitSheets = splitDao.getAllSheets().map { BackupSplitSheet.from(it) },
+                shareGroups = splitDao.getAllGroups().map { BackupShareGroup.from(it) },
+                shareGroupItems = splitDao.getAllGroupItems().map { BackupShareGroupItem.from(it) },
+                itemShares = splitDao.getAllItemShares().map { BackupItemShare.from(it) },
+                wholeShares = splitDao.getAllWholeShares().map { BackupWholeShare.from(it) },
+                paymentPayers = splitDao.getAllPayers().map { BackupPaymentPayer.from(it) },
             )
             val json = BackupJson.encodeToString(BackupData.serializer(), data).toByteArray(Charsets.UTF_8)
             val files = collectFiles()
@@ -190,7 +201,11 @@ class BackupManager @Inject constructor(
         data.diaryEntries.forEach { diaryDao.insert(it.toEntity()) }
         data.diaryPhotos.forEach { diaryDao.insertPhoto(it.toEntity()) }
         val replaceItemsByReceipt = data.receiptItems.groupBy { it.receiptId }
-        data.receipts.forEach { receiptDao.insert(it.toEntity(replaceItemsByReceipt[it.id].orEmpty(), legacyFormat = data.formatVersion < 5)) }
+        // バックアップ内の支払い id -> 復元後の id(割り勘の表の付け替えに使う)
+        val receiptIdMap = HashMap<Long, Long>()
+        data.receipts.forEach { r ->
+            receiptIdMap[r.id] = receiptDao.insert(r.toEntity(replaceItemsByReceipt[r.id].orEmpty(), legacyFormat = data.formatVersion < 5))
+        }
         // 品目は1件ずつ入れて、バックアップ内の id -> 復元後の id を控える(支出の receiptItemId の付け替えに使う)
         val itemIdMap = HashMap<Long, Long>()
         for (bi in data.receiptItems) {
@@ -216,6 +231,11 @@ class BackupManager @Inject constructor(
                 },
             )
         }
+        // 割り勘の表(v7 以降)。人は消されないので先に全部消してから入れ直す(支払いの削除で表は CASCADE で消えている)。
+        // 形式6以前のファイルは人の行が無いので、消したあと自分1人だけになる
+        splitDao.getPersons().forEach { splitDao.deletePerson(it) }
+        val personIdMap = importPersons(data.persons)
+        importSplitRows(data, receiptIdMap, itemIdMap, personIdMap)
         return ImportResult(
             diaryEntries = data.diaryEntries.size,
             diaryPhotos = data.diaryPhotos.size,
@@ -271,6 +291,9 @@ class BackupManager @Inject constructor(
         val itemsByReceipt = data.receiptItems.groupBy { it.receiptId }
         // バックアップ内の品目 id -> 復元後の品目 id。新しく入れたレシートの品目だけ対応が取れる(既存のレシートに当たったものは null になる)
         val itemIdMap = HashMap<Long, Long>()
+        // 今回新しく入れた支払い・品目だけの対応(割り勘の表は、これに当たる分だけ入れる)
+        val newReceiptIdMap = HashMap<Long, Long>()
+        val newItemIdMap = HashMap<Long, Long>()
         for (r in data.receipts) {
             val entity = r.toEntity(itemsByReceipt[r.id].orEmpty(), legacyFormat = data.formatVersion < 5)
             val existing = receiptIndex.take(entity)
@@ -282,9 +305,13 @@ class BackupManager @Inject constructor(
             } else {
                 val newId = receiptDao.insert(entity.copy(id = 0))
                 receiptIdMap[r.id] = newId
+                newReceiptIdMap[r.id] = newId
                 for (bi in itemsByReceipt[r.id].orEmpty()) {
                     val newIds = bi.toEntities().map { receiptDao.insertItem(it.copy(id = 0, receiptId = newId)) }
-                    newIds.firstOrNull()?.let { itemIdMap[bi.id] = it }
+                    newIds.firstOrNull()?.let {
+                        itemIdMap[bi.id] = it
+                        newItemIdMap[bi.id] = it
+                    }
                 }
                 addedReceipts++
             }
@@ -345,7 +372,64 @@ class BackupManager @Inject constructor(
         }
         if (toInsert.isNotEmpty()) expenseDao.insertAll(toInsert)
 
+        // 割り勘の表(v7 以降)。人は uid で照合し(自分は端末の自分に合わせる)、表は「今回新しく入れた支払い」の分だけ入れる。
+        // 既存の支払いと同じと判定されたもの(receiptIdMap にあって newReceiptIdMap に無いもの)は端末側の割り勘を残し、二重に入れない。
+        // 既存の支払いに当たった分の割り勘は、バックアップ側を捨てる(端末側の割り勘を上書きしない)
+        val personIdMap = importPersons(data.persons)
+        importSplitRows(data, newReceiptIdMap, newItemIdMap, personIdMap)
+
         return ImportResult(addedEntries, addedPhotos, addedReceipts, addedExpenses, skipped, fileCount)
+    }
+
+    /**
+     * バックアップの人を取り込み、バックアップの人 id -> 端末の人 id を返す(純粋な照合は planPersons)。
+     * 同じ uid の人は既存を使い、自分は端末の自分に合わせる。端末に自分が無ければ作る(最後に必ず自分が1人いるようにする)。
+     */
+    private suspend fun importPersons(persons: List<BackupPerson>): Map<Long, Long> {
+        val existing = splitDao.getPersons()
+        val plan = planPersons(
+            persons,
+            existingByUid = existing.associate { it.uid to it.id },
+            selfId = existing.firstOrNull { it.isSelf }?.id,
+        )
+        val map = HashMap<Long, Long>()
+        for ((backupId, p) in plan) {
+            map[backupId] = when (p) {
+                is PersonPlan.Existing -> p.id
+                is PersonPlan.New -> splitDao.insertPerson(p.person.toEntity().copy(id = 0))
+            }
+        }
+        ensureSelf()
+        return map
+    }
+
+    /** 端末に自分(isSelf)が1人も無ければ作る。 */
+    private suspend fun ensureSelf() {
+        if (splitDao.getSelf() == null) {
+            splitDao.insertPerson(Person(name = SELF_NAME, isSelf = true, createdAt = System.currentTimeMillis()))
+        }
+    }
+
+    /**
+     * 割り勘の表を入れる。まとまりは先に入れて新しい id を控え、そのあと表の他の行を付け替えて入れる。
+     * receiptIdMap / itemIdMap は取り込み対象の分だけ渡す(既存に当たった支払いは渡さない)。
+     */
+    private suspend fun importSplitRows(
+        data: BackupData,
+        receiptIdMap: Map<Long, Long>,
+        itemIdMap: Map<Long, Long>,
+        personIdMap: Map<Long, Long>,
+    ) {
+        val groupIdMap = HashMap<Long, Long>()
+        for ((backupGroupId, group) in remapShareGroups(data.shareGroups, receiptIdMap)) {
+            groupIdMap[backupGroupId] = splitDao.insertGroup(group)
+        }
+        val rows = remapSplitRows(data, receiptIdMap, itemIdMap, personIdMap, groupIdMap)
+        rows.sheets.forEach { splitDao.upsertSheet(it) }
+        if (rows.groupItems.isNotEmpty()) splitDao.insertGroupItems(rows.groupItems)
+        if (rows.itemShares.isNotEmpty()) splitDao.insertItemShares(rows.itemShares)
+        if (rows.wholeShares.isNotEmpty()) splitDao.insertWholeShares(rows.wholeShares)
+        if (rows.payers.isNotEmpty()) splitDao.insertPayers(rows.payers)
     }
 
     /** 一時ディレクトリに展開済みの画像を filesDir へ移す。 */
@@ -399,6 +483,9 @@ class BackupManager @Inject constructor(
 
     companion object {
         private const val MAX_JSON_BYTES = 128 * 1024 * 1024
+
+        /** 割り勘の「自分」を新しく作るときの名前(形式6以前のファイル、または自分が無いバックアップ)。 */
+        private const val SELF_NAME = "自分"
 
         /** formatVersion が新しすぎる場合は拒否。 */
         fun checkVersion(formatVersion: Int) {
