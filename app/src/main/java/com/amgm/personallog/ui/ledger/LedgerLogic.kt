@@ -23,6 +23,9 @@ sealed interface LedgerEntry {
     val category: String
     val createdAt: Long
 
+    /** この行のもとになったレシートの id(手入力なら null)。下書き・割り勘の警告の表示に使う。 */
+    val receiptId: Long?
+
     /**
      * この行をカテゴリ別に数えるときの内訳(合計は amount と一致する)。
      * 単独の支出は自分のカテゴリ。グループは品目ごとのカテゴリで数え、差額(支払い金額 − 品目の合計)はグループのカテゴリに入れる。
@@ -35,6 +38,7 @@ sealed interface LedgerEntry {
         override val amount: Long get() = expense.amount.toLong()
         override val category: String get() = expense.category
         override val createdAt: Long get() = expense.createdAt
+        override val receiptId: Long? get() = expense.receiptId
         override val categoryParts: List<CategoryTotal> get() = listOf(CategoryTotal(expense.category, amount))
     }
 
@@ -45,6 +49,7 @@ sealed interface LedgerEntry {
         override val amount: Long get() = group.amount.toLong()
         override val category: String get() = group.category
         override val createdAt: Long get() = group.createdAt
+        override val receiptId: Long? get() = group.receiptId
 
         override val categoryParts: List<CategoryTotal>
             get() {
@@ -88,9 +93,9 @@ data class ExpenseValidation(
 const val ALLOCATION_NOTE =
     "品目ごとの金額は、レシート全体の端数を品目に割り振った値です。品目単位では1円ほどずれることがありますが、合計は一致します。"
 
-/** 家計簿で消した品目の注釈。品目は一覧と品目の合計から外れるが、支払い金額は変わらない。 */
+/** 家計簿で消した品目の注釈。品目は一覧と品目の合計から外れるが、支出金額は変わらない。 */
 const val DELETED_ITEMS_NOTE =
-    "家計簿で消した品目の金額は、差額として支払いのカテゴリに入ります(支払い金額は変わらないため)。元に戻すと品目に戻ります。"
+    "家計簿で消した品目の金額は、差額として支出のカテゴリに入ります(支出金額は変わらないため)。元に戻すと品目に戻ります。"
 
 /** 家計簿画面用の純粋ロジック(JVMでテスト可能)。domain/LedgerCalc は変更せず、足りない分をここに置く。 */
 object LedgerLogic {

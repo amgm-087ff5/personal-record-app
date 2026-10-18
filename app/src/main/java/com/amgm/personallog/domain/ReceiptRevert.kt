@@ -15,15 +15,23 @@ enum class PaymentField { AMOUNT, CATEGORY, NAME, MEMO, TIME }
 object ReceiptRevert {
     /**
      * @param group この支出が属する支払いグループ(単独の支出は null)。日時はグループに従うので、日時はグループの値に戻す。
+     * @param share 割り勘の自分の分(割り勘が無いときは null)。あればレシートの値の代わりに自分の分で求める。
      */
-    fun expense(have: Expense, field: PaymentField, receipt: Receipt, items: List<ReceiptItem>, group: ExpenseGroup?): Expense? {
-        if (receipt.totalAmount == null) return null
+    fun expense(
+        have: Expense,
+        field: PaymentField,
+        receipt: Receipt,
+        items: List<ReceiptItem>,
+        group: ExpenseGroup?,
+        share: SelfShare? = null,
+    ): Expense? {
+        if (receipt.totalAmount == null && share == null) return null
         val itemId = have.receiptItemId
         val want: Expense = if (itemId != null) {
-            LedgerCalc.groupFromReceipt(receipt, items, 0L)?.items?.firstOrNull { it.receiptItemId == itemId }
+            LedgerCalc.groupFromReceipt(receipt, items, 0L, share)?.items?.firstOrNull { it.receiptItemId == itemId }
         } else {
             // 単独の支出は合計1行(支払総額、立て替えなら自分の分)。品目ごとの行ではない
-            LedgerCalc.expensesFromReceipt(receipt, items, perItem = false, now = 0L).singleOrNull()
+            LedgerCalc.expensesFromReceipt(receipt, items, perItem = false, now = 0L, share = share).singleOrNull()
         } ?: return null
         return when (field) {
             PaymentField.AMOUNT -> have.copy(amount = want.amount, amountEdited = false)
@@ -37,9 +45,15 @@ object ReceiptRevert {
         }
     }
 
-    fun group(have: ExpenseGroup, field: PaymentField, receipt: Receipt, items: List<ReceiptItem>): ExpenseGroup? {
-        if (receipt.totalAmount == null) return null
-        val want = LedgerCalc.groupFromReceipt(receipt, items, 0L)?.group ?: return null
+    fun group(
+        have: ExpenseGroup,
+        field: PaymentField,
+        receipt: Receipt,
+        items: List<ReceiptItem>,
+        share: SelfShare? = null,
+    ): ExpenseGroup? {
+        if (receipt.totalAmount == null && share == null) return null
+        val want = LedgerCalc.groupFromReceipt(receipt, items, 0L, share)?.group ?: return null
         return when (field) {
             PaymentField.AMOUNT -> have.copy(amount = want.amount, amountEdited = false)
             PaymentField.CATEGORY -> have.copy(category = want.category, categoryEdited = false)

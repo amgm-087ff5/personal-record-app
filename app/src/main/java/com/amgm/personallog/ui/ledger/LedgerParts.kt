@@ -61,6 +61,8 @@ import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.LeaderRow
 import com.amgm.personallog.ui.design.Pills
 import com.amgm.personallog.ui.design.Space
+import com.amgm.personallog.ui.design.Stamp
+import com.amgm.personallog.ui.design.StampTone
 import com.amgm.personallog.ui.design.TextAction
 import com.amgm.personallog.ui.design.tappable
 import java.time.Instant
@@ -291,8 +293,12 @@ private fun LevelTabs(level: ChartLevel, onLevel: (ChartLevel) -> Unit) {
 internal fun DayBlock(
     day: DayGroup,
     expandedGroups: Map<Long, Boolean>,
+    /** 下書きのレシートの id(行に「下書き」を付ける)。 */
+    draftReceiptIds: Set<Long>,
+    /** 割り勘に警告があるレシートの id(行に「要確認」を付ける)。 */
+    warnReceiptIds: Set<Long>,
     onToggleGroup: (Long) -> Unit,
-    /** 行をタップ: 支払いの詳細画面を開く。 */
+    /** 行をタップ: 支出の詳細画面を開く。 */
     onOpen: (LedgerEntry) -> Unit,
     onDeleteGroup: (LedgerEntry.Group) -> Unit,
 ) {
@@ -329,9 +335,17 @@ internal fun DayBlock(
                 day.items.forEachIndexed { index, entry ->
                     if (index > 0) Hairline()
                     when (entry) {
-                        is LedgerEntry.Single -> ExpenseLine(entry.expense, onClick = { onOpen(entry) })
+                        is LedgerEntry.Single -> ExpenseLine(
+                            entry.expense,
+                            onClick = { onOpen(entry) },
+                            showBadges = true,
+                            draftReceiptIds = draftReceiptIds,
+                            warnReceiptIds = warnReceiptIds,
+                        )
                         is LedgerEntry.Group -> GroupLine(
                             entry = entry,
+                            draftReceiptIds = draftReceiptIds,
+                            warnReceiptIds = warnReceiptIds,
                             expanded = expandedGroups[entry.group.id] == true,
                             onToggle = { onToggleGroup(entry.group.id) },
                             onOpen = { onOpen(entry) },
@@ -344,8 +358,23 @@ internal fun DayBlock(
     }
 }
 
+/** 行の印: レシートが下書きなら「下書き」、割り勘に警告があれば「要確認」。手入力の行には付けない。 */
 @Composable
-private fun ExpenseLine(expense: Expense, onClick: () -> Unit) {
+private fun RowBadges(receiptId: Long?, draftReceiptIds: Set<Long>, warnReceiptIds: Set<Long>) {
+    if (receiptId == null) return
+    if (receiptId in draftReceiptIds) Stamp("下書き", modifier = Modifier.padding(start = Space.xs))
+    if (receiptId in warnReceiptIds) Stamp("要確認", modifier = Modifier.padding(start = Space.xs), tone = StampTone.Danger)
+}
+
+@Composable
+private fun ExpenseLine(
+    expense: Expense,
+    onClick: () -> Unit,
+    /** 行の印(下書き・要確認)を出すか。グループの中の品目には出さない。 */
+    showBadges: Boolean = false,
+    draftReceiptIds: Set<Long> = emptySet(),
+    warnReceiptIds: Set<Long> = emptySet(),
+) {
     val c = AppTheme.colors
     val title = listOf(expense.name, expense.memo).filter { it.isNotBlank() }.joinToString(" ").ifBlank { expense.category }
     val sub = listOfNotNull(
@@ -358,7 +387,17 @@ private fun ExpenseLine(expense: Expense, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = AppTheme.type.title, color = c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    title,
+                    style = AppTheme.type.title,
+                    color = c.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (showBadges) RowBadges(expense.receiptId, draftReceiptIds, warnReceiptIds)
+            }
             if (sub.isNotEmpty()) {
                 Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -371,6 +410,8 @@ private fun ExpenseLine(expense: Expense, onClick: () -> Unit) {
 @Composable
 private fun GroupLine(
     entry: LedgerEntry.Group,
+    draftReceiptIds: Set<Long>,
+    warnReceiptIds: Set<Long>,
     expanded: Boolean,
     onToggle: () -> Unit,
     onOpen: () -> Unit,
@@ -387,7 +428,7 @@ private fun GroupLine(
             Modifier.fillMaxWidth().tappable(onOpen),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 開閉は矢印だけ。行のほかの場所をタップすると支払いの詳細画面を開く
+            // 開閉は矢印だけ。行のほかの場所をタップすると支出の詳細画面を開く
             Text(
                 if (expanded) "▾" else "▸",
                 style = AppTheme.type.title,
@@ -395,13 +436,17 @@ private fun GroupLine(
                 modifier = Modifier.tappable(onToggle).padding(end = Space.s, top = Space.s + Space.xs, bottom = Space.s + Space.xs),
             )
             Column(Modifier.weight(1f).padding(vertical = Space.s + Space.xs)) {
-                Text(
-                    entry.group.memo.ifBlank { entry.category },
-                    style = AppTheme.type.title,
-                    color = c.ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        entry.group.memo.ifBlank { entry.category },
+                        style = AppTheme.type.title,
+                        color = c.ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds)
+                }
                 Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.width(Space.s))
@@ -425,12 +470,12 @@ private fun GroupLine(
                 )
                 if (entry.difference != 0L) {
                     Text(
-                        "差額 ${LedgerLogic.formatYen(entry.difference)}(品目の合計と支払い金額が一致しません)",
+                        "差額 ${LedgerLogic.formatYen(entry.difference)}(品目の合計と支出金額が一致しません)",
                         style = AppTheme.type.caption,
                         color = c.danger,
                     )
                 }
-                TextAction("このグループを削除", onClick = onDelete, color = c.danger)
+                TextAction("この支出を削除", onClick = onDelete, color = c.danger)
             }
         }
     }
@@ -555,7 +600,7 @@ internal fun ExpenseEditorSheet(
                 }
             } else {
                 Text(
-                    "${dateChip(dateText)} ${timeText}(支払いの日時に従います。直すときは支払いの日時を直してください)",
+                    "${dateChip(dateText)} ${timeText}(支出の日時に従います。直すときは支出の日時を直してください)",
                     style = AppTheme.type.caption,
                     color = c.inkFaint,
                 )

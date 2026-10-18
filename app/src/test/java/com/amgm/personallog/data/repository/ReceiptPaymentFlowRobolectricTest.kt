@@ -43,8 +43,9 @@ class ReceiptPaymentFlowRobolectricTest {
     fun setUp() {
         val context: Context = RuntimeEnvironment.getApplication()
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
-        receipts = ReceiptRepository(db, db.receiptDao(), db.expenseDao(), db.expenseGroupDao())
-        expenses = ExpenseRepository(db.expenseDao(), db.expenseGroupDao(), db)
+        val splits = SplitRepository(db, db.splitDao(), db.receiptDao())
+        receipts = ReceiptRepository(db, db.receiptDao(), db.expenseDao(), db.expenseGroupDao(), splits)
+        expenses = ExpenseRepository(db.expenseDao(), db.expenseGroupDao(), db, splits)
     }
 
     @After

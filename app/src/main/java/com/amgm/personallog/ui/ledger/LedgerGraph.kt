@@ -8,6 +8,7 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import com.amgm.personallog.domain.PaymentKind
 import com.amgm.personallog.ui.receipt.ReceiptRoutes
+import com.amgm.personallog.ui.split.SplitRoutes
 
 object LedgerRoutes {
     const val ROOT = "ledger"
@@ -32,6 +33,7 @@ fun NavGraphBuilder.ledgerGraph(navController: NavController) {
         ) {
             PaymentDetailScreen(
                 onBack = { navController.popBackStack() },
+                onOpenSplit = { receiptId -> navController.navigate(SplitRoutes.sheet(receiptId)) },
                 onOpenReceipt = { receiptId ->
                     // レシートの詳細から来たなら、新しく積まずに戻る(行き来で履歴が伸びない)
                     val prev = navController.previousBackStackEntry

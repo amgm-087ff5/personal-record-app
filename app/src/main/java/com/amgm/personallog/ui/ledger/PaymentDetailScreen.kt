@@ -60,6 +60,8 @@ import java.io.File
 fun PaymentDetailScreen(
     onBack: () -> Unit,
     onOpenReceipt: (Long) -> Unit,
+    /** 割り勘シートを開く(レシートの id)。レシートに紐づく支出のときだけボタンを出す。 */
+    onOpenSplit: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: PaymentDetailViewModel = hiltViewModel(),
 ) {
@@ -103,6 +105,11 @@ fun PaymentDetailScreen(
                 item(key = "receipt") {
                     ReceiptBlock(s.receipt?.imagePath, s.receipt?.id, onOpenReceipt)
                 }
+                s.receipt?.let { r ->
+                    item(key = "split") {
+                        TextAction("割り勘", onClick = { onOpenSplit(r.id) }, modifier = Modifier.padding(horizontal = Space.edge))
+                    }
+                }
                 item(key = "items-title") {
                     Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(top = Space.l)) {
                         Label("品目")
@@ -127,8 +134,8 @@ fun PaymentDetailScreen(
                         )
                         if (s.difference != 0L) {
                             Text(
-                                "差額 ${LedgerLogic.formatYen(s.difference)}(支払い金額 ${LedgerLogic.formatYen(group.amount.toLong())} − 品目の合計)。" +
-                                    "カテゴリ別の集計では、差額は支払いのカテゴリ「${group.category}」に入ります。",
+                                "差額 ${LedgerLogic.formatYen(s.difference)}(支出金額 ${LedgerLogic.formatYen(group.amount.toLong())} − 品目の合計)。" +
+                                    "カテゴリ別の集計では、差額は支出のカテゴリ「${group.category}」に入ります。",
                                 style = AppTheme.type.caption,
                                 color = c.danger,
                                 modifier = Modifier.padding(top = Space.xs),
@@ -161,7 +168,7 @@ fun PaymentDetailScreen(
                 }
                 item(key = "delete") {
                     TextAction(
-                        "この支払いを削除",
+                        "この支出を削除",
                         onClick = { deletingGroup = true },
                         color = c.danger,
                         modifier = Modifier.padding(horizontal = Space.s, vertical = Space.l),
@@ -199,7 +206,7 @@ fun PaymentDetailScreen(
                 viewModel.saveGroup(group, date, time, amount, category, memo, done)
             },
             onDelete = null,
-            title = "支払いを編集",
+            title = "支出を編集",
             showName = false,
         )
     }
@@ -238,8 +245,8 @@ fun PaymentDetailScreen(
     }
     if (deletingGroup && group != null) {
         ConfirmSheet(
-            title = "支払いを削除",
-            message = "「${group.memo.ifBlank { group.category }}」の支払いと品目をすべて削除します。レシートは残ります。",
+            title = "支出を削除",
+            message = "「${group.memo.ifBlank { group.category }}」の支出と品目をすべて削除します。レシートは残ります。",
             confirmText = "削除",
             onDismiss = { deletingGroup = false },
             onConfirm = {
@@ -278,7 +285,7 @@ private fun GroupHeader(group: ExpenseGroup, onEdit: () -> Unit, onRevert: (Paym
     Column(
         Modifier.fillMaxWidth().tappable(onEdit).padding(horizontal = Space.edge, vertical = Space.m),
     ) {
-        Label("支払い")
+        Label("支出")
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 LedgerLogic.dayLabel(group.date) + if (group.time.isNotEmpty()) " ${group.time}" else "",
