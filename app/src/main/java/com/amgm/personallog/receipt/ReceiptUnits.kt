@@ -11,6 +11,8 @@ data class UnitRow(
     val priceIncludesTax: Boolean,
     val ownAmount: Int? = null,
     val memo: String = "",
+    /** 割り勘の共通費かどうかの提案(LLM由来)。既定は false。 */
+    val shared: Boolean = false,
 )
 
 /** 旧版(v3まで)の品目行。数量と負担割合(%)を持っていた。 */
@@ -45,7 +47,7 @@ object ReceiptUnits {
     fun fromParsed(p: ParsedItem): List<UnitRow> {
         val rate = TaxCalc.normalizeTaxRate(p.taxRate)
         return splitAmount(p.amount, unitCount(p.quantity)).map { amt ->
-            UnitRow(p.name, amt, p.category, rate, p.priceIncludesTax)
+            UnitRow(p.name, amt, p.category, rate, p.priceIncludesTax, shared = p.shared)
         }
     }
 
