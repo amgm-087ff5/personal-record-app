@@ -1,5 +1,6 @@
 package com.amgm.personallog.receipt
 
+import com.amgm.personallog.data.model.Categories
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
@@ -22,15 +23,25 @@ class ReceiptApiException(message: String) : Exception(message)
 object ClaudeRequest {
     const val ENDPOINT = "https://api.anthropic.com/v1/messages"
     const val API_VERSION = "2023-06-01"
-    const val MAX_TOKENS = 4096
+    /** 入れ子形式は品目ごとに長くなるため、旧形式の 4096 から上げる(長いレシートで途中切れしないように)。 */
+    const val MAX_TOKENS = 8192
 
+    /** 家計簿のカテゴリ名(Categories.DEFAULTS から未分類を除いたもの)。アプリのカテゴリ名とずれないよう、ここから埋め込む。 */
+    private val categoryNames: String =
+        Categories.DEFAULTS.filter { it != Categories.UNCATEGORIZED }.joinToString(", ")
+
+    /**
+     * 品目ごとに「receipt(事実: 印字された内容)」と「ledger(家計簿への提案)」を入れ子にして返させる。
+     * 割り勘の金額や家計簿の金額は LLM に出させず、システム側で計算する。
+     */
     val PROMPT: String = """
         このレシート画像から情報を抽出し、次の形式のJSONだけを返してください。
-        {"date":"yyyy-MM-dd","time":"HH:mm"またはnull,"store":"店名","items":[{"name":"品目名","quantity":数量(数値、不明なら1),"unitPrice":単価(円の整数),"amount":金額(円の整数、値引き行は負の数),"taxRate":消費税率(整数の%。例 8 や 10。不明ならnull),"priceIncludesTax":金額が税込ならtrue、税抜ならfalse(不明ならnull),"category":"カテゴリ"}],"total":レシートに印字された合計(円の整数。読み取れなければnull。品目から計算しない),"note":"補足またはnull"}
-        品目の金額(amount)は印字されているとおりの値にしてください。税抜表示の品目を税込に換算しないでください(税込換算はシステム側で行います)。
-        軽減税率(8%)の品目は taxRate を 8 にしてください。品目ごとの税率が分からない場合は null にしてください。
-        数量が2以上の品目は quantity に数量を入れ、amount には数量分の合計金額を入れてください。
-        カテゴリは次のいずれか1つにしてください: 食費, 外食, 日用品, 交通, 医療, 衣服, 娯楽, 光熱費, その他。
+        {"date":"yyyy-MM-dd","time":"HH:mm"またはnull,"store":"店名","items":[{"receipt":{"name":"品目名","quantity":数量(数値、不明なら1),"unitPrice":単価(円の整数),"amount":金額(円の整数、値引き行は負の数),"taxRate":消費税率(整数の%。例 8 や 10。不明ならnull),"priceIncludesTax":金額が税込ならtrue、税抜ならfalse(不明ならnull)},"ledger":{"category":"カテゴリ","shared":true または false}}],"total":レシートに印字された合計(円の整数。読み取れなければnull。品目から計算しない),"note":"補足またはnull"}
+        品目の金額(receipt.amount)は印字されているとおりの値にしてください。税抜表示の品目を税込に換算しないでください(税込換算はシステム側で行います)。
+        軽減税率(8%)の品目は receipt.taxRate を 8 にしてください。品目ごとの税率が分からない場合は null にしてください。
+        数量が2以上の品目は receipt.quantity に数量を入れ、receipt.amount には数量分の合計金額を入れてください。
+        ledger.category は次のいずれか1つにしてください: ${categoryNames}。
+        ledger.shared は、袋代・レジ袋・送料・配送料・手数料・サービス料のように、参加者みんなで割る共通費なら true、それ以外(個人が買った品物など)は false にしてください。
         読み取れない項目はnullにしてください。
         値引き・クーポン・ポイント値引きは、負の金額の品目として含めてください。
         説明文やコードフェンスを付けず、JSONだけを返してください。
@@ -88,6 +99,12 @@ object ClaudeRequest {
             if (text != null) return text
         }
         return null
+    }
+
+    /** 応答の stop_reason を取り出す(例 "end_turn"、出力上限で切れたら "max_tokens")。無ければ null。 */
+    fun extractStopReason(responseBody: String): String? {
+        val root = ReceiptParser.parseObject(responseBody) ?: return null
+        return (root["stop_reason"] as? JsonPrimitive)?.takeIf { it.isString }?.content
     }
 
     /** エラー応答の error.message を取り出す。 */

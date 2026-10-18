@@ -98,7 +98,7 @@ class ReceiptParserTest {
         assertNotNull(root)
         val s = root.toString()
         assertTrue(s.contains("\"model\":\"claude-haiku-5-5\""))
-        assertTrue(s.contains("\"max_tokens\":4096"))
+        assertTrue(s.contains("\"max_tokens\":${ClaudeRequest.MAX_TOKENS}"))
         assertTrue(s.contains("\"media_type\":\"image/jpeg\""))
         assertTrue(s.contains("\"data\":\"QUJD\""))
         assertTrue(s.contains("\"type\":\"base64\""))
@@ -175,5 +175,86 @@ class ReceiptParserTest {
         assertNull(ReceiptMapper.printedTotal(noTotal))
         assertNull(ReceiptMapper.printedTotal(""))
         assertNull(ReceiptMapper.printedTotal("not json"))
+    }
+
+    /** 新形式: 品目ごとに receipt(事実)と ledger(家計簿への提案)を入れ子にした応答。 */
+    private val nested = """{"date":"2026-10-09","time":"18:32","store":"スーパーA","items":[
+        {"receipt":{"name":"牛乳","quantity":1,"unitPrice":198,"amount":198,"taxRate":8,"priceIncludesTax":true},"ledger":{"category":"食費","shared":false}},
+        {"receipt":{"name":"洗剤","quantity":2,"unitPrice":300,"amount":600,"taxRate":10,"priceIncludesTax":true},"ledger":{"category":"日用品","shared":false}},
+        {"receipt":{"name":"レジ袋","quantity":1,"unitPrice":3,"amount":3,"taxRate":10,"priceIncludesTax":true},"ledger":{"category":"その他","shared":true}},
+        {"receipt":{"name":"クーポン値引き","quantity":1,"unitPrice":-50,"amount":-50,"taxRate":null,"priceIncludesTax":null},"ledger":{"category":"食費","shared":false}}
+    ],"total":751,"note":null}"""
+
+    @Test
+    fun newFormat_readsFactFromReceiptAndSuggestionFromLedger() {
+        val p = success(nested)
+        assertEquals("2026-10-09", p.date)
+        assertEquals(751, p.total)
+        assertEquals(4, p.items.size)
+        val milk = p.items[0]
+        assertEquals("牛乳", milk.name)
+        assertEquals(198, milk.amount)
+        assertEquals(8, milk.taxRate)
+        assertEquals(true, milk.priceIncludesTax)
+        assertEquals("食費", milk.category)
+        assertEquals(false, milk.shared)
+        val bag = p.items[2]
+        assertEquals("その他", bag.category)
+        assertEquals(true, bag.shared)
+    }
+
+    @Test
+    fun newFormat_quantityOverOneUsesReceiptAmount() {
+        // 数量2でも、印字の amount(割引後の合計)をそのまま使う。単価×数量では計算しない
+        val text = """{"items":[{"receipt":{"name":"洗剤","quantity":2,"unitPrice":300,"amount":580},"ledger":{"category":"日用品","shared":false}}],"total":580}"""
+        val p = success(text)
+        assertEquals(2.0, p.items[0].quantity, 0.0)
+        assertEquals(300, p.items[0].unitPrice)
+        assertEquals(580, p.items[0].amount)
+    }
+
+    @Test
+    fun newFormat_negativeDiscountItemAndNullTaxFields() {
+        val p = success(nested)
+        val discount = p.items[3]
+        assertEquals(-50, discount.amount)
+        assertEquals(10, discount.taxRate)
+        assertEquals(true, discount.priceIncludesTax)
+        // 合計の検証: 品目の合計(負の値を含む)と total が一致する
+        assertEquals(751L, ReceiptCalc.itemsSum(p.items.map { it.amount }))
+        assertNull(ReceiptCalc.mismatch(p.items.map { it.amount }, p.total))
+    }
+
+    @Test
+    fun newFormat_missingLedgerBecomesUncategorizedAndNotShared() {
+        val text = """{"items":[{"receipt":{"name":"X","amount":100}}],"total":100}"""
+        val item = success(text).items[0]
+        assertEquals("未分類", item.category)
+        assertEquals(false, item.shared)
+        assertEquals(100, item.amount)
+    }
+
+    @Test
+    fun newFormat_nullCategoryBecomesUncategorizedButKeepsShared() {
+        val text = """{"items":[{"receipt":{"name":"送料","amount":300},"ledger":{"category":null,"shared":true}}],"total":300}"""
+        val item = success(text).items[0]
+        assertEquals("未分類", item.category)
+        assertEquals(true, item.shared)
+    }
+
+    @Test
+    fun oldFormat_flatItemStillReadsCategoryAndSharedFalse() {
+        // 旧形式(品目の直下に category)の応答も今までどおり読める
+        val p = success(sample)
+        assertEquals("食費", p.items[0].category)
+        assertEquals("日用品", p.items[1].category)
+        assertEquals(600, p.items[1].amount)
+        assertTrue(p.items.none { it.shared })
+    }
+
+    @Test
+    fun printedTotalIsReadFromNewFormat() {
+        // 保存済みの rawJson(新形式)から印字合計を取り出せる(TotalSourceInit と同じ経路)
+        assertEquals(751, ReceiptMapper.printedTotal(nested))
     }
 }

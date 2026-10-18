@@ -13,6 +13,7 @@ import kotlin.math.roundToInt
 /**
  * Claude が返した品目1行(正規化後)。値引きは amount が負。
  * amount は印字どおりの金額。priceIncludesTax が false なら税抜で、税込価格は taxRate から計算する。
+ * shared は割り勘の共通費(袋代・送料など)かどうかの提案。LLM の提案であり、割り勘の金額はシステムが計算する。
  */
 data class ParsedItem(
     val name: String,
@@ -22,6 +23,7 @@ data class ParsedItem(
     val category: String,
     val taxRate: Int = TaxCalc.DEFAULT_TAX_RATE,
     val priceIncludesTax: Boolean = true,
+    val shared: Boolean = false,
 )
 
 data class ParsedReceipt(
@@ -116,19 +118,28 @@ object ReceiptParser {
             null
         }
 
+    /**
+     * 品目1行を読む。新形式は { "receipt": 事実, "ledger": 家計簿への提案 } の入れ子。
+     * receipt が無ければ旧形式(品目の直下に事実と category が並ぶ平らな形)として読む。
+     */
     private fun parseItem(e: JsonElement): ParsedItem? {
         val o = e as? JsonObject ?: return null
-        val qty = o["quantity"].asDouble()?.takeIf { it > 0 } ?: 1.0
-        val unit = o["unitPrice"].asInt()
-        val amount = o["amount"].asInt() ?: unit?.let { (it * qty).roundToInt() } ?: 0
+        val fact = o["receipt"] as? JsonObject ?: o
+        val ledger = o["ledger"] as? JsonObject ?: o
+        val qty = fact["quantity"].asDouble()?.takeIf { it > 0 } ?: 1.0
+        val unit = fact["unitPrice"].asInt()
+        val amount = fact["amount"].asInt() ?: unit?.let { (it * qty).roundToInt() } ?: 0
         return ParsedItem(
-            name = o.str("name").orEmpty(),
+            name = fact.str("name").orEmpty(),
             quantity = qty,
             unitPrice = unit ?: amount,
             amount = amount,
-            category = normalizeCategory(o.str("category")),
-            taxRate = TaxCalc.normalizeTaxRate(o["taxRate"].asInt()),
-            priceIncludesTax = o.bool("priceIncludesTax") ?: true,
+            // ledger が無い・category が null なら未分類(normalizeCategory の規則)
+            category = normalizeCategory(ledger.str("category")),
+            taxRate = TaxCalc.normalizeTaxRate(fact["taxRate"].asInt()),
+            priceIncludesTax = fact.bool("priceIncludesTax") ?: true,
+            // 旧形式には shared が無いので false
+            shared = ledger.bool("shared") ?: false,
         )
     }
 

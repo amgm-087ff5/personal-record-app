@@ -53,4 +53,15 @@ class ReceiptUnitsTest {
         assertEquals(3, rows.size)
         assertEquals(301, rows.sumOf { it.amount })
     }
+
+    @Test
+    fun fromParsed_carriesSharedSuggestionToEveryUnit() {
+        val shared = ParsedItem(name = "レジ袋", quantity = 2.0, unitPrice = 3, amount = 6, category = "その他", shared = true)
+        val rows = ReceiptUnits.fromParsed(shared)
+        assertEquals(listOf(true, true), rows.map { it.shared })
+        // 指定しなければ false(既定値)
+        val normal = ParsedItem(name = "牛乳", quantity = 1.0, unitPrice = 198, amount = 198, category = "食費")
+        assertEquals(false, ReceiptUnits.fromParsed(normal).single().shared)
+        assertEquals(false, UnitRow(name = "x", amount = 1, category = "食費", taxRate = 10, priceIncludesTax = true).shared)
+    }
 }

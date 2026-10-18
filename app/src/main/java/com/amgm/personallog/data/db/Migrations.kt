@@ -13,6 +13,9 @@ import com.amgm.personallog.receipt.TotalSourceInit
  *  - AppDatabase の version を上げるたびに、ここへ Migration(旧, 新) を必ず追加し ALL に登録する。
  *  - fallbackToDestructiveMigration は絶対に使わない。
  *  - version を上げたら app/schemas/<version>.json もコミットする(mainのCIが自動コミットする)。
+ *
+ * v10(割り勘): 割り勘の7表(persons・split_sheets・share_groups・share_group_items・item_shares・whole_shares・payment_payers)を
+ * 追加し、自分の人を1行作る(MIGRATION_9_10)。既存の表は変えない。
  */
 object Migrations {
     /**
@@ -493,7 +496,123 @@ object Migrations {
         }
     }
 
+    /** v10 で新しく作る割り勘の7表(宣言順)。既存の表は変えない。 */
+    val SPLIT_V10_TABLES: List<String> = listOf(
+        "persons", "split_sheets", "share_groups", "share_group_items", "item_shares", "whole_shares", "payment_payers",
+    )
+
+    /**
+     * v10 の割り勘の表の CREATE TABLE(表名は引数。Room が生成する 10.json の createSql と完全に一致させること。
+     * SchemaMatchTest が検査する)。FOREIGN KEY の区切りと末尾の空白は Room の出力に合わせている。
+     */
+    fun splitV10CreateSql(table: String): String = when (table) {
+        "persons" ->
+            "CREATE TABLE IF NOT EXISTS `$table` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`uid` TEXT NOT NULL, " +
+                "`name` TEXT NOT NULL, " +
+                "`shortName` TEXT NOT NULL DEFAULT '', " +
+                "`isSelf` INTEGER NOT NULL DEFAULT 0, " +
+                "`sortOrder` INTEGER NOT NULL DEFAULT 0, " +
+                "`createdAt` INTEGER NOT NULL)"
+        "split_sheets" ->
+            "CREATE TABLE IF NOT EXISTS `$table` (" +
+                "`receiptId` INTEGER NOT NULL, " +
+                "`mode` TEXT NOT NULL DEFAULT 'self', " +
+                "PRIMARY KEY(`receiptId`), " +
+                "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+        "share_groups" ->
+            "CREATE TABLE IF NOT EXISTS `$table` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`receiptId` INTEGER NOT NULL, " +
+                "`pieceCount` INTEGER, " +
+                "`isShared` INTEGER NOT NULL DEFAULT 0, " +
+                "`sortOrder` INTEGER NOT NULL DEFAULT 0, " +
+                "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+        "share_group_items" ->
+            "CREATE TABLE IF NOT EXISTS `$table` (" +
+                "`groupId` INTEGER NOT NULL, " +
+                "`receiptItemId` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`groupId`, `receiptItemId`), " +
+                "FOREIGN KEY(`groupId`) REFERENCES `share_groups`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                "FOREIGN KEY(`receiptItemId`) REFERENCES `receipt_items`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+        "item_shares" ->
+            "CREATE TABLE IF NOT EXISTS `$table` (" +
+                "`groupId` INTEGER NOT NULL, " +
+                "`personId` INTEGER NOT NULL, " +
+                "`kind` TEXT NOT NULL, " +
+                "`weight` INTEGER, " +
+                "`amount` INTEGER, " +
+                "PRIMARY KEY(`groupId`, `personId`), " +
+                "FOREIGN KEY(`groupId`) REFERENCES `share_groups`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                "FOREIGN KEY(`personId`) REFERENCES `persons`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )"
+        "whole_shares" ->
+            "CREATE TABLE IF NOT EXISTS `$table` (" +
+                "`receiptId` INTEGER NOT NULL, " +
+                "`personId` INTEGER NOT NULL, " +
+                "`kind` TEXT NOT NULL, " +
+                "`weight` INTEGER, " +
+                "`amount` INTEGER, " +
+                "PRIMARY KEY(`receiptId`, `personId`), " +
+                "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                "FOREIGN KEY(`personId`) REFERENCES `persons`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )"
+        "payment_payers" ->
+            "CREATE TABLE IF NOT EXISTS `$table` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`receiptId` INTEGER NOT NULL, " +
+                "`personId` INTEGER NOT NULL, " +
+                "`method` TEXT NOT NULL DEFAULT '', " +
+                "`amount` INTEGER NOT NULL, " +
+                "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                "FOREIGN KEY(`personId`) REFERENCES `persons`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )"
+        else -> throw IllegalArgumentException("v10 の割り勘の表ではありません: $table")
+    }
+
+    /** v10 の割り勘の表のインデックス(10.json の indices[].createSql と一致させる)。宣言順。 */
+    fun splitV10IndexSqls(table: String): List<String> = when (table) {
+        "persons" -> listOf("CREATE UNIQUE INDEX IF NOT EXISTS `index_persons_uid` ON `$table` (`uid`)")
+        "split_sheets" -> emptyList()
+        "share_groups" -> listOf("CREATE INDEX IF NOT EXISTS `index_share_groups_receiptId` ON `$table` (`receiptId`)")
+        "share_group_items" ->
+            listOf("CREATE UNIQUE INDEX IF NOT EXISTS `index_share_group_items_receiptItemId` ON `$table` (`receiptItemId`)")
+        "item_shares" -> listOf("CREATE INDEX IF NOT EXISTS `index_item_shares_personId` ON `$table` (`personId`)")
+        "whole_shares" -> listOf("CREATE INDEX IF NOT EXISTS `index_whole_shares_personId` ON `$table` (`personId`)")
+        "payment_payers" -> listOf(
+            "CREATE INDEX IF NOT EXISTS `index_payment_payers_receiptId` ON `$table` (`receiptId`)",
+            "CREATE INDEX IF NOT EXISTS `index_payment_payers_personId` ON `$table` (`personId`)",
+        )
+        else -> throw IllegalArgumentException("v10 の割り勘の表ではありません: $table")
+    }
+
+    /**
+     * v9 -> v10: 割り勘の7表を追加し、自分の人を1行作る。既存の表には触らない(作り直さない)。
+     *  - 7表を CREATE TABLE(と各インデックス)で作る。既存の表は一切変えない。
+     *  - persons に isSelf = 1 の行が無いときだけ「自分」を入れる(2回目の実行でも増えない)。uid は乱数。
+     * 安全策: 移行の前後で既存の表の件数を数え、1つでも変わったら例外にする(トランザクションが戻り、データは守られる)。
+     */
+    val MIGRATION_9_10: Migration = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val before = V8_CHILD_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+
+            for (t in SPLIT_V10_TABLES) {
+                db.execSQL(splitV10CreateSql(t))
+                for (sql in splitV10IndexSqls(t)) db.execSQL(sql)
+            }
+            db.execSQL(
+                "INSERT INTO `persons` (`uid`, `name`, `shortName`, `isSelf`, `sortOrder`, `createdAt`) " +
+                    "SELECT lower(hex(randomblob(16))), '自分', '自', 1, 0, CAST(strftime('%s','now') AS INTEGER) * 1000 " +
+                    "WHERE NOT EXISTS (SELECT 1 FROM `persons` WHERE `isSelf` = 1)",
+            )
+
+            val after = V8_CHILD_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+            if (before != after) {
+                throw IllegalStateException("v10 への移行を中止しました: 件数が変わりました $before -> $after")
+            }
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+        MIGRATION_9_10,
     )
 }

@@ -12,6 +12,7 @@ import com.amgm.personallog.data.db.ExpenseGroupDao
 import com.amgm.personallog.data.db.Migrations
 import com.amgm.personallog.data.db.PreMigrationBackup
 import com.amgm.personallog.data.db.ReceiptDao
+import com.amgm.personallog.data.db.SplitDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -39,6 +40,7 @@ object AppModule {
     @Provides fun provideReceiptDao(db: AppDatabase): ReceiptDao = db.receiptDao()
     @Provides fun provideExpenseDao(db: AppDatabase): ExpenseDao = db.expenseDao()
     @Provides fun provideExpenseGroupDao(db: AppDatabase): ExpenseGroupDao = db.expenseGroupDao()
+    @Provides fun provideSplitDao(db: AppDatabase): SplitDao = db.splitDao()
 
     @Provides
     @Singleton
