@@ -202,6 +202,9 @@ data class DetailUiState(
     /** このレシートに紐づく家計簿の支払い(グループか単独の支出)。無ければ null。 */
     val paymentLink: PaymentLink? = null,
 ) {
+    /** 手入力の支払い(レシート画像なし)か。画像の表示・補正・再読取は出さない。読み込み後だけ意味がある。 */
+    val manualEntry: Boolean get() = !loading && !notFound && imagePath.isBlank()
+
     /** 税込の支払総額(品目ごとの税込価格の合計、円は切り捨て)。items が変わったときだけ計算する。 */
     val itemsSum: Long get() = ItemsCalcCache.of(items).sum
 
@@ -614,7 +617,8 @@ class ReceiptDetailViewModel @Inject constructor(
                 _state.update {
                     it.copy(busy = false, adjust = clean, info = if (rescanAfter) null else "向き・範囲を保存しました。")
                 }
-                if (rescanAfter) rescan()
+                // 画像の無い(手入力の)支払いは読み取らない
+                if (rescanAfter && _state.value.imagePath.isNotBlank()) rescan()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
