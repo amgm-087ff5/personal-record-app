@@ -3,7 +3,6 @@ package com.amgm.personallog.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -12,8 +11,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,7 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,12 +40,12 @@ import com.amgm.personallog.ui.ledger.LedgerRoutes
 import com.amgm.personallog.ui.receipt.ReceiptRoutes
 import com.amgm.personallog.ui.settings.SettingsRoutes
 
-/** 下部タブ。アイコンは使わず文字だけ。選ばれたタブの下に、窓明かりのような琥珀の灯りが点る。 */
-enum class TopLevelTab(val route: String, val label: String) {
-    Diary(DiaryRoutes.ROOT, "日記"),
-    Receipt(ReceiptRoutes.ROOT, "レシート"),
-    Ledger(LedgerRoutes.ROOT, "家計簿"),
-    Settings(SettingsRoutes.ROOT, "設定"),
+/** 下部タブ。アイコンと文字を並べる。選ばれたタブは琥珀色になり、文字は太くなる。 */
+enum class TopLevelTab(val route: String, val label: String, val icon: ImageVector) {
+    Diary(DiaryRoutes.ROOT, "日記", Icons.Filled.Edit),
+    Receipt(ReceiptRoutes.ROOT, "レシート", Icons.Filled.Check),
+    Ledger(LedgerRoutes.ROOT, "家計簿", Icons.Filled.Home),
+    Settings(SettingsRoutes.ROOT, "設定", Icons.Filled.Settings),
 }
 
 @Composable
@@ -91,6 +95,7 @@ private fun InkTabBar(selectedRoute: String?, onSelect: (TopLevelTab) -> Unit) {
         Row(modifier = Modifier.fillMaxWidth().navigationBarsPadding().height(64.dp)) {
             TopLevelTab.entries.forEach { tab ->
                 val selected = tab.route == selectedRoute
+                val color = if (selected) c.accent else c.inkFaint
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -99,34 +104,21 @@ private fun InkTabBar(selectedRoute: String?, onSelect: (TopLevelTab) -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
+                    Icon(
+                        imageVector = tab.icon,
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(22.dp),
+                    )
                     Text(
                         text = tab.label,
                         style = AppTheme.type.title.copy(
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                         ),
-                        color = if (selected) c.ink else c.inkFaint,
-                    )
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 6.dp)
-                            .size(6.dp)
-                            .then(
-                                if (selected) {
-                                    Modifier
-                                        .shadow(
-                                            elevation = 8.dp,
-                                            shape = CircleShape,
-                                            clip = false,
-                                            ambientColor = c.glow,
-                                            spotColor = c.glow,
-                                        )
-                                        .background(c.accent, CircleShape)
-                                } else {
-                                    Modifier.background(Color.Transparent, CircleShape)
-                                },
-                            ),
+                        color = color,
+                        modifier = Modifier.padding(top = 2.dp),
                     )
                 }
             }

@@ -61,6 +61,7 @@ import com.amgm.personallog.ui.design.TextAction
 import com.amgm.personallog.ui.design.sheet
 import com.amgm.personallog.ui.design.tappable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -693,7 +694,14 @@ private fun ItemGroupRows(
         if (head.memo.isNotBlank() && count == 1) append(" ・ ").append(head.memo)
         if (isAdvance) append(if (allPicked) " ・ 自分の分" else " ・ 相手の分")
     }
-    Column(modifier = Modifier.fillMaxWidth()) {
+    // 品目1つ分を影つきのスリップにする(一覧の枠と同じ窓辺の紙)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Space.edge, vertical = Space.xs)
+            .sheet(RoundedCornerShape(16.dp), depth = 10.dp)
+            .clip(RoundedCornerShape(16.dp)),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -721,7 +729,6 @@ private fun ItemGroupRows(
                 )
             }
         }
-        Hairline(modifier = Modifier.padding(horizontal = Space.edge))
     }
 }
 

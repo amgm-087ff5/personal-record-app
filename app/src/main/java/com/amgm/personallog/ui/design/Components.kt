@@ -368,7 +368,7 @@ fun LeaderRow(
 ) {
     val leaderColor = AppTheme.colors.inkFaint.copy(alpha = 0.6f)
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-        Text(label, style = labelStyle, color = labelColor, modifier = Modifier.weight(1f, fill = false))
+        Text(label, style = labelStyle, color = labelColor)
         Canvas(
             modifier = Modifier
                 .weight(1f)
