@@ -123,13 +123,9 @@ class LedgerCalcTest {
             imagePath = "", rawJson = "{}", createdAt = 0,
         )
         val items = listOf(ReceiptItem(receiptId = 5, name = "牛乳", amount = 300, category = "食費"))
-        // グループの支払い金額は合計を使うので、null は例外
-        try {
-            LedgerCalc.groupFromReceipt(draft, items, now = 1)
-            org.junit.Assert.fail("expected IllegalArgumentException")
-        } catch (e: IllegalArgumentException) {
-            assertTrue(e.message!!.contains("合計"))
-        }
+        // 下書き(合計が null)のグループは品目の合計で作る(下書きも家計簿に入れるため)
+        val g = LedgerCalc.groupFromReceipt(draft, items, now = 1)!!.group
+        assertEquals(300, g.amount)
         // 品目なしの支出も合計を使う
         try {
             LedgerCalc.expensesFromReceipt(draft, emptyList(), perItem = true, now = 1)
