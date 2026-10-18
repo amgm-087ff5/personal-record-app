@@ -7,6 +7,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -141,5 +142,69 @@ class SchemaMatchTest {
             assertEquals("$t の createSql", Migrations.splitV10CreateSql(t), createSql(e, t))
             assertEquals("$t のインデックス", Migrations.splitV10IndexSqls(t), indexSqls(e, t))
         }
+    }
+
+    // ---- v11(割り勘の参加者・ラベル金額。割当の参照先を参加者に変更)----
+
+    private val v11 get() = entities(load(11))
+
+    private val v11NewTables = Migrations.SPLIT_V11_NEW_TABLES
+    private val v11RebuiltTables = Migrations.SPLIT_V11_REBUILT_TABLES
+
+    @Test
+    fun schema11_isVersion11() {
+        assertEquals(11, load(11)["version"]!!.jsonPrimitive.content.toInt())
+    }
+
+    @Test
+    fun v11_tableSetIsV10PlusNewTables() {
+        assertEquals(v10.keys + v11NewTables, v11.keys)
+    }
+
+    @Test
+    fun v11_tablesOutsideTheChangesAreUnchangedFromV10() {
+        // split_sheets は列を足すだけ、作り直す3表は下で確かめる。それ以外は v10 と同じ
+        val changed = v11RebuiltTables.toSet() + "split_sheets"
+        for (name in v10.keys - changed) {
+            assertEquals("$name の createSql", createSql(v10.getValue(name), name), createSql(v11.getValue(name), name))
+            assertEquals("$name のインデックス", indexSqls(v10.getValue(name), name), indexSqls(v11.getValue(name), name))
+        }
+    }
+
+    @Test
+    fun v11_newAndRebuiltSplitTables_createSqlAndIndicesMatchMigration() {
+        for (t in v11NewTables + v11RebuiltTables) {
+            val e = v11.getValue(t)
+            assertEquals("$t の createSql", Migrations.splitV11CreateSql(t), createSql(e, t))
+            assertEquals("$t のインデックス", Migrations.splitV11IndexSqls(t), indexSqls(e, t))
+        }
+    }
+
+    @Test
+    fun v11_rebuiltTables_referenceParticipantsNotPersons() {
+        for (t in v11RebuiltTables) {
+            val sql = Migrations.splitV11CreateSql(t)
+            assertTrue("$t は participantId を参照する", sql.contains("REFERENCES `split_participants`(`id`)"))
+            assertFalse("$t は persons を参照しない", sql.contains("`personId`"))
+        }
+    }
+
+    @Test
+    fun v11_splitSheets_hasAddedColumnsOnly() {
+        val fields = v11.getValue("split_sheets")["fields"]!!.jsonArray.map { it.jsonObject["columnName"]!!.jsonPrimitive.content }
+        assertEquals(listOf("receiptId", "mode", "wholeKind", "warnings"), fields)
+        // ALTER TABLE で足す列定義が、CREATE TABLE の列定義(11.json)と同じ文字列になる
+        val v10Sql = Migrations.splitV10CreateSql("split_sheets")
+        val added = Migrations.SPLIT_SHEETS_V11_ADDED_COLUMNS.map { c ->
+            assertEquals(
+                "ALTER TABLE `split_sheets` ADD COLUMN `${c.name}` ${c.type} NOT NULL DEFAULT ${c.default}",
+                Migrations.splitSheetsV11AddColumnSql(c),
+            )
+            "`${c.name}` ${c.type} NOT NULL DEFAULT ${c.default}"
+        }
+        assertEquals(
+            v10Sql.replace(", PRIMARY KEY(", ", " + added.joinToString(", ") + ", PRIMARY KEY("),
+            createSql(v11.getValue("split_sheets"), "split_sheets"),
+        )
     }
 }

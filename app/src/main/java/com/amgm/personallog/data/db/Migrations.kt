@@ -16,6 +16,9 @@ import com.amgm.personallog.receipt.TotalSourceInit
  *
  * v10(割り勘): 割り勘の7表(persons・split_sheets・share_groups・share_group_items・item_shares・whole_shares・payment_payers)を
  * 追加し、自分の人を1行作る(MIGRATION_9_10)。既存の表は変えない。
+ *
+ * v11(割り勘の参加者・ラベル金額): split_participants・split_label_amounts を追加し、split_sheets に wholeKind・warnings を足す。
+ * item_shares・whole_shares・payment_payers は参照先を persons から参加者(split_participants)に変えるため作り直す(MIGRATION_10_11)。
  */
 object Migrations {
     /**
@@ -611,8 +614,250 @@ object Migrations {
         }
     }
 
+    /** v11 で新しく作る割り勘の表(宣言順)。 */
+    val SPLIT_V11_NEW_TABLES: List<String> = listOf("split_participants", "split_label_amounts")
+
+    /** v11 で作り直す表(割当・支払内訳の参照先を persons から split_participants に変える)。宣言順。 */
+    val SPLIT_V11_REBUILT_TABLES: List<String> = listOf("item_shares", "whole_shares", "payment_payers")
+
+    /** v11 で split_sheets に ALTER TABLE ADD COLUMN で足す列。 */
+    val SPLIT_SHEETS_V11_ADDED_COLUMNS: List<AddedColumn> = listOf(
+        AddedColumn("wholeKind", "TEXT", "'amount'"),
+        AddedColumn("warnings", "TEXT", "''"),
+    )
+
+    fun splitSheetsV11AddColumnSql(c: AddedColumn): String =
+        "ALTER TABLE `split_sheets` ADD COLUMN `${c.name}` ${c.type} NOT NULL DEFAULT ${c.default}"
+
+    /**
+     * v11 の割り勘の表の CREATE TABLE(表名は引数。Room が生成する 11.json の createSql と完全に一致させること。
+     * SchemaMatchTest が検査する)。FOREIGN KEY の区切りと末尾の空白は Room の出力に合わせている。
+     */
+    fun splitV11CreateSql(table: String): String = when (table) {
+        "split_participants" ->
+            "CREATE TABLE IF NOT EXISTS `$table` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`receiptId` INTEGER NOT NULL, " +
+                "`personId` INTEGER, " +
+                "`memo` TEXT NOT NULL DEFAULT '', " +
+                "`label` TEXT NOT NULL DEFAULT '', " +
+                "`isPayer` INTEGER NOT NULL DEFAULT 0, " +
+                "`sortOrder` INTEGER NOT NULL DEFAULT 0, " +
+                "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                "FOREIGN KEY(`personId`) REFERENCES `persons`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )"
+        "split_label_amounts" ->
+            "CREATE TABLE IF NOT EXISTS `$table` (" +
+                "`receiptId` INTEGER NOT NULL, " +
+                "`label` TEXT NOT NULL, " +
+                "`amount` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`receiptId`, `label`), " +
+                "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+        "item_shares" ->
+            "CREATE TABLE IF NOT EXISTS `$table` (" +
+                "`groupId` INTEGER NOT NULL, " +
+                "`participantId` INTEGER NOT NULL, " +
+                "`kind` TEXT NOT NULL, " +
+                "`weight` INTEGER, " +
+                "`amount` INTEGER, " +
+                "PRIMARY KEY(`groupId`, `participantId`), " +
+                "FOREIGN KEY(`groupId`) REFERENCES `share_groups`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                "FOREIGN KEY(`participantId`) REFERENCES `split_participants`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+        "whole_shares" ->
+            "CREATE TABLE IF NOT EXISTS `$table` (" +
+                "`receiptId` INTEGER NOT NULL, " +
+                "`participantId` INTEGER NOT NULL, " +
+                "`kind` TEXT NOT NULL, " +
+                "`weight` INTEGER, " +
+                "`amount` INTEGER, " +
+                "PRIMARY KEY(`receiptId`, `participantId`), " +
+                "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                "FOREIGN KEY(`participantId`) REFERENCES `split_participants`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+        "payment_payers" ->
+            "CREATE TABLE IF NOT EXISTS `$table` (" +
+                "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`receiptId` INTEGER NOT NULL, " +
+                "`participantId` INTEGER NOT NULL, " +
+                "`method` TEXT NOT NULL DEFAULT '', " +
+                "`amount` INTEGER NOT NULL, " +
+                "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                "FOREIGN KEY(`participantId`) REFERENCES `split_participants`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+        else -> throw IllegalArgumentException("v11 の割り勘の表ではありません: $table")
+    }
+
+    /** v11 の割り勘の表のインデックス(11.json の indices[].createSql と一致させる)。宣言順。 */
+    fun splitV11IndexSqls(table: String): List<String> = when (table) {
+        "split_participants" -> listOf(
+            "CREATE INDEX IF NOT EXISTS `index_split_participants_receiptId` ON `$table` (`receiptId`)",
+            "CREATE INDEX IF NOT EXISTS `index_split_participants_personId` ON `$table` (`personId`)",
+        )
+        "split_label_amounts" -> emptyList()
+        "item_shares" -> listOf("CREATE INDEX IF NOT EXISTS `index_item_shares_participantId` ON `$table` (`participantId`)")
+        "whole_shares" -> listOf("CREATE INDEX IF NOT EXISTS `index_whole_shares_participantId` ON `$table` (`participantId`)")
+        "payment_payers" -> listOf(
+            "CREATE INDEX IF NOT EXISTS `index_payment_payers_receiptId` ON `$table` (`receiptId`)",
+            "CREATE INDEX IF NOT EXISTS `index_payment_payers_participantId` ON `$table` (`participantId`)",
+        )
+        else -> throw IllegalArgumentException("v11 の割り勘の表ではありません: $table")
+    }
+
+    /** v11 の移行の前後で件数を比べる対象(v8 の子表と、割り勘の表)。 */
+    internal val V11_COUNT_QUERIES: List<Pair<String, String>> = V8_CHILD_COUNT_QUERIES + listOf(
+        "split_sheets" to "SELECT COUNT(*) FROM `split_sheets`",
+        "share_groups" to "SELECT COUNT(*) FROM `share_groups`",
+        "item_shares" to "SELECT COUNT(*) FROM `item_shares`",
+        "whole_shares" to "SELECT COUNT(*) FROM `whole_shares`",
+        "payment_payers" to "SELECT COUNT(*) FROM `payment_payers`",
+    )
+
+    /** 作り直す割り勘の表の外部キー違反の件数(PRAGMA foreign_key_check を表ごとに数える。移行と無関係な古い不整合は含めるが、移行の前後で比べる)。 */
+    internal fun SupportSQLiteDatabase.splitFkViolations(tables: List<String>): Long {
+        var n = 0L
+        for (t in tables) query("PRAGMA foreign_key_check(`$t`)").use { c -> while (c.moveToNext()) n++ }
+        return n
+    }
+
+    private fun android.database.Cursor.nullableInt(index: Int): Int? = if (isNull(index)) null else getInt(index)
+
+    /**
+     * v10 の割当・支払内訳(personId)を、v11 の参加者(participantId)へ写す。_old の表から読み、新しい表へ書く。
+     *  - (receiptId, personId) ごとに参加者を1人作る。sortOrder は出現順で、自分の人は先頭。
+     *  - 支払内訳(payment_payers)に出てくる人は isPayer = 1 にする(店に払った人)。
+     *  - item_shares の receiptId は share_groups から引く。share_groups が無い割当は写せないので、件数の検査で止まる。
+     * 写す前に読み出しきってから書く(読みながら書かない)。
+     */
+    private fun SupportSQLiteDatabase.copyLegacySplitShares() {
+        class ItemRow(val groupId: Long, val receiptId: Long, val personId: Long, val kind: String, val weight: Int?, val amount: Int?)
+        class WholeRow(val receiptId: Long, val personId: Long, val kind: String, val weight: Int?, val amount: Int?)
+        class PayerRow(val id: Long, val receiptId: Long, val personId: Long, val method: String, val amount: Int)
+
+        val items = ArrayList<ItemRow>()
+        query(
+            "SELECT `item_shares_old`.`groupId`, `share_groups`.`receiptId`, `item_shares_old`.`personId`, " +
+                "`item_shares_old`.`kind`, `item_shares_old`.`weight`, `item_shares_old`.`amount` " +
+                "FROM `item_shares_old` INNER JOIN `share_groups` ON `share_groups`.`id` = `item_shares_old`.`groupId` " +
+                "ORDER BY `item_shares_old`.`rowid`",
+        ).use { c ->
+            while (c.moveToNext()) {
+                items.add(ItemRow(c.getLong(0), c.getLong(1), c.getLong(2), c.getString(3), c.nullableInt(4), c.nullableInt(5)))
+            }
+        }
+        val wholes = ArrayList<WholeRow>()
+        query("SELECT `receiptId`, `personId`, `kind`, `weight`, `amount` FROM `whole_shares_old` ORDER BY `rowid`").use { c ->
+            while (c.moveToNext()) wholes.add(WholeRow(c.getLong(0), c.getLong(1), c.getString(2), c.nullableInt(3), c.nullableInt(4)))
+        }
+        val payers = ArrayList<PayerRow>()
+        query("SELECT `id`, `receiptId`, `personId`, `method`, `amount` FROM `payment_payers_old` ORDER BY `id`").use { c ->
+            while (c.moveToNext()) payers.add(PayerRow(c.getLong(0), c.getLong(1), c.getLong(2), c.getString(3), c.getInt(4)))
+        }
+
+        // 人の並び: 出現順(割当 → 全体の割当 → 支払内訳)。自分の人を先頭にする(sortedBy は安定)
+        val selfIds = HashSet<Long>()
+        query("SELECT `id` FROM `persons` WHERE `isSelf` = 1").use { c -> while (c.moveToNext()) selfIds.add(c.getLong(0)) }
+        val appearance = LinkedHashMap<Long, LinkedHashSet<Long>>()
+        for (r in items) appearance.getOrPut(r.receiptId) { LinkedHashSet() }.add(r.personId)
+        for (r in wholes) appearance.getOrPut(r.receiptId) { LinkedHashSet() }.add(r.personId)
+        for (r in payers) appearance.getOrPut(r.receiptId) { LinkedHashSet() }.add(r.personId)
+        val payerKeys = payers.map { it.receiptId to it.personId }.toHashSet()
+
+        val participantOf = HashMap<Pair<Long, Long>, Long>()
+        for ((receiptId, personSet) in appearance) {
+            personSet.sortedBy { if (it in selfIds) 0 else 1 }.forEachIndexed { index, personId ->
+                val isPayer = (receiptId to personId) in payerKeys
+                execSQL(
+                    "INSERT INTO `split_participants` (`receiptId`, `personId`, `memo`, `label`, `isPayer`, `sortOrder`) " +
+                        "VALUES (?, ?, '', '', ?, ?)",
+                    arrayOf<Any?>(receiptId, personId, if (isPayer) 1 else 0, index),
+                )
+                participantOf[receiptId to personId] = query("SELECT last_insert_rowid()").use { c ->
+                    c.moveToFirst()
+                    c.getLong(0)
+                }
+            }
+        }
+
+        for (r in items) {
+            execSQL(
+                "INSERT INTO `item_shares` (`groupId`, `participantId`, `kind`, `weight`, `amount`) VALUES (?, ?, ?, ?, ?)",
+                arrayOf<Any?>(r.groupId, participantOf.getValue(r.receiptId to r.personId), r.kind, r.weight, r.amount),
+            )
+        }
+        for (r in wholes) {
+            execSQL(
+                "INSERT INTO `whole_shares` (`receiptId`, `participantId`, `kind`, `weight`, `amount`) VALUES (?, ?, ?, ?, ?)",
+                arrayOf<Any?>(r.receiptId, participantOf.getValue(r.receiptId to r.personId), r.kind, r.weight, r.amount),
+            )
+        }
+        for (r in payers) {
+            execSQL(
+                "INSERT INTO `payment_payers` (`id`, `receiptId`, `participantId`, `method`, `amount`) VALUES (?, ?, ?, ?, ?)",
+                arrayOf<Any?>(r.id, r.receiptId, participantOf.getValue(r.receiptId to r.personId), r.method, r.amount),
+            )
+        }
+    }
+
+    /**
+     * v10 -> v11: 割り勘の参加者とラベル金額を追加し、割当・支払内訳の参照先を persons から参加者に変える。
+     *  - split_sheets に wholeKind・warnings を ALTER TABLE ADD COLUMN で足す(既存の行は既定値)。
+     *  - split_participants・split_label_amounts を CREATE する(インデックスも)。
+     *  - item_shares・whole_shares・payment_payers は作り直す: 旧表を _old に RENAME → 新しい表を CREATE → 旧データを写す
+     *    (copyLegacySplitShares)→ _old を DROP → インデックス。
+     * 安全策(8_9 と同じ): 最初に PRAGMA foreign_keys を読み、1 なら何も変えずに止める。
+     * 作り直す3表の外部キー違反の数を移行の前後で比べ、増えたら止める。件数(レシート・品目・割り勘の表)も前後で比べ、変わったら止める。
+     */
+    val MIGRATION_10_11: Migration = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val fkOn = db.query("PRAGMA foreign_keys").use { c -> c.moveToFirst() && c.getInt(0) == 1 }
+            if (fkOn) {
+                throw IllegalStateException(
+                    "v11 への移行を中止しました: 外部キー(PRAGMA foreign_keys)が有効です。" +
+                        "有効なまま表を作り直すと、子のデータが連鎖で変わるおそれがあるため、何も変更せずに止めました。",
+                )
+            }
+            val fkBefore = db.splitFkViolations(SPLIT_V11_REBUILT_TABLES)
+            val before = V11_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+            // RENAME すると採番の行も _old 側へ移るので、移す前の値を読んでおく
+            val oldPayerSeq = db.query("SELECT `seq` FROM `sqlite_sequence` WHERE `name` = 'payment_payers'")
+                .use { c -> if (c.moveToFirst()) c.getLong(0) else null }
+
+            // 親の表と新しい表
+            for (c in SPLIT_SHEETS_V11_ADDED_COLUMNS) db.execSQL(splitSheetsV11AddColumnSql(c))
+            for (t in SPLIT_V11_NEW_TABLES) {
+                db.execSQL(splitV11CreateSql(t))
+                for (sql in splitV11IndexSqls(t)) db.execSQL(sql)
+            }
+
+            // 作り直す3表: 旧表を退避 → 新しい表 → 旧データを写す
+            for (t in SPLIT_V11_REBUILT_TABLES) db.execSQL("ALTER TABLE `$t` RENAME TO `${t}_old`")
+            for (t in SPLIT_V11_REBUILT_TABLES) db.execSQL(splitV11CreateSql(t))
+            db.copyLegacySplitShares()
+
+            // payment_payers の採番を引き継ぐ(8_9 と同じ。id を写したあと、古い採番と最大 id の大きい方で入れ直す)
+            val maxPayerId = db.count("SELECT COALESCE(MAX(`id`), 0) FROM `payment_payers`")
+            val seq = maxOf(oldPayerSeq ?: 0L, maxPayerId)
+            db.execSQL("DELETE FROM `sqlite_sequence` WHERE `name` = 'payment_payers'")
+            if (seq > 0L) {
+                db.execSQL("INSERT INTO `sqlite_sequence` (`name`, `seq`) VALUES ('payment_payers', ?)", arrayOf<Any?>(seq))
+            }
+
+            // 旧表を消してから、新しい表のインデックスを作る(旧表のインデックスと名前が重なるものがあるため)
+            for (t in SPLIT_V11_REBUILT_TABLES) db.execSQL("DROP TABLE `${t}_old`")
+            for (t in SPLIT_V11_REBUILT_TABLES) {
+                for (sql in splitV11IndexSqls(t)) db.execSQL(sql)
+            }
+
+            val after = V11_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+            if (before != after) {
+                throw IllegalStateException("v11 への移行を中止しました: 件数が変わりました $before -> $after")
+            }
+            val fkAfter = db.splitFkViolations(listOf("split_participants", "split_label_amounts") + SPLIT_V11_REBUILT_TABLES)
+            if (fkAfter > fkBefore) {
+                throw IllegalStateException("v11 への移行を中止しました: 割り勘の表の外部キーの違反が増えました $fkBefore -> $fkAfter")
+            }
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-        MIGRATION_9_10,
+        MIGRATION_9_10, MIGRATION_10_11,
     )
 }
