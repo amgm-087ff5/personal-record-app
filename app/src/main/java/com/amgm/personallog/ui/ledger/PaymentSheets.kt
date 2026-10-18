@@ -3,11 +3,8 @@ package com.amgm.personallog.ui.ledger
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,8 +22,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.amgm.personallog.data.model.Categories
-import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.BareField
 import com.amgm.personallog.ui.design.Hairline
@@ -36,48 +33,18 @@ import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.Pills
 import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.TextAction
-import com.amgm.personallog.ui.design.tappable
-
-/** 「＋ 記録」を押したときの選択: 単独の支出か、品目つきの支払いか。 */
-@Composable
-internal fun AddKindSheet(onDismiss: () -> Unit, onSingle: () -> Unit, onWithItems: () -> Unit) {
-    val c = AppTheme.colors
-    InkSheet(onDismiss = onDismiss) {
-        Label("記録する")
-        Text(
-            "単独の支出",
-            style = AppTheme.type.title,
-            color = c.ink,
-            modifier = Modifier.fillMaxWidth().tappable(onSingle).padding(vertical = Space.m),
-        )
-        Text("金額・カテゴリ・メモを1行で記録します", style = AppTheme.type.caption, color = c.inkSoft)
-        Spacer(Modifier.height(Space.s))
-        Hairline()
-        Text(
-            "品目つきの支出",
-            style = AppTheme.type.title,
-            color = c.ink,
-            modifier = Modifier.fillMaxWidth().tappable(onWithItems).padding(vertical = Space.m),
-        )
-        Text(
-            "合計・店名と、品目(品名・金額・カテゴリ)をまとめて記録します",
-            style = AppTheme.type.caption,
-            color = c.inkSoft,
-        )
-        Spacer(Modifier.height(Space.m))
-    }
-}
 
 /**
- * 品目つきの支払いの手入力。合計・日時・メモ(店名など)・品目を入れて、グループと品目の支出を作る。
- * 品目の金額の合計を合計欄の下に出し、1タップで合計に入れられる。
+ * 手入力の支払いの入力。合計・日時・店名・品目を入れて、支払い(レシートの表の下書き)と品目を保存する。
+ * 家計簿の支出は、保存のなかで支払いから作られる。品目の金額の合計を合計欄の下に出し、1タップで合計に入れられる。
+ * onSave には作った支払いと品目を渡す。done には保存の結果(エラーメッセージ、成功なら null)を渡す。
  */
 @Composable
 internal fun ManualPaymentSheet(
     initialDate: String,
     initialTime: String,
     onDismiss: () -> Unit,
-    onSave: (group: ExpenseGroup, items: List<Expense>, done: (String?) -> Unit) -> Unit,
+    onSave: (receipt: Receipt, items: List<ReceiptItem>, done: (String?) -> Unit) -> Unit,
 ) {
     val c = AppTheme.colors
     var dateText by remember { mutableStateOf(initialDate) }
@@ -96,7 +63,7 @@ internal fun ManualPaymentSheet(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding(),
             verticalArrangement = Arrangement.spacedBy(Space.m),
         ) {
-            Label("品目つきの支出を追加")
+            Label("支払いを追加")
 
             // 合計: 大きく中央。下に品目の合計と「合計に入れる」
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -149,7 +116,7 @@ internal fun ManualPaymentSheet(
                 )
             }
 
-            Label("メモ(店名など)")
+            Label("店名(任意)")
             BareField(value = memo, onValueChange = { memo = it }, underline = true, placeholder = "店名など")
 
             Label("品目")
@@ -174,7 +141,7 @@ internal fun ManualPaymentSheet(
                     errors = r.errors
                     if (r.isValid) {
                         saving = true
-                        onSave(r.group!!, r.items) { err ->
+                        onSave(r.receipt!!, r.items) { err ->
                             saving = false
                             if (err == null) onDismiss() else errors = listOf(err)
                         }

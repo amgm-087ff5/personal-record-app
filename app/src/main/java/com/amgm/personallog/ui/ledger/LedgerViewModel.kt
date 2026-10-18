@@ -9,12 +9,13 @@ import com.amgm.personallog.backup.BackupProgress
 import com.amgm.personallog.backup.ImportMode
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.repository.ExpenseRepository
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.domain.LedgerCalc
-import com.amgm.personallog.domain.PaymentEdit
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -190,57 +191,18 @@ class LedgerViewModel @Inject constructor(
     suspend fun linkedReceiptDateTime(expense: Expense): String? = repository.linkedReceiptDateTime(expense)
 
     /**
-     * original が null なら新規。onDone にはエラーメッセージ(成功なら null)を渡す。
-     * 日時(date/time)を変えたら timeEdited を立て、以後レシートの日時変更に追従しないようにする。
-     * レシートの日時は変更しない。
+     * 手入力の支払いを保存する(レシートの表と品目)。家計簿の支出は、この保存のなかで支払いから作られる。
+     * onDone には保存した支払いの id と、エラーメッセージ(成功なら null)を渡す。
      */
-    fun saveExpense(
-        original: Expense?,
-        date: String,
-        time: String,
-        amount: Int,
-        category: String,
-        name: String,
-        memo: String,
-        onDone: (String?) -> Unit,
-    ) {
+    fun addManualPayment(receipt: Receipt, items: List<ReceiptItem>, onDone: (Long?, String?) -> Unit) {
         viewModelScope.launch {
             try {
-                if (original == null) {
-                    repository.add(
-                        Expense(
-                            date = date,
-                            time = time,
-                            amount = amount,
-                            category = category,
-                            name = name.trim(),
-                            memo = memo.trim(),
-                            createdAt = System.currentTimeMillis(),
-                        ),
-                    )
-                } else {
-                    // 変わった欄の「編集済み」を立てる(日時の timeEdited を含む)
-                    repository.update(PaymentEdit.editExpense(original, date, time, amount, category, name, memo))
-                }
-                onDone(null)
+                val id = receipts.save(receipt, items)
+                onDone(id, null)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                onDone("保存に失敗しました: ${e.message ?: e.javaClass.simpleName}")
-            }
-        }
-    }
-
-    /** 品目つきの手入力: グループと品目の支出を作る。onDone にはエラーメッセージ(成功なら null)を渡す。 */
-    fun addPayment(group: ExpenseGroup, items: List<Expense>, onDone: (String?) -> Unit) {
-        viewModelScope.launch {
-            try {
-                repository.addPayment(group, items)
-                onDone(null)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                onDone("保存に失敗しました: ${e.message ?: e.javaClass.simpleName}")
+                onDone(null, "保存に失敗しました: ${e.message ?: e.javaClass.simpleName}")
             }
         }
     }

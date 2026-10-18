@@ -338,14 +338,6 @@ class ExpenseRepository @Inject constructor(
     /** レシート画像のサムネイル・「レシートを開く」用。 */
     suspend fun receipt(id: Long): Receipt? = db.receiptDao().getById(id)
 
-    /** 品目つきの手入力: グループと品目の支出を1つの処理で作る。groupId を返す。 */
-    suspend fun addPayment(group: ExpenseGroup, items: List<Expense>): Long = db.withTransaction {
-        val groupId = groupDao.insert(group)
-        dao.insertAll(items.map { it.copy(groupId = groupId) })
-        groupId
-    }
-
-    suspend fun add(expense: Expense): Long = dao.insert(expense)
     suspend fun update(expense: Expense) = dao.update(expense)
 
     /**

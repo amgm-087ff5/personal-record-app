@@ -128,11 +128,12 @@ class ReceiptPaymentFlowRobolectricTest {
     fun manualRow_isReallyDeleted() {
         val (r, _) = confirmedReceipt()
         val g = runBlocking { db.expenseGroupDao().getByReceiptId(r.id) }.single()
-        val manualId = runBlocking {
-            expenses.add(Expense(date = g.date, time = g.time, amount = 30, category = "その他", name = "袋", createdAt = 1, groupId = g.id))
+        // 移行前から残る行を想定する: 品目の対応(receiptItemId)が無い行は、家計簿の削除で本当に消す(品目の行のように印だけ付けない)
+        val legacyId = runBlocking {
+            db.expenseDao().insert(Expense(date = g.date, time = g.time, amount = 30, category = "その他", name = "袋", createdAt = 1, groupId = g.id))
         }
-        runBlocking { expenses.delete(db.expenseDao().getById(manualId)!!) }
-        assertEquals(null, runBlocking { db.expenseDao().getById(manualId) })
+        runBlocking { expenses.delete(db.expenseDao().getById(legacyId)!!) }
+        assertEquals(null, runBlocking { db.expenseDao().getById(legacyId) })
     }
 
     @Test
@@ -197,8 +198,8 @@ class ReceiptPaymentFlowRobolectricTest {
     fun groupMovedToNextMonth_childrenFollow_andBothMonthsAreCorrect() {
         val (r, _) = confirmedReceipt()
         val g = runBlocking { db.expenseGroupDao().getByReceiptId(r.id) }.single()
-        val single = Expense(date = "2026-10-20", time = "10:00", amount = 50, category = "その他", createdAt = 1)
-        runBlocking { expenses.add(single) }
+        // 単独の支出も、支払い(合計だけの手入力)を保存して作る
+        runBlocking { receipts.saveAndConfirm(receipt(total = 50, at = "2026-10-20 10:00", store = "単独"), emptyList()) }
         fun total(from: String, to: String): Long = runBlocking {
             val rows = expenses.observeLedgerRows(from, to).first()
             val groups = expenses.observeGroupsBetween(from, to).first()

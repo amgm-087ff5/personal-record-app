@@ -3,6 +3,7 @@ package com.amgm.personallog.ledger
 import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentKind
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentLink
@@ -112,7 +113,7 @@ class PaymentItemsTest {
     // ------------------------------------------------------------ 品目つきの手入力
 
     @Test
-    fun draftPayment_buildsGroupAndItems_withTopItemCategory() {
+    fun draftPayment_buildsReceiptAndItems_forTheSavePath() {
         val r = DraftPayment.build(
             "2026-10-03", "10:15", "700", " スーパー ",
             listOf(
@@ -123,15 +124,24 @@ class PaymentItemsTest {
             now = 9,
         )
         assertTrue(r.errors.toString(), r.isValid)
-        assertEquals(700, r.group!!.amount)
-        assertEquals("スーパー", r.group!!.memo)
-        assertEquals("日用品", r.group!!.category)
+        // 支払い(レシートの表)は手入力の下書き。店名は memo から
+        val receipt = r.receipt!!
+        assertEquals(700, receipt.totalAmount)
+        assertEquals("2026-10-03 10:15", receipt.purchasedAt)
+        assertEquals("スーパー", receipt.storeName)
+        assertEquals("", receipt.imagePath)
+        assertEquals("", receipt.rawJson)
+        assertEquals("draft", receipt.status)
+        assertEquals("manual", receipt.totalSource)
+        assertEquals(9L, receipt.createdAt)
+        // 品目は空行を除いて2件。支払いの保存で receiptId が入る
         assertEquals(listOf("牛乳", "洗剤"), r.items.map { it.name })
         assertEquals(listOf("特売", ""), r.items.map { it.memo })
         assertEquals(listOf(200, 500), r.items.map { it.amount })
-        assertTrue(r.items.all { it.date == "2026-10-03" && it.time == "10:15" && it.receiptId == null && it.receiptItemId == null })
-        // uid は行ごとに異なる
-        assertEquals(3, (r.items.map { it.uid } + r.group!!.uid).toSet().size)
+        assertEquals(listOf("食費", "日用品"), r.items.map { it.category })
+        assertTrue(r.items.all { it.receiptId == 0L && it.id == 0L })
+        // 家計簿のグループのカテゴリは、金額が最も高い品目のカテゴリ(支出は支払いから作られる)
+        assertEquals("日用品", LedgerCalc.groupCategory(r.items))
     }
 
     @Test

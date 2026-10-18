@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.repository.ExpenseRepository
+import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.domain.PaymentEdit
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentKind
@@ -53,6 +55,7 @@ data class PaymentUiState(
 class PaymentDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: ExpenseRepository,
+    private val receipts: ReceiptRepository,
 ) : ViewModel() {
     private val kind: PaymentKind = PaymentKind.of(savedStateHandle.get<String>("kind")) ?: PaymentKind.GROUP
     private val id: Long = savedStateHandle.get<Long>("id") ?: 0L
@@ -141,13 +144,13 @@ class PaymentDetailViewModel @Inject constructor(
         if (original != null) {
             repository.update(PaymentEdit.editExpense(original, d, t, amount, category, name, memo))
         } else if (group != null) {
-            // 手で足した品目はレシートの品目と対応しないので、receiptId も receiptItemId も付けない
-            repository.add(
-                Expense(
-                    date = d, time = t, amount = amount, category = category,
-                    name = name.trim(), memo = memo.trim(), createdAt = System.currentTimeMillis(), groupId = group.id,
-                ),
+            // 品目は支払い(レシート)の品目として足す。家計簿の品目は、支払いを保存するときに作られる(支出だけを単独では作らない)
+            val receiptId = checkNotNull(group.receiptId) { "レシートに紐づかない支払いには品目を足せません" }
+            val receipt = checkNotNull(receipts.getReceipt(receiptId)) { "レシートが見つかりません" }
+            val item = ReceiptItem(
+                receiptId = receiptId, name = name.trim(), amount = amount, category = category, memo = memo.trim(),
             )
+            receipts.save(receipt, receipts.getItems(receiptId) + item)
         }
     }
 
