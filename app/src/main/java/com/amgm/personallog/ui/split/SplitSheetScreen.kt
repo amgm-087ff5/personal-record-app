@@ -317,7 +317,7 @@ fun SplitSheetScreen(
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = Space.s, vertical = Space.xs),
                             ) {
                                 TextAction(
-                                    "未設定($unsetCount件)を全員で均等にする",
+                                    "未設定(${unsetCount}件)を全員で均等にする",
                                     onClick = viewModel::equalizeUnsetGroups,
                                 )
                             }
