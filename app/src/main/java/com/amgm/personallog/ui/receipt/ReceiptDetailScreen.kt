@@ -582,7 +582,7 @@ fun ReceiptDetailScreen(
             choice = choice,
             onToggle = viewModel::toggleHeadcountChoice,
             onConfirm = viewModel::confirmHeadcountChoice,
-            onCancel = viewModel::cancelHeadcountChoice,
+            onDismiss = viewModel::dismissHeadcountChoice,
         )
     }
 }
@@ -596,10 +596,10 @@ private fun HeadcountChoiceSheet(
     choice: HeadcountChoice,
     onToggle: (Long) -> Unit,
     onConfirm: () -> Unit,
-    onCancel: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
     val need = choice.change.chooseCount
-    InkSheet(onDismiss = onCancel) {
+    InkSheet(onDismiss = onDismiss) {
         SheetTitle("人数を ${choice.target} 人に合わせますか?")
         Text(
             "割り勘の参加者を減らします。名前も割当も無い人は自動で消えます。" +
@@ -619,7 +619,7 @@ private fun HeadcountChoiceSheet(
         if (choice.change.isValidChoice(choice.selected)) {
             TextAction("決定", onClick = onConfirm)
         }
-        TextAction("キャンセル", onClick = onCancel, color = AppTheme.colors.inkSoft)
+        TextAction("キャンセル", onClick = onDismiss, color = AppTheme.colors.inkSoft)
     }
 }
 

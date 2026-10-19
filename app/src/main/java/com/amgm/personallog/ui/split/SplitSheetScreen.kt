@@ -399,8 +399,8 @@ fun SplitSheetScreen(
     s.headcountConfirm?.let { change ->
         HeadcountConfirm(
             message = headcountConfirmText(change),
-            onYes = { viewModel.confirmHeadcount(updateHeadcount = true) },
-            onCancel = { viewModel.confirmHeadcount(updateHeadcount = false) },
+            onYes = viewModel::confirmHeadcount,
+            onCancel = viewModel::dismissHeadcountConfirm,
             onDismiss = viewModel::dismissHeadcountConfirm,
         )
     }
@@ -424,7 +424,7 @@ private fun GroupOpConfirm(message: String, onConfirm: () -> Unit, onDismiss: ()
     }
 }
 
-/** 保存時の支払い側の人数の確認。ボタンは「はい」「キャンセル」の2つだけ。「はい」は人数を変え、「キャンセル」は人数を変えない(どちらも割り勘は保存する)。 */
+/** 保存時の支払い側の人数の確認。ボタンは「はい」「キャンセル」の2つだけ。「はい」は人数を変えて保存し、「キャンセル」・外側タップ・戻るは何もせず閉じる(保存しない)。 */
 @Composable
 private fun HeadcountConfirm(message: String, onYes: () -> Unit, onCancel: () -> Unit, onDismiss: () -> Unit) {
     val c = AppTheme.colors

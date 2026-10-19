@@ -689,21 +689,23 @@ class SplitSheetViewModel @Inject constructor(
     }
 
     /**
-     * 人数の確認で選んだ後の保存。「はい」(updateHeadcount = true)は支払い側の人数を新しい人数にする。
-     * 「キャンセル」(false)は支払い側の人数を変えない。どちらも割り勘は保存する。
+     * 人数の確認で「はい」を選んだ後の保存。支払い側の人数を新しい人数に変えてから、割り勘を保存する。
      */
-    fun confirmHeadcount(updateHeadcount: Boolean) {
+    fun confirmHeadcount() {
         val change = _state.value.headcountConfirm ?: return
         _state.update { it.copy(headcountConfirm = null) }
         val d = data ?: return
         if (_state.value.busy) return
-        writeSave(d, headcountTo = if (updateHeadcount) change.to else null)
+        writeSave(d, headcountTo = change.to)
     }
 
-    /** 人数の確認を、ボタン以外の方法で閉じる(外側のタップなど)。何も保存しない。 */
+    /**
+     * 人数の確認を閉じる。「キャンセル」・外側のタップ・戻る操作がここに来る。何も保存しない。
+     * 割り勘の編集内容はそのまま残す。
+     */
     fun dismissHeadcountConfirm() = _state.update { it.copy(headcountConfirm = null) }
 
-    /** 割り勘を保存する。headcountTo が null なら支払い側の人数は変えない。 */
+    /** 割り勘を保存する。headcountTo が null なら支払い側の人数は変えない(一致している場合の通常保存)。 */
     private fun writeSave(d: SplitSheetData, headcountTo: Int?) {
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {

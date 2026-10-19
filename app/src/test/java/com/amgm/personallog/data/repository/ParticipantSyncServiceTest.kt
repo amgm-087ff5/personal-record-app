@@ -72,7 +72,7 @@ class ParticipantSyncServiceTest {
         val change = planHeadcountChange(listOf(self(0), named(1), named(2)), target = 1)
         assertTrue(change.isValidChoice(setOf(1L, 2L)))
         assertTrue(change.isValidChoice(setOf(0L, 2L)))
-        // 足りない・多すぎるときは決定できない(キャンセル相当は VM で人数を戻す)
+        // 足りない・多すぎるときは決定できない(キャンセルは保存せず閉じるだけ。VM の dismissHeadcountChoice)
         assertFalse(change.isValidChoice(setOf(2L)))
         assertFalse(change.isValidChoice(emptySet()))
         assertFalse(change.isValidChoice(setOf(0L, 1L, 2L)))

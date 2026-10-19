@@ -270,7 +270,7 @@ class ReceiptDetailViewModel @Inject constructor(
     /** 保存済みの人数(割り勘の参加者と合わせた後の値)。人数が変わったかの判定に使う。 */
     private var storedHeadcount: Int? = null
 
-    /** 人数の確認(消す人の選択)の後に続けるはずだった保存。キャンセルでも続きを行う。 */
+    /** 人数の確認(消す人の選択)の「決定」の後に続ける保存。キャンセルではこれを捨てる(保存しない)。 */
     private var pendingSave: (() -> Unit)? = null
 
     /** 読み込んだレシート。フォームに無い列(回転・トリミングなど)を保存で失わないよう、これを土台にする。 */
@@ -398,12 +398,13 @@ class ReceiptDetailViewModel @Inject constructor(
         }
     }
 
-    /** 人数の確認の「キャンセル」: 人数の入力を前の値に戻し、止めていた保存を人数の変更なしで続ける。 */
-    fun cancelHeadcountChoice() {
-        val next = pendingSave
+    /**
+     * 人数の確認を閉じる。「キャンセル」・外側タップ・戻るは、すべてこれだけを行う。
+     * 保存はせず、人数の入力欄も参加者も変えない。止めていた保存(pendingSave)は捨てる。
+     */
+    fun dismissHeadcountChoice() {
         pendingSave = null
-        _state.update { it.copy(headcountChoice = null, headcount = storedHeadcount?.toString().orEmpty()) }
-        next?.invoke()
+        _state.update { it.copy(headcountChoice = null) }
     }
 
     /**
