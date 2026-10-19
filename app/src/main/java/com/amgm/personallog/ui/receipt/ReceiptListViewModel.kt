@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.repository.ReceiptRepository
-import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptDedup
 import com.amgm.personallog.receipt.ReceiptImageHash
@@ -110,7 +109,6 @@ class ReceiptListViewModel @Inject constructor(
     private val repository: ReceiptRepository,
     private val store: ReceiptImageStore,
     private val scanner: ReceiptScanner,
-    private val splitRepository: SplitRepository,
 ) : ViewModel() {
 
     val receipts: StateFlow<List<Receipt>> = repository.observeReceipts()
@@ -463,21 +461,6 @@ class ReceiptListViewModel @Inject constructor(
             scanned to savedId
         }
         finish(key, result, id)
-    }
-
-    /**
-     * 読み取りが共通費(割り勘の提案)とした品目を、割り勘のまとまりに反映する。
-     * 保存した品目(id順)と読み取りの行は同じ順に並ぶので、件数が合うときだけ対応させる。
-     */
-    private suspend fun suggestShared(receiptId: Long, outcome: ScanOutcome) {
-        val parsed = outcome as? ScanOutcome.Parsed ?: return
-        val rows = parsed.receipt.items.flatMap { ReceiptUnits.fromParsed(it) }
-        val saved = repository.getItems(receiptId)
-        if (saved.size != rows.size) return
-        val hints = saved.zip(rows).associate { (item, row) -> item.id to row.shared }
-        splitRepository.ensureGroups(receiptId, hints)
-        // まとまりを組み直したかもしれないので、家計簿を今の割り勘に合わせる(割り勘の自分の分を反映する)
-        repository.syncLedger(receiptId)
     }
 
     private suspend fun finish(key: Long, outcome: ScanOutcome, id: Long) {
