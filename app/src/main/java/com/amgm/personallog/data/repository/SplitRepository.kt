@@ -21,6 +21,7 @@ import com.amgm.personallog.domain.split.ItemYen
 import com.amgm.personallog.domain.split.ShareInput
 import com.amgm.personallog.domain.split.SplitGroupInput
 import com.amgm.personallog.domain.split.SplitInput
+import com.amgm.personallog.domain.split.SplitModeReading
 import com.amgm.personallog.domain.split.SplitPerson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -165,7 +166,8 @@ class SplitRepository @Inject constructor(
         // 旧い立て替え(シートが無く isAdvance)は、保存せずに既定値を返す(保存するのは利用者が保存したとき)
         if (sheet == null && receipt != null && receipt.isAdvance) return@withTransaction legacyDefault(receiptId, receipt)
 
-        val savedSheet = sheet ?: SplitSheet(receiptId = receiptId).also { splitDao.upsertSheet(it) }
+        // 新しいシートの既定は「食べた分どおり」(ITEM)
+        val savedSheet = sheet ?: SplitSheet(receiptId = receiptId, mode = SplitMode.ITEM).also { splitDao.upsertSheet(it) }
         val self = personRepo.self()
         var participants = splitDao.getParticipants(receiptId)
         if (participants.none { it.personId == self.id }) {
@@ -174,16 +176,22 @@ class SplitRepository @Inject constructor(
             splitDao.insertParticipant(SplitParticipant(receiptId = receiptId, personId = self.id, sortOrder = top))
             participants = splitDao.getParticipants(receiptId)
         }
+        // 保存が「自分だけ」(旧 SELF)なら、参加者は自分1人に読み替える(割当も自分の分だけ残す。保存で他の参加者は消える)
+        val selfOnly = SplitModeReading.isSelfOnly(savedSheet.mode)
+        if (selfOnly) participants = participants.filter { it.personId == self.id }
+        val keptIds = participants.map { it.id }.toSet()
+        val itemShares = splitDao.getItemShares(receiptId).let { rows -> if (selfOnly) rows.filter { it.participantId in keptIds } else rows }
+        val wholeShares = splitDao.getWholeShares(receiptId).let { rows -> if (selfOnly) rows.filter { it.participantId in keptIds } else rows }
         val byId = splitDao.getPersons().associateBy { it.id }
         val persons = participants.mapNotNull { p -> p.personId?.let { pid -> byId[pid]?.let { p.id to it } } }.toMap()
         SplitSheetData(
             receiptId = receiptId,
-            mode = savedSheet.mode,
+            mode = SplitModeReading.modeOf(savedSheet.mode),
             wholeKind = savedSheet.wholeKind,
             participants = participants,
             groups = groupsWithItems(receiptId),
-            itemShares = splitDao.getItemShares(receiptId),
-            wholeShares = splitDao.getWholeShares(receiptId),
+            itemShares = itemShares,
+            wholeShares = wholeShares,
             labelAmounts = splitDao.getLabelAmounts(receiptId),
             persons = persons,
         )
