@@ -456,10 +456,10 @@ fun ReceiptDetailScreen(
             SheetField("店名", s.store, viewModel::setStore)
             SheetField("日付 yyyy-MM-dd", s.date, viewModel::setDate)
             SheetField("時刻 HH:mm", s.time, viewModel::setTime)
-            SheetChoice("割り勘") {
-                // 割り勘の編集は割り勘シートで行う(戻ると、開いた画面に戻る)
+            SheetChoice("負担割り") {
+                // 負担割りの編集は割り勘シートで行う(戻ると、開いた画面に戻る)
                 TextAction(
-                    "割り勘を編集する",
+                    "負担割りを編集する",
                     onClick = {
                         sheet = SHEET_NONE
                         onOpenSplit()

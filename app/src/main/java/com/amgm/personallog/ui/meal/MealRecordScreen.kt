@@ -104,7 +104,7 @@ fun MealRecordScreen(
             if (!state.loading && state.payments.isEmpty()) {
                 item(key = "empty") {
                     Text(
-                        "この月の支払いはありません",
+                        "この月の自分の内訳はありません",
                         style = AppTheme.type.body,
                         color = c.inkSoft,
                         modifier = Modifier.padding(vertical = Space.s),
@@ -141,7 +141,7 @@ private fun MealMonthHeader(
     ) {
         TextAction("‹", onClick = onPrev, color = c.ink)
         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-            Label("${ym.year}年 食べた記録")
+            Label("${ym.year}年 自分の内訳")
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(ym.monthValue.toString(), style = AppTheme.type.display, color = c.ink, textAlign = TextAlign.Center)
                 Text(
@@ -191,6 +191,12 @@ private fun MealPaymentBlock(
         payment.meal.rows.forEach { row ->
             MealRowLine(row, onClick = onOpenReceipt)
         }
+        if (payment.meal.burden != null || payment.meal.selfPaid != null) {
+            Column(Modifier.fillMaxWidth().padding(vertical = Space.xs)) {
+                payment.meal.burden?.let { AmountLine("自分の負担", it) }
+                payment.meal.selfPaid?.let { AmountLine("会計者として払った", it) }
+            }
+        }
         if (payment.meal.unsetGroups > 0) {
             Row(
                 Modifier.fillMaxWidth().padding(vertical = Space.xs),
@@ -202,7 +208,7 @@ private fun MealPaymentBlock(
                     color = c.accent,
                     modifier = Modifier.weight(1f),
                 )
-                TextAction("割り勘を開く", onClick = onOpenSplit)
+                TextAction("負担割りを開く", onClick = onOpenSplit)
             }
         }
         payment.link?.let { link ->
@@ -210,6 +216,16 @@ private fun MealPaymentBlock(
                 TextAction("この支払いの支出を開く", onClick = { onOpenPayment(link.kind, link.id) }, color = c.inkSoft)
             }
         }
+    }
+}
+
+/** 1支払いの金額の一行(ラベルと金額)。自分の負担・会計者として払った額に使う。 */
+@Composable
+private fun AmountLine(label: String, amount: Int) {
+    val c = AppTheme.colors
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = AppTheme.type.caption, color = c.inkSoft, modifier = Modifier.weight(1f))
+        Text(LedgerLogic.formatYen(amount.toLong()), style = AppTheme.type.caption, color = c.ink)
     }
 }
 

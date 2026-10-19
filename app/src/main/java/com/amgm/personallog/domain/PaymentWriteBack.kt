@@ -71,7 +71,7 @@ sealed interface WriteBackPlan {
  * 金額は、割り勘の参加者が1人のときだけ書き戻す(people が 2 以上なら拒否)。
  */
 object PaymentWriteBack {
-    const val MESSAGE_SPLIT_AMOUNT = "割り勘があるため、金額は割り勘画面で直してください。"
+    const val MESSAGE_SPLIT_AMOUNT = "負担割りがあるため、金額は負担割り画面で直してください。"
     const val MESSAGE_PRINTED_TOTAL = "レシートに印字された合計は変えられません。"
     const val MESSAGE_ITEMS_AMOUNT = "品目のある支払いの金額は、品目の金額で直してください。"
     const val MESSAGE_ADVANCE_AMOUNT = "立て替えの支払いの金額は、ここでは直せません。"
