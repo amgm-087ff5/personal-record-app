@@ -17,8 +17,8 @@ import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.TextAction
 import com.amgm.personallog.ui.design.tappable
 
-/** 「支払いを開く(家計簿 ¥N)」。確定済みで、家計簿に紐づく支払いがあるときだけ出す。 */
-internal fun paymentLinkLabel(link: PaymentLink): String = "支払いを開く(家計簿 ${formatYen(link.amount)})"
+/** 「支出を開く(家計簿 ¥N)」。確定済みで、家計簿に紐づく支出があるときだけ出す。 */
+internal fun paymentLinkLabel(link: PaymentLink): String = "支出を開く(家計簿 ${formatYen(link.amount)})"
 
 @Composable
 internal fun PaymentLinkRow(link: PaymentLink, onClick: () -> Unit) {
@@ -44,13 +44,13 @@ internal fun RebuildWarningSheet(rebuilds: Boolean, lostEdited: Int, keptDeleted
     InkSheet(onDismiss = onDismiss) {
         SheetTitle(if (rebuilds) "家計簿の行を作り直します" else "家計簿で直した内容が消えます")
         val lostNote = (if (lostEdited > 0) "家計簿で直した${lostEdited}件が消えます。" else "") +
-            (if (keptDeleted > 0) "家計簿で消した品目${keptDeleted}件は、消したまま残ります(支払い詳細から元に戻せます)。" else "")
+            (if (keptDeleted > 0) "家計簿で消した品目${keptDeleted}件は、消したまま残ります(支出の詳細から元に戻せます)。" else "")
         Text(
             if (rebuilds) {
-                "古い形式で確定した記録のときは、このレシートの家計簿の行を作り直します。" +
+                "古い形式で確定した記録のときは、この支払いの家計簿の行を作り直します。" +
                     "家計簿で直した金額・カテゴリ・メモ・日時は消えます。$lostNote"
             } else {
-                "レシートから消した品目に対応する家計簿の行は、品目といっしょに消えます。$lostNote"
+                "支払いから消した品目に対応する家計簿の行は、品目といっしょに消えます。$lostNote"
             },
             style = AppTheme.type.body,
             color = c.inkSoft,

@@ -255,7 +255,7 @@ class LedgerViewModel @Inject constructor(
                 val r = backupManager.export(uri) { setProgress(it) }
                 showResult(
                     "エクスポート完了",
-                    "日記 ${r.diaryEntries}件、レシート ${r.receipts}件、支出 ${r.expenses}件、画像 ${r.files}枚を書き出しました。",
+                    "日記 ${r.diaryEntries}件、支払い ${r.receipts}件、支出 ${r.expenses}件、画像 ${r.files}枚を書き出しました。",
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -282,7 +282,7 @@ class LedgerViewModel @Inject constructor(
                 val r = backupManager.importZip(uri, mode) { setProgress(it) }
                 showResult(
                     "インポート完了",
-                    "日記 ${r.diaryEntries}件、写真 ${r.diaryPhotos}件、レシート ${r.receipts}件、支出 ${r.expenses}件を取り込みました。" +
+                    "日記 ${r.diaryEntries}件、写真 ${r.diaryPhotos}件、支払い ${r.receipts}件、支出 ${r.expenses}件を取り込みました。" +
                         "重複などでスキップ ${r.skipped}件、画像 ${r.files}枚。",
                 )
             } catch (e: CancellationException) {

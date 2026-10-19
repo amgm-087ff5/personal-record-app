@@ -162,7 +162,7 @@ fun ReceiptDetailScreen(
             } else if (s.notFound) {
                 item(key = "notFound") {
                     Text(
-                        "レシートが見つかりません。",
+                        "支払いが見つかりません。",
                         style = AppTheme.type.body,
                         color = c.inkSoft,
                         modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.m),
@@ -272,7 +272,7 @@ fun ReceiptDetailScreen(
                             Column(modifier = Modifier.padding(top = Space.m)) {
                                 Stamp("重複の可能性", tone = StampTone.Danger)
                                 Text(
-                                    "時刻が近く(5分以内)合計が同じレシートが既にあります。時刻が無いときは同じ日付・同じ合計です。",
+                                    "時刻が近く(5分以内)合計が同じ支払いが既にあります。時刻が無いときは同じ日付・同じ合計です。",
                                     style = AppTheme.type.caption,
                                     color = c.danger,
                                     modifier = Modifier.padding(top = Space.xs),
@@ -377,7 +377,7 @@ fun ReceiptDetailScreen(
                             )
                         }
                         TextAction(
-                            "このレシートを削除",
+                            "この支払いを削除",
                             onClick = { sheet = SHEET_DELETE },
                             color = c.danger,
                             enabled = !s.busy,
@@ -490,9 +490,9 @@ fun ReceiptDetailScreen(
             TextAction("閉じる", onClick = { sheet = SHEET_NONE })
         }
         SHEET_DELETE -> InkSheet(onDismiss = { sheet = SHEET_NONE }) {
-            SheetTitle("レシートを削除")
+            SheetTitle("支払いを削除")
             Text(
-                "レシート画像も端末から削除されます。このレシートから作った家計簿の行はどうしますか?",
+                "レシート画像があれば端末から削除されます。この支払いから作った家計簿の行はどうしますか?",
                 style = AppTheme.type.body,
                 color = AppTheme.colors.inkSoft,
                 modifier = Modifier.padding(bottom = Space.m),
@@ -565,7 +565,7 @@ fun ReceiptDetailScreen(
             SheetTitle("重複の確認")
             Stamp("重複の可能性", tone = StampTone.Danger)
             Text(
-                "既に同じレシートがあります。追加しますか?\n\n" + s.duplicateWarning.joinToString("\n") { it.summary },
+                "既に同じ支払いがあります。追加しますか?\n\n" + s.duplicateWarning.joinToString("\n") { it.summary },
                 style = AppTheme.type.body,
                 color = AppTheme.colors.inkSoft,
                 modifier = Modifier.padding(vertical = Space.m),

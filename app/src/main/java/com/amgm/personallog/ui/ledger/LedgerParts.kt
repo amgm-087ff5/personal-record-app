@@ -761,7 +761,7 @@ internal fun BackupSheets(
             Spacer(Modifier.height(Space.s))
             ModeChoice("追加(重複はスキップ)", "今あるデータは残し、無いものだけ追加します", mode == ImportMode.MERGE) { mode = ImportMode.MERGE }
             Hairline()
-            ModeChoice("すべて置き換え", "今ある日記・レシート・家計簿を全て削除してから取り込みます", mode == ImportMode.REPLACE) { mode = ImportMode.REPLACE }
+            ModeChoice("すべて置き換え", "今ある日記・支払い・家計簿を全て削除してから取り込みます", mode == ImportMode.REPLACE) { mode = ImportMode.REPLACE }
             Spacer(Modifier.height(Space.m))
             InkButton("取り込む", onClick = { onPickMode(mode) }, modifier = Modifier.fillMaxWidth())
             TextAction("キャンセル", onClick = onCancelImport, color = c.inkSoft, modifier = Modifier.fillMaxWidth())
