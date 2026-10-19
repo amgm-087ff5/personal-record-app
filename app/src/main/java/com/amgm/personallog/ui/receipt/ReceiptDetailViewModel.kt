@@ -8,7 +8,7 @@ import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.model.TotalSource
-import com.amgm.personallog.data.repository.HeadcountChange
+import com.amgm.personallog.data.repository.HeadcountSyncChange
 import com.amgm.personallog.data.repository.ParticipantSyncService
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.domain.PaymentLink
@@ -163,7 +163,7 @@ private object ItemsCalcCache {
  */
 data class HeadcountChoice(
     val target: Int,
-    val change: HeadcountChange,
+    val change: HeadcountSyncChange,
     val labels: Map<Long, String>,
     val selected: Set<Long>,
 )

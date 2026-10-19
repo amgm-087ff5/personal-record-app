@@ -20,7 +20,7 @@ import javax.inject.Singleton
  * - choiceIds: 消す人を選ばせる候補(末尾から。自分も含む)。
  * - chooseCount: 候補から選んで消す人数(excess からの自動分を引いた数)。0 なら選択は不要。
  */
-data class HeadcountChange(
+data class HeadcountSyncChange(
     val add: Int,
     val autoRemoveIds: List<Long>,
     val choiceIds: List<Long>,
@@ -38,21 +38,21 @@ data class HeadcountChange(
 }
 
 /** 計画と、候補の表示名(参加者 id → 名前)。 */
-data class HeadcountPlan(val change: HeadcountChange, val labels: Map<Long, String>)
+data class HeadcountPlan(val change: HeadcountSyncChange, val labels: Map<Long, String>)
 
 /**
  * 参加者の人数を、目標人数 target に合わせる計画を作る(純関数。DB に触れない)。
  * 今の人数 = participants.size。target が 1 未満なら 1 人扱い(domain/split の shortfall・excess と同じ)。
  * 減らすときは removalPlan に従う。候補を全部使っても足りない分は、chooseCount を候補数までに抑える。
  */
-fun planHeadcountChange(participants: List<ParticipantFacts>, target: Int): HeadcountChange {
+fun planHeadcountChange(participants: List<ParticipantFacts>, target: Int): HeadcountSyncChange {
     val current = participants.size
     val add = shortfall(current, target)
     val drop = excess(current, target)
-    if (drop == 0) return HeadcountChange(add = add, autoRemoveIds = emptyList(), choiceIds = emptyList(), chooseCount = 0)
+    if (drop == 0) return HeadcountSyncChange(add = add, autoRemoveIds = emptyList(), choiceIds = emptyList(), chooseCount = 0)
     val plan = removalPlan(participants, drop)
     val chooseCount = minOf(drop - plan.autoRemoveIds.size, plan.needsChoice.size)
-    return HeadcountChange(
+    return HeadcountSyncChange(
         add = 0,
         autoRemoveIds = plan.autoRemoveIds,
         choiceIds = plan.needsChoice,
