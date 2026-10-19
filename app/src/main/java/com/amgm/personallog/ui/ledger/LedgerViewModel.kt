@@ -197,7 +197,12 @@ class LedgerViewModel @Inject constructor(
     fun addManualPayment(receipt: Receipt, items: List<ReceiptItem>, onDone: (Long?, String?) -> Unit) {
         viewModelScope.launch {
             try {
-                val id = receipts.save(receipt, items)
+                // 確定(合計か品目がある)は詳細画面の確定と同じ saveAndConfirm を通す。下書きは save のまま
+                val id = if (receipt.status == ReceiptStatus.CONFIRMED) {
+                    receipts.saveAndConfirm(receipt, items)
+                } else {
+                    receipts.save(receipt, items)
+                }
                 onDone(id, null)
             } catch (e: CancellationException) {
                 throw e

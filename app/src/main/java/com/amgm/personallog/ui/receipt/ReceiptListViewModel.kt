@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.receipt.ReceiptAdjust
@@ -197,7 +198,12 @@ class ReceiptListViewModel @Inject constructor(
         }
         viewModelScope.launch {
             try {
-                val id = repository.save(receipt, emptyList())
+                // 合計がある手入力は確定として保存する(詳細画面の確定と同じ saveAndConfirm)。合計が無いものは下書き
+                val id = if (receipt.status == ReceiptStatus.CONFIRMED) {
+                    repository.saveAndConfirm(receipt, emptyList())
+                } else {
+                    repository.save(receipt, emptyList())
+                }
                 _pendingOpen.value = id
             } catch (e: CancellationException) {
                 throw e

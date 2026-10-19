@@ -20,7 +20,9 @@ object ManualReceipt {
     /**
      * 入力から下書きの Receipt を作る。
      * - date: 必須(yyyy-MM-dd)。time: 任意(HH:mm)。purchasedAt は既存と同じ "yyyy-MM-dd" または "yyyy-MM-dd HH:mm"。
-     * - store: 任意。total: 任意(円・0以上の整数)。空は未入力(null)。未入力でも下書きは作れる(確定時に入力を求める)。
+     * - store: 任意。total: 任意(円・0以上の整数)。空は未入力(null)。
+     * - 確定の判定: 合計か品目があれば確定(CONFIRMED)、どちらも無ければ下書き(DRAFT)。ここでは品目は無いので、合計の有無で決まる。
+     *   確定の検証(ReceiptRepository.confirm)は合計を必須にしているため、確定の行には必ず合計が入る。
      * - totalSource は MANUAL(空の合計でも MANUAL のまま。詳細画面の「未入力」表示に合わせる)。
      */
     fun build(date: String, time: String, store: String, total: String, now: Long): Result {
@@ -49,7 +51,7 @@ object ManualReceipt {
                 totalAmount = amount,
                 imagePath = "",
                 rawJson = "",
-                status = ReceiptStatus.DRAFT,
+                status = if (amount != null) ReceiptStatus.CONFIRMED else ReceiptStatus.DRAFT,
                 createdAt = now,
                 totalSource = TotalSource.MANUAL,
             ),
