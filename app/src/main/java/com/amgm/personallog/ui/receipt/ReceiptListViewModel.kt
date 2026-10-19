@@ -189,8 +189,8 @@ class ReceiptListViewModel @Inject constructor(
      * 手入力の支払いを下書きとして保存し、その詳細画面を開く(レシート画像は無い)。
      * 不正な入力は保存せず、理由を返す(null なら保存を始めた)。品目は詳細画面で足す。
      */
-    fun addManual(date: String, time: String, store: String, total: String): String? {
-        val receipt = when (val built = ManualReceipt.build(date, time, store, total, System.currentTimeMillis())) {
+    fun addManual(date: String, time: String, store: String, total: String, headcount: String = ""): String? {
+        val receipt = when (val built = ManualReceipt.build(date, time, store, total, System.currentTimeMillis(), headcount)) {
             is ManualReceipt.Result.Invalid -> return built.message
             is ManualReceipt.Result.Ok -> built.receipt
         }
