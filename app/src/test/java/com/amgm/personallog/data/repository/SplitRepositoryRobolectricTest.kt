@@ -9,6 +9,7 @@ import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ShareKind
 import com.amgm.personallog.data.model.SplitMode
 import com.amgm.personallog.data.model.SplitParticipant
+import com.amgm.personallog.data.model.SplitSheet
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -73,7 +74,7 @@ class SplitRepositoryRobolectricTest {
         runBlocking {
             val rid = receiptWith(listOf(item("牛乳", 200)))
             val data = split.load(rid)
-            assertEquals(SplitMode.SELF, data.mode)
+            assertEquals(SplitMode.ITEM, data.mode) // 新しいシートの既定は食べた分どおり
             assertEquals(ShareKind.AMOUNT, data.wholeKind)
             val self = persons.self()
             val only = data.participants.single()
@@ -171,6 +172,29 @@ class SplitRepositoryRobolectricTest {
             split.save(first.copy(participants = first.participants.take(1)), names = emptyMap())
             assertEquals(1, db.splitDao().getParticipants(rid).size)
             assertTrue(db.splitDao().getItemShares(rid).isEmpty())
+        }
+    }
+
+    @Test
+    fun load_savedSelfMode_readsAsItem_withOnlySelfParticipant() {
+        runBlocking {
+            val rid = receiptWith(listOf(item("牛乳", 200)))
+            val group = split.load(rid).groups.single().group
+            val self = persons.self()
+            // 旧い「自分だけ」の保存に、他の参加者と割当が残っている場合
+            val sato = persons.findOrCreate("佐藤")
+            val satoRowId = db.splitDao().insertParticipant(SplitParticipant(receiptId = rid, personId = sato.id, sortOrder = 5))
+            db.splitDao().insertItemShares(listOf(ItemShare(groupId = group.id, participantId = satoRowId, kind = ShareKind.EQUAL)))
+            db.splitDao().upsertSheet(SplitSheet(receiptId = rid, mode = SplitMode.SELF))
+
+            val data = split.load(rid)
+            assertEquals(SplitMode.ITEM, data.mode)
+            assertEquals(self.id, data.participants.single().personId)
+            assertTrue(data.itemShares.isEmpty())
+            // 保存すると、旧い参加者は消え、保存される方式は ITEM になる
+            split.save(data, names = emptyMap())
+            assertEquals(1, db.splitDao().getParticipants(rid).size)
+            assertEquals(SplitMode.ITEM, db.splitDao().getSheet(rid)?.mode)
         }
     }
 
