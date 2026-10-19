@@ -51,13 +51,18 @@ class SplitSheetRulesTest {
     }
 
     @Test
-    fun 末尾が名前ありか自分なら消せない() {
+    fun 末尾が名前ありなら消せない() {
         assertNull(removableLastParticipantId(listOf(fact(1, isSelf = true), fact(-2), fact(-3, name = "田中"))))
-        assertNull(removableLastParticipantId(listOf(fact(1, isSelf = true))))
     }
 
     @Test
-    fun 末尾が支払者か割当ありなら消せない() {
+    fun 末尾が自分なら名前があっても消せる() {
+        assertEquals(1L, removableLastParticipantId(listOf(fact(1, isSelf = true, name = "自分"))))
+        assertEquals(1L, removableLastParticipantId(listOf(fact(-2), fact(1, isSelf = true, name = "自分"))))
+    }
+
+    @Test
+    fun 末尾が会計者か割当ありなら消せない() {
         assertNull(removableLastParticipantId(listOf(fact(1, isSelf = true), fact(-2, payer = true))))
         assertNull(removableLastParticipantId(listOf(fact(1, isSelf = true), fact(-2, share = true))))
     }

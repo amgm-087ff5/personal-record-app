@@ -44,13 +44,14 @@ internal fun ManualPaymentSheet(
     initialDate: String,
     initialTime: String,
     onDismiss: () -> Unit,
-    onSave: (receipt: Receipt, items: List<ReceiptItem>, done: (String?) -> Unit) -> Unit,
+    onSave: (receipt: Receipt, items: List<ReceiptItem>, headcount: Int?, done: (String?) -> Unit) -> Unit,
 ) {
     val c = AppTheme.colors
     var dateText by remember { mutableStateOf(initialDate) }
     var timeText by remember { mutableStateOf(initialTime) }
     var totalText by remember { mutableStateOf("") }
     var memo by remember { mutableStateOf("") }
+    var headcountText by remember { mutableStateOf("") }
     val drafts = remember { mutableStateListOf(DraftItem(), DraftItem()) }
     var errors by remember { mutableStateOf<List<String>>(emptyList()) }
     var saving by remember { mutableStateOf(false) }
@@ -119,6 +120,16 @@ internal fun ManualPaymentSheet(
             Label("店名(任意)")
             BareField(value = memo, onValueChange = { memo = it }, underline = true, placeholder = "店名など")
 
+            Label("人数(任意)")
+            BareField(
+                value = headcountText,
+                onValueChange = { v -> headcountText = v.filter { it in '0'..'9' }.take(3) },
+                underline = true,
+                singleLine = true,
+                placeholder = "人数",
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+
             Label("品目")
             drafts.forEachIndexed { index, item ->
                 DraftItemRow(
@@ -137,11 +148,13 @@ internal fun ManualPaymentSheet(
                 enabled = !saving,
                 modifier = Modifier.fillMaxWidth(),
                 onClick = {
-                    val r = DraftPayment.build(dateText, timeText, totalText, memo, drafts.toList(), System.currentTimeMillis())
+                    val r = DraftPayment.build(
+                        dateText, timeText, totalText, memo, drafts.toList(), System.currentTimeMillis(), headcountText,
+                    )
                     errors = r.errors
                     if (r.isValid) {
                         saving = true
-                        onSave(r.receipt!!, r.items) { err ->
+                        onSave(r.receipt!!, r.items, r.headcount) { err ->
                             saving = false
                             if (err == null) onDismiss() else errors = listOf(err)
                         }

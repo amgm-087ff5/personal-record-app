@@ -59,7 +59,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /** 割り勘があるときの、支出の金額欄の注記(金額は全体支出で直す)。 */
-private const val LOCKED_AMOUNT_NOTE = "金額は割り勘画面(全体支出)で直す"
+private const val LOCKED_AMOUNT_NOTE = "金額は負担割り画面(全体支出)で直す"
 
 /**
  * 支出の詳細画面。家計簿の支出(まとまり、または単独の支出)を、金額・日時・メモ・品目まで見て直す。
@@ -203,6 +203,24 @@ fun PaymentDetailScreen(
                     ReceiptBlock(s.receipt?.imagePath, s.receipt?.id, onOpenReceipt)
                 }
                 item(key = "pad") { Spacer(Modifier.height(Space.xl)) }
+            } else if (s.selfExcluded) {
+                // 割り勘で自分が外れた支払い。家計簿には自分の行が無く、支払いと割り勘だけを見せる
+                s.receipt?.let { r ->
+                    item(key = "excluded-note") {
+                        Text(
+                            "この支払いに自分は含まれていません",
+                            style = AppTheme.type.body,
+                            color = c.ink,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(top = Space.l),
+                        )
+                    }
+                    item(key = "store") { StoreRow(r.storeName, onEdit = { editingStore = true }) }
+                    item(key = "split") { SplitRow(s.splitPeople, r.id, onOpenSplit) }
+                    item(key = "receipt") {
+                        ReceiptBlock(r.imagePath, r.id, onOpenReceipt)
+                    }
+                }
+                item(key = "pad") { Spacer(Modifier.height(Space.xl)) }
             } else if (s.loading) {
                 item(key = "loading") {
                     Text("読み込み中…", style = AppTheme.type.body, color = c.inkSoft, modifier = Modifier.padding(Space.edge))
@@ -313,13 +331,13 @@ private fun SplitRow(people: Int, receiptId: Long, onOpenSplit: (Long) -> Unit) 
     Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge, vertical = Space.xs)) {
         if (people >= 2) {
             Text(
-                "割り勘があるため、金額はここでは直せません。金額は全体支出で直してください。",
+                "負担割りがあるため、金額はここでは直せません。金額は全体支出で直してください。",
                 style = AppTheme.type.caption,
                 color = c.inkSoft,
             )
         }
         TextAction(
-            if (people >= 2) "全体支出を開く" else "割り勘",
+            if (people >= 2) "全体支出を開く" else "負担割り",
             onClick = { onOpenSplit(receiptId) },
         )
     }

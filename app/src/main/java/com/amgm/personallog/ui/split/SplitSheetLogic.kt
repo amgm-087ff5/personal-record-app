@@ -2,6 +2,7 @@ package com.amgm.personallog.ui.split
 
 import com.amgm.personallog.data.model.Person
 import com.amgm.personallog.data.model.SplitParticipant
+import com.amgm.personallog.data.repository.HeadcountChange
 import com.amgm.personallog.domain.split.SplitLine
 import com.amgm.personallog.domain.split.SplitWarning
 
@@ -104,7 +105,7 @@ fun warningText(warning: SplitWarning, groupName: (Long) -> String = { "品目" 
     is SplitWarning.WholeAmountMismatch -> "全体の割当が合計と合いません"
     is SplitWarning.ItemsTotalMismatch ->
         "品目の合計と支払いの合計が ${formatYenText(kotlin.math.abs(warning.residual))} ずれています(読み漏れの可能性)"
-    is SplitWarning.PayersMismatch -> "支払者の合計が合いません"
+    is SplitWarning.PayersMismatch -> "会計者の合計が合いません"
     is SplitWarning.InvalidShares -> "割当を解釈できません"
 }
 
@@ -142,6 +143,9 @@ fun totalAfterBulkAdd(current: Int, text: String): Int? = bulkAddCount(text)?.le
 /** 参加人数の表示: 「合計3人」(自分を含む)。 */
 fun participantCountText(count: Int): String = "合計${count}人"
 
+/** 保存時の人数の確認の文言(支払い側の人数の変更)。 */
+fun headcountConfirmText(change: HeadcountChange): String = "支払い側の人数を${change.from}人→${change.to}人に変更しますか？"
+
 /** 参加者1行ぶんの判定材料。participants は並び順(sortOrder)の早い順に渡す。 */
 data class ParticipantFacts(
     val id: Long,
@@ -154,12 +158,13 @@ data class ParticipantFacts(
 )
 
 /**
- * − で消せる参加者の id。末尾の1人が「自分でない・名前なし・割当なし・支払者でない」ときだけ id を返す。
+ * − で消せる参加者の id。末尾の1人が「自分(名前は見ない)か名前なし・割当なし・会計者でない」ときだけ id を返す。
  * それ以外(末尾が条件に合わない・参加者がいない)は null(− は押せない)。
+ * 自分の typedName は「自分」が入るので、自分は名前の判定を飛ばす。
  */
 fun removableLastParticipantId(participants: List<ParticipantFacts>): Long? {
     val last = participants.lastOrNull() ?: return null
-    val removable = !last.isSelf && last.typedName.isBlank() && !last.hasShare && !last.isPayer
+    val removable = (last.isSelf || last.typedName.isBlank()) && !last.hasShare && !last.isPayer
     return if (removable) last.id else null
 }
 

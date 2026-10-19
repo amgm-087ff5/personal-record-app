@@ -223,8 +223,8 @@ fun ReceiptScreen(
 
     if (manualOpen) {
         ManualPaymentSheet(
-            onSubmit = { date, time, store, total ->
-                val error = viewModel.addManual(date, time, store, total)
+            onSubmit = { date, time, store, total, headcount ->
+                val error = viewModel.addManual(date, time, store, total, headcount)
                 // 保存を始めたらシートを閉じる。詳細画面へは pendingOpen で移る
                 if (error == null) manualOpen = false
                 error
@@ -240,13 +240,14 @@ fun ReceiptScreen(
  */
 @Composable
 private fun ManualPaymentSheet(
-    onSubmit: (date: String, time: String, store: String, total: String) -> String?,
+    onSubmit: (date: String, time: String, store: String, total: String, headcount: String) -> String?,
     onDismiss: () -> Unit,
 ) {
     var date by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var time by rememberSaveable { mutableStateOf("") }
     var store by rememberSaveable { mutableStateOf("") }
     var total by rememberSaveable { mutableStateOf("") }
+    var headcount by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
 
     InkSheet(onDismiss = onDismiss, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
@@ -261,10 +262,11 @@ private fun ManualPaymentSheet(
         SheetField("時刻 HH:mm(任意)", time, { time = it })
         SheetField("店名(任意)", store, { store = it })
         SheetField("合計(円・任意)", total, { total = it.filter { c -> c.isDigit() } }, numeric = true)
+        SheetField("人数(任意)", headcount, { headcount = it.filter { c -> c.isDigit() }.take(3) }, numeric = true)
         error?.let {
             Text(it, style = AppTheme.type.caption, color = AppTheme.colors.danger, modifier = Modifier.padding(bottom = Space.s))
         }
-        TextAction("追加して開く", onClick = { error = onSubmit(date, time, store, total) })
+        TextAction("追加して開く", onClick = { error = onSubmit(date, time, store, total, headcount) })
         TextAction("キャンセル", onClick = onDismiss, color = AppTheme.colors.inkSoft)
     }
 }

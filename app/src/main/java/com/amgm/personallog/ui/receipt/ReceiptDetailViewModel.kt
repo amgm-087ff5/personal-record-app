@@ -8,6 +8,8 @@ import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.model.TotalSource
+import com.amgm.personallog.data.repository.HeadcountSyncChange
+import com.amgm.personallog.data.repository.ParticipantSyncService
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.domain.PaymentLink
 import com.amgm.personallog.domain.TaxBreakdown
@@ -155,6 +157,17 @@ private object ItemsCalcCache {
     }
 }
 
+/**
+ * 人数を減らすとき、消す人を選ぶ確認の中身。selected は選んだ人の参加者 id(chooseCount 人ちょうどで決定できる)。
+ * labels は参加者 id → 画面に出す名前。
+ */
+data class HeadcountChoice(
+    val target: Int,
+    val change: HeadcountSyncChange,
+    val labels: Map<Long, String>,
+    val selected: Set<Long>,
+)
+
 data class DetailUiState(
     val loading: Boolean = true,
     val notFound: Boolean = false,
@@ -201,6 +214,10 @@ data class DetailUiState(
     val keptDeletedCount: Int = 0,
     /** このレシートに紐づく家計簿の支払い(グループか単独の支出)。無ければ null。 */
     val paymentLink: PaymentLink? = null,
+    /** 参加人数(整数。空は未入力)。保存で receipts.headcount に入り、割り勘の参加者もそれに合わせる。 */
+    val headcount: String = "",
+    /** 人数を減らしたとき、消す人を選ぶ確認。null なら出さない。 */
+    val headcountChoice: HeadcountChoice? = null,
 ) {
     /** 手入力の支払い(レシート画像なし)か。画像の表示・補正・再読取は出さない。読み込み後だけ意味がある。 */
     val manualEntry: Boolean get() = !loading && !notFound && imagePath.isBlank()
@@ -244,10 +261,17 @@ class ReceiptDetailViewModel @Inject constructor(
     private val repository: ReceiptRepository,
     private val store: ReceiptImageStore,
     private val scanner: ReceiptScanner,
+    private val syncService: ParticipantSyncService,
 ) : ViewModel() {
 
     private val receiptId: Long = savedStateHandle.get<Long>("id") ?: 0L
     private var nextKey = 1L
+
+    /** 保存済みの人数(割り勘の参加者と合わせた後の値)。人数が変わったかの判定に使う。 */
+    private var storedHeadcount: Int? = null
+
+    /** 人数の確認(消す人の選択)の後に続けるはずだった保存。キャンセルでも続きを行う。 */
+    private var pendingSave: (() -> Unit)? = null
 
     /** 読み込んだレシート。フォームに無い列(回転・トリミングなど)を保存で失わないよう、これを土台にする。 */
     private var loadedReceipt: Receipt? = null
@@ -269,6 +293,7 @@ class ReceiptDetailViewModel @Inject constructor(
             val items = repository.getItems(receiptId)
             val (d, t) = splitPurchasedAt(r.purchasedAt)
             loadedReceipt = r
+            storedHeadcount = r.headcount
             notDuplicateSet = HashSet(ReceiptDedup.notDuplicateSet(repository.notDuplicates()))
             otherReceipts = repository.allReceipts().filter { it.id != r.id }
             val earlier = ReceiptDedup.earlierDuplicates(r, otherReceipts, notDuplicateSet)
@@ -291,6 +316,7 @@ class ReceiptDetailViewModel @Inject constructor(
                 printedTotal = ReceiptMapper.printedTotal(r.rawJson),
                 items = items.map { it.toForm(newKey()) },
                 adjust = r.adjust(),
+                headcount = r.headcount?.toString().orEmpty(),
             )
             repository.observePaymentLink(receiptId).collect { link ->
                 _state.update { it.copy(paymentLink = link) }
@@ -336,6 +362,103 @@ class ReceiptDetailViewModel @Inject constructor(
         _state.update { it.copy(total = v.filter { c -> c.isDigit() || c == '-' }, totalSource = TotalSource.MANUAL) }
         recomputeDuplicates()
     }
+    /** 人数の入力: 数字だけを通す(3桁まで)。 */
+    fun setHeadcount(v: String) = _state.update { it.copy(headcount = v.filter { c -> c.isDigit() }.take(3)) }
+
+    /** 人数の確認で、消す人を1人選ぶ・外す。選べるのは chooseCount 人まで。 */
+    fun toggleHeadcountChoice(id: Long) = _state.update { s ->
+        val c = s.headcountChoice ?: return@update s
+        val selected = when {
+            id in c.selected -> c.selected - id
+            c.selected.size < c.change.chooseCount -> c.selected + id
+            else -> c.selected
+        }
+        s.copy(headcountChoice = c.copy(selected = selected))
+    }
+
+    /** 人数の確認の「決定」: 自動で消す人と選んだ人を消し、人数を保存してから、止めていた保存を続ける。 */
+    fun confirmHeadcountChoice() {
+        val c = _state.value.headcountChoice ?: return
+        if (!c.change.isValidChoice(c.selected)) return
+        val next = pendingSave
+        pendingSave = null
+        _state.update { it.copy(headcountChoice = null, busy = true, error = null) }
+        viewModelScope.launch {
+            try {
+                syncService.apply(receiptId, c.target, c.change.autoRemoveIds + c.selected, addCount = 0)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(busy = false, error = "人数に合わせられませんでした: ${e.message.orEmpty()}") }
+                return@launch
+            }
+            storedHeadcount = c.target
+            _state.update { it.copy(busy = false) }
+            next?.invoke()
+        }
+    }
+
+    /** 人数の確認の「キャンセル」: 人数の入力を前の値に戻し、止めていた保存を人数の変更なしで続ける。 */
+    fun cancelHeadcountChoice() {
+        val next = pendingSave
+        pendingSave = null
+        _state.update { it.copy(headcountChoice = null, headcount = storedHeadcount?.toString().orEmpty()) }
+        next?.invoke()
+    }
+
+    /**
+     * 保存の前に、人数が前の値と変わっていれば割り勘の参加者を合わせる。
+     * 消す人を選ぶ必要があれば確認を出し、続き(next)は確認のあとに行う。割り勘が無い支払いは何もせず続ける。
+     */
+    private fun syncHeadcountThen(next: () -> Unit) {
+        val s = _state.value
+        if (s.busy || s.headcountChoice != null) return
+        val target = s.headcount.trim().toIntOrNull()?.takeIf { it >= 1 }
+        // 空・不正・変更なしは何もせず続ける(不正な入力は buildFromForm が出す)
+        if (target == null || target == storedHeadcount) {
+            next()
+            return
+        }
+        _state.update { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            val planned = try {
+                syncService.plan(receiptId, target)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(busy = false, error = "人数の確認に失敗しました: ${e.message.orEmpty()}") }
+                return@launch
+            }
+            // 割り勘が無い・変更が無い: 人数は続きの保存で書く
+            if (planned == null || planned.change.isEmpty) {
+                _state.update { it.copy(busy = false) }
+                next()
+                return@launch
+            }
+            if (planned.change.needsChoice) {
+                pendingSave = next
+                _state.update {
+                    it.copy(
+                        busy = false,
+                        headcountChoice = HeadcountChoice(target, planned.change, planned.labels, selected = emptySet()),
+                    )
+                }
+                return@launch
+            }
+            try {
+                syncService.apply(receiptId, target, planned.change.autoRemoveIds, planned.change.add)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(busy = false, error = "人数に合わせられませんでした: ${e.message.orEmpty()}") }
+                return@launch
+            }
+            storedHeadcount = target
+            _state.update { it.copy(busy = false) }
+            next()
+        }
+    }
+
     fun setAdvance(v: Boolean) = _state.update { it.copy(isAdvance = v) }
     fun setOwnAmount(v: String) = _state.update { it.copy(ownAmount = v.filterAmount()) }
 
@@ -425,6 +548,12 @@ class ReceiptDetailViewModel @Inject constructor(
                 return null
             }
         }
+        val headcountText = s.headcount.trim()
+        val headcount: Int? = if (headcountText.isEmpty()) null else headcountText.toIntOrNull()?.takeIf { it >= 1 }
+        if (headcountText.isNotEmpty() && headcount == null) {
+            _state.update { it.copy(error = "人数は1以上の整数で入力するか、空にしてください。") }
+            return null
+        }
         val badRate = s.items.indexOfFirst { val r = it.taxRate.toIntOrNull(); r == null || r !in TaxCalc.MIN_TAX_RATE..TaxCalc.MAX_TAX_RATE }
         if (badRate >= 0) {
             _state.update { it.copy(error = "品目${badRate + 1}の税率は0〜100の整数で入力してください。") }
@@ -457,6 +586,7 @@ class ReceiptDetailViewModel @Inject constructor(
             rotationDegrees = s.adjust.rotationDegrees,
             cropLeft = s.adjust.cropLeft, cropTop = s.adjust.cropTop,
             cropRight = s.adjust.cropRight, cropBottom = s.adjust.cropBottom,
+            headcount = headcount,
         )
         return receipt to items
     }
@@ -464,11 +594,17 @@ class ReceiptDetailViewModel @Inject constructor(
     /** 下書きとして保存(確定済みレシートでは使わない)。 */
     fun saveDraft() {
         if (_state.value.busy) return
+        syncHeadcountThen { doSaveDraft() }
+    }
+
+    private fun doSaveDraft() {
+        if (_state.value.busy) return
         val built = buildFromForm(strict = false) ?: return
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             try {
                 repository.save(built.first, built.second)
+                storedHeadcount = built.first.headcount
                 _state.update { it.copy(busy = false, info = "下書きを保存しました。") }
             } catch (e: CancellationException) {
                 throw e
@@ -550,6 +686,11 @@ class ReceiptDetailViewModel @Inject constructor(
 
     private fun startConfirm(checkDuplicate: Boolean, rebuildAccepted: Boolean = false) {
         if (_state.value.busy) return
+        syncHeadcountThen { startConfirmNow(checkDuplicate, rebuildAccepted) }
+    }
+
+    private fun startConfirmNow(checkDuplicate: Boolean, rebuildAccepted: Boolean) {
+        if (_state.value.busy) return
         val built = buildFromForm(strict = true) ?: return
         if (built.first.totalAmount == null) {
             _state.update { it.copy(missingTotalPrompt = true) }
@@ -580,6 +721,7 @@ class ReceiptDetailViewModel @Inject constructor(
                 }
                 // 保存と確定は1つのトランザクション(途中で失敗しても保存だけ残らない)
                 repository.saveAndConfirm(built.first, built.second, perItem = true)
+                storedHeadcount = built.first.headcount
                 _state.update { it.copy(busy = false, confirmed = true, finished = true) }
             } catch (e: CancellationException) {
                 throw e

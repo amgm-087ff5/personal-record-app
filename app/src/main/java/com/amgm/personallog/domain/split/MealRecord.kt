@@ -31,8 +31,16 @@ data class MealRecordRow(
 /**
  * 1つの支払いの食べた記録。rows は自分が食べた分だけ。
  * unsetGroups は「誰が食べたか未入力」のまとまりの数(割り当てが無い・解釈できないもの)。未入力は行にせず、自分が食べたことにもしない。
+ * burden は自分の負担額(共通費を含む、割り勘の計算結果の自分の合計)。計算できないときは null。
+ * selfPaid は自分が会計者として店に払った額。会計者の内訳が特定できないとき(会計者が2人以上)は null。
  */
-data class PaymentMeal(val paymentId: Long?, val rows: List<MealRecordRow>, val unsetGroups: Int)
+data class PaymentMeal(
+    val paymentId: Long?,
+    val rows: List<MealRecordRow>,
+    val unsetGroups: Int,
+    val burden: Int? = null,
+    val selfPaid: Int? = null,
+)
 
 object MealRecord {
     /** 割当の種類のうち、食べた記録の量を決められるもの。 */
@@ -87,7 +95,9 @@ object MealRecord {
         // 自分1人(割り勘が無い・参加者が自分だけ)
         if (personIds.all { it == selfId }) {
             val rows = groups.filter { it.amount != 0 }.map { rowOf(it.id, "全部", it.amount) }
-            return PaymentMeal(paymentId, rows, unsetGroups = 0)
+            // 自分1人の支払いは、負担も払った額も支払いの合計(自分が払った)
+            val whole = if (selfId in personIds) paymentTotal(input) else null
+            return PaymentMeal(paymentId, rows, unsetGroups = 0, burden = whole, selfPaid = whole)
         }
 
         // 自分が参加者に入っていない(起きない想定)。食べた分は決められないので、すべて未入力として数える
@@ -122,7 +132,27 @@ object MealRecord {
             if (mine == 0) continue
             rows += rowOf(g.id, quantityOf(g, shares, selfId, mine), mine)
         }
-        return PaymentMeal(paymentId, rows, unset)
+        // 自分の負担額(共通費を含む)は、割り勘の計算を実際の方式で求めた自分の合計。払った額は会計者の指定から
+        val burden = SplitCalculator.calculate(input).lines.filter { it.personId == selfId }.sumOf { it.amount }
+        return PaymentMeal(paymentId, rows, unset, burden = burden, selfPaid = selfPaidOf(input, selfId))
+    }
+
+    /** 支払いの合計(円)。total が無ければ品目(まとまり)の合計。共通費を含む。 */
+    private fun paymentTotal(input: SplitInput): Int = input.total ?: input.groups.sumOf { it.amount }
+
+    /**
+     * 自分が会計者として店に払った額。割り勘の計算(SplitCalculator)と同じ決め方:
+     * 会計者(isPayer)が1人ならその人が合計を払う。2人以上は会計者ごとの金額が入力に無いので null。
+     * 会計者が無ければ、payers(空なら自分が合計を払った)。
+     */
+    private fun selfPaidOf(input: SplitInput, selfId: Long): Int? {
+        val flagged = input.people.filter { it.isPayer }.map { it.id }.toSet()
+        return when {
+            flagged.size == 1 -> if (selfId in flagged) paymentTotal(input) else 0
+            flagged.size >= 2 -> null
+            input.payers.isNotEmpty() -> input.payers.filter { it.personId == selfId }.sumOf { it.amount }
+            else -> paymentTotal(input)
+        }
     }
 
     /** 量の表示。shares は割当が1種類に揃っていて、空でないもの。mine は自分の食べた分(円)。 */

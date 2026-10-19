@@ -57,7 +57,7 @@ class BackupFormat8Test {
         val text = BackupJson.encodeToString(BackupData.serializer(), data)
         val back = BackupJson.decodeFromString(BackupData.serializer(), text)
         assertEquals(data, back)
-        assertEquals(8, back.formatVersion)
+        assertEquals(BACKUP_FORMAT_VERSION, back.formatVersion)
         assertEquals(3, back.participants.size)
         assertEquals(listOf(BackupLabelAmount(5, "新人", 3000)), back.labelAmounts)
         assertEquals(21L, back.itemShares[0].participantId)
@@ -136,11 +136,12 @@ class BackupFormat8Test {
     }
 
     @Test
-    fun checkVersion_acceptsUpToEight_rejectsNine() {
+    fun checkVersion_acceptsUpToNine_rejectsTen() {
         BackupManager.checkVersion(7)
         BackupManager.checkVersion(8)
+        BackupManager.checkVersion(9)
         try {
-            BackupManager.checkVersion(9)
+            BackupManager.checkVersion(10)
             fail("expected BackupException")
         } catch (e: BackupException) {
             assertTrue(e.message!!.contains("新しい"))

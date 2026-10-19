@@ -12,10 +12,12 @@ import com.amgm.personallog.data.model.SplitMode
 import com.amgm.personallog.data.model.SplitParticipant
 import com.amgm.personallog.data.model.WholeShare
 import com.amgm.personallog.data.repository.PersonRepository
+import com.amgm.personallog.data.repository.HeadcountChange
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.data.repository.SplitBuild
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.data.repository.SplitSheetData
+import com.amgm.personallog.data.repository.headcountChangeOf
 import com.amgm.personallog.data.repository.mergeKeepGroup
 import com.amgm.personallog.data.repository.mergeShareRows
 import com.amgm.personallog.data.repository.splitEmptiesSource
@@ -68,7 +70,8 @@ data class SplitSheetUiState(
     val total: Int? = null,
     /** 参加者(sortOrder 順)。 */
     val participants: List<SplitParticipant> = emptyList(),
-    val selfId: Long = 0L,
+    /** 自分の参加者 id。自分を外しているときは null(仮の id と混ざらないよう番兵の数は使わない)。 */
+    val selfId: Long? = null,
     /** 参加者 id → 入力中の名前(登録済みの人は人の名前)。 */
     val names: Map<Long, String> = emptyMap(),
     /** 参加者 id → 表示名(自分は「自分」、空の名前は「メンバーN」)。 */
@@ -108,6 +111,8 @@ data class SplitSheetUiState(
     val error: String? = null,
     /** 保存できたら true。画面は閉じる。 */
     val saved: Boolean = false,
+    /** 保存時に支払い側の人数が違うときの確認(あれば確認を出す)。 */
+    val headcountConfirm: HeadcountChange? = null,
 )
 
 /**
@@ -133,6 +138,8 @@ class SplitSheetViewModel @Inject constructor(
     private var items: List<ReceiptItem> = emptyList()
     private var total: Int? = null
     private var members: List<Person> = emptyList()
+    /** レシートの参加人数(headcount。null は不明)。保存時の確認に使う。 */
+    private var headcount: Int? = null
 
     /** まとまりに割当の行が無いときの割り方の見本(画面で選んだ方式を覚えておく)。 */
     private val groupKindHint = HashMap<Long, String>()
@@ -147,6 +154,7 @@ class SplitSheetViewModel @Inject constructor(
                 }
                 items = receipts.getItems(receiptId)
                 total = r.totalAmount
+                headcount = r.headcount
                 val d = splits.load(receiptId)
                 data = d
                 names = initialNames(d.participants, d.persons)
@@ -184,8 +192,8 @@ class SplitSheetViewModel @Inject constructor(
             return
         }
         val sorted = d.participants.sortedBy { it.sortOrder }
-        val selfId = sorted.firstOrNull { d.persons[it.id]?.isSelf == true }?.id
-            ?: sorted.firstOrNull()?.id ?: 0L
+        // 自分の参加者が無いとき(自分を外した)は null。先頭の人を「自分」にしない
+        val selfId: Long? = sorted.firstOrNull { d.persons[it.id]?.isSelf == true }?.id
 
         // 表示名: 非自分の空欄は「メンバー1」「メンバー2」…(並び順で数える)
         val displayNames = HashMap<Long, String>()
@@ -404,10 +412,9 @@ class SplitSheetViewModel @Inject constructor(
         commit(d.copy(participants = list, persons = pers), nm)
     }
 
-    /** 参加者を外す。自分は外せない。その人の割当も消す。 */
+    /** 参加者を外す(自分も外せる)。その人の割当も消す。 */
     fun removeParticipant(id: Long) {
         val d = data ?: return
-        if (id == _state.value.selfId) return
         commit(
             d.copy(
                 participants = d.participants.filterNot { it.id == id },
@@ -510,7 +517,8 @@ class SplitSheetViewModel @Inject constructor(
     fun takeDifferenceForGroup(groupId: Long) {
         val d = data ?: return
         val s = _state.value
-        val selfId = s.selfId
+        // 自分を外しているときは、ずれを自分に足せない(何もしない)
+        val selfId = s.selfId ?: return
         val w = s.groupWarnings[groupId].orEmpty()
             .filterIsInstance<SplitWarning.GroupAmountMismatch>()
             .firstOrNull() ?: return
@@ -524,7 +532,8 @@ class SplitSheetViewModel @Inject constructor(
     fun takeDifferenceForWhole() {
         val d = data ?: return
         val s = _state.value
-        val selfId = s.selfId
+        // 自分を外しているときは、ずれを自分に足せない(何もしない)
+        val selfId = s.selfId ?: return
         val w = s.wholeWarnings.filterIsInstance<SplitWarning.WholeAmountMismatch>().firstOrNull() ?: return
         val selfLabel = s.participants.firstOrNull { it.id == selfId }?.label.orEmpty()
         val current = d.wholeShares.firstOrNull { it.participantId == selfId }?.amount ?: s.labelAmounts[selfLabel]
@@ -664,14 +673,46 @@ class SplitSheetViewModel @Inject constructor(
 
     // ---- 保存 ----
 
-    /** 保存する。成功したら saved を立てる(画面は閉じる)。失敗はメッセージを出す。 */
+    /**
+     * 保存する。参加人数(自分を含む合計)と支払い側の人数(headcount。null は 1)が違えば、確認を出して止める。
+     * 一致していれば、そのまま保存する。成功したら saved を立てる(画面は閉じる)。失敗はメッセージを出す。
+     */
     fun save() {
         val d = data ?: return
         if (_state.value.busy) return
+        val change = headcountChangeOf(headcount, d.participants.size)
+        if (change != null) {
+            _state.update { it.copy(headcountConfirm = change) }
+            return
+        }
+        writeSave(d, headcountTo = null)
+    }
+
+    /**
+     * 人数の確認で選んだ後の保存。「はい」(updateHeadcount = true)は支払い側の人数を新しい人数にする。
+     * 「キャンセル」(false)は支払い側の人数を変えない。どちらも割り勘は保存する。
+     */
+    fun confirmHeadcount(updateHeadcount: Boolean) {
+        val change = _state.value.headcountConfirm ?: return
+        _state.update { it.copy(headcountConfirm = null) }
+        val d = data ?: return
+        if (_state.value.busy) return
+        writeSave(d, headcountTo = if (updateHeadcount) change.to else null)
+    }
+
+    /** 人数の確認を、ボタン以外の方法で閉じる(外側のタップなど)。何も保存しない。 */
+    fun dismissHeadcountConfirm() = _state.update { it.copy(headcountConfirm = null) }
+
+    /** 割り勘を保存する。headcountTo が null なら支払い側の人数は変えない。 */
+    private fun writeSave(d: SplitSheetData, headcountTo: Int?) {
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             try {
                 val saved = receipts.saveSplit(d, names)
+                if (headcountTo != null) {
+                    splits.setHeadcount(receiptId, headcountTo)
+                    headcount = headcountTo
+                }
                 data = saved
                 recompute()
                 _state.update { it.copy(busy = false, saved = true) }

@@ -73,6 +73,8 @@ data class Receipt(
     val cropRight: Float = 1f,
     @ColumnInfo(defaultValue = "1")
     val cropBottom: Float = 1f,
+    /** 参加人数(自分を含む)。レシートの席料・注文タブレット等から読めた人数。不明は null（割り勘の既定は1人）。 */
+    val headcount: Int? = null,
 )
 
 object ReceiptStatus {

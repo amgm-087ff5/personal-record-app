@@ -100,7 +100,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(Space.xl))
 
                 // 割り勘
-                Label("割り勘")
+                Label("負担割り")
                 Spacer(Modifier.height(Space.s))
                 Hairline()
                 Row(

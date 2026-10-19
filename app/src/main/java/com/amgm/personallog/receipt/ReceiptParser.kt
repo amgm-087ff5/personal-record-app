@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /**
@@ -33,6 +34,8 @@ data class ParsedReceipt(
     val items: List<ParsedItem>,
     val total: Int?,
     val note: String?,
+    /** 参加人数(自分を含む)。印字・入力された人数。不明・不正値・旧形式は null。 */
+    val headcount: Int? = null,
 )
 
 sealed interface ParseResult {
@@ -107,6 +110,7 @@ object ReceiptParser {
                 items = items,
                 total = obj["total"].asInt(),
                 note = obj.str("note"),
+                headcount = obj["headcount"].asHeadcount(),
             ),
         )
     }
@@ -167,6 +171,13 @@ object ReceiptParser {
     }
 
     private fun JsonElement?.asInt(): Int? = asDouble()?.roundToInt()
+
+    /** 人数: 1以上の整数だけを受け付ける。0・負・小数・文字列の不正値は null。 */
+    private fun JsonElement?.asHeadcount(): Int? {
+        val d = asDouble() ?: return null
+        if (d < 1.0 || d != floor(d) || d > Int.MAX_VALUE) return null
+        return d.toInt()
+    }
 
     private val dateRegex = Regex("""(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})""")
 

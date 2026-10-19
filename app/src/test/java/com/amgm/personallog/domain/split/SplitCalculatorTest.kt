@@ -365,11 +365,42 @@ class SplitCalculatorTest {
     }
 
     @Test
-    fun noSelfPerson_throwsIllegalArgument() {
-        // 自分(isSelf)が0人なら例外。
-        val noSelf = people.map { it.copy(isSelf = false) }
+    fun 自分が0人ならITEMで自分の分は0円_他の人の合計が支払いの合計() {
+        // 自分(id=1)を外した支払い。自分に計上するはずの金額(割当の無いまとまり)は他の人で均等に配る。
+        val others = people.filter { it.id != 1L }
+        val result = SplitCalculator.calculate(
+            input(SplitMode.ITEM, groups = listOf(SplitGroupInput(10L, 300), SplitGroupInput(11L, 500)), total = 800, people = others),
+        )
+        assertEquals(800, result.total)
+        assertEquals(0, result.totalOf(1L))
+        assertTrue(result.lines.none { it.personId == 1L })
+        // 300 と 500 を4人で割ると、ちょうど1人200円
+        others.forEach { assertEquals(200, result.totalOf(it.id)) }
+    }
+
+    @Test
+    fun 自分が0人ならWHOLEで全体を他の人で割る() {
+        val others = people.filter { it.id != 1L }
+        val result = SplitCalculator.calculate(
+            input(
+                SplitMode.WHOLE,
+                groups = listOf(SplitGroupInput(10L, 300), SplitGroupInput(11L, 500)),
+                total = 800,
+                people = others,
+                wholeKind = ShareKind.RATIO,
+            ),
+        )
+        assertEquals(800, result.total)
+        assertEquals(0, result.totalOf(1L))
+        others.forEach { assertEquals(200, result.totalOf(it.id)) }
+    }
+
+    @Test
+    fun 自分が2人以上ならIllegalArgument() {
+        // 自分(isSelf)は0人か1人だけ。2人は例外。
+        val twoSelves = people.mapIndexed { i, p -> if (i < 2) p.copy(isSelf = true) else p }
         try {
-            SplitCalculator.calculate(input(SplitMode.SELF, groups = listOf(SplitGroupInput(1L, 100)), people = noSelf))
+            SplitCalculator.calculate(input(SplitMode.ITEM, groups = listOf(SplitGroupInput(10L, 100)), people = twoSelves))
             fail("IllegalArgumentException が出るはず")
         } catch (e: IllegalArgumentException) {
             // 期待どおり

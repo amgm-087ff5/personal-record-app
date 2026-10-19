@@ -24,6 +24,8 @@ data class DraftPaymentResult(
     val errors: List<String>,
     val receipt: Receipt? = null,
     val items: List<ReceiptItem> = emptyList(),
+    /** 参加人数(任意)。空欄は null。保存時に receipts.headcount に入れる。 */
+    val headcount: Int? = null,
 ) {
     val isValid: Boolean get() = errors.isEmpty() && receipt != null
 }
@@ -52,8 +54,11 @@ object DraftPayment {
         memo: String,
         drafts: List<DraftItem>,
         now: Long,
+        headcountText: String = "",
     ): DraftPaymentResult {
         val errors = ArrayList<String>()
+        val headcount = LedgerLogic.parseHeadcount(headcountText)
+        headcount.error?.let { errors += "人数: $it" }
         // 日付と時刻だけ LedgerLogic の検証を使う。合計は下で見る(LedgerLogic は合計が空だと落ちるので、合計には検証用の固定値を渡す)
         val dateTime = LedgerLogic.validate(dateText, timeText, "1", "-")
         dateTime.dateError?.let { errors += it }
@@ -105,6 +110,6 @@ object DraftPayment {
             createdAt = now,
             totalSource = TotalSource.MANUAL,
         )
-        return DraftPaymentResult(emptyList(), receipt, items)
+        return DraftPaymentResult(emptyList(), receipt, items, headcount = headcount.value)
     }
 }

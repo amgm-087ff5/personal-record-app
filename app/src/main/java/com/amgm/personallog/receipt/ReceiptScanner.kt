@@ -109,6 +109,8 @@ object ReceiptMapper {
                 rotationDegrees = adjust.rotationDegrees,
                 cropLeft = adjust.cropLeft, cropTop = adjust.cropTop,
                 cropRight = adjust.cropRight, cropBottom = adjust.cropBottom,
+                // 読めた人数。読めなければ null(割り勘の既定は1人)
+                headcount = p.headcount,
             ) to items
         }
         is ScanOutcome.Unparsable -> Receipt(

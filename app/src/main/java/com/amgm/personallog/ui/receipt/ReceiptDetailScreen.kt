@@ -456,10 +456,11 @@ fun ReceiptDetailScreen(
             SheetField("店名", s.store, viewModel::setStore)
             SheetField("日付 yyyy-MM-dd", s.date, viewModel::setDate)
             SheetField("時刻 HH:mm", s.time, viewModel::setTime)
-            SheetChoice("割り勘") {
-                // 割り勘の編集は割り勘シートで行う(戻ると、開いた画面に戻る)
+            SheetField("人数(任意)", s.headcount, viewModel::setHeadcount, numeric = true)
+            SheetChoice("負担割り") {
+                // 負担割りの編集は割り勘シートで行う(戻ると、開いた画面に戻る)
                 TextAction(
-                    "割り勘を編集する",
+                    "負担割りを編集する",
                     onClick = {
                         sheet = SHEET_NONE
                         onOpenSplit()
@@ -574,6 +575,51 @@ fun ReceiptDetailScreen(
             TextAction("重複ではない(今後表示しない)", onClick = viewModel::confirmMarkingNotDuplicate)
             TextAction("キャンセル", onClick = viewModel::dismissDuplicateWarning, color = AppTheme.colors.inkSoft)
         }
+    }
+
+    s.headcountChoice?.let { choice ->
+        HeadcountChoiceSheet(
+            choice = choice,
+            onToggle = viewModel::toggleHeadcountChoice,
+            onConfirm = viewModel::confirmHeadcountChoice,
+            onCancel = viewModel::cancelHeadcountChoice,
+        )
+    }
+}
+
+/**
+ * 人数を減らすとき、消す人を選ぶ確認。空欄の人は自動で消えるので、残りの選択数だけを選ばせる。
+ * 選択肢は「キャンセル」と「決定」の2つだけ(決定は選んだ人数がちょうど揃ったときに出す)。
+ */
+@Composable
+private fun HeadcountChoiceSheet(
+    choice: HeadcountChoice,
+    onToggle: (Long) -> Unit,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val need = choice.change.chooseCount
+    InkSheet(onDismiss = onCancel) {
+        SheetTitle("人数を ${choice.target} 人に合わせますか?")
+        Text(
+            "割り勘の参加者を減らします。名前も割当も無い人は自動で消えます。" +
+                "ほかに消す人を ${need} 人選んでください(選んだ ${choice.selected.size} 人)。消した人の割当も消えます。",
+            style = AppTheme.type.body,
+            color = AppTheme.colors.inkSoft,
+            modifier = Modifier.padding(bottom = Space.m),
+        )
+        choice.change.choiceIds.forEach { id ->
+            val picked = id in choice.selected
+            TextAction(
+                (if (picked) "● " else "○ ") + (choice.labels[id] ?: "名前なし"),
+                onClick = { onToggle(id) },
+                color = if (picked) AppTheme.colors.danger else AppTheme.colors.ink,
+            )
+        }
+        if (choice.change.isValidChoice(choice.selected)) {
+            TextAction("決定", onClick = onConfirm)
+        }
+        TextAction("キャンセル", onClick = onCancel, color = AppTheme.colors.inkSoft)
     }
 }
 

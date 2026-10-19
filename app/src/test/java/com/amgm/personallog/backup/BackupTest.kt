@@ -120,8 +120,8 @@ class BackupTest {
     }
 
     @Test
-    fun formatVersionIsEight() {
-        assertEquals(8, BACKUP_FORMAT_VERSION)
+    fun formatVersionIsNine() {
+        assertEquals(9, BACKUP_FORMAT_VERSION)
     }
 
     @Test

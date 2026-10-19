@@ -21,6 +21,8 @@ import com.amgm.personallog.receipt.TotalSourceInit
  * item_shares・whole_shares・payment_payers は参照先を persons から参加者(split_participants)に変えるため作り直す(MIGRATION_10_11)。
  *
  * v12(支出は支払いから作る): 支払いに属さない支出グループ・単独の支出を、手入力の支払い(receipts)に変える(MIGRATION_11_12)。表の形は変えない。
+ *
+ * v13(参加人数): receipts に headcount を ALTER TABLE ADD COLUMN で足す(MIGRATION_12_13)。既存の行は null。
  */
 object Migrations {
     /**
@@ -967,8 +969,18 @@ object Migrations {
         }
     }
 
+    /**
+     * v12 -> v13: receipts に参加人数(headcount, INTEGER, null 可・既定値なし)を追加する。
+     * 既存の行は null(不明)になる。Entity の Receipt.headcount(Int?, 既定値なし)と完全に一致させること。
+     */
+    val MIGRATION_12_13: Migration = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `receipts` ADD COLUMN `headcount` INTEGER")
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12,
+        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
     )
 }

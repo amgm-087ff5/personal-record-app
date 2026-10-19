@@ -48,6 +48,8 @@ import java.time.YearMonth
 fun LedgerScreen(
     modifier: Modifier = Modifier,
     onOpenPayment: (PaymentKind, Long) -> Unit = { _, _ -> },
+    /** 割り勘で自分が外れた支払い(0円の行)の詳細を、支払い(レシート)の id で開く。 */
+    onOpenExcludedPayment: (Long) -> Unit = {},
     /** 手入力で保存した支払いの詳細(レシートの詳細)を開く。 */
     onOpenReceipt: (Long) -> Unit = {},
     viewModel: LedgerViewModel = hiltViewModel(),
@@ -119,7 +121,7 @@ fun LedgerScreen(
                         }
                         if (state.warnCount > 0) {
                             Text(
-                                "要確認の支払い ${state.warnCount}件(割り勘に警告があります)",
+                                "要確認の支払い ${state.warnCount}件(負担割りに警告があります)",
                                 style = AppTheme.type.caption,
                                 color = c.danger,
                                 modifier = Modifier.padding(top = Space.xs),
@@ -192,6 +194,7 @@ fun LedgerScreen(
                             when (entry) {
                                 is LedgerEntry.Single -> onOpenPayment(PaymentKind.EXPENSE, entry.expense.id)
                                 is LedgerEntry.Group -> onOpenPayment(PaymentKind.GROUP, entry.group.id)
+                                is LedgerEntry.Excluded -> onOpenExcludedPayment(entry.receipt.id)
                             }
                         },
                         onDeleteGroup = { deletingGroup = it.group },
@@ -245,8 +248,8 @@ fun LedgerScreen(
             initialDate = initialDate,
             initialTime = LedgerLogic.defaultTime(initialDate, LocalDate.now(), LocalTime.now()),
             onDismiss = { creatingPayment = false },
-            onSave = { receipt, items, done ->
-                viewModel.addManualPayment(receipt, items) { id, err ->
+            onSave = { receipt, items, headcount, done ->
+                viewModel.addManualPayment(receipt, items, headcount) { id, err ->
                     done(err)
                     // 保存できたら、その支払いの詳細を開く(レシート一覧の手入力と同じ遷移)
                     if (id != null) onOpenReceipt(id)
