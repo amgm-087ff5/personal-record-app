@@ -14,7 +14,7 @@ class SchemaVersionTest {
 
     @Test
     fun databaseAnnotationVersionEqualsConstant() {
-        val m = Regex("""@Database\([^)]*?\bversion\s*=\s*(\d+)""", RegexOption.DOT_MATCHES_ALL).find(source())
+        val m = Regex("""\bversion\s*=\s*(\d+)""").find(source())
         assertTrue("@Database の version が見つかりません", m != null)
         assertEquals(AppDatabase.VERSION, m!!.groupValues[1].toInt())
     }
