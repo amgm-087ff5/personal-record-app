@@ -12,6 +12,8 @@ import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.domain.PaymentEdit
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentKind
+import com.amgm.personallog.domain.PaymentValues
+import com.amgm.personallog.domain.WriteBackTarget
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,27 +28,29 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** 支払いの詳細画面の表示内容。group が非 null ならグループ、single が非 null なら単独の支出。 */
+/** 支出の詳細画面の表示内容。group が非 null ならまとまり(支払い全体)、single が非 null なら単独の支出。 */
 data class PaymentUiState(
     val loading: Boolean = true,
     val notFound: Boolean = false,
     val kind: PaymentKind = PaymentKind.GROUP,
     val group: ExpenseGroup? = null,
     val items: List<Expense> = emptyList(),
-    /** 家計簿で消したレシート由来の品目(一覧・合計には入らない。「元に戻す」で品目に戻る)。 */
+    /** 家計簿で消した支払い由来の品目(一覧・合計には入らない。「元に戻す」で品目に戻る)。 */
     val deletedItems: List<Expense> = emptyList(),
     val single: Expense? = null,
-    /** 紐づくレシート(あれば)。サムネイルと「レシートを開く」に使う。 */
+    /** 紐づく支払い(レシート)。サムネイル・支払い先・「レシートを開く」に使う。 */
     val receipt: Receipt? = null,
-    /** レシートの日時 "yyyy-MM-dd HH:mm"。日時を変えるときの警告に使う。 */
+    /** 支払いの日時 "yyyy-MM-dd HH:mm"。日時を変えるときの警告に使う。 */
     val receiptAt: String? = null,
+    /** 割り勘の参加者の数(割り勘が無ければ1)。2人以上では金額をここで直せない。 */
+    val splitPeople: Int = 1,
     val error: String? = null,
     /** 削除などで、この画面の対象が無くなった。 */
     val finished: Boolean = false,
 ) {
     val itemSum: Long get() = items.sumOf { it.amount.toLong() }
 
-    /** 支払い金額 - 品目の合計。グループでなければ 0。 */
+    /** 支出金額 - 品目の合計。まとまりでなければ 0。 */
     val difference: Long get() = group?.let { it.amount.toLong() - itemSum } ?: 0L
 }
 
@@ -77,6 +81,7 @@ class PaymentDetailViewModel @Inject constructor(
                                 PaymentUiState(
                                     loading = false, kind = kind, group = g, items = visible, deletedItems = gone,
                                     receipt = receipt, receiptAt = repository.receiptDateTime(g.receiptId),
+                                    splitPeople = g.receiptId?.let { receipts.participantCount(it) } ?: 1,
                                 )
                             }
                         }
@@ -89,6 +94,7 @@ class PaymentDetailViewModel @Inject constructor(
                             PaymentUiState(
                                 loading = false, kind = kind, single = e, items = listOf(e),
                                 receipt = receipt, receiptAt = repository.receiptDateTime(e.receiptId),
+                                splitPeople = e.receiptId?.let { receipts.participantCount(it) } ?: 1,
                             )
                         }
                     }
@@ -115,7 +121,24 @@ class PaymentDetailViewModel @Inject constructor(
         }
     }
 
-    /** グループの合計・日時・メモ・カテゴリを直す。変わった欄は「編集済み」になる。 */
+    /**
+     * 保存の本体。block は「理由(拒否・失敗)」を返す(成功なら null)。
+     * onDone があれば、その結果を渡す(シートに出す)。無ければ画面のエラーに出す。
+     */
+    private fun write(onDone: ((String?) -> Unit)?, block: suspend () -> String?) {
+        viewModelScope.launch {
+            val msg = try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                "保存に失敗しました: ${e.message ?: e.javaClass.simpleName}"
+            }
+            if (onDone != null) onDone(msg) else if (msg != null) _state.update { it.copy(error = msg) }
+        }
+    }
+
+    /** 支出のまとまりの金額・日時・カテゴリ・メモを直す。日時と金額は支払いへ書き戻す。 */
     fun saveGroup(
         original: ExpenseGroup,
         date: String,
@@ -124,9 +147,19 @@ class PaymentDetailViewModel @Inject constructor(
         category: String,
         memo: String,
         onDone: (String?) -> Unit,
-    ) = run(onDone) { repository.updateGroup(PaymentEdit.editGroup(original, date, time, amount, category, memo)) }
+    ) = write(onDone) {
+        if (original.receiptId == null) {
+            repository.updateGroup(PaymentEdit.editGroup(original, date, time, amount, category, memo))
+            null
+        } else {
+            receipts.writeBackFromLedger(
+                WriteBackTarget.Group(original),
+                PaymentValues(date, time, amount, category, name = "", memo = memo),
+            )
+        }
+    }
 
-    /** 品目(または単独の支出)を直す。original が null なら、グループへ品目を足す。 */
+    /** 品目(または単独の支出)を直す。original が null なら、まとまりへ品目を足す。 */
     fun saveItem(
         group: ExpenseGroup?,
         original: Expense?,
@@ -137,46 +170,79 @@ class PaymentDetailViewModel @Inject constructor(
         name: String,
         memo: String,
         onDone: (String?) -> Unit,
-    ) = run(onDone) {
-        // グループの品目の日時はグループに従う(月・日の振り分けはグループの日付)。品目の側では変えない
+    ) = write(onDone) {
+        // まとまりの品目の日時はまとまりに従う(月・日の振り分けはまとまりの日付)。品目の側では変えない
         val d = group?.date ?: date
         val t = group?.time ?: time
         if (original != null) {
-            repository.update(PaymentEdit.editExpense(original, d, t, amount, category, name, memo))
+            if (original.receiptId == null) {
+                repository.update(PaymentEdit.editExpense(original, d, t, amount, category, name, memo))
+                null
+            } else {
+                val target = if (original.receiptItemId != null) {
+                    WriteBackTarget.Item(original)
+                } else {
+                    WriteBackTarget.Single(original)
+                }
+                receipts.writeBackFromLedger(target, PaymentValues(d, t, amount, category, name, memo))
+            }
         } else if (group != null) {
             // 品目は支払い(レシート)の品目として足す。家計簿の品目は、支払いを保存するときに作られる(支出だけを単独では作らない)
-            val receiptId = checkNotNull(group.receiptId) { "レシートに紐づかない支払いには品目を足せません" }
-            val receipt = checkNotNull(receipts.getReceipt(receiptId)) { "レシートが見つかりません" }
+            val receiptId = checkNotNull(group.receiptId) { "支払いに紐づかない支出には品目を足せません" }
+            val receipt = checkNotNull(receipts.getReceipt(receiptId)) { "支払いが見つかりません" }
             val item = ReceiptItem(
                 receiptId = receiptId, name = name.trim(), amount = amount, category = category, memo = memo.trim(),
             )
             receipts.save(receipt, receipts.getItems(receiptId) + item)
+            null
+        } else {
+            null
         }
     }
 
-    /** 品目の合計を、グループの合計に入れる(差額を無くす)。 */
+    /** 支払い先(店名)を直す。 */
+    fun saveStore(receiptId: Long, storeName: String, onDone: (String?) -> Unit) = write(onDone) {
+        if (storeName.isBlank()) {
+            "支払い先を入力してください。"
+        } else {
+            receipts.saveStoreName(receiptId, storeName)
+            null
+        }
+    }
+
+    /** 品目の合計を、まとまりの金額に入れる(差額を無くす)。 */
     fun useItemsSumAsTotal() {
         val s = _state.value
         val g = s.group ?: return
         val sum = s.itemSum
         if (sum <= 0L || sum > Int.MAX_VALUE) return
-        run { repository.updateGroup(PaymentEdit.editGroup(g, g.date, g.time, sum.toInt(), g.category, g.memo)) }
+        write(null) {
+            if (g.receiptId == null) {
+                repository.updateGroup(PaymentEdit.editGroup(g, g.date, g.time, sum.toInt(), g.category, g.memo))
+                null
+            } else {
+                receipts.writeBackFromLedger(
+                    WriteBackTarget.Group(g),
+                    PaymentValues(g.date, g.time, sum.toInt(), g.category, name = "", memo = g.memo),
+                )
+            }
+        }
     }
 
     /** 家計簿で消した品目を元に戻す。 */
     fun restoreItem(expense: Expense) = run { repository.restore(expense) }
 
-    /** 品目(または単独の支出)の1つの欄を、レシートの値に戻す。 */
+    /** 品目(または単独の支出)の1つの欄を、支払いの値に戻す。 */
     fun revertItemField(expense: Expense, field: PaymentField) = run {
         if (!repository.revertExpenseField(expense.id, field)) {
-            _state.update { it.copy(error = "レシートの値を求められませんでした。") }
+            _state.update { it.copy(error = "支払いの値を求められませんでした。") }
         }
     }
 
-    /** 支払い(グループ)の1つの欄を、レシートの値に戻す。 */
+    /** 支出のまとまりの1つの欄を、支払いの値に戻す。 */
     fun revertGroupField(group: ExpenseGroup, field: PaymentField) = run {
         if (!repository.revertGroupField(group.id, field)) {
-            _state.update { it.copy(error = "レシートの値を求められませんでした。") }
+            _state.update { it.copy(error = "支払いの値を求められませんでした。") }
         }
     }
 
