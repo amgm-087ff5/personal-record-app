@@ -403,7 +403,10 @@ class SplitRepository @Inject constructor(
     suspend fun buildFor(receiptId: Long, total: Int?, items: List<ReceiptItem>): SplitBuild? {
         val sheet = splitDao.getSheet(receiptId) ?: return null
         if (sheet.mode == SplitMode.SELF) return null
-        return load(receiptId).toBuild(total, items)
+        val data = load(receiptId)
+        // 参加者が自分1人なら割り勘は無い(全額が自分)。従来の「自分だけ」と同じに扱い、家計簿に警告を付けない
+        if (data.participants.size <= 1) return null
+        return data.toBuild(total, items)
     }
 
     /** 直近の計算の警告(例 "W1,W3")を保存する。 */
