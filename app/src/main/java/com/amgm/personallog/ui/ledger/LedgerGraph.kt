@@ -16,6 +16,13 @@ object LedgerRoutes {
     const val PAYMENT = "ledger/payment/{kind}/{id}"
 
     fun payment(kind: PaymentKind, id: Long) = "ledger/payment/${kind.key}/$id"
+
+    /**
+     * 割り勘で自分が外れた支払い(家計簿に支出の行が無い)の詳細。PAYMENT と同じ画面を、種類 "receipt" と支払いの id で開く。
+     * PaymentKind には入れない(支出の種類ではないため)。PaymentDetailViewModel が種類の文字列で見分ける。
+     */
+    const val EXCLUDED_KIND = "receipt"
+    fun excludedPayment(receiptId: Long) = "ledger/payment/$EXCLUDED_KIND/$receiptId"
 }
 
 /** 家計簿機能のナビゲーショングラフ。AppNavHost から呼ばれるので、機能内の遷移はここで完結させる。 */
@@ -24,6 +31,7 @@ fun NavGraphBuilder.ledgerGraph(navController: NavController) {
         composable(LedgerRoutes.HOME) {
             LedgerScreen(
                 onOpenPayment = { kind, id -> navController.navigate(LedgerRoutes.payment(kind, id)) },
+                onOpenExcludedPayment = { receiptId -> navController.navigate(LedgerRoutes.excludedPayment(receiptId)) },
                 onOpenReceipt = { receiptId -> navController.navigate(ReceiptRoutes.detail(receiptId)) },
             )
         }

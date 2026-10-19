@@ -50,6 +50,8 @@ data class PaymentUiState(
     val splitPeople: Int = 1,
     /** 割り勘があるとき(参加者2人以上)の、自分の個別支出。計算できなければ null。 */
     val individual: IndividualExpense? = null,
+    /** 割り勘で自分が参加者に入っていない(自分の分が0円で、家計簿に行が無い)支払い。receipt だけが入る。 */
+    val selfExcluded: Boolean = false,
     val error: String? = null,
     /** 削除などで、この画面の対象が無くなった。 */
     val finished: Boolean = false,
@@ -68,15 +70,39 @@ class PaymentDetailViewModel @Inject constructor(
     private val receipts: ReceiptRepository,
     private val splits: SplitRepository,
 ) : ViewModel() {
-    private val kind: PaymentKind = PaymentKind.of(savedStateHandle.get<String>("kind")) ?: PaymentKind.GROUP
+    private val rawKind: String? = savedStateHandle.get<String>("kind")
+    /** 割り勘で自分が外れた支払い(家計簿に行が無い)の詳細か。id は支払い(レシート)の id。 */
+    private val excludedMode: Boolean = rawKind == LedgerRoutes.EXCLUDED_KIND
+    private val kind: PaymentKind = PaymentKind.of(rawKind) ?: PaymentKind.GROUP
     private val id: Long = savedStateHandle.get<Long>("id") ?: 0L
 
     private val _state = MutableStateFlow(PaymentUiState(kind = kind))
     val state: StateFlow<PaymentUiState> = _state.asStateFlow()
 
+    /**
+     * 自分が外れた支払いの画面。家計簿に行が無いので、支払いと割り勘だけを見る。
+     * 家計簿に行が出来た(割り勘で自分が入った)ときは、通常の詳細とは別の画面なので notFound にして戻す。
+     */
+    private fun excludedFlow(receiptId: Long): Flow<PaymentUiState> =
+        combine(receipts.observeReceipt(receiptId), receipts.observePaymentLink(receiptId)) { r, link -> r to link }
+            .map { (r, link) ->
+                if (r == null || link != null) {
+                    PaymentUiState(loading = false, notFound = true, kind = kind)
+                } else {
+                    PaymentUiState(
+                        loading = false,
+                        kind = kind,
+                        receipt = r,
+                        receiptAt = repository.receiptDateTime(receiptId),
+                        splitPeople = receipts.participantCount(receiptId),
+                        selfExcluded = true,
+                    )
+                }
+            }
+
     init {
         viewModelScope.launch {
-            val flow: Flow<PaymentUiState> = when (kind) {
+            val flow: Flow<PaymentUiState> = if (excludedMode) excludedFlow(id) else when (kind) {
                 PaymentKind.GROUP ->
                     combine(repository.observeGroup(id), repository.observeGroupItems(id)) { g, items -> g to items }
                         .map { (g, items) ->

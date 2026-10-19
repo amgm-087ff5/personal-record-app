@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import com.amgm.personallog.backup.ImportMode
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.data.model.Expense
+import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.BareField
 import com.amgm.personallog.ui.design.Hairline
@@ -73,6 +74,7 @@ import java.time.ZoneOffset
 internal fun entryKey(entry: LedgerEntry): String = when (entry) {
     is LedgerEntry.Single -> "exp-" + entry.expense.id
     is LedgerEntry.Group -> "grp-" + entry.group.id
+    is LedgerEntry.Excluded -> "rcp-" + entry.receipt.id
 }
 
 /** カテゴリの色。定義済みカテゴリは順番で固定し、それ以外は名前から決まる色にする。未分類は inkFaint。 */
@@ -355,6 +357,12 @@ internal fun DayBlock(
                             onOpen = { onOpen(entry) },
                             onDelete = { onDeleteGroup(entry) },
                         )
+                        is LedgerEntry.Excluded -> ExcludedLine(
+                            entry = entry,
+                            onClick = { onOpen(entry) },
+                            draftReceiptIds = draftReceiptIds,
+                            warnReceiptIds = warnReceiptIds,
+                        )
                     }
                 }
             }
@@ -410,6 +418,43 @@ private fun ExpenseLine(
         }
         Spacer(Modifier.width(Space.s))
         Text(LedgerLogic.formatYen(expense.amount.toLong()), style = AppTheme.type.numeral, color = c.ink)
+    }
+}
+
+/** 割り勘で自分が外れた支払いの行。金額は0円で、「自分の分 ¥0（対象外）」と出す。印(下書き・要確認)は他の行と同じ。 */
+@Composable
+private fun ExcludedLine(
+    entry: LedgerEntry.Excluded,
+    onClick: () -> Unit,
+    draftReceiptIds: Set<Long>,
+    warnReceiptIds: Set<Long>,
+) {
+    val c = AppTheme.colors
+    val time = LedgerCalc.splitPurchasedAt(entry.receipt.purchasedAt).second
+    val sub = listOfNotNull(
+        time.ifEmpty { null },
+        "自分の分 ${LedgerLogic.formatYen(0L)}（対象外）",
+    ).joinToString(" · ")
+    Row(
+        Modifier.fillMaxWidth().tappable(onClick).padding(vertical = Space.s + Space.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    entry.receipt.storeName.ifBlank { "支払い" },
+                    style = AppTheme.type.title,
+                    color = c.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds)
+            }
+            Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.width(Space.s))
+        Text(LedgerLogic.formatYen(entry.amount), style = AppTheme.type.numeral, color = c.inkSoft)
     }
 }
 
