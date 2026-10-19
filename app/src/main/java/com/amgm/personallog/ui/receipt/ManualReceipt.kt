@@ -24,8 +24,9 @@ object ManualReceipt {
      * - 確定の判定: 合計か品目があれば確定(CONFIRMED)、どちらも無ければ下書き(DRAFT)。ここでは品目は無いので、合計の有無で決まる。
      *   確定の検証(ReceiptRepository.confirm)は合計を必須にしているため、確定の行には必ず合計が入る。
      * - totalSource は MANUAL(空の合計でも MANUAL のまま。詳細画面の「未入力」表示に合わせる)。
+     * - headcount: 任意(整数・1以上)。空は未入力(null)。
      */
-    fun build(date: String, time: String, store: String, total: String, now: Long): Result {
+    fun build(date: String, time: String, store: String, total: String, now: Long, headcount: String = ""): Result {
         val d = date.trim()
         if (!ReceiptCalc.isValidDate(d)) {
             return Result.Invalid("日付は yyyy-MM-dd 形式(例 2026-10-10)で入力してください。")
@@ -44,6 +45,16 @@ object ManualReceipt {
             }
             parsed
         }
+        val headcountText = headcount.trim()
+        val people: Int? = if (headcountText.isEmpty()) {
+            null
+        } else {
+            val parsed = headcountText.toIntOrNull()
+            if (parsed == null || parsed < 1) {
+                return Result.Invalid("人数は1以上の整数で入力するか、空にしてください。")
+            }
+            parsed
+        }
         return Result.Ok(
             Receipt(
                 purchasedAt = ReceiptMapper.purchasedAt(d, t.takeIf { it.isNotEmpty() }),
@@ -54,6 +65,7 @@ object ManualReceipt {
                 status = if (amount != null) ReceiptStatus.CONFIRMED else ReceiptStatus.DRAFT,
                 createdAt = now,
                 totalSource = TotalSource.MANUAL,
+                headcount = people,
             ),
         )
     }
