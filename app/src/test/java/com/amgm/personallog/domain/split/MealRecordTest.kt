@@ -217,4 +217,51 @@ class MealRecordTest {
         assertEquals("A ほか1品", MealRecord.groupName(listOf("A", "B", "A")))
         assertEquals("品目", MealRecord.groupName(emptyList()))
     }
+
+    @Test
+    fun paymentWithoutSheetGivesWholeForEachItem() {
+        // 割り勘シートが無い支払い: 自分1人。まとまりが無いので、品目1つが1まとまり(仮の id は負)。全部が自分の分
+        val input = input(
+            people = selfOnly,
+            groups = listOf(
+                SplitGroupInput(id = -10L, amount = 300),
+                SplitGroupInput(id = -11L, amount = 500),
+            ),
+        )
+        val m = MealRecord.ofPayment(
+            paymentId = 7L,
+            at = "2026-10-02",
+            storeName = "店",
+            draft = false,
+            input = input,
+            groupItemNames = mapOf(-10L to listOf("唐揚げ"), -11L to listOf("サラダ")),
+            selfId = me,
+        )
+        assertEquals(2, m.rows.size)
+        assertEquals("唐揚げ", m.rows[0].name)
+        assertEquals("全部", m.rows[0].quantity)
+        assertEquals(300, m.rows[0].amount)
+        assertEquals(500, m.rows[1].amount)
+        assertEquals(0, m.unsetGroups)
+    }
+
+    @Test
+    fun uncoveredItemsWithTwoPeopleAreUnsetNotSelf() {
+        // まとまりの無い支払いを2人で割るとき、割当が無い品目は未入力(自分が食べたことにしない)
+        val input = input(
+            people = two,
+            groups = listOf(SplitGroupInput(id = -10L, amount = 300)),
+        )
+        val m = MealRecord.ofPayment(
+            paymentId = 8L,
+            at = "2026-10-02",
+            storeName = "店",
+            draft = false,
+            input = input,
+            groupItemNames = mapOf(-10L to listOf("唐揚げ")),
+            selfId = me,
+        )
+        assertTrue(m.rows.isEmpty())
+        assertEquals(1, m.unsetGroups)
+    }
 }

@@ -2,8 +2,14 @@ package com.amgm.personallog.data.repository
 
 import com.amgm.personallog.data.db.ExpenseDao
 import com.amgm.personallog.data.db.ExpenseGroupDao
+import com.amgm.personallog.data.db.SplitDao
 import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.ShareGroup
+import com.amgm.personallog.data.model.ShareKind
+import com.amgm.personallog.data.model.SplitMode
+import com.amgm.personallog.data.model.SplitParticipant
 import com.amgm.personallog.domain.PaymentLink
 import com.amgm.personallog.domain.split.MealRecord
 import com.amgm.personallog.domain.split.PaymentMeal
@@ -28,12 +34,13 @@ data class MealPayment(
 
 /**
  * 食べた記録の読み込み。新しい表は持たず、支払い(レシート)と割り勘の計算結果から毎回求める。
- * 注意: SplitRepository.load は割り勘シートや参加者が無いとき既定値を保存する(読み取りでも少し書き込む)。
+ * 読み取りだけで、DB には書き込まない(割り勘は SplitRepository.peek で読む。load は使わない)。
  */
 @Singleton
 class MealRecordRepository @Inject constructor(
     private val receipts: ReceiptRepository,
     private val splits: SplitRepository,
+    private val splitDao: SplitDao,
     private val expenseDao: ExpenseDao,
     private val expenseGroupDao: ExpenseGroupDao,
 ) {
@@ -47,10 +54,12 @@ class MealRecordRepository @Inject constructor(
 
     private suspend fun mealOf(receipt: Receipt): MealPayment {
         val items = receipts.getItems(receipt.id)
-        val data = splits.load(receipt.id)
-        val build = data.toBuild(receipt.totalAmount, items)
+        // 割り勘シートが無い支払いは、自分1人の既定の割り勘として扱う(保存はしない)
+        val sheet = splits.peek(receipt.id) ?: selfOnlySheet(receipt.id)
+        val withGroups = withItemGroups(sheet, items)
+        val build = withGroups.toBuild(receipt.totalAmount, items)
         val itemNames = items.associate { it.id to it.name }
-        val groupItemNames = data.groups.associate { g -> g.group.id to g.itemIds.mapNotNull { itemNames[it] } }
+        val groupItemNames = withGroups.groups.associate { g -> g.group.id to g.itemIds.mapNotNull { itemNames[it] } }
         val draft = receipt.status == ReceiptStatus.DRAFT
         val meal = MealRecord.ofPayment(
             paymentId = receipt.id,
@@ -73,5 +82,39 @@ class MealRecordRepository @Inject constructor(
             meal = meal,
             link = link,
         )
+    }
+
+    /**
+     * 割り勘シートが無いときの既定(保存しない): 参加者は自分1人、割当なし。自分が未登録なら参加者は無い。
+     * 自分の参加者 id は 0(未保存の扱い)。
+     */
+    private suspend fun selfOnlySheet(receiptId: Long): SplitSheetData {
+        val self = splitDao.getSelf()
+        return SplitSheetData(
+            receiptId = receiptId,
+            mode = SplitMode.SELF,
+            wholeKind = ShareKind.AMOUNT,
+            participants = if (self != null) listOf(SplitParticipant(id = 0, receiptId = receiptId, personId = self.id, sortOrder = 0)) else emptyList(),
+            groups = emptyList(),
+            itemShares = emptyList(),
+            wholeShares = emptyList(),
+            labelAmounts = emptyList(),
+            persons = if (self != null) mapOf(0L to self) else emptyMap(),
+        )
+    }
+
+    /**
+     * まとまりに入っていない品目は、品目1つを1まとまりとして足す(まとまりの無い古い支払い用)。
+     * 仮のまとまり id は品目 id の符号を反転したもの(保存されたまとまりの id と衝突しない)。割当は無い。
+     */
+    private fun withItemGroups(sheet: SplitSheetData, items: List<ReceiptItem>): SplitSheetData {
+        val covered = sheet.groups.flatMap { it.itemIds }.toSet()
+        val extra = items.filter { it.id !in covered }.map { item ->
+            GroupWithItems(
+                group = ShareGroup(id = -item.id, receiptId = sheet.receiptId),
+                itemIds = listOf(item.id),
+            )
+        }
+        return if (extra.isEmpty()) sheet else sheet.copy(groups = sheet.groups + extra)
     }
 }
