@@ -37,9 +37,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.domain.PaymentField
+import com.amgm.personallog.domain.PaymentWriteBack
 import com.amgm.personallog.receipt.ReceiptImageCodec
 import com.amgm.personallog.ui.design.AppTheme
+import com.amgm.personallog.ui.design.BareField
 import com.amgm.personallog.ui.design.Hairline
+import com.amgm.personallog.ui.design.InkButton
+import com.amgm.personallog.ui.design.InkSheet
 import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.LeaderRow
 import com.amgm.personallog.ui.design.PaperScreen
@@ -53,14 +57,14 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * 支払いの詳細画面。家計簿の正である支払い(グループまたは単独の支出)を、合計・日時・メモ・品目まで見て直す。
- * レシート由来なら、サムネイルと「レシートを開く」でレシートの詳細へ移れる。
+ * 支出の詳細画面。家計簿の支出(まとまり、または単独の支出)を、金額・日時・メモ・品目まで見て直す。
+ * 支払い(レシート)由来なら、日時・金額・品目・支払い先は支払いへ書き戻す。サムネイルと「レシートを開く」でレシートの詳細へ移れる。
  */
 @Composable
 fun PaymentDetailScreen(
     onBack: () -> Unit,
     onOpenReceipt: (Long) -> Unit,
-    /** 割り勘シートを開く(レシートの id)。レシートに紐づく支出のときだけボタンを出す。 */
+    /** 割り勘シートを開く(支払いの id)。支払いに紐づく支出のときだけボタンを出す。 */
     onOpenSplit: (Long) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: PaymentDetailViewModel = hiltViewModel(),
@@ -73,6 +77,7 @@ fun PaymentDetailScreen(
     var editingItemId by rememberSaveable { mutableStateOf<Long?>(null) }
     var addingItem by rememberSaveable { mutableStateOf(false) }
     var deletingGroup by rememberSaveable { mutableStateOf(false) }
+    var editingStore by rememberSaveable { mutableStateOf(false) }
     val editingItem: Expense? = editingItemId?.let { id -> s.items.firstOrNull { it.id == id } }
 
     // 削除などで対象が無くなった(または開いた時点で無かった)ら戻る
@@ -102,13 +107,12 @@ fun PaymentDetailScreen(
                 item(key = "head") {
                     GroupHeader(group, onEdit = { editingGroup = true }, onRevert = { viewModel.revertGroupField(group, it) })
                 }
+                s.receipt?.let { r ->
+                    item(key = "store") { StoreRow(r.storeName, onEdit = { editingStore = true }) }
+                    item(key = "split") { SplitRow(s.splitPeople, r.id, onOpenSplit) }
+                }
                 item(key = "receipt") {
                     ReceiptBlock(s.receipt?.imagePath, s.receipt?.id, onOpenReceipt)
-                }
-                s.receipt?.let { r ->
-                    item(key = "split") {
-                        TextAction("割り勘", onClick = { onOpenSplit(r.id) }, modifier = Modifier.padding(horizontal = Space.edge))
-                    }
                 }
                 item(key = "items-title") {
                     Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(top = Space.l)) {
@@ -140,7 +144,9 @@ fun PaymentDetailScreen(
                                 color = c.danger,
                                 modifier = Modifier.padding(top = Space.xs),
                             )
-                            if (s.itemSum > 0) {
+                            // 印字のあるレシートや割り勘の金額は、ここから合計に入れられない
+                            val canTakeSum = s.receipt?.let { !PaymentWriteBack.isPrinted(it) && s.splitPeople < 2 } ?: true
+                            if (s.itemSum > 0 && canTakeSum) {
                                 TextAction(
                                     "${LedgerLogic.formatYen(s.itemSum)} を合計に入れる",
                                     onClick = viewModel::useItemsSumAsTotal,
@@ -177,6 +183,10 @@ fun PaymentDetailScreen(
             } else if (single != null) {
                 item(key = "single") {
                     SingleBody(single, onEdit = { editingItemId = single.id }, onRevert = { viewModel.revertItemField(single, it) })
+                }
+                s.receipt?.let { r ->
+                    item(key = "store") { StoreRow(r.storeName, onEdit = { editingStore = true }) }
+                    item(key = "split") { SplitRow(s.splitPeople, r.id, onOpenSplit) }
                 }
                 item(key = "receipt") {
                     ReceiptBlock(s.receipt?.imagePath, s.receipt?.id, onOpenReceipt)
@@ -246,7 +256,7 @@ fun PaymentDetailScreen(
     if (deletingGroup && group != null) {
         ConfirmSheet(
             title = "支出を削除",
-            message = "「${group.memo.ifBlank { group.category }}」の支出と品目をすべて削除します。レシートは残ります。",
+            message = "「${group.memo.ifBlank { group.category }}」の支出と品目をすべて削除します。支払いは残ります。",
             confirmText = "削除",
             onDismiss = { deletingGroup = false },
             onConfirm = {
@@ -255,9 +265,88 @@ fun PaymentDetailScreen(
             },
         )
     }
+    val receipt = s.receipt
+    if (editingStore && receipt != null) {
+        StoreSheet(
+            current = receipt.storeName,
+            onDismiss = { editingStore = false },
+            onSave = { name, done -> viewModel.saveStore(receipt.id, name, done) },
+        )
+    }
 }
 
-/** 「レシートと違う」の小さな印。onRevert があれば、その欄を「レシートの値に戻す」操作を添える。 */
+/** 支払い先(支払いの店名)。タップで直す。支払いへ書き戻す。 */
+@Composable
+private fun StoreRow(store: String, onEdit: () -> Unit) {
+    val c = AppTheme.colors
+    Column(Modifier.fillMaxWidth().tappable(onEdit).padding(horizontal = Space.edge, vertical = Space.s)) {
+        Label("支払い先")
+        Text(
+            store.ifBlank { "(未入力)" },
+            style = AppTheme.type.body,
+            color = if (store.isBlank()) c.inkFaint else c.ink,
+        )
+    }
+    Hairline()
+}
+
+/**
+ * 割り勘の入口。参加者が2人以上なら、金額はこの画面では直せないので、割り勘画面へ案内する。
+ * 支払いが無い(レシートに紐づかない)支出では出さない。
+ */
+@Composable
+private fun SplitRow(people: Int, receiptId: Long, onOpenSplit: (Long) -> Unit) {
+    val c = AppTheme.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge, vertical = Space.xs)) {
+        if (people >= 2) {
+            Text(
+                "割り勘があるため、金額はここでは直せません。金額は割り勘画面で直してください。",
+                style = AppTheme.type.caption,
+                color = c.inkSoft,
+            )
+        }
+        TextAction(
+            if (people >= 2) "割り勘画面で直す" else "割り勘",
+            onClick = { onOpenSplit(receiptId) },
+        )
+    }
+}
+
+/** 支払い先を直すシート。空にはできない(ViewModel が拒否する)。 */
+@Composable
+private fun StoreSheet(current: String, onDismiss: () -> Unit, onSave: (String, (String?) -> Unit) -> Unit) {
+    val c = AppTheme.colors
+    var text by remember { mutableStateOf(current) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    InkSheet(onDismiss = { if (!saving) onDismiss() }) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+            Label("支払い先")
+            BareField(
+                value = text,
+                onValueChange = { text = it },
+                underline = true,
+                singleLine = true,
+                placeholder = "支払い先",
+            )
+            error?.let { Text(it, style = AppTheme.type.caption, color = c.danger) }
+            InkButton(
+                text = "保存",
+                enabled = !saving,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    saving = true
+                    onSave(text) { err ->
+                        saving = false
+                        if (err == null) onDismiss() else error = err
+                    }
+                },
+            )
+        }
+    }
+}
+
+/** 「レシートと違う」の小さな印。onRevert があれば、その欄を「支払いの値に戻す」操作を添える。 */
 @Composable
 private fun EditedMark(modifier: Modifier = Modifier, text: String = "レシートと違う", onRevert: (() -> Unit)? = null) {
     if (onRevert == null) {
@@ -265,7 +354,7 @@ private fun EditedMark(modifier: Modifier = Modifier, text: String = "レシー�
     } else {
         Row(modifier, verticalAlignment = Alignment.CenterVertically) {
             Stamp(text, tone = StampTone.Accent)
-            TextAction("レシートの値に戻す", onClick = onRevert)
+            TextAction("支払いの値に戻す", onClick = onRevert)
         }
     }
 }
