@@ -74,7 +74,7 @@ class SplitSheetLogicTest {
             "品目の合計と支払いの合計が ¥1,200 ずれています(読み漏れの可能性)",
             warningText(SplitWarning.ItemsTotalMismatch(-1200)),
         )
-        assertEquals("支払者の合計が合いません", warningText(SplitWarning.PayersMismatch(1000, 900)))
+        assertEquals("会計者の合計が合いません", warningText(SplitWarning.PayersMismatch(1000, 900)))
         assertEquals("割当を解釈できません", warningText(SplitWarning.InvalidShares(null, "unknown person")))
     }
 

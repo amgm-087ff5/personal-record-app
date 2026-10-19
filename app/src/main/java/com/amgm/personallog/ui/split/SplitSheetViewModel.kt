@@ -184,8 +184,8 @@ class SplitSheetViewModel @Inject constructor(
             return
         }
         val sorted = d.participants.sortedBy { it.sortOrder }
-        val selfId = sorted.firstOrNull { d.persons[it.id]?.isSelf == true }?.id
-            ?: sorted.firstOrNull()?.id ?: 0L
+        // 自分の参加者が無いとき(自分を外した)は -1。先頭の人を「自分」にしない
+        val selfId = sorted.firstOrNull { d.persons[it.id]?.isSelf == true }?.id ?: -1L
 
         // 表示名: 非自分の空欄は「メンバー1」「メンバー2」…(並び順で数える)
         val displayNames = HashMap<Long, String>()
@@ -404,10 +404,9 @@ class SplitSheetViewModel @Inject constructor(
         commit(d.copy(participants = list, persons = pers), nm)
     }
 
-    /** 参加者を外す。自分は外せない。その人の割当も消す。 */
+    /** 参加者を外す(自分も外せる)。その人の割当も消す。 */
     fun removeParticipant(id: Long) {
         val d = data ?: return
-        if (id == _state.value.selfId) return
         commit(
             d.copy(
                 participants = d.participants.filterNot { it.id == id },

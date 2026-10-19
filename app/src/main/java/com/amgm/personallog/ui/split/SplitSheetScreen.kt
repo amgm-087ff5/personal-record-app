@@ -625,9 +625,7 @@ private fun MemberRow(
                 }
                 SheetField("ラベル(例: 新人)", p.label, onSetLabel, placeholder = "なし")
                 Pill(text = "店に払った人", selected = p.isPayer, onClick = { onSetPayer(!p.isPayer) })
-                if (!isSelf) {
-                    TextAction("この人を外す", onClick = onRemove, color = c.danger, modifier = Modifier.padding(top = Space.s))
-                }
+                TextAction("この人を外す", onClick = onRemove, color = c.danger, modifier = Modifier.padding(top = Space.s))
             }
         }
     }
