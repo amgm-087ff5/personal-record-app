@@ -20,6 +20,8 @@ import com.amgm.personallog.data.repository.mergeKeepGroup
 import com.amgm.personallog.data.repository.mergeShareRows
 import com.amgm.personallog.data.repository.splitEmptiesSource
 import com.amgm.personallog.data.repository.toBuild
+import com.amgm.personallog.domain.split.IndividualExpense
+import com.amgm.personallog.domain.split.IndividualExpenses
 import com.amgm.personallog.domain.split.SplitCalculator
 import com.amgm.personallog.domain.split.SplitGroupInput
 import com.amgm.personallog.domain.split.SplitLedger
@@ -79,6 +81,8 @@ data class SplitSheetUiState(
     val groupYen: Map<Long, Map<Long, Int>> = emptyMap(),
     /** 参加者 id → カテゴリ別の金額(品目の金額の比で按分した内訳)。 */
     val breakdown: Map<Long, List<Pair<String, Int>>> = emptyMap(),
+    /** 参加者 id → その人の個別支出(関わったまとまり・割合・食べた分・負担・差)。個別支出のシートと「食べた分 / 負担」の表示に使う。 */
+    val individuals: Map<Long, IndividualExpense> = emptyMap(),
     val groups: List<GroupUi> = emptyList(),
     /** まとまり id → そこに入っている品目(品目 id と品名)。分けるときの選択に使う。 */
     val groupItems: Map<Long, List<Pair<Long, String>>> = emptyMap(),
@@ -192,9 +196,11 @@ class SplitSheetViewModel @Inject constructor(
             displayNames[p.id] = displayNameOf(p, isSelf, names, number)
         }
 
+        val groupNameMap = groupNames(d)
         var result: SplitResult? = null
         var build: SplitBuild? = null
         var breakdown: Map<Long, List<Pair<String, Int>>> = emptyMap()
+        var individuals: Map<Long, IndividualExpense> = emptyMap()
         var calcError: String? = null
         try {
             val b = d.toBuild(total, items)
@@ -202,12 +208,12 @@ class SplitSheetViewModel @Inject constructor(
             val r = SplitCalculator.calculate(b.input)
             result = r
             breakdown = sorted.associate { it.id to SplitLedger.categoryBreakdown(r, it.id, b.itemYen) }
+            individuals = sorted.associate { it.id to IndividualExpenses.of(b.input, it.id, groupNameMap) }
         } catch (e: Throwable) {
             // 未実装の関数(TODO)も Error として届くので Throwable で受ける
             calcError = "計算できません"
         }
 
-        val groupNameMap = groupNames(d)
         val groupAmounts: Map<Long, Int> = build?.input?.groups
             ?.associate { g: SplitGroupInput -> g.id to g.amount }
             .orEmpty()
@@ -259,6 +265,7 @@ class SplitSheetViewModel @Inject constructor(
                 totals = totals,
                 groupYen = groupYen,
                 breakdown = breakdown,
+                individuals = individuals,
                 groups = groupUis,
                 groupItems = groupItemsOf(d),
                 labels = labelsOf(sorted),

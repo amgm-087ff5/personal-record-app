@@ -31,6 +31,8 @@ import com.amgm.personallog.data.model.ShareKind
 import com.amgm.personallog.data.model.SplitMode
 import com.amgm.personallog.data.model.SplitParticipant
 import com.amgm.personallog.data.repository.canSplitOutItems
+import com.amgm.personallog.domain.split.IndividualExpense
+import com.amgm.personallog.domain.split.IndividualLine
 import com.amgm.personallog.domain.split.SplitWarning
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.BareField
@@ -51,7 +53,11 @@ import com.amgm.personallog.ui.receipt.SheetChoice
 import com.amgm.personallog.ui.receipt.SheetField
 import com.amgm.personallog.ui.receipt.SheetTitle
 
-/** 割り勘シートの画面。方式は「食べた分どおり」「全体で割る」の2つ。最初は自分1人で開き、メンバーは後から足す。 */
+/**
+ * 全体支出の画面(割り勘シート)。支払い1件について、誰が何をどれだけ負担するかを全員分まとめて設定する。
+ * 方式は「食べた分どおり」「全体で割る」の2つ。最初は自分1人で開き、メンバーは後から足す。
+ * 参加者の「個別支出」からは、その人が関わったまとまりと割合・食べた分・負担・差を見られる。
+ */
 @Composable
 fun SplitSheetScreen(
     onBack: () -> Unit,
@@ -66,6 +72,8 @@ fun SplitSheetScreen(
     var openMemberId by rememberSaveable { mutableStateOf(0L) }
     /** 開いているまとまり(割り方・対象者・共通費)。0 は無し。 */
     var openGroupId by rememberSaveable { mutableStateOf(0L) }
+    /** 個別支出を開いている参加者の id(null は無し。参加者 id 0 は旧い既定の自分にあり得るので 0 を無しにしない)。 */
+    var openIndividualId by rememberSaveable { mutableStateOf<Long?>(null) }
     /** まとめる操作中か(まとまりを選ぶ)と、選んだまとまり。 */
     var mergeMode by remember { mutableStateOf(false) }
     var mergeSelection by remember { mutableStateOf(setOf<Long>()) }
@@ -104,7 +112,7 @@ fun SplitSheetScreen(
                 ) {
                     TextAction("戻る", onClick = onBack, color = c.inkSoft)
                     Box(modifier = Modifier.weight(1f))
-                    Text("割り勘", style = AppTheme.type.title, color = c.ink)
+                    Text("全体支出", style = AppTheme.type.title, color = c.ink)
                     Box(modifier = Modifier.weight(1f))
                     TextAction("保存", onClick = viewModel::save, enabled = !s.busy && s.data != null)
                 }
@@ -125,7 +133,7 @@ fun SplitSheetScreen(
             }
             if (s.notFound) {
                 item(key = "notFound") {
-                    Text("レシートが見つかりません。", style = AppTheme.type.body, color = c.inkSoft, modifier = Modifier.padding(horizontal = Space.edge))
+                    Text("支払いが見つかりません。", style = AppTheme.type.body, color = c.inkSoft, modifier = Modifier.padding(horizontal = Space.edge))
                 }
             }
             s.error?.let { msg ->
@@ -212,6 +220,7 @@ fun SplitSheetScreen(
                         mode = s.mode,
                         open = openMemberId == p.id,
                         onToggleOpen = { openMemberId = if (openMemberId == p.id) 0L else p.id },
+                        onOpenIndividual = { openIndividualId = p.id },
                         onSetName = { viewModel.setName(p.id, it) },
                         onPickMember = { viewModel.pickMember(p.id, it) },
                         onSetWhole = { viewModel.setWholeValue(p.id, it) },
@@ -361,6 +370,18 @@ fun SplitSheetScreen(
         openGroupId = 0L
     }
 
+    // 参加者の個別支出のシート(参加者が消えたら閉じる)
+    val individualPerson = s.participants.firstOrNull { it.id == openIndividualId }
+    if (individualPerson != null) {
+        IndividualSheet(
+            s = s,
+            p = individualPerson,
+            onDismiss = { openIndividualId = null },
+        )
+    } else if (openIndividualId != null) {
+        openIndividualId = null
+    }
+
     pendingOp?.let { op ->
         GroupOpConfirm(
             message = when (op) {
@@ -503,6 +524,7 @@ private fun MemberRow(
     mode: String,
     open: Boolean,
     onToggleOpen: () -> Unit,
+    onOpenIndividual: () -> Unit,
     onSetName: (String) -> Unit,
     onPickMember: (com.amgm.personallog.data.model.Person) -> Unit,
     onSetWhole: (String) -> Unit,
@@ -561,6 +583,15 @@ private fun MemberRow(
                 textStyle = AppTheme.type.body,
                 modifier = Modifier.padding(top = Space.xs),
             )
+            // 全体で割るときは、食べた分(品目どおりの分)と負担(全体で割った分)を並べる
+            s.individuals[p.id]?.let { ind ->
+                Text(
+                    "食べた分 ${formatYenText(ind.eatenTotal)} / 負担 ${formatYenText(ind.burdenTotal)}",
+                    style = AppTheme.type.caption,
+                    color = c.ink,
+                    modifier = Modifier.padding(top = Space.xs),
+                )
+            }
             val breakdown = s.breakdown[p.id].orEmpty()
             if (breakdown.isNotEmpty()) {
                 Text(
@@ -571,6 +602,13 @@ private fun MemberRow(
                 )
             }
         }
+
+        TextAction(
+            "個別支出",
+            onClick = onOpenIndividual,
+            color = c.inkSoft,
+            modifier = Modifier.padding(top = Space.xs),
+        )
 
         if (open) {
             Column(modifier = Modifier.padding(top = Space.s)) {
@@ -593,6 +631,80 @@ private fun MemberRow(
             }
         }
     }
+}
+
+/**
+ * 個別支出のシート。1人ぶんの、関わったまとまり・割合・食べた分(と全体で割るときは負担)・差。
+ * 差 = 負担 − 食べた分。マイナスは「多めに払ってもらった」、プラスは「多めに払った」。
+ */
+@Composable
+private fun IndividualSheet(s: SplitSheetUiState, p: SplitParticipant, onDismiss: () -> Unit) {
+    val c = AppTheme.colors
+    val ind = s.individuals[p.id]
+    val isWhole = s.mode == SplitMode.WHOLE
+    InkSheet(onDismiss = onDismiss, modifier = Modifier.imePadding()) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            Label("個別支出")
+            Text(s.displayNames[p.id].orEmpty(), style = AppTheme.type.title, color = c.ink)
+            if (ind == null) {
+                Text("計算できません", style = AppTheme.type.body, color = c.danger)
+            } else {
+                if (ind.lines.isEmpty()) {
+                    Text("この支払いでは負担がありません。", style = AppTheme.type.body, color = c.inkSoft)
+                }
+                ind.lines.forEach { line -> IndividualLineRow(line, isWhole) }
+                Hairline(dashed = true)
+                LeaderRow(
+                    label = "食べた分",
+                    value = formatYenText(ind.eatenTotal),
+                    labelStyle = AppTheme.type.caption,
+                    valueStyle = AppTheme.type.caption,
+                    labelColor = c.inkSoft,
+                    valueColor = c.inkSoft,
+                )
+                LeaderRow(
+                    label = if (isWhole) "負担(全体で割る)" else "負担",
+                    value = formatYenText(ind.burdenTotal),
+                    labelStyle = AppTheme.type.body,
+                    valueStyle = AppTheme.type.numeral,
+                    labelColor = c.ink,
+                    valueColor = c.ink,
+                )
+                ind.wholeShare?.let { share ->
+                    Text("全体に対する割合: $share", style = AppTheme.type.caption, color = c.inkSoft)
+                }
+                Text(differenceText(ind.difference), style = AppTheme.type.caption, color = c.ink)
+            }
+            TextAction("閉じる", onClick = onDismiss, color = c.inkSoft, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+/** 個別支出の1行(まとまり1つぶん)。食べた分を大きく、割合と未設定の印を小さく付ける。全体で割るときは負担も出す。 */
+@Composable
+private fun IndividualLineRow(line: IndividualLine, isWhole: Boolean) {
+    val c = AppTheme.colors
+    Column(Modifier.fillMaxWidth().padding(vertical = Space.xs)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(line.name, style = AppTheme.type.body, color = c.ink, modifier = Modifier.weight(1f))
+            Text(formatYenText(line.eaten), style = AppTheme.type.numeral, color = c.ink)
+        }
+        val shareText = if (line.groupId == null) "残差・調整(参加者で均等)" else "割合 ${line.share}"
+        Text(shareText, style = AppTheme.type.caption, color = c.inkSoft)
+        if (isWhole) {
+            Text("負担 ${formatYenText(line.burden)}", style = AppTheme.type.caption, color = c.inkSoft)
+        }
+        if (line.unset) {
+            Text(unsetNoteText(line.isShared), style = AppTheme.type.caption, color = c.inkFaint)
+        }
+    }
+}
+
+/** 差の文言。負担 − 食べた分。 */
+private fun differenceText(difference: Int): String = when {
+    difference < 0 -> "多めに払ってもらった ${formatYenText(-difference)}"
+    difference > 0 -> "多めに払った ${formatYenText(difference)}"
+    else -> "食べた分どおり(差はありません)"
 }
 
 /** ラベルごとの1人あたり金額の1行。label "" は「その他」。空欄の placeholder は同じラベルの人の計算結果。 */

@@ -9,11 +9,15 @@ import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.repository.ExpenseRepository
 import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.repository.SplitRepository
+import com.amgm.personallog.data.repository.toBuild
 import com.amgm.personallog.domain.PaymentEdit
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentKind
 import com.amgm.personallog.domain.PaymentValues
 import com.amgm.personallog.domain.WriteBackTarget
+import com.amgm.personallog.domain.split.IndividualExpense
+import com.amgm.personallog.domain.split.IndividualExpenses
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -38,12 +42,14 @@ data class PaymentUiState(
     /** 家計簿で消した支払い由来の品目(一覧・合計には入らない。「元に戻す」で品目に戻る)。 */
     val deletedItems: List<Expense> = emptyList(),
     val single: Expense? = null,
-    /** 紐づく支払い(レシート)。サムネイル・支払い先・「レシートを開く」に使う。 */
+    /** 紐づく支払い。サムネイル・支払い先・「レシートを開く」に使う。 */
     val receipt: Receipt? = null,
     /** 支払いの日時 "yyyy-MM-dd HH:mm"。日時を変えるときの警告に使う。 */
     val receiptAt: String? = null,
     /** 割り勘の参加者の数(割り勘が無ければ1)。2人以上では金額をここで直せない。 */
     val splitPeople: Int = 1,
+    /** 割り勘があるとき(参加者2人以上)の、自分の個別支出。計算できなければ null。 */
+    val individual: IndividualExpense? = null,
     val error: String? = null,
     /** 削除などで、この画面の対象が無くなった。 */
     val finished: Boolean = false,
@@ -60,6 +66,7 @@ class PaymentDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: ExpenseRepository,
     private val receipts: ReceiptRepository,
+    private val splits: SplitRepository,
 ) : ViewModel() {
     private val kind: PaymentKind = PaymentKind.of(savedStateHandle.get<String>("kind")) ?: PaymentKind.GROUP
     private val id: Long = savedStateHandle.get<Long>("id") ?: 0L
@@ -78,10 +85,12 @@ class PaymentDetailViewModel @Inject constructor(
                             } else {
                                 val receipt = g.receiptId?.let { repository.receipt(it) }
                                 val (gone, visible) = items.sortedBy { it.id }.partition { it.deletedByUser }
+                                val people = g.receiptId?.let { receipts.participantCount(it) } ?: 1
                                 PaymentUiState(
                                     loading = false, kind = kind, group = g, items = visible, deletedItems = gone,
                                     receipt = receipt, receiptAt = repository.receiptDateTime(g.receiptId),
-                                    splitPeople = g.receiptId?.let { receipts.participantCount(it) } ?: 1,
+                                    splitPeople = people,
+                                    individual = if (people >= 2) selfIndividual(g.receiptId) else null,
                                 )
                             }
                         }
@@ -91,10 +100,12 @@ class PaymentDetailViewModel @Inject constructor(
                             PaymentUiState(loading = false, notFound = true, kind = kind)
                         } else {
                             val receipt = e.receiptId?.let { repository.receipt(it) }
+                            val people = e.receiptId?.let { receipts.participantCount(it) } ?: 1
                             PaymentUiState(
                                 loading = false, kind = kind, single = e, items = listOf(e),
                                 receipt = receipt, receiptAt = repository.receiptDateTime(e.receiptId),
-                                splitPeople = e.receiptId?.let { receipts.participantCount(it) } ?: 1,
+                                splitPeople = people,
+                                individual = if (people >= 2) selfIndividual(e.receiptId) else null,
                             )
                         }
                     }
@@ -106,6 +117,30 @@ class PaymentDetailViewModel @Inject constructor(
     }
 
     fun dismissError() = _state.update { it.copy(error = null) }
+
+    /**
+     * 支払いの割り勘から、自分の個別支出を作る(読み込みは SplitRepository.load と toBuild。保存はしない)。
+     * 支払いが無いか、計算できないときは null。まとまりの名前は、そこに入っている品名をつなぐ。
+     */
+    private suspend fun selfIndividual(receiptId: Long?): IndividualExpense? {
+        if (receiptId == null) return null
+        return try {
+            val receipt = receipts.getReceipt(receiptId) ?: return null
+            val items = receipts.getItems(receiptId)
+            val data = splits.load(receiptId)
+            val build = data.toBuild(receipt.totalAmount, items)
+            val itemsById = items.associateBy { it.id }
+            val names = data.groups.associate { gw ->
+                val itemNames = gw.itemIds.mapNotNull { itemsById[it]?.name?.trim()?.ifEmpty { null } }.distinct()
+                gw.group.id to itemNames.joinToString("・").ifEmpty { IndividualExpenses.UNKNOWN_NAME }
+            }
+            IndividualExpenses.of(build.input, build.selfParticipantId, names)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     private fun run(onDone: ((String?) -> Unit)? = null, block: suspend () -> Unit) {
         viewModelScope.launch {
@@ -187,7 +222,7 @@ class PaymentDetailViewModel @Inject constructor(
                 receipts.writeBackFromLedger(target, PaymentValues(d, t, amount, category, name, memo))
             }
         } else if (group != null) {
-            // 品目は支払い(レシート)の品目として足す。家計簿の品目は、支払いを保存するときに作られる(支出だけを単独では作らない)
+            // 品目は支払いの品目として足す。家計簿の品目は、支払いを保存するときに作られる(支出だけを単独では作らない)
             val receiptId = checkNotNull(group.receiptId) { "支払いに紐づかない支出には品目を足せません" }
             val receipt = checkNotNull(receipts.getReceipt(receiptId)) { "支払いが見つかりません" }
             val item = ReceiptItem(

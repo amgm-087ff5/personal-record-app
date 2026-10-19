@@ -38,6 +38,7 @@ import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentWriteBack
+import com.amgm.personallog.domain.split.IndividualExpense
 import com.amgm.personallog.receipt.ReceiptImageCodec
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.BareField
@@ -52,13 +53,17 @@ import com.amgm.personallog.ui.design.Stamp
 import com.amgm.personallog.ui.design.StampTone
 import com.amgm.personallog.ui.design.TextAction
 import com.amgm.personallog.ui.design.tappable
+import com.amgm.personallog.ui.split.unsetNoteText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/** 割り勘があるときの、支出の金額欄の注記(金額は全体支出で直す)。 */
+private const val LOCKED_AMOUNT_NOTE = "金額は割り勘画面(全体支出)で直す"
+
 /**
  * 支出の詳細画面。家計簿の支出(まとまり、または単独の支出)を、金額・日時・メモ・品目まで見て直す。
- * 支払い(レシート)由来なら、日時・金額・品目・支払い先は支払いへ書き戻す。サムネイルと「レシートを開く」でレシートの詳細へ移れる。
+ * 支払い由来なら、日時・金額・品目・支払い先は支払いへ書き戻す。サムネイルと「レシートを開く」でレシートの詳細へ移れる。
  */
 @Composable
 fun PaymentDetailScreen(
@@ -110,6 +115,9 @@ fun PaymentDetailScreen(
                 s.receipt?.let { r ->
                     item(key = "store") { StoreRow(r.storeName, onEdit = { editingStore = true }) }
                     item(key = "split") { SplitRow(s.splitPeople, r.id, onOpenSplit) }
+                    if (s.splitPeople >= 2) {
+                        item(key = "individual") { IndividualBlock(s.individual) }
+                    }
                 }
                 item(key = "receipt") {
                     ReceiptBlock(s.receipt?.imagePath, s.receipt?.id, onOpenReceipt)
@@ -187,6 +195,9 @@ fun PaymentDetailScreen(
                 s.receipt?.let { r ->
                     item(key = "store") { StoreRow(r.storeName, onEdit = { editingStore = true }) }
                     item(key = "split") { SplitRow(s.splitPeople, r.id, onOpenSplit) }
+                    if (s.splitPeople >= 2) {
+                        item(key = "individual") { IndividualBlock(s.individual) }
+                    }
                 }
                 item(key = "receipt") {
                     ReceiptBlock(s.receipt?.imagePath, s.receipt?.id, onOpenReceipt)
@@ -218,6 +229,7 @@ fun PaymentDetailScreen(
             onDelete = null,
             title = "支出を編集",
             showName = false,
+            lockedAmountNote = if (s.splitPeople >= 2) LOCKED_AMOUNT_NOTE else null,
         )
     }
     editingItem?.let { target ->
@@ -236,6 +248,7 @@ fun PaymentDetailScreen(
             },
             title = if (group != null) "品目を編集" else null,
             showDateTime = group == null,
+            lockedAmountNote = if (s.splitPeople >= 2) LOCKED_AMOUNT_NOTE else null,
         )
     }
     if (addingItem && group != null) {
@@ -292,7 +305,7 @@ private fun StoreRow(store: String, onEdit: () -> Unit) {
 
 /**
  * 割り勘の入口。参加者が2人以上なら、金額はこの画面では直せないので、割り勘画面へ案内する。
- * 支払いが無い(レシートに紐づかない)支出では出さない。
+ * 支払いが無い(支払いに紐づかない)支出では出さない。
  */
 @Composable
 private fun SplitRow(people: Int, receiptId: Long, onOpenSplit: (Long) -> Unit) {
@@ -300,16 +313,78 @@ private fun SplitRow(people: Int, receiptId: Long, onOpenSplit: (Long) -> Unit) 
     Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge, vertical = Space.xs)) {
         if (people >= 2) {
             Text(
-                "割り勘があるため、金額はここでは直せません。金額は割り勘画面で直してください。",
+                "割り勘があるため、金額はここでは直せません。金額は全体支出で直してください。",
                 style = AppTheme.type.caption,
                 color = c.inkSoft,
             )
         }
         TextAction(
-            if (people >= 2) "割り勘画面で直す" else "割り勘",
+            if (people >= 2) "全体支出を開く" else "割り勘",
             onClick = { onOpenSplit(receiptId) },
         )
     }
+}
+
+/** 割り勘があるときの、自分の個別支出。まとまりごとの割合・食べた分・負担と、差(多めに払ったか・払ってもらったか)。 */
+@Composable
+private fun IndividualBlock(individual: IndividualExpense?) {
+    val c = AppTheme.colors
+    Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge, vertical = Space.s)) {
+        Label("自分の個別支出")
+        if (individual == null) {
+            Text("計算できません", style = AppTheme.type.caption, color = c.danger, modifier = Modifier.padding(top = Space.xs))
+            return@Column
+        }
+        if (individual.lines.isEmpty()) {
+            Text("この支払いでは自分の負担はありません。", style = AppTheme.type.caption, color = c.inkSoft, modifier = Modifier.padding(top = Space.xs))
+        }
+        individual.lines.forEach { line ->
+            Row(Modifier.fillMaxWidth().padding(top = Space.xs), verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Text(line.name, style = AppTheme.type.body, color = c.ink)
+                    val shareText = if (line.groupId == null) "残差・調整(参加者で均等)" else "割合 ${line.share}"
+                    Text(shareText, style = AppTheme.type.caption, color = c.inkSoft)
+                    if (line.unset) {
+                        Text(unsetNoteText(line.isShared), style = AppTheme.type.caption, color = c.inkFaint)
+                    }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(LedgerLogic.formatYen(line.eaten.toLong()), style = AppTheme.type.numeral, color = c.ink)
+                    if (line.burden != line.eaten) {
+                        Text("負担 ${LedgerLogic.formatYen(line.burden.toLong())}", style = AppTheme.type.caption, color = c.inkSoft)
+                    }
+                }
+            }
+        }
+        Hairline(dashed = true, modifier = Modifier.padding(top = Space.s))
+        LeaderRow(
+            label = "食べた分",
+            value = LedgerLogic.formatYen(individual.eatenTotal.toLong()),
+            labelStyle = AppTheme.type.caption,
+            valueStyle = AppTheme.type.caption,
+            labelColor = c.inkSoft,
+            valueColor = c.inkSoft,
+            modifier = Modifier.padding(top = Space.xs),
+        )
+        LeaderRow(
+            label = "負担",
+            value = LedgerLogic.formatYen(individual.burdenTotal.toLong()),
+            modifier = Modifier.padding(top = Space.xs),
+        )
+        Text(
+            individualDifferenceText(individual.difference),
+            style = AppTheme.type.caption,
+            color = c.ink,
+            modifier = Modifier.padding(top = Space.xs),
+        )
+    }
+}
+
+/** 差の文言。差 = 負担 − 食べた分。マイナスは「多めに払ってもらった」、プラスは「多めに払った」。 */
+private fun individualDifferenceText(difference: Int): String = when {
+    difference < 0 -> "多めに払ってもらった ${LedgerLogic.formatYen(-difference.toLong())}"
+    difference > 0 -> "多めに払った ${LedgerLogic.formatYen(difference.toLong())}"
+    else -> "食べた分どおり(差はありません)"
 }
 
 /** 支払い先を直すシート。空にはできない(ViewModel が拒否する)。 */
