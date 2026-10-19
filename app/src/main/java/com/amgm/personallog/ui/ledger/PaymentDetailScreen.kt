@@ -203,6 +203,24 @@ fun PaymentDetailScreen(
                     ReceiptBlock(s.receipt?.imagePath, s.receipt?.id, onOpenReceipt)
                 }
                 item(key = "pad") { Spacer(Modifier.height(Space.xl)) }
+            } else if (s.selfExcluded) {
+                // 割り勘で自分が外れた支払い。家計簿には自分の行が無く、支払いと割り勘だけを見せる
+                s.receipt?.let { r ->
+                    item(key = "excluded-note") {
+                        Text(
+                            "この支払いに自分は含まれていません",
+                            style = AppTheme.type.body,
+                            color = c.ink,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(top = Space.l),
+                        )
+                    }
+                    item(key = "store") { StoreRow(r.storeName, onEdit = { editingStore = true }) }
+                    item(key = "split") { SplitRow(s.splitPeople, r.id, onOpenSplit) }
+                    item(key = "receipt") {
+                        ReceiptBlock(r.imagePath, r.id, onOpenReceipt)
+                    }
+                }
+                item(key = "pad") { Spacer(Modifier.height(Space.xl)) }
             } else if (s.loading) {
                 item(key = "loading") {
                     Text("読み込み中…", style = AppTheme.type.body, color = c.inkSoft, modifier = Modifier.padding(Space.edge))

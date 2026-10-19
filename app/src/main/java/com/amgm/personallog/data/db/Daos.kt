@@ -225,6 +225,16 @@ interface ExpenseDao {
     )
     fun observeLedgerRows(from: String, to: String): Flow<List<Expense>>
 
+    /**
+     * 家計簿の行(支出またはグループ)が1つでもあるレシートの id。期間に関係なく全件を見る
+     * (割り勘で自分の分が 0 円の支払いを見分けるため。行が無いレシートだけが対象になる)。
+     */
+    @Query(
+        "SELECT receiptId FROM expenses WHERE receiptId IS NOT NULL " +
+            "UNION SELECT receiptId FROM expense_groups WHERE receiptId IS NOT NULL",
+    )
+    fun observeReceiptIdsWithRows(): Flow<List<Long>>
+
     /** グループの日時が変わったとき、その品目の日時を合わせる。 */
     @Query("UPDATE expenses SET date = :date, time = :time WHERE groupId = :groupId")
     suspend fun syncGroupChildrenDateTime(groupId: Long, date: String, time: String)

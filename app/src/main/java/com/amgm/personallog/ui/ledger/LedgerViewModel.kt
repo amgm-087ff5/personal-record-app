@@ -3,10 +3,12 @@ package com.amgm.personallog.ui.ledger
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.amgm.personallog.backup.BackupException
 import com.amgm.personallog.backup.BackupManager
 import com.amgm.personallog.backup.BackupProgress
 import com.amgm.personallog.backup.ImportMode
+import com.amgm.personallog.data.db.AppDatabase
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
@@ -86,6 +88,7 @@ class LedgerViewModel @Inject constructor(
     private val receipts: ReceiptRepository,
     private val splits: SplitRepository,
     private val backupManager: BackupManager,
+    private val db: AppDatabase,
 ) : ViewModel() {
 
     /** 表示の基準日。月ヘッダーと積み上げグラフはこの日付から決まる。 */
@@ -112,12 +115,22 @@ class LedgerViewModel @Inject constructor(
                     repository.observeGroupsBetween(from, to),
                     receipts.observeReceipts(),
                     splits.observeSheets(),
-                ) { all, groups, receiptList, sheets ->
+                    db.expenseDao().observeReceiptIdsWithRows(),
+                ) { all, groups, receiptList, sheets, rowReceiptIds ->
+                    // 割り勘で自分を外した支払い(自分の分が0円で行が無い)は、0円の行として一覧に出す
+                    val excluded = LedgerLogic.excludedReceipts(
+                        receipts = receiptList,
+                        splitReceiptIds = sheets.mapTo(HashSet()) { it.receiptId },
+                        rowReceiptIds = rowReceiptIds.toHashSet(),
+                        from = from,
+                        to = to,
+                    )
                     snapshot(
                         f, l, all, groups,
                         draftIds = receiptList.filter { it.status == ReceiptStatus.DRAFT }.mapTo(HashSet()) { it.id },
                         warnIds = sheets.filter { it.warnings.isNotBlank() }.mapTo(HashSet()) { it.receiptId },
                         imageIds = receiptList.filter { it.imagePath.isNotEmpty() }.mapTo(HashSet()) { it.id },
+                        excluded = excluded,
                     )
                 }
                     .catch { e ->
@@ -153,9 +166,11 @@ class LedgerViewModel @Inject constructor(
         draftIds: Set<Long>,
         warnIds: Set<Long>,
         imageIds: Set<Long>,
+        excluded: List<LedgerEntry.Excluded>,
     ): Snapshot {
         val ym = YearMonth.from(f).toString()
-        val entries = LedgerLogic.buildEntries(all, groups)
+        // 集計は自分の分だけ。0円の行(自分が外れた支払い)は金額もカテゴリ内訳も0なので、合計には足さない
+        val entries = LedgerLogic.buildEntries(all, groups, excluded)
         val current = entries.filter { it.date.startsWith(ym) }
         return Snapshot(
             month = ym,
@@ -201,14 +216,24 @@ class LedgerViewModel @Inject constructor(
      * 手入力の支払いを保存する(レシートの表と品目)。家計簿の支出は、この保存のなかで支払いから作られる。
      * onDone には保存した支払いの id と、エラーメッセージ(成功なら null)を渡す。
      */
-    fun addManualPayment(receipt: Receipt, items: List<ReceiptItem>, onDone: (Long?, String?) -> Unit) {
+    fun addManualPayment(
+        receipt: Receipt,
+        items: List<ReceiptItem>,
+        headcount: Int?,
+        onDone: (Long?, String?) -> Unit,
+    ) {
         viewModelScope.launch {
             try {
-                // 確定(合計か品目がある)は詳細画面の確定と同じ saveAndConfirm を通す。下書きは save のまま
-                val id = if (receipt.status == ReceiptStatus.CONFIRMED) {
-                    receipts.saveAndConfirm(receipt, items)
-                } else {
-                    receipts.save(receipt, items)
+                // 保存と人数の書き込みを1つのトランザクションにする(人数だけ残る状態を作らない)
+                val id = db.withTransaction {
+                    // 確定(合計か品目がある)は詳細画面の確定と同じ saveAndConfirm を通す。下書きは save のまま
+                    val savedId = if (receipt.status == ReceiptStatus.CONFIRMED) {
+                        receipts.saveAndConfirm(receipt, items)
+                    } else {
+                        receipts.save(receipt, items)
+                    }
+                    if (headcount != null) db.receiptDao().setHeadcount(savedId, headcount)
+                    savedId
                 }
                 onDone(id, null)
             } catch (e: CancellationException) {

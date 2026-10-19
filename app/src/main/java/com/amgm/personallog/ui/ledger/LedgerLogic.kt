@@ -1,8 +1,11 @@
 package com.amgm.personallog.ui.ledger
 
+import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.domain.LedgerCalc
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
@@ -66,6 +69,21 @@ sealed interface LedgerEntry {
         /** 支払い金額 - 品目の合計。0 なら一致。 */
         val difference: Long get() = amount - itemSum
     }
+
+    /**
+     * 割り勘で自分を外した支払い(自分の分が 0 円で、家計簿に支出の行が無いもの)。
+     * 金額は 0 円で、カテゴリ別の内訳は空(合計・カテゴリ集計に何も足さない)。
+     * 一覧に「自分の分 ¥0（対象外）」として出すためだけの行。詳細画面は支払い(receipt.id)で開く。
+     */
+    data class Excluded(val receipt: Receipt) : LedgerEntry {
+        override val date: String get() = LedgerCalc.splitPurchasedAt(receipt.purchasedAt).first
+        override val time: String get() = LedgerCalc.splitPurchasedAt(receipt.purchasedAt).second
+        override val amount: Long get() = 0L
+        override val category: String get() = Categories.UNCATEGORIZED
+        override val createdAt: Long get() = receipt.createdAt
+        override val receiptId: Long? get() = receipt.id
+        override val categoryParts: List<CategoryTotal> get() = emptyList()
+    }
 }
 
 /** 日付ごとにまとめた行。 */
@@ -74,6 +92,9 @@ data class DayGroup(val date: String, val total: Long, val items: List<LedgerEnt
 data class CategoryShare(val category: String, val total: Long, val percent: Int)
 
 data class MonthTotal(val yearMonth: String, val total: Long)
+
+/** 参加人数の入力の検証結果。空欄は value=null・error=null。 */
+data class HeadcountParse(val value: Int?, val error: String?)
 
 /** 入力フォームの検証結果。エラーが無ければ date / amount / category が入る。 */
 data class ExpenseValidation(
@@ -117,8 +138,13 @@ object LedgerLogic {
      * (合計が二重にならない)。groupId のある行は、グループが渡されていなくても単独の行としては数えない
      * (グループが別の月に動いたとき、品目が元の月に単独で残って二重に数えられるのを防ぐ)。
      * 月・日の振り分けはグループの日付に従う。並びは日付の降順、同じ日は作成の新しい順。
+     * excluded は割り勘で自分を外した支払いの0円の行(excludedReceipts で作る)。金額は 0 なので合計には影響しない。
      */
-    fun buildEntries(expenses: List<Expense>, groups: List<ExpenseGroup>): List<LedgerEntry> {
+    fun buildEntries(
+        expenses: List<Expense>,
+        groups: List<ExpenseGroup>,
+        excluded: List<LedgerEntry.Excluded> = emptyList(),
+    ): List<LedgerEntry> {
         val groupIds = groups.map { it.id }.toSet()
         // 家計簿で消した品目(deletedByUser)は、一覧にも集計にも入れない
         val itemsByGroup = expenses
@@ -128,9 +154,42 @@ object LedgerLogic {
             .filter { e -> e.groupId == null && !e.deletedByUser }
             .map { LedgerEntry.Single(it) }
         val grouped = groups.map { LedgerEntry.Group(it, itemsByGroup[it.id].orEmpty().sortedBy { x -> x.id }) }
-        return (singles + grouped).sortedWith(
+        val all: List<LedgerEntry> = singles + grouped + excluded
+        return all.sortedWith(
             compareByDescending<LedgerEntry> { it.date }.thenByDescending { it.createdAt },
         )
+    }
+
+    /**
+     * 割り勘で自分を外した支払いを、0円の行にする対象を選ぶ。
+     * 条件: 割り勘のシートがある(splitReceiptIds)・家計簿の行が1つも無い(rowReceiptIds に無い)・合計がある・
+     * 支払いの日付が from..to の中(yyyy-MM-dd の文字列で比べる)。
+     * 行が無いのは「自分の分が 0 円」のときだけ(行は自分の分が 0 円なら作らない)。合計が無い下書きは対象外。
+     */
+    fun excludedReceipts(
+        receipts: List<Receipt>,
+        splitReceiptIds: Set<Long>,
+        rowReceiptIds: Set<Long>,
+        from: String,
+        to: String,
+    ): List<LedgerEntry.Excluded> =
+        receipts.asSequence()
+            .filter { it.id != 0L && it.id in splitReceiptIds && it.id !in rowReceiptIds }
+            .filter { it.totalAmount != null }
+            .filter { val d = LedgerCalc.splitPurchasedAt(it.purchasedAt).first; d >= from && d <= to }
+            .map { LedgerEntry.Excluded(it) }
+            .toList()
+
+    /**
+     * 参加人数(任意)の入力。空欄は null(不明)。数字は1以上の整数だけ。
+     * 値は整数に変換できる範囲に収める(大きすぎる数は不正)。
+     */
+    fun parseHeadcount(text: String): HeadcountParse {
+        val t = text.trim()
+        if (t.isEmpty()) return HeadcountParse(value = null, error = null)
+        if (!t.all { it in '0'..'9' }) return HeadcountParse(null, "人数は整数で入力してください")
+        val n = t.toIntOrNull() ?: return HeadcountParse(null, "人数が大きすぎます")
+        return if (n <= 0) HeadcountParse(null, "人数は1以上の整数で入力してください") else HeadcountParse(n, null)
     }
 
     /** 日付降順にグループ化。グループ内は entries の順序を保つ。 */
