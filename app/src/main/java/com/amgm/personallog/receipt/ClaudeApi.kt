@@ -36,7 +36,8 @@ object ClaudeRequest {
      */
     val PROMPT: String = """
         このレシート画像から情報を抽出し、次の形式のJSONだけを返してください。
-        {"date":"yyyy-MM-dd","time":"HH:mm"またはnull,"store":"店名","items":[{"receipt":{"name":"品目名","quantity":数量(数値、不明なら1),"unitPrice":単価(円の整数),"amount":金額(円の整数、値引き行は負の数),"taxRate":消費税率(整数の%。例 8 や 10。不明ならnull),"priceIncludesTax":金額が税込ならtrue、税抜ならfalse(不明ならnull)},"ledger":{"category":"カテゴリ","shared":true または false}}],"total":レシートに印字された合計(円の整数。読み取れなければnull。品目から計算しない),"note":"補足またはnull"}
+        {"date":"yyyy-MM-dd","time":"HH:mm"またはnull,"store":"店名","items":[{"receipt":{"name":"品目名","quantity":数量(数値、不明なら1),"unitPrice":単価(円の整数),"amount":金額(円の整数、値引き行は負の数),"taxRate":消費税率(整数の%。例 8 や 10。不明ならnull),"priceIncludesTax":金額が税込ならtrue、税抜ならfalse(不明ならnull)},"ledger":{"category":"カテゴリ","shared":true または false}}],"total":レシートに印字された合計(円の整数。読み取れなければnull。品目から計算しない),"headcount":人数(整数。席料・注文タブレット・伝票などに人数が印字・入力されていればその数。無ければnull),"note":"補足またはnull"}
+        headcount は、印字・入力された人数だけを入れてください。品目の数や個数から推測しないでください。
         品目の金額(receipt.amount)は印字されているとおりの値にしてください。税抜表示の品目を税込に換算しないでください(税込換算はシステム側で行います)。
         軽減税率(8%)の品目は receipt.taxRate を 8 にしてください。品目ごとの税率が分からない場合は null にしてください。
         数量が2以上の品目は receipt.quantity に数量を入れ、receipt.amount には数量分の合計金額を入れてください。

@@ -34,7 +34,7 @@ class BackupFormat6Test {
         val text = BackupJson.encodeToString(BackupData.serializer(), data)
         val back = BackupJson.decodeFromString(BackupData.serializer(), text)
         assertEquals(data, back)
-        assertEquals(8, back.formatVersion)
+        assertEquals(BACKUP_FORMAT_VERSION, back.formatVersion)
         assertEquals(group, back.expenseGroups.single().toEntity())
         assertEquals(expense, back.expenses.single().toEntity())
         assertTrue(text.contains("\"receiptItemId\":11"))

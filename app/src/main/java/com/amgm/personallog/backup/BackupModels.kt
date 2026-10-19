@@ -34,7 +34,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /** バックアップZIPのフォーマット版。互換性を壊す変更をしたら上げる。 */
-const val BACKUP_FORMAT_VERSION = 8
+const val BACKUP_FORMAT_VERSION = 9
 const val BACKUP_DATA_ENTRY = "data.json"
 const val BACKUP_FILES_PREFIX = "files/"
 
@@ -114,6 +114,8 @@ data class BackupReceipt(
     val cropTop: Float = 0f,
     val cropRight: Float = 1f,
     val cropBottom: Float = 1f,
+    /** v9 以降。参加人数(自分を含む)。無い古いバックアップは null(不明)。 */
+    val headcount: Int? = null,
 ) {
     /**
      * items はこのレシートの品目(旧形式の自分の分を集計するため)。
@@ -138,6 +140,7 @@ data class BackupReceipt(
             totalSource = source,
             rotationDegrees = rotationDegrees,
             cropLeft = cropLeft, cropTop = cropTop, cropRight = cropRight, cropBottom = cropBottom,
+            headcount = headcount,
         )
     }
     companion object {
@@ -148,6 +151,7 @@ data class BackupReceipt(
             totalSource = e.totalSource, imageHash = e.imageHash,
             rotationDegrees = e.rotationDegrees,
             cropLeft = e.cropLeft, cropTop = e.cropTop, cropRight = e.cropRight, cropBottom = e.cropBottom,
+            headcount = e.headcount,
         )
     }
 }

@@ -57,7 +57,7 @@ class BackupFormat8Test {
         val text = BackupJson.encodeToString(BackupData.serializer(), data)
         val back = BackupJson.decodeFromString(BackupData.serializer(), text)
         assertEquals(data, back)
-        assertEquals(8, back.formatVersion)
+        assertEquals(BACKUP_FORMAT_VERSION, back.formatVersion)
         assertEquals(3, back.participants.size)
         assertEquals(listOf(BackupLabelAmount(5, "新人", 3000)), back.labelAmounts)
         assertEquals(21L, back.itemShares[0].participantId)

@@ -94,6 +94,10 @@ interface ReceiptDao {
     )
     suspend fun setAdjust(id: Long, rotation: Float, left: Float, top: Float, right: Float, bottom: Float): Int
 
+    /** 参加人数(headcount)の列だけを更新する。null は「不明」。 */
+    @Query("UPDATE receipts SET headcount = :headcount WHERE id = :id")
+    suspend fun setHeadcount(id: Long, headcount: Int?): Int
+
     @Insert
     suspend fun insert(receipt: Receipt): Long
 

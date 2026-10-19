@@ -30,8 +30,9 @@ import com.amgm.personallog.data.model.WholeShare
         Person::class, SplitSheet::class, ShareGroup::class, ShareGroupItem::class, ItemShare::class, WholeShare::class, PaymentPayer::class,
         // v11: 支払いごとの参加者・ラベルごとの金額。割当の参照先を参加者に変更
         SplitParticipant::class, SplitLabelAmount::class,
+        // v13: レシートの参加人数(receipts.headcount)
     ],
-    version = 12, // AppDatabase.VERSION と同じにする(テストで確認)
+    version = 13, // AppDatabase.VERSION と同じにする(テストで確認)
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -45,6 +46,6 @@ abstract class AppDatabase : RoomDatabase() {
         const val NAME = "personal_log.db"
 
         /** Room の版。@Database の version と PreMigrationBackup が共有する。 */
-        const val VERSION = 12
+        const val VERSION = 13
     }
 }
