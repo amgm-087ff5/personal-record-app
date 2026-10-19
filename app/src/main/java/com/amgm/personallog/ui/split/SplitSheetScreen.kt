@@ -31,6 +31,9 @@ import com.amgm.personallog.data.model.ShareKind
 import com.amgm.personallog.data.model.SplitMode
 import com.amgm.personallog.data.model.SplitParticipant
 import com.amgm.personallog.data.repository.canSplitOutItems
+import com.amgm.personallog.domain.split.IndividualExpense
+import com.amgm.personallog.domain.split.IndividualLine
+import com.amgm.personallog.domain.split.SplitWarning
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.BareField
 import com.amgm.personallog.ui.design.Hairline
@@ -50,7 +53,11 @@ import com.amgm.personallog.ui.receipt.SheetChoice
 import com.amgm.personallog.ui.receipt.SheetField
 import com.amgm.personallog.ui.receipt.SheetTitle
 
-/** 割り勘シートの画面。タブ(自分だけ / 全体 / 品目ごと)で方式を切り替える。 */
+/**
+ * 全体支出の画面(割り勘シート)。支払い1件について、誰が何をどれだけ負担するかを全員分まとめて設定する。
+ * 方式は「食べた分どおり」「全体で割る」の2つ。最初は自分1人で開き、メンバーは後から足す。
+ * 参加者の「個別支出」からは、その人が関わったまとまりと割合・食べた分・負担・差を見られる。
+ */
 @Composable
 fun SplitSheetScreen(
     onBack: () -> Unit,
@@ -60,10 +67,13 @@ fun SplitSheetScreen(
     val s by viewModel.state.collectAsStateWithLifecycle()
     val c = AppTheme.colors
     var pickerOpen by rememberSaveable { mutableStateOf(false) }
+    var bulkOpen by rememberSaveable { mutableStateOf(false) }
     /** 行を開いている参加者(メモ・ラベル・支払者・削除)。0 は無し。 */
     var openMemberId by rememberSaveable { mutableStateOf(0L) }
     /** 開いているまとまり(割り方・対象者・共通費)。0 は無し。 */
     var openGroupId by rememberSaveable { mutableStateOf(0L) }
+    /** 個別支出を開いている参加者の id(null は無し。参加者 id 0 は旧い既定の自分にあり得るので 0 を無しにしない)。 */
+    var openIndividualId by rememberSaveable { mutableStateOf<Long?>(null) }
     /** まとめる操作中か(まとまりを選ぶ)と、選んだまとまり。 */
     var mergeMode by remember { mutableStateOf(false) }
     var mergeSelection by remember { mutableStateOf(setOf<Long>()) }
@@ -102,7 +112,7 @@ fun SplitSheetScreen(
                 ) {
                     TextAction("戻る", onClick = onBack, color = c.inkSoft)
                     Box(modifier = Modifier.weight(1f))
-                    Text("割り勘", style = AppTheme.type.title, color = c.ink)
+                    Text("全体支出", style = AppTheme.type.title, color = c.ink)
                     Box(modifier = Modifier.weight(1f))
                     TextAction("保存", onClick = viewModel::save, enabled = !s.busy && s.data != null)
                 }
@@ -123,7 +133,7 @@ fun SplitSheetScreen(
             }
             if (s.notFound) {
                 item(key = "notFound") {
-                    Text("レシートが見つかりません。", style = AppTheme.type.body, color = c.inkSoft, modifier = Modifier.padding(horizontal = Space.edge))
+                    Text("支払いが見つかりません。", style = AppTheme.type.body, color = c.inkSoft, modifier = Modifier.padding(horizontal = Space.edge))
                 }
             }
             s.error?.let { msg ->
@@ -148,7 +158,7 @@ fun SplitSheetScreen(
                     Text(w, style = AppTheme.type.caption, color = c.danger, modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.xs))
                 }
 
-                // タブ(割り方は排他)
+                // 方式のタブ(排他)
                 item(key = "tabs") {
                     Pills(
                         options = MODES,
@@ -159,131 +169,158 @@ fun SplitSheetScreen(
                     )
                 }
 
-                if (s.mode == SplitMode.SELF) {
-                    item(key = "selfOnly") {
-                        Text(
-                            "全額が自分の支出になります。",
-                            style = AppTheme.type.body,
-                            color = c.inkSoft,
-                            modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.m),
-                        )
-                    }
-                } else {
-                    if (s.mode == SplitMode.WHOLE) {
-                        item(key = "wholeKind") {
-                            Column(modifier = Modifier.padding(horizontal = Space.edge)) {
-                                Label("入力の種類", modifier = Modifier.padding(bottom = Space.s))
-                                Pills(
-                                    options = listOf(ShareKind.AMOUNT, ShareKind.RATIO),
-                                    selected = s.wholeKind,
-                                    onSelect = viewModel::setWholeKind,
-                                    label = { if (it == ShareKind.AMOUNT) "金額" else "割合" },
-                                )
-                                Text(
-                                    "空欄は残りの額を均等に割ります(薄い数字が計算結果)。",
-                                    style = AppTheme.type.caption,
-                                    color = c.inkFaint,
-                                    modifier = Modifier.padding(top = Space.xs),
-                                )
-                            }
+                if (s.mode == SplitMode.WHOLE) {
+                    item(key = "wholeKind") {
+                        Column(modifier = Modifier.padding(horizontal = Space.edge)) {
+                            Label("入力の種類", modifier = Modifier.padding(bottom = Space.s))
+                            Pills(
+                                options = listOf(ShareKind.AMOUNT, ShareKind.RATIO),
+                                selected = s.wholeKind,
+                                onSelect = viewModel::setWholeKind,
+                                label = { if (it == ShareKind.AMOUNT) "金額" else "割合" },
+                            )
+                            Text(
+                                "空欄は残りの額を均等に割ります(薄い数字が計算結果)。",
+                                style = AppTheme.type.caption,
+                                color = c.inkFaint,
+                                modifier = Modifier.padding(top = Space.xs),
+                            )
                         }
                     }
+                }
 
-                    // メンバー欄(全体・品目ごとで共通)
-                    item(key = "membersTitle") {
-                        Label("メンバー", modifier = Modifier.padding(start = Space.edge, end = Space.edge, top = Space.l, bottom = Space.s))
-                    }
-                    items(s.participants, key = { it.id }) { p ->
-                        MemberRow(
-                            s = s,
-                            p = p,
-                            mode = s.mode,
-                            open = openMemberId == p.id,
-                            onToggleOpen = { openMemberId = if (openMemberId == p.id) 0L else p.id },
-                            onSetName = { viewModel.setName(p.id, it) },
-                            onPickMember = { viewModel.pickMember(p.id, it) },
-                            onSetWhole = { viewModel.setWholeValue(p.id, it) },
-                            onSetMemo = { viewModel.setMemo(p.id, it) },
-                            onSetLabel = { viewModel.setLabel(p.id, it) },
-                            onSetPayer = { viewModel.setPayer(p.id, it) },
-                            onRemove = { viewModel.removeParticipant(p.id) },
+                // 参加人数(参加者が自分1人でも出す)
+                item(key = "count") {
+                    ParticipantCountRow(
+                        count = s.participants.size,
+                        canRemove = s.removableId != null,
+                        onMinus = viewModel::removeLastBlankParticipant,
+                        onPlus = viewModel::addBlankParticipant,
+                        onBulk = { bulkOpen = true },
+                    )
+                }
+
+                // メンバー欄(両方式で共通)
+                item(key = "membersTitle") {
+                    Label("メンバー", modifier = Modifier.padding(start = Space.edge, end = Space.edge, top = Space.l, bottom = Space.s))
+                }
+                if (s.mode == SplitMode.WHOLE && s.wholeWarnings.isNotEmpty()) {
+                    item(key = "wholeWarnings") {
+                        WholeWarningBlock(
+                            warnings = s.wholeWarnings,
+                            onEqualize = viewModel::equalizeWhole,
+                            onTakeDifference = viewModel::takeDifferenceForWhole,
                         )
                     }
-                    item(key = "memberActions") {
+                }
+                items(s.participants, key = { it.id }) { p ->
+                    MemberRow(
+                        s = s,
+                        p = p,
+                        mode = s.mode,
+                        open = openMemberId == p.id,
+                        onToggleOpen = { openMemberId = if (openMemberId == p.id) 0L else p.id },
+                        onOpenIndividual = { openIndividualId = p.id },
+                        onSetName = { viewModel.setName(p.id, it) },
+                        onPickMember = { viewModel.pickMember(p.id, it) },
+                        onSetWhole = { viewModel.setWholeValue(p.id, it) },
+                        onSetMemo = { viewModel.setMemo(p.id, it) },
+                        onSetLabel = { viewModel.setLabel(p.id, it) },
+                        onSetPayer = { viewModel.setPayer(p.id, it) },
+                        onRemove = { viewModel.removeParticipant(p.id) },
+                    )
+                }
+                item(key = "memberActions") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = Space.s),
+                        horizontalArrangement = Arrangement.spacedBy(Space.s),
+                    ) {
+                        TextAction("メンバーを追加", onClick = { pickerOpen = true })
+                    }
+                }
+
+                if (s.mode == SplitMode.WHOLE && s.labels.isNotEmpty()) {
+                    item(key = "labelAmounts") {
+                        Column(modifier = Modifier.padding(horizontal = Space.edge).padding(top = Space.l)) {
+                            Label("ラベルごとの金額(1人あたり)")
+                            Text(
+                                "新人はいくら、その他はいくら、と一括で決められます。空欄は均等割。",
+                                style = AppTheme.type.caption,
+                                color = c.inkFaint,
+                                modifier = Modifier.padding(bottom = Space.s),
+                            )
+                        }
+                    }
+                    items(listOf("") + s.labels, key = { "label-$it" }) { label ->
+                        LabelAmountRow(s = s, label = label, onSet = { viewModel.setLabelAmount(label, it) })
+                    }
+                }
+
+                if (s.mode == SplitMode.ITEM) {
+                    item(key = "groupsTitle") {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = Space.s),
-                            horizontalArrangement = Arrangement.spacedBy(Space.s),
+                            modifier = Modifier.fillMaxWidth().padding(start = Space.edge, end = Space.edge, top = Space.l, bottom = Space.s),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            TextAction("メンバーを選ぶ", onClick = { pickerOpen = true })
-                            TextAction("+ 追加", onClick = viewModel::addBlankParticipant)
-                        }
-                    }
-
-                    if (s.mode == SplitMode.WHOLE && s.labels.isNotEmpty()) {
-                        item(key = "labelAmounts") {
-                            Column(modifier = Modifier.padding(horizontal = Space.edge).padding(top = Space.l)) {
-                                Label("ラベルごとの金額(1人あたり)")
-                                Text(
-                                    "新人はいくら、その他はいくら、と一括で決められます。空欄は均等割。",
-                                    style = AppTheme.type.caption,
-                                    color = c.inkFaint,
-                                    modifier = Modifier.padding(bottom = Space.s),
-                                )
-                            }
-                        }
-                        items(listOf("") + s.labels, key = { "label-$it" }) { label ->
-                            LabelAmountRow(s = s, label = label, onSet = { viewModel.setLabelAmount(label, it) })
-                        }
-                    }
-
-                    if (s.mode == SplitMode.ITEM) {
-                        item(key = "groupsTitle") {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(start = Space.edge, end = Space.edge, top = Space.l, bottom = Space.s),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Label("品目のまとまり")
-                                Box(modifier = Modifier.weight(1f))
-                                TextAction(
-                                    if (mergeMode) "やめる" else "まとめる",
-                                    onClick = {
-                                        mergeMode = !mergeMode
-                                        mergeSelection = emptySet()
-                                    },
-                                )
-                            }
-                        }
-                        if (mergeMode) {
-                            item(key = "mergeAction") {
-                                Column(modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.xs)) {
-                                    Text(
-                                        "まとめるまとまりを2つ以上選びます。残すのは並びが一番早いまとまりです。",
-                                        style = AppTheme.type.caption,
-                                        color = c.inkFaint,
-                                    )
-                                    TextAction(
-                                        "${mergeSelection.size}件をまとめる",
-                                        onClick = { requestGroupOp(GroupOp.Merge(mergeSelection)) },
-                                        enabled = mergeSelection.size >= 2,
-                                    )
-                                }
-                            }
-                        }
-                        if (s.groups.isEmpty()) {
-                            item(key = "noGroups") {
-                                Text("品目がありません。", style = AppTheme.type.caption, color = c.inkSoft, modifier = Modifier.padding(horizontal = Space.edge))
-                            }
-                        }
-                        items(s.groups, key = { "group-${it.id}" }) { g ->
-                            GroupCard(
-                                g = g,
-                                selecting = mergeMode,
-                                selected = g.id in mergeSelection,
-                                onOpen = { openGroupId = g.id },
-                                onSelect = {
-                                    mergeSelection = if (g.id in mergeSelection) mergeSelection - g.id else mergeSelection + g.id
+                            Label("品目のまとまり")
+                            Box(modifier = Modifier.weight(1f))
+                            TextAction(
+                                if (mergeMode) "やめる" else "まとめる",
+                                onClick = {
+                                    mergeMode = !mergeMode
+                                    mergeSelection = emptySet()
                                 },
                             )
+                        }
+                    }
+                    if (mergeMode) {
+                        item(key = "mergeAction") {
+                            Column(modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.xs)) {
+                                Text(
+                                    "まとめるまとまりを2つ以上選びます。残すのは並びが一番早いまとまりです。",
+                                    style = AppTheme.type.caption,
+                                    color = c.inkFaint,
+                                )
+                                TextAction(
+                                    "${mergeSelection.size}件をまとめる",
+                                    onClick = { requestGroupOp(GroupOp.Merge(mergeSelection)) },
+                                    enabled = mergeSelection.size >= 2,
+                                )
+                            }
+                        }
+                    }
+                    if (s.groups.isEmpty()) {
+                        item(key = "noGroups") {
+                            Text("品目がありません。", style = AppTheme.type.caption, color = c.inkSoft, modifier = Modifier.padding(horizontal = Space.edge))
+                        }
+                    }
+                    items(s.groups, key = { "group-${it.id}" }) { g ->
+                        GroupCard(
+                            g = g,
+                            selecting = mergeMode,
+                            selected = g.id in mergeSelection,
+                            participantCount = s.participants.size,
+                            warnings = s.groupWarnings[g.id].orEmpty(),
+                            provisional = s.provisionalByGroup[g.id],
+                            onOpen = { openGroupId = g.id },
+                            onSelect = {
+                                mergeSelection = if (g.id in mergeSelection) mergeSelection - g.id else mergeSelection + g.id
+                            },
+                            onEqualize = { viewModel.equalizeGroup(g.id) },
+                            onTakeDifference = { viewModel.takeDifferenceForGroup(g.id) },
+                        )
+                    }
+                    val unsetCount = s.groups.count { it.unset }
+                    if (s.participants.size >= 2 && unsetCount > 0) {
+                        item(key = "equalUnset") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = Space.s, vertical = Space.xs),
+                            ) {
+                                TextAction(
+                                    "未設定(${unsetCount}件)を全員で均等にする",
+                                    onClick = viewModel::equalizeUnsetGroups,
+                                )
+                            }
                         }
                     }
                 }
@@ -299,6 +336,17 @@ fun SplitSheetScreen(
             onConfirm = { list ->
                 pickerOpen = false
                 viewModel.addMembers(list)
+            },
+        )
+    }
+
+    if (bulkOpen) {
+        BulkAddSheet(
+            current = s.participants.size,
+            onDismiss = { bulkOpen = false },
+            onConfirm = { count ->
+                bulkOpen = false
+                viewModel.addBlankParticipants(count)
             },
         )
     }
@@ -320,6 +368,18 @@ fun SplitSheetScreen(
     } else if (openGroupId != 0L) {
         // 開いていたまとまりが消えたら閉じる
         openGroupId = 0L
+    }
+
+    // 参加者の個別支出のシート(参加者が消えたら閉じる)
+    val individualPerson = s.participants.firstOrNull { it.id == openIndividualId }
+    if (individualPerson != null) {
+        IndividualSheet(
+            s = s,
+            p = individualPerson,
+            onDismiss = { openIndividualId = null },
+        )
+    } else if (openIndividualId != null) {
+        openIndividualId = null
     }
 
     pendingOp?.let { op ->
@@ -355,12 +415,11 @@ private fun GroupOpConfirm(message: String, onConfirm: () -> Unit, onDismiss: ()
     }
 }
 
-private val MODES = listOf(SplitMode.SELF, SplitMode.WHOLE, SplitMode.ITEM)
+private val MODES = listOf(SplitMode.ITEM, SplitMode.WHOLE)
 
 private fun modeLabel(mode: String): String = when (mode) {
-    SplitMode.SELF -> "自分だけ"
-    SplitMode.WHOLE -> "全体"
-    else -> "品目ごと"
+    SplitMode.WHOLE -> "全体で割る"
+    else -> "食べた分どおり"
 }
 
 private fun kindLabel(kind: String): String = when (kind) {
@@ -368,6 +427,93 @@ private fun kindLabel(kind: String): String = when (kind) {
     ShareKind.EQUAL -> "均等"
     ShareKind.RATIO -> "個数"
     else -> "金額"
+}
+
+/** 参加人数の行: 「合計N人」と − / +、まとめて追加。− は末尾の名前なし行が消せるときだけ押せる。 */
+@Composable
+private fun ParticipantCountRow(
+    count: Int,
+    canRemove: Boolean,
+    onMinus: () -> Unit,
+    onPlus: () -> Unit,
+    onBulk: () -> Unit,
+) {
+    val c = AppTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Space.edge, vertical = Space.xs)
+            .sheet(RoundedCornerShape(16.dp), depth = 8.dp)
+            .padding(horizontal = Space.m, vertical = Space.s),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Label("参加人数(自分を含む)")
+            Text(participantCountText(count), style = AppTheme.type.numeralL, color = c.ink)
+        }
+        TextAction("−", onClick = onMinus, enabled = canRemove, color = c.ink)
+        TextAction("+", onClick = onPlus, color = c.ink)
+        TextAction("まとめて追加", onClick = onBulk)
+    }
+}
+
+/** まとめて追加の確認シート。人数を数字で入れると、入力中に「(合計〇人)」を出す。 */
+@Composable
+private fun BulkAddSheet(current: Int, onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
+    val c = AppTheme.colors
+    var text by rememberSaveable { mutableStateOf("") }
+    val count = bulkAddCount(text)
+    val total = totalAfterBulkAdd(current, text)
+    InkSheet(onDismiss = onDismiss, modifier = Modifier.imePadding()) {
+        SheetTitle("まとめて追加")
+        SheetChoice("何人追加しますか?") {
+            BareField(
+                value = text,
+                onValueChange = { text = filterNumericInput(it) },
+                placeholder = "人数",
+                singleLine = true,
+                underline = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle = AppTheme.type.body,
+            )
+        }
+        Text(
+            total?.let { "(合計${it}人)" } ?: "1〜${MAX_BULK_ADD}人の数字を入れてください",
+            style = AppTheme.type.caption,
+            color = c.inkSoft,
+            modifier = Modifier.padding(bottom = Space.m),
+        )
+        TextAction("追加する", onClick = { count?.let(onConfirm) }, enabled = count != null)
+        TextAction("やめる", onClick = onDismiss, color = c.inkSoft)
+    }
+}
+
+/** 全体の金額指定のずれ(W2)と、解消の操作。金額欄は下の各人の行で直せる。 */
+@Composable
+private fun WholeWarningBlock(
+    warnings: List<SplitWarning>,
+    onEqualize: () -> Unit,
+    onTakeDifference: () -> Unit,
+) {
+    val c = AppTheme.colors
+    val hasDiff = warnings.any { it is SplitWarning.WholeAmountMismatch }
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = Space.edge, vertical = Space.xs)) {
+        warnings.forEach { w ->
+            Text(badgeText(w), style = AppTheme.type.caption, color = c.danger)
+        }
+        Row(
+            modifier = Modifier.padding(top = Space.xs),
+            horizontalArrangement = Arrangement.spacedBy(Space.s),
+        ) {
+            TextAction("均等に配り直す", onClick = onEqualize, color = c.danger)
+            if (hasDiff) TextAction("差額を自分に", onClick = onTakeDifference)
+        }
+        Text(
+            "手で直すときは、下の各人の金額欄を直してください。",
+            style = AppTheme.type.caption,
+            color = c.inkFaint,
+        )
+    }
 }
 
 /** 1人ぶんの行。名前・(全体なら)金額か割合・(開いたら)メモ・ラベル・支払者・削除。 */
@@ -378,6 +524,7 @@ private fun MemberRow(
     mode: String,
     open: Boolean,
     onToggleOpen: () -> Unit,
+    onOpenIndividual: () -> Unit,
     onSetName: (String) -> Unit,
     onPickMember: (com.amgm.personallog.data.model.Person) -> Unit,
     onSetWhole: (String) -> Unit,
@@ -389,6 +536,8 @@ private fun MemberRow(
     val c = AppTheme.colors
     val isSelf = p.id == s.selfId
     val total = s.totals[p.id]
+    /** 自分に入った仮計上(金額指定のずれ)の合計。自分の行にだけ付く。 */
+    val provisionalTotal = if (isSelf) s.provisionalWhole + s.provisionalByGroup.values.sum() else 0
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -410,10 +559,15 @@ private fun MemberRow(
                     )
                 }
             }
-            if (mode != SplitMode.SELF) {
-                Text(total?.let { formatYenText(it) } ?: "", style = AppTheme.type.numeral, color = c.ink)
-            }
+            Text(total?.let { formatYenText(it) } ?: "", style = AppTheme.type.numeral, color = c.ink)
             TextAction(if (open) "閉じる" else "詳細", onClick = onToggleOpen, color = c.inkSoft)
+        }
+        if (provisionalTotal != 0) {
+            Text(
+                provisionalText(provisionalTotal),
+                style = AppTheme.type.caption,
+                color = c.danger,
+            )
         }
 
         if (mode == SplitMode.WHOLE) {
@@ -429,6 +583,15 @@ private fun MemberRow(
                 textStyle = AppTheme.type.body,
                 modifier = Modifier.padding(top = Space.xs),
             )
+            // 全体で割るときは、食べた分(品目どおりの分)と負担(全体で割った分)を並べる
+            s.individuals[p.id]?.let { ind ->
+                Text(
+                    "食べた分 ${formatYenText(ind.eatenTotal)} / 負担 ${formatYenText(ind.burdenTotal)}",
+                    style = AppTheme.type.caption,
+                    color = c.ink,
+                    modifier = Modifier.padding(top = Space.xs),
+                )
+            }
             val breakdown = s.breakdown[p.id].orEmpty()
             if (breakdown.isNotEmpty()) {
                 Text(
@@ -439,6 +602,13 @@ private fun MemberRow(
                 )
             }
         }
+
+        TextAction(
+            "個別支出",
+            onClick = onOpenIndividual,
+            color = c.inkSoft,
+            modifier = Modifier.padding(top = Space.xs),
+        )
 
         if (open) {
             Column(modifier = Modifier.padding(top = Space.s)) {
@@ -461,6 +631,80 @@ private fun MemberRow(
             }
         }
     }
+}
+
+/**
+ * 個別支出のシート。1人ぶんの、関わったまとまり・割合・食べた分(と全体で割るときは負担)・差。
+ * 差 = 負担 − 食べた分。マイナスは「多めに払ってもらった」、プラスは「多めに払った」。
+ */
+@Composable
+private fun IndividualSheet(s: SplitSheetUiState, p: SplitParticipant, onDismiss: () -> Unit) {
+    val c = AppTheme.colors
+    val ind = s.individuals[p.id]
+    val isWhole = s.mode == SplitMode.WHOLE
+    InkSheet(onDismiss = onDismiss, modifier = Modifier.imePadding()) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            Label("個別支出")
+            Text(s.displayNames[p.id].orEmpty(), style = AppTheme.type.title, color = c.ink)
+            if (ind == null) {
+                Text("計算できません", style = AppTheme.type.body, color = c.danger)
+            } else {
+                if (ind.lines.isEmpty()) {
+                    Text("この支払いでは負担がありません。", style = AppTheme.type.body, color = c.inkSoft)
+                }
+                ind.lines.forEach { line -> IndividualLineRow(line, isWhole) }
+                Hairline(dashed = true)
+                LeaderRow(
+                    label = "食べた分",
+                    value = formatYenText(ind.eatenTotal),
+                    labelStyle = AppTheme.type.caption,
+                    valueStyle = AppTheme.type.caption,
+                    labelColor = c.inkSoft,
+                    valueColor = c.inkSoft,
+                )
+                LeaderRow(
+                    label = if (isWhole) "負担(全体で割る)" else "負担",
+                    value = formatYenText(ind.burdenTotal),
+                    labelStyle = AppTheme.type.body,
+                    valueStyle = AppTheme.type.numeral,
+                    labelColor = c.ink,
+                    valueColor = c.ink,
+                )
+                ind.wholeShare?.let { share ->
+                    Text("全体に対する割合: $share", style = AppTheme.type.caption, color = c.inkSoft)
+                }
+                Text(differenceText(ind.difference), style = AppTheme.type.caption, color = c.ink)
+            }
+            TextAction("閉じる", onClick = onDismiss, color = c.inkSoft, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+/** 個別支出の1行(まとまり1つぶん)。食べた分を大きく、割合と未設定の印を小さく付ける。全体で割るときは負担も出す。 */
+@Composable
+private fun IndividualLineRow(line: IndividualLine, isWhole: Boolean) {
+    val c = AppTheme.colors
+    Column(Modifier.fillMaxWidth().padding(vertical = Space.xs)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(line.name, style = AppTheme.type.body, color = c.ink, modifier = Modifier.weight(1f))
+            Text(formatYenText(line.eaten), style = AppTheme.type.numeral, color = c.ink)
+        }
+        val shareText = if (line.groupId == null) "残差・調整(参加者で均等)" else "割合 ${line.share}"
+        Text(shareText, style = AppTheme.type.caption, color = c.inkSoft)
+        if (isWhole) {
+            Text("負担 ${formatYenText(line.burden)}", style = AppTheme.type.caption, color = c.inkSoft)
+        }
+        if (line.unset) {
+            Text(unsetNoteText(line.isShared), style = AppTheme.type.caption, color = c.inkFaint)
+        }
+    }
+}
+
+/** 差の文言。負担 − 食べた分。 */
+private fun differenceText(difference: Int): String = when {
+    difference < 0 -> "多めに払ってもらった ${formatYenText(-difference)}"
+    difference > 0 -> "多めに払った ${formatYenText(difference)}"
+    else -> "食べた分どおり(差はありません)"
 }
 
 /** ラベルごとの1人あたり金額の1行。label "" は「その他」。空欄の placeholder は同じラベルの人の計算結果。 */
@@ -490,16 +734,33 @@ private fun LabelAmountRow(s: SplitSheetUiState, label: String, onSet: (String) 
     }
 }
 
-/** まとまり1つ分の行: 品名 ······ 金額、割り方・共通費・N個中の補足。タップで編集シート(まとめる操作中は選択)。 */
+/**
+ * まとまり1つ分の行: 品名 ······ 金額、割り方・共通費・N個中・未設定・仮の補足。
+ * 警告(W1・W5)があるときは、バッジと解消の操作(均等に配り直す・差額を自分に・手で直す)を出す。
+ * タップで編集シート(まとめる操作中は選択)。
+ */
 @Composable
-private fun GroupCard(g: GroupUi, selecting: Boolean, selected: Boolean, onOpen: () -> Unit, onSelect: () -> Unit) {
+private fun GroupCard(
+    g: GroupUi,
+    selecting: Boolean,
+    selected: Boolean,
+    participantCount: Int,
+    warnings: List<SplitWarning>,
+    provisional: Int?,
+    onOpen: () -> Unit,
+    onSelect: () -> Unit,
+    onEqualize: () -> Unit,
+    onTakeDifference: () -> Unit,
+) {
     val c = AppTheme.colors
+    val unsetNote = g.unset && participantCount >= 2
     val note = buildString {
         if (selecting && selected) append("選択中 ・ ")
-        append(kindLabel(g.kind))
+        append(if (unsetNote) unsetNoteText(g.isShared) else kindLabel(g.kind))
         if (g.pieceCount != null) append(" ・ ${g.pieceCount}個中")
-        if (g.isShared) append(" ・ 共通費")
+        if (g.isShared && !unsetNote) append(" ・ 共通費")
     }
+    val hasDiff = warnings.any { it is SplitWarning.GroupAmountMismatch }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -510,6 +771,22 @@ private fun GroupCard(g: GroupUi, selecting: Boolean, selected: Boolean, onOpen:
     ) {
         LeaderRow(label = g.name + if (g.count > 1 && !g.name.contains("×")) " ×${g.count}" else "", value = formatYenText(g.amount))
         Text(note, style = AppTheme.type.caption, color = c.inkSoft)
+        provisional?.takeIf { it != 0 }?.let { amount ->
+            Text(provisionalText(amount), style = AppTheme.type.caption, color = c.danger)
+        }
+        warnings.forEach { w ->
+            Text(badgeText(w), style = AppTheme.type.caption, color = c.danger, modifier = Modifier.padding(top = Space.xs))
+        }
+        if (warnings.isNotEmpty() && !selecting) {
+            Row(
+                modifier = Modifier.padding(top = Space.xs),
+                horizontalArrangement = Arrangement.spacedBy(Space.s),
+            ) {
+                TextAction("均等に配り直す", onClick = onEqualize, color = c.danger)
+                if (hasDiff) TextAction("差額を自分に", onClick = onTakeDifference)
+                TextAction("手で直す", onClick = onOpen, color = c.inkSoft)
+            }
+        }
     }
 }
 

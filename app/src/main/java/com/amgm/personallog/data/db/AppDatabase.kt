@@ -31,7 +31,7 @@ import com.amgm.personallog.data.model.WholeShare
         // v11: 支払いごとの参加者・ラベルごとの金額。割当の参照先を参加者に変更
         SplitParticipant::class, SplitLabelAmount::class,
     ],
-    version = 11, // AppDatabase.VERSION と同じにする(テストで確認)
+    version = 12, // AppDatabase.VERSION と同じにする(テストで確認)
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -45,6 +45,6 @@ abstract class AppDatabase : RoomDatabase() {
         const val NAME = "personal_log.db"
 
         /** Room の版。@Database の version と PreMigrationBackup が共有する。 */
-        const val VERSION = 11
+        const val VERSION = 12
     }
 }

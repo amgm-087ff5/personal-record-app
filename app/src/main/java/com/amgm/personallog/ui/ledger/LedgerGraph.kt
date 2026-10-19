@@ -22,7 +22,10 @@ object LedgerRoutes {
 fun NavGraphBuilder.ledgerGraph(navController: NavController) {
     navigation(route = LedgerRoutes.ROOT, startDestination = LedgerRoutes.HOME) {
         composable(LedgerRoutes.HOME) {
-            LedgerScreen(onOpenPayment = { kind, id -> navController.navigate(LedgerRoutes.payment(kind, id)) })
+            LedgerScreen(
+                onOpenPayment = { kind, id -> navController.navigate(LedgerRoutes.payment(kind, id)) },
+                onOpenReceipt = { receiptId -> navController.navigate(ReceiptRoutes.detail(receiptId)) },
+            )
         }
         composable(
             route = LedgerRoutes.PAYMENT,

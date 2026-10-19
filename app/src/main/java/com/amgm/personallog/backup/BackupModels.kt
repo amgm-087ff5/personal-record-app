@@ -1,5 +1,6 @@
 package com.amgm.personallog.backup
 
+import com.amgm.personallog.data.db.Migrations
 import com.amgm.personallog.data.model.DiaryEntry
 import com.amgm.personallog.data.model.DiaryPhoto
 import com.amgm.personallog.data.model.Expense
@@ -499,6 +500,118 @@ class ExpenseMergeIndex(existing: List<Expense>) {
         remaining[k] = left - 1
         return true
     }
+}
+
+// ---------------------------------------------------------------- 支払いに属さない支出(旧形式の取り込み)
+
+/**
+ * 支払いに属さない支出を手入力の支払いに変えた結果。
+ * manualReceiptIds: 変換で作った支払いの backup id。旧形式(形式4以前)のファイルでも、TotalSourceInit で合計の出所を変えないために使う。
+ */
+data class ManualPaymentConversion(val data: BackupData, val manualReceiptIds: Set<Long>)
+
+/**
+ * 支払いに属さない支出グループ・単独の支出を、手入力の支払いに変える(純Kotlin)。
+ * 「支払いに属さない」は、receiptId が無い、または取り込み元に無いレシートを指すもの。
+ * 変換内容は DB の MIGRATION_11_12 と同じ:
+ *  - 対象ごとに手入力の支払いを1つ作る(画像なし・確定・合計のみ・storeName は空)。日時は日付(時刻があれば "yyyy-MM-dd HH:mm")、金額は支払い金額。
+ *  - グループの中の支出は品目に写し、支出に receiptId と receiptItemId を張る。グループにも receiptId を張る。
+ *  - 単独の支出は品目を作らず、receiptId だけ張る。
+ *  - 金額・品名・カテゴリ・メモ・作成時刻は変えない。グループと単独の支出は、カテゴリとメモを編集済みにする(次の同期で既定値に戻らないように)。
+ *  - 時刻が空の支出・グループは、取り込み時の既定(作成時刻)を "HH:mm" で入れる。空のままだと支払いの時刻を借りてしまうため。
+ * 作る支払い・品目の id は、バックアップ内のどの id とも重ならない値にする。
+ */
+fun convertOrphanExpensesToManualPayments(data: BackupData): ManualPaymentConversion {
+    val receiptIds = data.receipts.map { it.id }.toSet()
+    fun isOrphan(receiptId: Long?) = receiptId == null || receiptId !in receiptIds
+    val needsWork = data.expenseGroups.any { isOrphan(it.receiptId) } ||
+        data.expenses.any { it.groupId == null && isOrphan(it.receiptId) }
+    if (!needsWork) return ManualPaymentConversion(data, emptySet())
+
+    var nextId = maxReferencedId(data) + 1
+    val newReceipts = ArrayList<BackupReceipt>()
+    val newItems = ArrayList<BackupReceiptItem>()
+    // 変換したグループの backup id -> 作った支払いの id
+    val paymentOfGroup = HashMap<Long, Long>()
+
+    val groups = data.expenseGroups.map { g ->
+        if (!isOrphan(g.receiptId)) return@map g
+        val rid = nextId++
+        newReceipts += manualPaymentOf(rid, g.date, g.time, g.amount, g.createdAt)
+        paymentOfGroup[g.id] = rid
+        g.copy(
+            time = g.time.ifBlank { LedgerCalc.timeOfMillis(g.createdAt) },
+            receiptId = rid,
+            categoryEdited = true,
+            memoEdited = true,
+        )
+    }
+
+    val expenses = data.expenses.map { e ->
+        val time = e.time.ifBlank { LedgerCalc.timeOfMillis(e.createdAt) }
+        val gid = e.groupId
+        when {
+            // 変換したグループの中の支出: 品目に写し、支出に支払いと品目を張る
+            gid != null && gid in paymentOfGroup -> {
+                val rid = paymentOfGroup.getValue(gid)
+                val itemId = nextId++
+                newItems += BackupReceiptItem(
+                    id = itemId, receiptId = rid, name = e.name, memo = e.memo, amount = e.amount, category = e.category,
+                )
+                e.copy(time = time, receiptId = rid, receiptItemId = itemId)
+            }
+            // 単独の支出: 支払いを作り、支出に張る(品目は作らない)
+            gid == null && isOrphan(e.receiptId) -> {
+                val rid = nextId++
+                newReceipts += manualPaymentOf(rid, e.date, e.time, e.amount, e.createdAt)
+                e.copy(time = time, receiptId = rid, categoryEdited = true, memoEdited = true)
+            }
+            else -> e
+        }
+    }
+
+    val out = data.copy(
+        receipts = data.receipts + newReceipts,
+        receiptItems = data.receiptItems + newItems,
+        expenses = expenses,
+        expenseGroups = groups,
+    )
+    return ManualPaymentConversion(out, newReceipts.map { it.id }.toSet())
+}
+
+/** 手入力の支払い(画像なし・確定・合計のみ)。MIGRATION_11_12 の insertV12ManualReceipt と同じ内容。 */
+private fun manualPaymentOf(id: Long, date: String, time: String, amount: Int, createdAt: Long) = BackupReceipt(
+    id = id,
+    purchasedAt = Migrations.v12PurchasedAt(date, time),
+    storeName = "",
+    totalAmount = amount,
+    imagePath = "",
+    rawJson = "{}",
+    status = ReceiptStatus.CONFIRMED,
+    createdAt = createdAt,
+    totalSource = TotalSource.MANUAL,
+)
+
+/** バックアップ内で使われている支払い・品目の id の最大値(新しく振る id がこれと重ならないように)。 */
+private fun maxReferencedId(data: BackupData): Long {
+    val ids = buildList<Long> {
+        data.receipts.forEach { add(it.id) }
+        data.receiptItems.forEach { add(it.id); add(it.receiptId) }
+        data.expenses.forEach { e ->
+            e.receiptId?.let { add(it) }
+            e.receiptItemId?.let { add(it) }
+        }
+        data.expenseGroups.forEach { g -> g.receiptId?.let { add(it) } }
+        data.receiptNotDuplicates.forEach { add(it.receiptIdLow); add(it.receiptIdHigh) }
+        data.splitSheets.forEach { add(it.receiptId) }
+        data.participants.forEach { add(it.receiptId) }
+        data.shareGroups.forEach { add(it.id); add(it.receiptId) }
+        data.shareGroupItems.forEach { add(it.receiptItemId) }
+        data.wholeShares.forEach { add(it.receiptId) }
+        data.paymentPayers.forEach { add(it.receiptId) }
+        data.labelAmounts.forEach { add(it.receiptId) }
+    }
+    return ids.maxOrNull() ?: 0L
 }
 
 // ---------------------------------------------------------------- 割り勘の表(v7 以降)

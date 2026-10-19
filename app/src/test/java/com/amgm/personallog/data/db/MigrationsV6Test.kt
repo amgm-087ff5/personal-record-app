@@ -8,7 +8,7 @@ class MigrationsV6Test {
     @Test
     fun v11IsCurrentVersion_andMigrationsAreContiguous() {
         val pairs = Migrations.ALL.map { it.startVersion to it.endVersion }
-        assertEquals(listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11), pairs)
+        assertEquals(listOf(1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6, 6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11, 11 to 12), pairs)
     }
 
     @Test

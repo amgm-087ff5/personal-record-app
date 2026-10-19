@@ -20,10 +20,13 @@ import com.amgm.personallog.data.repository.mergeKeepGroup
 import com.amgm.personallog.data.repository.mergeShareRows
 import com.amgm.personallog.data.repository.splitEmptiesSource
 import com.amgm.personallog.data.repository.toBuild
+import com.amgm.personallog.domain.split.IndividualExpense
+import com.amgm.personallog.domain.split.IndividualExpenses
 import com.amgm.personallog.domain.split.SplitCalculator
 import com.amgm.personallog.domain.split.SplitGroupInput
 import com.amgm.personallog.domain.split.SplitLedger
 import com.amgm.personallog.domain.split.SplitResult
+import com.amgm.personallog.domain.split.SplitWarning
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +50,8 @@ data class GroupUi(
     val kind: String,
     /** 「N個中M個」の N。 */
     val pieceCount: Int?,
+    /** 割当の行が1つも無い(未設定)。未設定は自分に計上(共通費は参加者で均等)。 */
+    val unset: Boolean = false,
 )
 
 /** 割り勘シートの画面の状態。計算結果は編集のたびに作り直す。 */
@@ -55,8 +60,8 @@ data class SplitSheetUiState(
     val notFound: Boolean = false,
     /** 読み込んだ割り勘の中身(画面の入力欄の値を、ここから読む)。 */
     val data: SplitSheetData? = null,
-    /** 割り方(SplitMode の値)。画面のタブと表示の切り替えに使う。 */
-    val mode: String = SplitMode.SELF,
+    /** 割り方(SplitMode の値。ITEM か WHOLE)。画面のタブと表示の切り替えに使う。 */
+    val mode: String = SplitMode.ITEM,
     /** 全体方式の入力の種類(ShareKind.AMOUNT / RATIO)。 */
     val wholeKind: String = ShareKind.AMOUNT,
     /** 支払いの合計。 */
@@ -76,6 +81,8 @@ data class SplitSheetUiState(
     val groupYen: Map<Long, Map<Long, Int>> = emptyMap(),
     /** 参加者 id → カテゴリ別の金額(品目の金額の比で按分した内訳)。 */
     val breakdown: Map<Long, List<Pair<String, Int>>> = emptyMap(),
+    /** 参加者 id → その人の個別支出(関わったまとまり・割合・食べた分・負担・差)。個別支出のシートと「食べた分 / 負担」の表示に使う。 */
+    val individuals: Map<Long, IndividualExpense> = emptyMap(),
     val groups: List<GroupUi> = emptyList(),
     /** まとまり id → そこに入っている品目(品目 id と品名)。分けるときの選択に使う。 */
     val groupItems: Map<Long, List<Pair<Long, String>>> = emptyMap(),
@@ -85,8 +92,18 @@ data class SplitSheetUiState(
     val labelAmounts: Map<String, Int> = emptyMap(),
     /** 計算の失敗など。出たときは計算結果の代わりに「計算できません」を出す。 */
     val calcError: String? = null,
-    /** 警告の文言(W1〜W5)。 */
+    /** 警告の文言(W1〜W5)。上の一覧に出す。 */
     val warnings: List<String> = emptyList(),
+    /** − で消せる参加者の id。無ければ null(− は押せない)。 */
+    val removableId: Long? = null,
+    /** まとまり id → その行に付ける警告(W1・まとまりの付いた W5)。 */
+    val groupWarnings: Map<Long, List<SplitWarning>> = emptyMap(),
+    /** 全体の欄に付ける警告(W2・まとまりの無い W5)。 */
+    val wholeWarnings: List<SplitWarning> = emptyList(),
+    /** まとまり id → 仮計上(自分に入った金額指定のずれ)。 */
+    val provisionalByGroup: Map<Long, Int> = emptyMap(),
+    /** 全体の仮計上(自分に入った分)。 */
+    val provisionalWhole: Int = 0,
     val busy: Boolean = false,
     val error: String? = null,
     /** 保存できたら true。画面は閉じる。 */
@@ -179,9 +196,11 @@ class SplitSheetViewModel @Inject constructor(
             displayNames[p.id] = displayNameOf(p, isSelf, names, number)
         }
 
+        val groupNameMap = groupNames(d)
         var result: SplitResult? = null
         var build: SplitBuild? = null
         var breakdown: Map<Long, List<Pair<String, Int>>> = emptyMap()
+        var individuals: Map<Long, IndividualExpense> = emptyMap()
         var calcError: String? = null
         try {
             val b = d.toBuild(total, items)
@@ -189,15 +208,16 @@ class SplitSheetViewModel @Inject constructor(
             val r = SplitCalculator.calculate(b.input)
             result = r
             breakdown = sorted.associate { it.id to SplitLedger.categoryBreakdown(r, it.id, b.itemYen) }
+            individuals = sorted.associate { it.id to IndividualExpenses.of(b.input, it.id, groupNameMap) }
         } catch (e: Throwable) {
             // 未実装の関数(TODO)も Error として届くので Throwable で受ける
             calcError = "計算できません"
         }
 
-        val groupNameMap = groupNames(d)
         val groupAmounts: Map<Long, Int> = build?.input?.groups
             ?.associate { g: SplitGroupInput -> g.id to g.amount }
             .orEmpty()
+        val unsetSet = unsetGroupIds(d.groups.map { it.group.id }, d.itemShares.map { it.groupId }.toSet()).toSet()
         val groupUis = d.groups.map { gw ->
             GroupUi(
                 id = gw.group.id,
@@ -207,6 +227,7 @@ class SplitSheetViewModel @Inject constructor(
                 isShared = gw.group.isShared,
                 kind = effectiveKind(d, gw.group.id),
                 pieceCount = gw.group.pieceCount,
+                unset = gw.group.id in unsetSet,
             )
         }
 
@@ -214,6 +235,19 @@ class SplitSheetViewModel @Inject constructor(
         val groupYen = result?.let { groupYenOf(it) }.orEmpty()
         val warnings = result?.warnings?.map { w -> warningText(w) { gid -> groupNameMap[gid].orEmpty().ifEmpty { "品目" } } }
             .orEmpty()
+        val rawWarnings = result?.warnings.orEmpty()
+        val lines = result?.lines.orEmpty()
+        val removableId = removableLastParticipantId(
+            sorted.map { p ->
+                ParticipantFacts(
+                    id = p.id,
+                    isSelf = p.id == selfId,
+                    typedName = names[p.id].orEmpty(),
+                    isPayer = p.isPayer,
+                    hasShare = d.itemShares.any { it.participantId == p.id } || d.wholeShares.any { it.participantId == p.id },
+                )
+            },
+        )
 
         _state.update {
             it.copy(
@@ -231,12 +265,18 @@ class SplitSheetViewModel @Inject constructor(
                 totals = totals,
                 groupYen = groupYen,
                 breakdown = breakdown,
+                individuals = individuals,
                 groups = groupUis,
                 groupItems = groupItemsOf(d),
                 labels = labelsOf(sorted),
                 labelAmounts = d.labelAmounts.associate { it.label to it.amount },
                 calcError = calcError,
                 warnings = warnings,
+                removableId = removableId,
+                groupWarnings = groupWarningsOf(rawWarnings),
+                wholeWarnings = wholeWarningsOf(rawWarnings),
+                provisionalByGroup = provisionalByGroup(lines),
+                provisionalWhole = provisionalWholeOf(lines),
             )
         }
     }
@@ -319,10 +359,27 @@ class SplitSheetViewModel @Inject constructor(
 
     // ---- 操作: 参加者 ----
 
-    fun addBlankParticipant() {
+    /** 名前なしの参加者を1人足す(+)。 */
+    fun addBlankParticipant() = addBlankParticipants(1)
+
+    /** 名前なしの参加者を count 人足す(まとめて追加・+)。 */
+    fun addBlankParticipants(count: Int) {
         val d = data ?: return
-        val p = newParticipant(d, null)
-        commit(d.copy(participants = d.participants + p), names + (p.id to ""))
+        if (count <= 0) return
+        var list = d.participants
+        var nm = names
+        repeat(count) {
+            val p = newParticipant(d.copy(participants = list), null)
+            list = list + p
+            nm = nm + (p.id to "")
+        }
+        commit(d.copy(participants = list), nm)
+    }
+
+    /** 末尾の名前なし・割当なし・支払者でない参加者を1人消す(−)。消せる行が無ければ何もしない。 */
+    fun removeLastBlankParticipant() {
+        val id = _state.value.removableId ?: return
+        removeParticipant(id)
     }
 
     /** 登録メンバーを追加する。既にいる人は足さない。 */
@@ -419,6 +476,61 @@ class SplitSheetViewModel @Inject constructor(
         val rest = d.labelAmounts.filterNot { it.label == label }
         val row = value?.let { SplitLabelAmount(receiptId = receiptId, label = label, amount = it) }
         commit(d.copy(labelAmounts = rest + listOfNotNull(row)))
+    }
+
+    // ---- 操作: 未設定・均等・差額(警告の解消) ----
+
+    /** 未設定のまとまりを、参加者全員の均等の割当にする(参加者が2人以上のとき)。 */
+    fun equalizeUnsetGroups() {
+        val d = data ?: return
+        val s = _state.value
+        val unset = unsetGroupIds(d.groups.map { it.group.id }, d.itemShares.map { it.groupId }.toSet())
+        val pairs = equalShareTargets(unset, s.participants.map { it.id })
+        if (pairs.isEmpty()) return
+        val rows = pairs.map { (g, p) -> ItemShare(groupId = g, participantId = p, kind = ShareKind.EQUAL) }
+        commit(d.copy(itemShares = d.itemShares + rows))
+    }
+
+    /** まとまりの割当を、参加者全員の均等に配り直す(W1・W5 の解消)。 */
+    fun equalizeGroup(groupId: Long) {
+        val d = data ?: return
+        val rows = _state.value.participants.map { p ->
+            ItemShare(groupId = groupId, participantId = p.id, kind = ShareKind.EQUAL)
+        }
+        commit(d.copy(itemShares = d.itemShares.filterNot { it.groupId == groupId } + rows))
+    }
+
+    /** 全体の割当を消して、残りの額を均等に割り直す(W2・全体の W5 の解消)。ラベルごとの金額は残す。 */
+    fun equalizeWhole() {
+        val d = data ?: return
+        commit(d.copy(wholeShares = emptyList()))
+    }
+
+    /** まとまりの金額指定のずれ(W1)を、自分の金額指定に足して合計を合わせる。自分の行が無ければ足す。 */
+    fun takeDifferenceForGroup(groupId: Long) {
+        val d = data ?: return
+        val s = _state.value
+        val selfId = s.selfId
+        val w = s.groupWarnings[groupId].orEmpty()
+            .filterIsInstance<SplitWarning.GroupAmountMismatch>()
+            .firstOrNull() ?: return
+        val current = d.itemShares.firstOrNull { it.groupId == groupId && it.participantId == selfId }?.amount
+        val value = selfAmountAfterDifference(current, w.expected, w.allocated)
+        val row = ItemShare(groupId = groupId, participantId = selfId, kind = ShareKind.AMOUNT, amount = value)
+        commit(d.copy(itemShares = d.itemShares.filterNot { it.groupId == groupId && it.participantId == selfId } + row))
+    }
+
+    /** 全体の金額指定のずれ(W2)を、自分の金額に足して合計を合わせる。自分の行が無ければ足す(ラベルの金額は今の値を起点にする)。 */
+    fun takeDifferenceForWhole() {
+        val d = data ?: return
+        val s = _state.value
+        val selfId = s.selfId
+        val w = s.wholeWarnings.filterIsInstance<SplitWarning.WholeAmountMismatch>().firstOrNull() ?: return
+        val selfLabel = s.participants.firstOrNull { it.id == selfId }?.label.orEmpty()
+        val current = d.wholeShares.firstOrNull { it.participantId == selfId }?.amount ?: s.labelAmounts[selfLabel]
+        val value = selfAmountAfterDifference(current, w.expected, w.allocated)
+        val row = WholeShare(receiptId = receiptId, participantId = selfId, kind = ShareKind.AMOUNT, amount = value)
+        commit(d.copy(wholeShares = d.wholeShares.filterNot { it.participantId == selfId } + row))
     }
 
     // ---- 操作: 品目ごと(まとまり) ----

@@ -20,7 +20,11 @@ import com.amgm.personallog.domain.ItemSaver
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentLink
+import com.amgm.personallog.domain.PaymentValues
+import com.amgm.personallog.domain.PaymentWriteBack
 import com.amgm.personallog.domain.ReceiptRevert
+import com.amgm.personallog.domain.WriteBackPlan
+import com.amgm.personallog.domain.WriteBackTarget
 import com.amgm.personallog.domain.SelfShare
 import com.amgm.personallog.domain.SplitWarningCodes
 import com.amgm.personallog.domain.split.SplitCalculator
@@ -242,6 +246,58 @@ class ReceiptRepository @Inject constructor(
         db.withTransaction { applyLedger(receiptId, perItem = true, now = now) }
     }
 
+    /** 割り勘の参加者の数。割り勘シートが無ければ1人(自分だけ)。 */
+    suspend fun participantCount(receiptId: Long): Int =
+        if (db.splitDao().getSheet(receiptId) == null) 1 else splitRepository.load(receiptId).participants.size
+
+    /**
+     * 支出の画面で直した欄を、支払い・品目へ書き戻し、家計簿を作り直す(1つのトランザクション)。
+     * 許されない変更(割り勘の金額、印字のある合計など)は何も書かず、理由を返す。成功なら null。
+     * 書き戻したあと、金額が家計簿に入っていなければ例外にして、すべて戻す。
+     */
+    suspend fun writeBackFromLedger(
+        target: WriteBackTarget,
+        values: PaymentValues,
+        now: Long = System.currentTimeMillis(),
+    ): String? = db.withTransaction {
+        val receiptId = target.receiptId ?: return@withTransaction "この支出は支払いに紐づいていないため、書き戻せません。"
+        val receipt = receiptDao.getById(receiptId) ?: return@withTransaction "支払いが見つかりません。"
+        val items = receiptDao.getItems(receiptId)
+        val people = splitRepository.load(receiptId).participants.size
+        when (val plan = PaymentWriteBack.plan(target, values, receipt, items, people)) {
+            is WriteBackPlan.Reject -> plan.message
+            is WriteBackPlan.Apply -> {
+                if (plan.receipt != receipt) receiptDao.update(plan.receipt)
+                plan.changedItems.forEach { receiptDao.updateItem(it) }
+                plan.expense?.let { expenseDao.update(it) }
+                plan.group?.let { expenseGroupDao.update(it) }
+                applyLedger(receiptId, perItem = true, now = now)
+                plan.expectedAmount?.let { want ->
+                    val got = when (target) {
+                        is WriteBackTarget.Item -> expenseDao.getByReceiptId(receiptId)
+                            .firstOrNull { it.receiptItemId == target.expense.receiptItemId }?.amount
+                        is WriteBackTarget.Single -> expenseDao.getByReceiptId(receiptId)
+                            .singleOrNull { it.groupId == null && it.receiptItemId == null }?.amount
+                        is WriteBackTarget.Group -> expenseGroupDao.getByReceiptId(receiptId).singleOrNull()?.amount
+                    }
+                    check(got == want) { "支払いに書き戻せませんでした(家計簿の金額 $got、入力 $want)" }
+                }
+                null
+            }
+        }
+    }
+
+    /** 支払い先(店名)を直し、家計簿を合わせる(1つのトランザクション)。 */
+    suspend fun saveStoreName(receiptId: Long, storeName: String, now: Long = System.currentTimeMillis()) {
+        db.withTransaction {
+            val r = receiptDao.getById(receiptId) ?: return@withTransaction
+            val updated = PaymentWriteBack.withStoreName(r, storeName)
+            if (updated == r) return@withTransaction
+            receiptDao.update(updated)
+            applyLedger(receiptId, perItem = true, now = now)
+        }
+    }
+
     /**
      * 割り勘シートを保存し、家計簿を合わせる(1つのトランザクション)。保存後のシートを返す。
      * 旧い立て替え(isAdvance・ownAmount)は割り勘シートに置き換わるので消す。
@@ -338,14 +394,6 @@ class ExpenseRepository @Inject constructor(
     /** レシート画像のサムネイル・「レシートを開く」用。 */
     suspend fun receipt(id: Long): Receipt? = db.receiptDao().getById(id)
 
-    /** 品目つきの手入力: グループと品目の支出を1つの処理で作る。groupId を返す。 */
-    suspend fun addPayment(group: ExpenseGroup, items: List<Expense>): Long = db.withTransaction {
-        val groupId = groupDao.insert(group)
-        dao.insertAll(items.map { it.copy(groupId = groupId) })
-        groupId
-    }
-
-    suspend fun add(expense: Expense): Long = dao.insert(expense)
     suspend fun update(expense: Expense) = dao.update(expense)
 
     /**

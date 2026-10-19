@@ -3,6 +3,7 @@ package com.amgm.personallog.ledger
 import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentKind
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentLink
@@ -112,7 +113,7 @@ class PaymentItemsTest {
     // ------------------------------------------------------------ 品目つきの手入力
 
     @Test
-    fun draftPayment_buildsGroupAndItems_withTopItemCategory() {
+    fun draftPayment_buildsReceiptAndItems_forTheSavePath() {
         val r = DraftPayment.build(
             "2026-10-03", "10:15", "700", " スーパー ",
             listOf(
@@ -123,15 +124,24 @@ class PaymentItemsTest {
             now = 9,
         )
         assertTrue(r.errors.toString(), r.isValid)
-        assertEquals(700, r.group!!.amount)
-        assertEquals("スーパー", r.group!!.memo)
-        assertEquals("日用品", r.group!!.category)
+        // 支払い(レシートの表)は手入力。合計が入っているので確定。店名は memo から
+        val receipt = r.receipt!!
+        assertEquals(700, receipt.totalAmount)
+        assertEquals("2026-10-03 10:15", receipt.purchasedAt)
+        assertEquals("スーパー", receipt.storeName)
+        assertEquals("", receipt.imagePath)
+        assertEquals("", receipt.rawJson)
+        assertEquals("confirmed", receipt.status)
+        assertEquals("manual", receipt.totalSource)
+        assertEquals(9L, receipt.createdAt)
+        // 品目は空行を除いて2件。支払いの保存で receiptId が入る
         assertEquals(listOf("牛乳", "洗剤"), r.items.map { it.name })
         assertEquals(listOf("特売", ""), r.items.map { it.memo })
         assertEquals(listOf(200, 500), r.items.map { it.amount })
-        assertTrue(r.items.all { it.date == "2026-10-03" && it.time == "10:15" && it.receiptId == null && it.receiptItemId == null })
-        // uid は行ごとに異なる
-        assertEquals(3, (r.items.map { it.uid } + r.group!!.uid).toSet().size)
+        assertEquals(listOf("食費", "日用品"), r.items.map { it.category })
+        assertTrue(r.items.all { it.receiptId == 0L && it.id == 0L })
+        // 家計簿のグループのカテゴリは、金額が最も高い品目のカテゴリ(支出は支払いから作られる)
+        assertEquals("日用品", LedgerCalc.groupCategory(r.items))
     }
 
     @Test
@@ -139,12 +149,36 @@ class PaymentItemsTest {
         val ok = listOf(DraftItem("a", "100"))
         assertFalse(DraftPayment.build("2026-13-01", "10:15", "100", "", ok, 1).isValid)
         assertFalse(DraftPayment.build("2026-10-03", "1015", "100", "", ok, 1).isValid)
-        assertFalse(DraftPayment.build("2026-10-03", "10:15", "", "", ok, 1).isValid)
         assertFalse(DraftPayment.build("2026-10-03", "10:15", "0", "", ok, 1).isValid)
-        assertFalse(DraftPayment.build("2026-10-03", "10:15", "100", "", emptyList(), 1).isValid)
         assertFalse(DraftPayment.build("2026-10-03", "10:15", "100", "", listOf(DraftItem("a", "")), 1).isValid)
         assertFalse(DraftPayment.build("2026-10-03", "10:15", "100", "", listOf(DraftItem("a", "-5")), 1).isValid)
         assertTrue(DraftPayment.build("2026-10-03", "10:15", "100", "", ok, 1).isValid)
+    }
+
+    @Test
+    fun draftPayment_confirmedWhenTotalOrItems_draftWhenNeither() {
+        // 合計だけ(品目なし)は確定
+        val totalOnly = DraftPayment.build("2026-10-03", "10:15", "100", "", emptyList(), 1)
+        assertTrue(totalOnly.isValid)
+        assertEquals("confirmed", totalOnly.receipt!!.status)
+        assertEquals(100, totalOnly.receipt!!.totalAmount)
+        // 合計が空で品目があるときは、品目の合計を入れて確定
+        val fromItems = DraftPayment.build(
+            "2026-10-03", "10:15", "", "", listOf(DraftItem("a", "120"), DraftItem("b", "380")), 1,
+        )
+        assertTrue(fromItems.errors.toString(), fromItems.isValid)
+        assertEquals("confirmed", fromItems.receipt!!.status)
+        assertEquals(500, fromItems.receipt!!.totalAmount)
+        assertEquals("manual", fromItems.receipt!!.totalSource)
+        // 入力した合計があれば、品目の合計より入力を優先する
+        val typed = DraftPayment.build("2026-10-03", "10:15", "480", "", listOf(DraftItem("a", "120"), DraftItem("b", "380")), 1)
+        assertEquals(480, typed.receipt!!.totalAmount)
+        // 合計も品目も無ければ下書き(合計は未入力)。日付と時刻は必要
+        val neither = DraftPayment.build("2026-10-03", "10:15", "", "", emptyList(), 1)
+        assertTrue(neither.errors.toString(), neither.isValid)
+        assertEquals("draft", neither.receipt!!.status)
+        assertNull(neither.receipt!!.totalAmount)
+        assertFalse(DraftPayment.build("2026-10-03", "", "", "", emptyList(), 1).isValid)
     }
 
     @Test

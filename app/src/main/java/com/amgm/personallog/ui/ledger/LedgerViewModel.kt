@@ -9,12 +9,13 @@ import com.amgm.personallog.backup.BackupProgress
 import com.amgm.personallog.backup.ImportMode
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.repository.ExpenseRepository
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.domain.LedgerCalc
-import com.amgm.personallog.domain.PaymentEdit
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -57,6 +58,8 @@ data class LedgerUiState(
     val draftReceiptIds: Set<Long> = emptySet(),
     /** 割り勘に警告があるレシートの id(行の「要確認」の印に使う)。 */
     val warnReceiptIds: Set<Long> = emptySet(),
+    /** 画像のあるレシート(レシート由来の支払い)の id。行の「レシート由来」の印に使う。手入力の支払い(画像なし)は含まない。 */
+    val imageReceiptIds: Set<Long> = emptySet(),
     val error: String? = null,
     val backup: BackupUiState = BackupUiState(),
 )
@@ -73,6 +76,7 @@ private data class Snapshot(
     val warnCount: Int,
     val draftReceiptIds: Set<Long>,
     val warnReceiptIds: Set<Long>,
+    val imageReceiptIds: Set<Long>,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -113,6 +117,7 @@ class LedgerViewModel @Inject constructor(
                         f, l, all, groups,
                         draftIds = receiptList.filter { it.status == ReceiptStatus.DRAFT }.mapTo(HashSet()) { it.id },
                         warnIds = sheets.filter { it.warnings.isNotBlank() }.mapTo(HashSet()) { it.receiptId },
+                        imageIds = receiptList.filter { it.imagePath.isNotEmpty() }.mapTo(HashSet()) { it.id },
                     )
                 }
                     .catch { e ->
@@ -133,6 +138,7 @@ class LedgerViewModel @Inject constructor(
                         warnCount = s.warnCount,
                         draftReceiptIds = s.draftReceiptIds,
                         warnReceiptIds = s.warnReceiptIds,
+                        imageReceiptIds = s.imageReceiptIds,
                     )
                 }
             }
@@ -146,6 +152,7 @@ class LedgerViewModel @Inject constructor(
         groups: List<ExpenseGroup>,
         draftIds: Set<Long>,
         warnIds: Set<Long>,
+        imageIds: Set<Long>,
     ): Snapshot {
         val ym = YearMonth.from(f).toString()
         val entries = LedgerLogic.buildEntries(all, groups)
@@ -163,6 +170,7 @@ class LedgerViewModel @Inject constructor(
             warnCount = current.mapNotNull { it.receiptId }.distinct().count { it in warnIds },
             draftReceiptIds = draftIds,
             warnReceiptIds = warnIds,
+            imageReceiptIds = imageIds,
         )
     }
 
@@ -190,57 +198,23 @@ class LedgerViewModel @Inject constructor(
     suspend fun linkedReceiptDateTime(expense: Expense): String? = repository.linkedReceiptDateTime(expense)
 
     /**
-     * original が null なら新規。onDone にはエラーメッセージ(成功なら null)を渡す。
-     * 日時(date/time)を変えたら timeEdited を立て、以後レシートの日時変更に追従しないようにする。
-     * レシートの日時は変更しない。
+     * 手入力の支払いを保存する(レシートの表と品目)。家計簿の支出は、この保存のなかで支払いから作られる。
+     * onDone には保存した支払いの id と、エラーメッセージ(成功なら null)を渡す。
      */
-    fun saveExpense(
-        original: Expense?,
-        date: String,
-        time: String,
-        amount: Int,
-        category: String,
-        name: String,
-        memo: String,
-        onDone: (String?) -> Unit,
-    ) {
+    fun addManualPayment(receipt: Receipt, items: List<ReceiptItem>, onDone: (Long?, String?) -> Unit) {
         viewModelScope.launch {
             try {
-                if (original == null) {
-                    repository.add(
-                        Expense(
-                            date = date,
-                            time = time,
-                            amount = amount,
-                            category = category,
-                            name = name.trim(),
-                            memo = memo.trim(),
-                            createdAt = System.currentTimeMillis(),
-                        ),
-                    )
+                // 確定(合計か品目がある)は詳細画面の確定と同じ saveAndConfirm を通す。下書きは save のまま
+                val id = if (receipt.status == ReceiptStatus.CONFIRMED) {
+                    receipts.saveAndConfirm(receipt, items)
                 } else {
-                    // 変わった欄の「編集済み」を立てる(日時の timeEdited を含む)
-                    repository.update(PaymentEdit.editExpense(original, date, time, amount, category, name, memo))
+                    receipts.save(receipt, items)
                 }
-                onDone(null)
+                onDone(id, null)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                onDone("保存に失敗しました: ${e.message ?: e.javaClass.simpleName}")
-            }
-        }
-    }
-
-    /** 品目つきの手入力: グループと品目の支出を作る。onDone にはエラーメッセージ(成功なら null)を渡す。 */
-    fun addPayment(group: ExpenseGroup, items: List<Expense>, onDone: (String?) -> Unit) {
-        viewModelScope.launch {
-            try {
-                repository.addPayment(group, items)
-                onDone(null)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                onDone("保存に失敗しました: ${e.message ?: e.javaClass.simpleName}")
+                onDone(null, "保存に失敗しました: ${e.message ?: e.javaClass.simpleName}")
             }
         }
     }
@@ -293,7 +267,7 @@ class LedgerViewModel @Inject constructor(
                 val r = backupManager.export(uri) { setProgress(it) }
                 showResult(
                     "エクスポート完了",
-                    "日記 ${r.diaryEntries}件、レシート ${r.receipts}件、支出 ${r.expenses}件、画像 ${r.files}枚を書き出しました。",
+                    "日記 ${r.diaryEntries}件、支払い ${r.receipts}件、支出 ${r.expenses}件、画像 ${r.files}枚を書き出しました。",
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -320,7 +294,7 @@ class LedgerViewModel @Inject constructor(
                 val r = backupManager.importZip(uri, mode) { setProgress(it) }
                 showResult(
                     "インポート完了",
-                    "日記 ${r.diaryEntries}件、写真 ${r.diaryPhotos}件、レシート ${r.receipts}件、支出 ${r.expenses}件を取り込みました。" +
+                    "日記 ${r.diaryEntries}件、写真 ${r.diaryPhotos}件、支払い ${r.receipts}件、支出 ${r.expenses}件を取り込みました。" +
                         "重複などでスキップ ${r.skipped}件、画像 ${r.files}枚。",
                 )
             } catch (e: CancellationException) {

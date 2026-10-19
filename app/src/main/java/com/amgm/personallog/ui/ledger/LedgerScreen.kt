@@ -48,12 +48,13 @@ import java.time.YearMonth
 fun LedgerScreen(
     modifier: Modifier = Modifier,
     onOpenPayment: (PaymentKind, Long) -> Unit = { _, _ -> },
+    /** 手入力で保存した支払いの詳細(レシートの詳細)を開く。 */
+    onOpenReceipt: (Long) -> Unit = {},
     viewModel: LedgerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val c = AppTheme.colors
-    var choosing by remember { mutableStateOf(false) }
-    var creating by remember { mutableStateOf(false) }
+    // 家計簿の支出は、支払い(レシートの表)を保存したときに作られる。支出だけを単独で追加する入口は無い
     var creatingPayment by remember { mutableStateOf(false) }
     val expandedGroups = remember { mutableStateMapOf<Long, Boolean>() }
     var deletingGroup by remember { mutableStateOf<ExpenseGroup?>(null) }
@@ -171,7 +172,7 @@ fun LedgerScreen(
                         Label("支出一覧")
                         if (state.days.isEmpty()) {
                             Text(
-                                "右下の「＋ 記録」から支出を追加できます",
+                                "右下の「＋ 記録」から支払いを追加できます",
                                 style = AppTheme.type.body,
                                 color = c.inkSoft,
                                 modifier = Modifier.padding(vertical = Space.s),
@@ -185,6 +186,7 @@ fun LedgerScreen(
                         expandedGroups = expandedGroups,
                         draftReceiptIds = state.draftReceiptIds,
                         warnReceiptIds = state.warnReceiptIds,
+                        imageReceiptIds = state.imageReceiptIds,
                         onToggleGroup = { id -> expandedGroups[id] = expandedGroups[id] != true },
                         onOpen = { entry ->
                             when (entry) {
@@ -199,7 +201,7 @@ fun LedgerScreen(
 
             InkButton(
                 text = "＋ 記録",
-                onClick = { choosing = true },
+                onClick = { creatingPayment = true },
                 modifier = Modifier.align(Alignment.BottomEnd).padding(Space.m),
             )
         }
@@ -237,40 +239,19 @@ fun LedgerScreen(
         }
     }
 
-    if (creating) {
-        val initialDate = LedgerLogic.defaultDate(state.month, LocalDate.now())
-        ExpenseEditorSheet(
-            original = null,
-            initialDate = initialDate,
-            initialTime = LedgerLogic.defaultTime(initialDate, LocalDate.now(), LocalTime.now()),
-            linkedReceiptAt = null,
-            onDismiss = { creating = false },
-            onSave = { date, time, amount, category, name, memo, done ->
-                viewModel.saveExpense(null, date, time, amount, category, name, memo, done)
-            },
-            onDelete = null,
-        )
-    }
-    if (choosing) {
-        AddKindSheet(
-            onDismiss = { choosing = false },
-            onSingle = {
-                choosing = false
-                creating = true
-            },
-            onWithItems = {
-                choosing = false
-                creatingPayment = true
-            },
-        )
-    }
     if (creatingPayment) {
         val initialDate = LedgerLogic.defaultDate(state.month, LocalDate.now())
         ManualPaymentSheet(
             initialDate = initialDate,
             initialTime = LedgerLogic.defaultTime(initialDate, LocalDate.now(), LocalTime.now()),
             onDismiss = { creatingPayment = false },
-            onSave = { group, items, done -> viewModel.addPayment(group, items, done) },
+            onSave = { receipt, items, done ->
+                viewModel.addManualPayment(receipt, items) { id, err ->
+                    done(err)
+                    // 保存できたら、その支払いの詳細を開く(レシート一覧の手入力と同じ遷移)
+                    if (id != null) onOpenReceipt(id)
+                }
+            },
         )
     }
     deletingGroup?.let { target ->

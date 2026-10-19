@@ -297,6 +297,8 @@ internal fun DayBlock(
     draftReceiptIds: Set<Long>,
     /** 割り勘に警告があるレシートの id(行に「要確認」を付ける)。 */
     warnReceiptIds: Set<Long>,
+    /** 画像のあるレシート(レシート由来の支払い)の id。行の「レシート由来」は、ここに含まれる支払いの行だけに付ける。 */
+    imageReceiptIds: Set<Long>,
     onToggleGroup: (Long) -> Unit,
     /** 行をタップ: 支出の詳細画面を開く。 */
     onOpen: (LedgerEntry) -> Unit,
@@ -341,11 +343,13 @@ internal fun DayBlock(
                             showBadges = true,
                             draftReceiptIds = draftReceiptIds,
                             warnReceiptIds = warnReceiptIds,
+                            imageReceiptIds = imageReceiptIds,
                         )
                         is LedgerEntry.Group -> GroupLine(
                             entry = entry,
                             draftReceiptIds = draftReceiptIds,
                             warnReceiptIds = warnReceiptIds,
+                            imageReceiptIds = imageReceiptIds,
                             expanded = expandedGroups[entry.group.id] == true,
                             onToggle = { onToggleGroup(entry.group.id) },
                             onOpen = { onOpen(entry) },
@@ -374,13 +378,15 @@ private fun ExpenseLine(
     showBadges: Boolean = false,
     draftReceiptIds: Set<Long> = emptySet(),
     warnReceiptIds: Set<Long> = emptySet(),
+    /** 画像のあるレシートの id。「レシート由来」の印は、ここに含まれる支払いの行にだけ付ける(手入力の支払いには付けない)。 */
+    imageReceiptIds: Set<Long> = emptySet(),
 ) {
     val c = AppTheme.colors
     val title = listOf(expense.name, expense.memo).filter { it.isNotBlank() }.joinToString(" ").ifBlank { expense.category }
     val sub = listOfNotNull(
         expense.time.ifEmpty { null },
         if (expense.name.isNotBlank() || expense.memo.isNotBlank()) expense.category else null,
-        if (expense.receiptId != null) "レシート由来" else null,
+        if (expense.receiptId != null && expense.receiptId in imageReceiptIds) "レシート由来" else null,
     ).joinToString(" · ")
     Row(
         Modifier.fillMaxWidth().tappable(onClick).padding(vertical = Space.s + Space.xs),
@@ -412,6 +418,7 @@ private fun GroupLine(
     entry: LedgerEntry.Group,
     draftReceiptIds: Set<Long>,
     warnReceiptIds: Set<Long>,
+    imageReceiptIds: Set<Long>,
     expanded: Boolean,
     onToggle: () -> Unit,
     onOpen: () -> Unit,
@@ -456,7 +463,7 @@ private fun GroupLine(
             Column(Modifier.fillMaxWidth().padding(start = Space.m, bottom = Space.s)) {
                 entry.items.forEach { item ->
                     Hairline()
-                    ExpenseLine(item, onClick = onOpen)
+                    ExpenseLine(item, onClick = onOpen, imageReceiptIds = imageReceiptIds)
                 }
                 Hairline(dashed = true)
                 Spacer(Modifier.height(Space.s))
@@ -524,6 +531,8 @@ internal fun ExpenseEditorSheet(
     showName: Boolean = true,
     /** 日時の欄を出すか。支払いグループの品目の日時はグループに従うので、品目の編集では出さない。 */
     showDateTime: Boolean = true,
+    /** 金額を読み取り専用にし、この注記を出す(割り勘が2人以上の支払い。金額は割り勘画面=全体支出で直す)。null なら直せる。 */
+    lockedAmountNote: String? = null,
 ) {
     val c = AppTheme.colors
     var dateText by remember { mutableStateOf(initialDate) }
@@ -568,16 +577,32 @@ internal fun ExpenseEditorSheet(
                 )
             }
 
-            // 金額: 大きく中央
+            // 金額: 大きく中央。割り勘が2人以上のときは読み取り専用(直す場所は割り勘画面=全体支出)
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Label("金額(円)")
-                BareField(
-                    value = amountText,
-                    onValueChange = { v -> amountText = v.filter { it in '0'..'9' }.take(9) },
-                    textStyle = AppTheme.type.numeralXL.copy(textAlign = TextAlign.Center),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
+                if (lockedAmountNote == null) {
+                    BareField(
+                        value = amountText,
+                        onValueChange = { v -> amountText = v.filter { it in '0'..'9' }.take(9) },
+                        textStyle = AppTheme.type.numeralXL.copy(textAlign = TextAlign.Center),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                } else {
+                    Text(
+                        LedgerLogic.formatYen(amountText.toLongOrNull() ?: 0L),
+                        style = AppTheme.type.numeralXL.copy(textAlign = TextAlign.Center),
+                        color = c.inkSoft,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        lockedAmountNote,
+                        style = AppTheme.type.caption,
+                        color = c.inkFaint,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(top = Space.xs),
+                    )
+                }
                 Hairline(color = c.ink)
             }
 
@@ -761,7 +786,7 @@ internal fun BackupSheets(
             Spacer(Modifier.height(Space.s))
             ModeChoice("追加(重複はスキップ)", "今あるデータは残し、無いものだけ追加します", mode == ImportMode.MERGE) { mode = ImportMode.MERGE }
             Hairline()
-            ModeChoice("すべて置き換え", "今ある日記・レシート・家計簿を全て削除してから取り込みます", mode == ImportMode.REPLACE) { mode = ImportMode.REPLACE }
+            ModeChoice("すべて置き換え", "今ある日記・支払い・家計簿を全て削除してから取り込みます", mode == ImportMode.REPLACE) { mode = ImportMode.REPLACE }
             Spacer(Modifier.height(Space.m))
             InkButton("取り込む", onClick = { onPickMode(mode) }, modifier = Modifier.fillMaxWidth())
             TextAction("キャンセル", onClick = onCancelImport, color = c.inkSoft, modifier = Modifier.fillMaxWidth())
