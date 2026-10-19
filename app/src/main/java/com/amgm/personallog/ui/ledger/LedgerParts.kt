@@ -524,6 +524,8 @@ internal fun ExpenseEditorSheet(
     showName: Boolean = true,
     /** 日時の欄を出すか。支払いグループの品目の日時はグループに従うので、品目の編集では出さない。 */
     showDateTime: Boolean = true,
+    /** 金額を読み取り専用にし、この注記を出す(割り勘が2人以上の支払い。金額は割り勘画面=全体支出で直す)。null なら直せる。 */
+    lockedAmountNote: String? = null,
 ) {
     val c = AppTheme.colors
     var dateText by remember { mutableStateOf(initialDate) }
@@ -568,16 +570,32 @@ internal fun ExpenseEditorSheet(
                 )
             }
 
-            // 金額: 大きく中央
+            // 金額: 大きく中央。割り勘が2人以上のときは読み取り専用(直す場所は割り勘画面=全体支出)
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Label("金額(円)")
-                BareField(
-                    value = amountText,
-                    onValueChange = { v -> amountText = v.filter { it in '0'..'9' }.take(9) },
-                    textStyle = AppTheme.type.numeralXL.copy(textAlign = TextAlign.Center),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                )
+                if (lockedAmountNote == null) {
+                    BareField(
+                        value = amountText,
+                        onValueChange = { v -> amountText = v.filter { it in '0'..'9' }.take(9) },
+                        textStyle = AppTheme.type.numeralXL.copy(textAlign = TextAlign.Center),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                } else {
+                    Text(
+                        LedgerLogic.formatYen(amountText.toLongOrNull() ?: 0L),
+                        style = AppTheme.type.numeralXL.copy(textAlign = TextAlign.Center),
+                        color = c.inkSoft,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        lockedAmountNote,
+                        style = AppTheme.type.caption,
+                        color = c.inkFaint,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(top = Space.xs),
+                    )
+                }
                 Hairline(color = c.ink)
             }
 
