@@ -46,7 +46,7 @@ import com.amgm.personallog.ui.settings.SettingsRoutes
 enum class TopLevelTab(val route: String, val label: String, val icon: ImageVector) {
     Diary(DiaryRoutes.ROOT, "日記", Icons.Filled.Edit),
     Receipt(ReceiptRoutes.ROOT, "支払い", Icons.Filled.Check),
-    Meal(MealRoutes.ROOT, "食べた記録", Icons.Filled.List),
+    Meal(MealRoutes.ROOT, "自分の内訳", Icons.Filled.List),
     Ledger(LedgerRoutes.ROOT, "家計簿", Icons.Filled.Home),
     Settings(SettingsRoutes.ROOT, "設定", Icons.Filled.Settings),
 }

@@ -60,7 +60,7 @@ fun MembersScreen(
                 .navigationBarsPadding(),
         ) {
             ScreenHeader(
-                kicker = "割り勘",
+                kicker = "負担割り",
                 title = "メンバー",
                 trailing = { TextAction(text = "戻る", onClick = onBack) },
             )

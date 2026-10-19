@@ -45,7 +45,7 @@ class MealRecordViewModel @Inject constructor(
                 repository.observeMonth(ym.toString())
                     .catch { e ->
                         if (e is CancellationException) throw e
-                        _uiState.update { it.copy(loading = false, error = "食べた記録の読み込みに失敗しました: ${e.message}") }
+                        _uiState.update { it.copy(loading = false, error = "自分の内訳の読み込みに失敗しました: ${e.message}") }
                     }
             }.collect { payments ->
                 _uiState.update {

@@ -55,7 +55,7 @@ class MembersViewModel @Inject constructor(
     fun delete(person: Person) {
         viewModelScope.launch {
             val deleted = repository.delete(person)
-            message = if (deleted) null else "割り勘で使われているため削除できません"
+            message = if (deleted) null else "負担割りで使われているため削除できません"
         }
     }
 }

@@ -119,7 +119,7 @@ fun LedgerScreen(
                         }
                         if (state.warnCount > 0) {
                             Text(
-                                "要確認の支払い ${state.warnCount}件(割り勘に警告があります)",
+                                "要確認の支払い ${state.warnCount}件(負担割りに警告があります)",
                                 style = AppTheme.type.caption,
                                 color = c.danger,
                                 modifier = Modifier.padding(top = Space.xs),
