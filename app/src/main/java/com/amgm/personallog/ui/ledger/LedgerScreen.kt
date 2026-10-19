@@ -186,6 +186,7 @@ fun LedgerScreen(
                         expandedGroups = expandedGroups,
                         draftReceiptIds = state.draftReceiptIds,
                         warnReceiptIds = state.warnReceiptIds,
+                        imageReceiptIds = state.imageReceiptIds,
                         onToggleGroup = { id -> expandedGroups[id] = expandedGroups[id] != true },
                         onOpen = { entry ->
                             when (entry) {

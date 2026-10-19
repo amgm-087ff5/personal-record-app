@@ -297,6 +297,8 @@ internal fun DayBlock(
     draftReceiptIds: Set<Long>,
     /** 割り勘に警告があるレシートの id(行に「要確認」を付ける)。 */
     warnReceiptIds: Set<Long>,
+    /** 画像のあるレシート(レシート由来の支払い)の id。行の「レシート由来」は、ここに含まれる支払いの行だけに付ける。 */
+    imageReceiptIds: Set<Long>,
     onToggleGroup: (Long) -> Unit,
     /** 行をタップ: 支出の詳細画面を開く。 */
     onOpen: (LedgerEntry) -> Unit,
@@ -341,11 +343,13 @@ internal fun DayBlock(
                             showBadges = true,
                             draftReceiptIds = draftReceiptIds,
                             warnReceiptIds = warnReceiptIds,
+                            imageReceiptIds = imageReceiptIds,
                         )
                         is LedgerEntry.Group -> GroupLine(
                             entry = entry,
                             draftReceiptIds = draftReceiptIds,
                             warnReceiptIds = warnReceiptIds,
+                            imageReceiptIds = imageReceiptIds,
                             expanded = expandedGroups[entry.group.id] == true,
                             onToggle = { onToggleGroup(entry.group.id) },
                             onOpen = { onOpen(entry) },
@@ -374,13 +378,15 @@ private fun ExpenseLine(
     showBadges: Boolean = false,
     draftReceiptIds: Set<Long> = emptySet(),
     warnReceiptIds: Set<Long> = emptySet(),
+    /** 画像のあるレシートの id。「レシート由来」の印は、ここに含まれる支払いの行にだけ付ける(手入力の支払いには付けない)。 */
+    imageReceiptIds: Set<Long> = emptySet(),
 ) {
     val c = AppTheme.colors
     val title = listOf(expense.name, expense.memo).filter { it.isNotBlank() }.joinToString(" ").ifBlank { expense.category }
     val sub = listOfNotNull(
         expense.time.ifEmpty { null },
         if (expense.name.isNotBlank() || expense.memo.isNotBlank()) expense.category else null,
-        if (expense.receiptId != null) "レシート由来" else null,
+        if (expense.receiptId != null && expense.receiptId in imageReceiptIds) "レシート由来" else null,
     ).joinToString(" · ")
     Row(
         Modifier.fillMaxWidth().tappable(onClick).padding(vertical = Space.s + Space.xs),
@@ -412,6 +418,7 @@ private fun GroupLine(
     entry: LedgerEntry.Group,
     draftReceiptIds: Set<Long>,
     warnReceiptIds: Set<Long>,
+    imageReceiptIds: Set<Long>,
     expanded: Boolean,
     onToggle: () -> Unit,
     onOpen: () -> Unit,
@@ -456,7 +463,7 @@ private fun GroupLine(
             Column(Modifier.fillMaxWidth().padding(start = Space.m, bottom = Space.s)) {
                 entry.items.forEach { item ->
                     Hairline()
-                    ExpenseLine(item, onClick = onOpen)
+                    ExpenseLine(item, onClick = onOpen, imageReceiptIds = imageReceiptIds)
                 }
                 Hairline(dashed = true)
                 Spacer(Modifier.height(Space.s))

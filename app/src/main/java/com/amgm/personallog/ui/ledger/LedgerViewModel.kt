@@ -58,6 +58,8 @@ data class LedgerUiState(
     val draftReceiptIds: Set<Long> = emptySet(),
     /** 割り勘に警告があるレシートの id(行の「要確認」の印に使う)。 */
     val warnReceiptIds: Set<Long> = emptySet(),
+    /** 画像のあるレシート(レシート由来の支払い)の id。行の「レシート由来」の印に使う。手入力の支払い(画像なし)は含まない。 */
+    val imageReceiptIds: Set<Long> = emptySet(),
     val error: String? = null,
     val backup: BackupUiState = BackupUiState(),
 )
@@ -74,6 +76,7 @@ private data class Snapshot(
     val warnCount: Int,
     val draftReceiptIds: Set<Long>,
     val warnReceiptIds: Set<Long>,
+    val imageReceiptIds: Set<Long>,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -114,6 +117,7 @@ class LedgerViewModel @Inject constructor(
                         f, l, all, groups,
                         draftIds = receiptList.filter { it.status == ReceiptStatus.DRAFT }.mapTo(HashSet()) { it.id },
                         warnIds = sheets.filter { it.warnings.isNotBlank() }.mapTo(HashSet()) { it.receiptId },
+                        imageIds = receiptList.filter { it.imagePath.isNotEmpty() }.mapTo(HashSet()) { it.id },
                     )
                 }
                     .catch { e ->
@@ -134,6 +138,7 @@ class LedgerViewModel @Inject constructor(
                         warnCount = s.warnCount,
                         draftReceiptIds = s.draftReceiptIds,
                         warnReceiptIds = s.warnReceiptIds,
+                        imageReceiptIds = s.imageReceiptIds,
                     )
                 }
             }
@@ -147,6 +152,7 @@ class LedgerViewModel @Inject constructor(
         groups: List<ExpenseGroup>,
         draftIds: Set<Long>,
         warnIds: Set<Long>,
+        imageIds: Set<Long>,
     ): Snapshot {
         val ym = YearMonth.from(f).toString()
         val entries = LedgerLogic.buildEntries(all, groups)
@@ -164,6 +170,7 @@ class LedgerViewModel @Inject constructor(
             warnCount = current.mapNotNull { it.receiptId }.distinct().count { it in warnIds },
             draftReceiptIds = draftIds,
             warnReceiptIds = warnIds,
+            imageReceiptIds = imageIds,
         )
     }
 
