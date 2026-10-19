@@ -395,6 +395,15 @@ fun SplitSheetScreen(
             onDismiss = { pendingOp = null },
         )
     }
+
+    s.headcountConfirm?.let { change ->
+        HeadcountConfirm(
+            message = headcountConfirmText(change),
+            onYes = { viewModel.confirmHeadcount(updateHeadcount = true) },
+            onCancel = { viewModel.confirmHeadcount(updateHeadcount = false) },
+            onDismiss = viewModel::dismissHeadcountConfirm,
+        )
+    }
 }
 
 /** まとまりの分割・結合の要求(確認を出すかどうかは画面で決める)。 */
@@ -412,6 +421,18 @@ private fun GroupOpConfirm(message: String, onConfirm: () -> Unit, onDismiss: ()
         Text(message, style = AppTheme.type.body, color = c.ink, modifier = Modifier.padding(bottom = Space.m))
         TextAction("実行する", onClick = onConfirm, color = c.danger)
         TextAction("やめる", onClick = onDismiss, color = c.inkSoft)
+    }
+}
+
+/** 保存時の支払い側の人数の確認。ボタンは「はい」「キャンセル」の2つだけ。「はい」は人数を変え、「キャンセル」は人数を変えない(どちらも割り勘は保存する)。 */
+@Composable
+private fun HeadcountConfirm(message: String, onYes: () -> Unit, onCancel: () -> Unit, onDismiss: () -> Unit) {
+    val c = AppTheme.colors
+    InkSheet(onDismiss = onDismiss) {
+        SheetTitle("確認")
+        Text(message, style = AppTheme.type.body, color = c.ink, modifier = Modifier.padding(bottom = Space.m))
+        TextAction("はい", onClick = onYes, color = c.ink)
+        TextAction("キャンセル", onClick = onCancel, color = c.inkSoft)
     }
 }
 

@@ -41,7 +41,7 @@ data class PayerInput(val personId: Long, val amount: Int)
  * 割り勘の入力一式。
  * - total: 支払いの合計。null なら Σまとまり を合計とする。
  * - mode: SplitMode の値。未知の値は SELF と同じ扱い。
- * - people: isSelf=true がちょうど1人であること。
+ * - people: isSelf=true が0人か1人であること(0人は自分を外した支払い。自分に計上する分は他の人に均等に配る)。
  * - itemShares: まとまりID → 割当(ITEM 方式)。
  * - wholeShares: 支払い全体への割当(WHOLE 方式)。
  * - payers: 空なら自分が合計を払った。

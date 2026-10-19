@@ -32,7 +32,8 @@ object SplitCalculator {
     }
 
     private class Calculation(private val input: SplitInput) {
-        private val self: Long
+        /** 自分の参加者 id。自分を外した(0人の)ときは null。 */
+        private val self: Long?
         private val total: Int
         private val groupSum: Int
         private val payerIds: Set<Long>
@@ -46,9 +47,10 @@ object SplitCalculator {
         private val warnings = mutableListOf<SplitWarning>()
 
         init {
+            // 自分は0人か1人。0人は自分を外した支払い(自分の分は0円。自分に計上するはずの金額は他の人に配る)
             val selves = input.people.filter { it.isSelf }
-            require(selves.size == 1) { "isSelf の人はちょうど1人にする(現在 ${selves.size} 人)" }
-            self = selves.single().id
+            require(selves.size <= 1) { "isSelf の人は0人か1人にする(現在 ${selves.size} 人)" }
+            self = selves.singleOrNull()?.id
             participants = input.people.map { it.id }.distinct()
             peopleIds = participants.toSet()
             order = input.people.associate { it.id to it.order }
@@ -60,7 +62,7 @@ object SplitCalculator {
             payerIds = when {
                 flagged.isNotEmpty() -> flagged
                 input.payers.isNotEmpty() -> input.payers.map { it.personId }.toSet()
-                else -> setOf(self)
+                else -> self?.let { setOf(it) }.orEmpty()
             }
         }
 
@@ -94,10 +96,30 @@ object SplitCalculator {
             return SplitResult(sorted, warnings.toList())
         }
 
-        /** SELF: 各まとまりを自分が全額払う。残差(合計−品目の合計)も自分の行にする。 */
+        /** SELF: 各まとまりを自分が全額払う。残差(合計−品目の合計)も自分の行にする。自分がいなければ参加者で均等。 */
         private fun selfLines() {
-            for (g in input.groups) add(self, g.id, g.amount)
-            add(self, null, total - groupSum)
+            for (g in input.groups) toSelfOrOthers(g.id, g.amount)
+            toSelfOrOthers(null, total - groupSum)
+        }
+
+        /**
+         * 自分に計上する。自分が0人のときは、参加者全員で均等に配る(自分の分は0円のまま)。
+         * 参加者も0人なら配り先が無いので W5 を出す。
+         */
+        private fun toSelfOrOthers(groupId: Long?, amount: Int, provisional: Boolean = false) {
+            if (amount == 0) return
+            val me = self
+            if (me != null) {
+                add(me, groupId, amount, provisional)
+                return
+            }
+            if (participants.isEmpty()) {
+                warnings += SplitWarning.InvalidShares(groupId, "no participants")
+                return
+            }
+            for ((id, x) in YenAllocator.allocate(amount, participants.map { it to 1 }, payerIds, order)) {
+                add(id, groupId, x, provisional)
+            }
         }
 
         /** ITEM: まとまりごとに割当で割る。残差は参加者 P(people 全員)で均等に配る。 */
@@ -110,13 +132,13 @@ object SplitCalculator {
                 }
                 if (valid.isEmpty()) {
                     // 割当が無い: 共通費は参加者で均等、それ以外は自分が全額。
-                    if (g.isShared) splitEqual(g.id, participants, g.amount) else add(self, g.id, g.amount)
+                    if (g.isShared) splitEqual(g.id, participants, g.amount) else toSelfOrOthers(g.id, g.amount)
                     continue
                 }
                 val kinds = valid.map { it.kind }.distinct()
                 if (kinds.size > 1) {
                     warnings += SplitWarning.InvalidShares(g.id, "mixed kinds")
-                    add(self, g.id, g.amount)
+                    toSelfOrOthers(g.id, g.amount)
                     continue
                 }
                 when (kinds.single()) {
@@ -129,7 +151,7 @@ object SplitCalculator {
                     ShareKind.AMOUNT -> amountItem(g, valid)
                     else -> {
                         warnings += SplitWarning.InvalidShares(g.id, "unknown kind")
-                        add(self, g.id, g.amount)
+                        toSelfOrOthers(g.id, g.amount)
                     }
                 }
             }
@@ -146,7 +168,7 @@ object SplitCalculator {
         private fun ratioItem(g: SplitGroupInput, valid: List<ShareInput>) {
             if (valid.any { (it.weight ?: 0) < 0 }) {
                 warnings += SplitWarning.InvalidShares(g.id, "negative weight")
-                add(self, g.id, g.amount)
+                toSelfOrOthers(g.id, g.amount)
                 return
             }
             val specified = LinkedHashMap<Long, Int>()
@@ -173,7 +195,7 @@ object SplitCalculator {
             }
             if (weights.sumOf { it.second.toLong() } == 0L) {
                 warnings += SplitWarning.InvalidShares(g.id, "zero total weight")
-                add(self, g.id, g.amount)
+                toSelfOrOthers(g.id, g.amount)
                 return
             }
             splitWeighted(g.id, weights, g.amount)
@@ -193,7 +215,7 @@ object SplitCalculator {
             for ((id, x) in split.shares) add(id, g.id, x)
             if (split.mismatch) {
                 warnings += SplitWarning.GroupAmountMismatch(g.id, g.amount, split.fixedSum)
-                add(self, g.id, g.amount - split.fixedSum, provisional = true)
+                toSelfOrOthers(g.id, g.amount - split.fixedSum, provisional = true)
             }
         }
 
@@ -242,7 +264,7 @@ object SplitCalculator {
             val split = splitAmounts(total, fixed, blanks)
             if (split.mismatch) {
                 warnings += SplitWarning.WholeAmountMismatch(total, split.fixedSum)
-                add(self, null, total - split.fixedSum, provisional = true)
+                toSelfOrOthers(null, total - split.fixedSum, provisional = true)
             }
             distributeByCategories(split.shares)
         }
@@ -319,6 +341,12 @@ object SplitCalculator {
         }
 
         private fun splitWeighted(groupId: Long?, weights: List<Pair<Long, Int>>, amount: Int) {
+            if (amount == 0) return
+            if (weights.isEmpty()) {
+                // 配り先が無い(参加者0人)。例外にせず W5 で知らせる
+                warnings += SplitWarning.InvalidShares(groupId, "no participants")
+                return
+            }
             for ((id, x) in YenAllocator.allocate(amount, weights, payerIds, order)) add(id, groupId, x)
         }
 

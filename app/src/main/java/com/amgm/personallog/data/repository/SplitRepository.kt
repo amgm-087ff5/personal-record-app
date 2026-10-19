@@ -34,7 +34,7 @@ data class GroupWithItems(val group: ShareGroup, val itemIds: List<Long>)
 /**
  * 1つの支払いの割り勘シートの中身(画面の編集と計算の両方が使う)。
  * id が 0 以下の参加者・まとまりは未保存(画面で追加したもの)。保存時に新しい id に付け替え、割当の participantId / groupId も付け替える。
- * participants は sortOrder 順で、自分(personId = 自分の人)を必ず含む。
+ * participants は sortOrder 順。自分(personId = 自分の人)は含むことも、外して含まないこともある。
  */
 data class SplitSheetData(
     val receiptId: Long,
@@ -77,8 +77,8 @@ fun SplitSheetData.toBuild(total: Int?, items: List<ReceiptItem>): SplitBuild {
         rows.map { ShareInput(personId = it.participantId, kind = it.kind, weight = it.weight, amount = it.amount) }
     }
     val wholeShareInputs = wholeShares.map { ShareInput(personId = it.participantId, kind = it.kind, weight = it.weight, amount = it.amount) }
-    // 自分の参加者が無いのは起きない想定(load は必ず自分を入れる)。念のため -1 にして、計算が自分を見つけられないと分かるようにする
-    val selfId = participants.firstOrNull { persons[it.id]?.isSelf == true }?.id ?: -1L
+    // 自分の参加者が無い(自分を外した)ときは NO_SELF_PARTICIPANT。自分の分は0円になる
+    val selfId = participants.firstOrNull { persons[it.id]?.isSelf == true }?.id ?: NO_SELF_PARTICIPANT_ID
     val input = SplitInput(
         total = total,
         mode = mode,
@@ -146,6 +146,23 @@ fun mergedGroupAttributes(keep: ShareGroup, all: List<ShareGroup>): ShareGroup =
 fun newGroupAfterSplit(receiptId: Long, sortOrder: Int): ShareGroup =
     ShareGroup(receiptId = receiptId, pieceCount = null, isShared = false, sortOrder = sortOrder)
 
+// ---- 支払い側の人数(headcount)と既定の参加者(純関数。テストは ui/split/SplitHeadcountRulesTest.kt) ----
+
+/** 自分の参加者が無いときの参加者 id(DB の id とは重ならない値。計算では自分の分は0円になる)。 */
+const val NO_SELF_PARTICIPANT_ID: Long = Long.MIN_VALUE
+
+/** 保存時の人数の確認に使う。from は今の人数(headcount。null は 1)、to は割り勘の参加人数(自分を含む合計)。 */
+data class HeadcountChange(val from: Int, val to: Int)
+
+/** 割り勘の参加人数と、レシートの人数(headcount。null は 1)を比べる。同じなら null(確認は出さない)。 */
+fun headcountChangeOf(headcount: Int?, participantCount: Int): HeadcountChange? {
+    val from = headcount ?: 1
+    return if (from == participantCount) null else HeadcountChange(from = from, to = participantCount)
+}
+
+/** 初めて作る割り勘で、自分の他に入れる名前なしの人数。headcount が 2 以上なら headcount−1、null や 1 以下なら 0。 */
+fun defaultBlankCount(headcount: Int?): Int = maxOf((headcount ?: 1) - 1, 0)
+
 /** 割り勘の表の読み書き。家計簿の更新は ReceiptRepository が行う(ここからは呼ばない)。 */
 @Singleton
 class SplitRepository @Inject constructor(
@@ -158,7 +175,10 @@ class SplitRepository @Inject constructor(
     /** 全支払いの割り勘シート(家計簿の一覧で警告のバッジを出すのに使う)。 */
     fun observeSheets(): Flow<List<SplitSheet>> = splitDao.observeSheets()
 
-    /** その支払いのシートを読む。無ければ既定(自分だけ・自分の参加者1人)。品目のまとまりは ensureGroups してから返す。 */
+    /**
+     * その支払いのシートを読む。シートが無ければ既定を作る(自分と、レシートの人数ぶんの空欄メンバー)。
+     * 保存済みのシートは、自分の参加者を勝手に入れ直さない(自分を外した状態のまま返す)。品目のまとまりは ensureGroups してから返す。
+     */
     suspend fun load(receiptId: Long): SplitSheetData = db.withTransaction {
         ensureGroups(receiptId)
         val receipt = receiptDao.getById(receiptId)
@@ -166,16 +186,13 @@ class SplitRepository @Inject constructor(
         // 旧い立て替え(シートが無く isAdvance)は、保存せずに既定値を返す(保存するのは利用者が保存したとき)
         if (sheet == null && receipt != null && receipt.isAdvance) return@withTransaction legacyDefault(receiptId, receipt)
 
-        // 新しいシートの既定は「食べた分どおり」(ITEM)
+        // 新しいシートの既定は「食べた分どおり」(ITEM)。初めて作るときだけ、既定の参加者(自分と人数ぶんの空欄)を入れる
+        val isNew = sheet == null
         val savedSheet = sheet ?: SplitSheet(receiptId = receiptId, mode = SplitMode.ITEM).also { splitDao.upsertSheet(it) }
         val self = personRepo.self()
+        if (isNew) addDefaultParticipants(receiptId, self, receipt?.headcount)
+        // 自分の参加者は勝手に入れ直さない(自分を外した状態を保つ)
         var participants = splitDao.getParticipants(receiptId)
-        if (participants.none { it.personId == self.id }) {
-            // 自分の参加者が無ければ、先頭に作る
-            val top = (participants.minOfOrNull { it.sortOrder } ?: 0) - 1
-            splitDao.insertParticipant(SplitParticipant(receiptId = receiptId, personId = self.id, sortOrder = top))
-            participants = splitDao.getParticipants(receiptId)
-        }
         // 保存が「自分だけ」(旧 SELF)なら、参加者は自分1人に読み替える(割当も自分の分だけ残す。保存で他の参加者は消える)
         val selfOnly = SplitModeReading.isSelfOnly(savedSheet.mode)
         if (selfOnly) participants = participants.filter { it.personId == self.id }
@@ -195,6 +212,19 @@ class SplitRepository @Inject constructor(
             labelAmounts = splitDao.getLabelAmounts(receiptId),
             persons = persons,
         )
+    }
+
+    /** 初めて作る割り勘の既定の参加者: 自分(先頭)と、名前なし・割当なしの人を defaultBlankCount 人。 */
+    private suspend fun addDefaultParticipants(receiptId: Long, self: Person, headcount: Int?) {
+        splitDao.insertParticipant(SplitParticipant(receiptId = receiptId, personId = self.id, sortOrder = 0))
+        repeat(defaultBlankCount(headcount)) { i ->
+            splitDao.insertParticipant(SplitParticipant(receiptId = receiptId, personId = null, sortOrder = i + 1))
+        }
+    }
+
+    /** レシートの参加人数(headcount)を変える。null は「不明」。割り勘の保存とは別に呼ぶ。 */
+    suspend fun setHeadcount(receiptId: Long, headcount: Int?) {
+        receiptDao.setHeadcount(receiptId, headcount)
     }
 
     /**
@@ -433,8 +463,10 @@ class SplitRepository @Inject constructor(
         val sheet = splitDao.getSheet(receiptId) ?: return null
         if (sheet.mode == SplitMode.SELF) return null
         val data = load(receiptId)
-        // 参加者が自分1人なら割り勘は無い(全額が自分)。従来の「自分だけ」と同じに扱い、家計簿に警告を付けない
-        if (data.participants.size <= 1) return null
+        // 参加者が自分1人だけ(0人を含む)なら割り勘は無い(全額が自分)。従来の「自分だけ」と同じに扱い、家計簿に警告を付けない。
+        // 自分を外して他の人だけのときは割り勘を計算する(自分の分は0円)
+        val onlySelf = data.participants.all { data.persons[it.id]?.isSelf == true }
+        if (data.participants.size <= 1 && onlySelf) return null
         return data.toBuild(total, items)
     }
 

@@ -2,6 +2,7 @@ package com.amgm.personallog.ui.split
 
 import com.amgm.personallog.data.model.Person
 import com.amgm.personallog.data.model.SplitParticipant
+import com.amgm.personallog.data.repository.HeadcountChange
 import com.amgm.personallog.domain.split.SplitLine
 import com.amgm.personallog.domain.split.SplitWarning
 
@@ -141,6 +142,9 @@ fun totalAfterBulkAdd(current: Int, text: String): Int? = bulkAddCount(text)?.le
 
 /** 参加人数の表示: 「合計3人」(自分を含む)。 */
 fun participantCountText(count: Int): String = "合計${count}人"
+
+/** 保存時の人数の確認の文言(支払い側の人数の変更)。 */
+fun headcountConfirmText(change: HeadcountChange): String = "支払い側の人数を${change.from}人→${change.to}人に変更しますか？"
 
 /** 参加者1行ぶんの判定材料。participants は並び順(sortOrder)の早い順に渡す。 */
 data class ParticipantFacts(

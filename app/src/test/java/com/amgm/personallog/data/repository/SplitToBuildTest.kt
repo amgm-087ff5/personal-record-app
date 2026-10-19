@@ -82,6 +82,6 @@ class SplitToBuildTest {
             persons = mapOf(0L to Person(id = 5, name = "自分", shortName = "自", isSelf = true, createdAt = 0)),
         )
         assertEquals(0L, data.toBuild(total = 100, items = emptyList()).selfParticipantId)
-        assertEquals(-1L, data.copy(persons = emptyMap()).toBuild(total = 100, items = emptyList()).selfParticipantId)
+        assertEquals(NO_SELF_PARTICIPANT_ID, data.copy(persons = emptyMap()).toBuild(total = 100, items = emptyList()).selfParticipantId)
     }
 }
