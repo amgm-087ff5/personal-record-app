@@ -197,6 +197,35 @@ class SplitRepository @Inject constructor(
         )
     }
 
+    /**
+     * 読み取りだけ(何も作らず保存しない)。その支払いの割り勘シートを返す。シートが無ければ null。
+     * load と違い、自分の参加者・既定のシート・まとまりを作らない。表示用(食べた記録など)に使う。
+     * 方式が「自分だけ」なら参加者と割当を自分の分に絞る(load と同じ読み替え)。
+     */
+    suspend fun peek(receiptId: Long): SplitSheetData? {
+        val sheet = splitDao.getSheet(receiptId) ?: return null
+        val self = splitDao.getSelf()
+        val selfOnly = SplitModeReading.isSelfOnly(sheet.mode)
+        var participants = splitDao.getParticipants(receiptId)
+        if (selfOnly) participants = participants.filter { self != null && it.personId == self.id }
+        val keptIds = participants.map { it.id }.toSet()
+        val itemShares = splitDao.getItemShares(receiptId).filter { !selfOnly || it.participantId in keptIds }
+        val wholeShares = splitDao.getWholeShares(receiptId).filter { !selfOnly || it.participantId in keptIds }
+        val byId = splitDao.getPersons().associateBy { it.id }
+        val persons = participants.mapNotNull { p -> p.personId?.let { pid -> byId[pid]?.let { p.id to it } } }.toMap()
+        return SplitSheetData(
+            receiptId = receiptId,
+            mode = SplitModeReading.modeOf(sheet.mode),
+            wholeKind = sheet.wholeKind,
+            participants = participants,
+            groups = groupsWithItems(receiptId),
+            itemShares = itemShares,
+            wholeShares = wholeShares,
+            labelAmounts = splitDao.getLabelAmounts(receiptId),
+            persons = persons,
+        )
+    }
+
     /** 支払いのまとまりと、そこに入っている品目の id(sortOrder 順)。 */
     private suspend fun groupsWithItems(receiptId: Long): List<GroupWithItems> {
         val groupItems = splitDao.getGroupItems(receiptId)
