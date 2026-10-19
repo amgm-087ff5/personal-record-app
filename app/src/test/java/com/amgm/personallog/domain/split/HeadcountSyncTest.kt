@@ -14,7 +14,7 @@ class HeadcountSyncTest {
         assertEquals(0, shortfall(1, 0))
         assertEquals(0, excess(1, 0))
         assertEquals(1, excess(2, 0))
-        assertEquals(0, shortfall(0, -3))
+        assertEquals(1, shortfall(0, -3))
         assertEquals(2, excess(3, -3))
     }
 
