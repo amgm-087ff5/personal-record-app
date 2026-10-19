@@ -116,7 +116,7 @@ fun ReceiptScreen(
 
     PaperScreen(modifier = modifier) {
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            item(key = "header") { ScreenHeader(kicker = "領収の記録", title = "レシート") }
+            item(key = "header") { ScreenHeader(kicker = "領収の記録", title = "支払い") }
 
             item(key = "capture") {
                 Column(modifier = Modifier.fillMaxWidth()) {
@@ -166,7 +166,7 @@ fun ReceiptScreen(
             if (receipts.isEmpty()) {
                 item(key = "empty") {
                     Text(
-                        "まだレシートがありません。「撮る」「選ぶ」、または「手入力で追加」から追加してください。",
+                        "まだ支払いがありません。「撮る」「選ぶ」、または「手入力で追加」から追加してください。",
                         style = AppTheme.type.body,
                         color = AppTheme.colors.inkSoft,
                         modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.l),

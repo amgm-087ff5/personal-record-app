@@ -43,7 +43,7 @@ import com.amgm.personallog.ui.settings.SettingsRoutes
 /** 下部タブ。アイコンと文字を並べる。選ばれたタブは琥珀色になり、文字は太くなる。 */
 enum class TopLevelTab(val route: String, val label: String, val icon: ImageVector) {
     Diary(DiaryRoutes.ROOT, "日記", Icons.Filled.Edit),
-    Receipt(ReceiptRoutes.ROOT, "レシート", Icons.Filled.Check),
+    Receipt(ReceiptRoutes.ROOT, "支払い", Icons.Filled.Check),
     Ledger(LedgerRoutes.ROOT, "家計簿", Icons.Filled.Home),
     Settings(SettingsRoutes.ROOT, "設定", Icons.Filled.Settings),
 }

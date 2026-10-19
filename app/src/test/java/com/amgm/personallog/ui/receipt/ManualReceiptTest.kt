@@ -39,11 +39,20 @@ class ManualReceiptTest {
         assertEquals("2026-10-10 14:05", r.purchasedAt)
         assertEquals(1280, r.totalAmount)
         assertEquals(TotalSource.MANUAL, r.totalSource)
+        // 合計が入っているので確定
+        assertEquals(ReceiptStatus.CONFIRMED, r.status)
     }
 
     @Test
-    fun zeroTotal_isAllowed() {
-        assertEquals(0, ok(ManualReceipt.build("2026-01-01", "", "", "0", now = 0L)).totalAmount)
+    fun zeroTotal_isAllowed_andConfirmed() {
+        val r = ok(ManualReceipt.build("2026-01-01", "", "", "0", now = 0L))
+        assertEquals(0, r.totalAmount)
+        assertEquals(ReceiptStatus.CONFIRMED, r.status)
+    }
+
+    @Test
+    fun noTotal_staysDraft() {
+        assertEquals(ReceiptStatus.DRAFT, ok(ManualReceipt.build("2026-10-10", "", "", "", now = 0L)).status)
     }
 
     @Test

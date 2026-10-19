@@ -155,9 +155,11 @@ class BackupManager @Inject constructor(
                 }
                 val backup = data ?: throw BackupException("このZIPは個人記録のバックアップではありません(data.json がありません)")
                 validatePaths(backup)
+                // 支払いに属さない支出は、手入力の支払いに変えてから入れる(支出は必ず支払いから作る)
+                val conversion = convertOrphanExpensesToManualPayments(backup)
 
                 onProgress(BackupProgress("データベースに取り込んでいます"))
-                val result = importData(backup, mode, fileCount)
+                val result = importData(conversion.data, mode, fileCount, conversion.manualReceiptIds)
 
                 onProgress(BackupProgress("画像を配置しています"))
                 try {
@@ -189,12 +191,18 @@ class BackupManager @Inject constructor(
         if (bad != null) throw BackupException("安全でない画像パスが含まれているため取り込みを中止しました: $bad")
     }
 
-    private suspend fun importData(data: BackupData, mode: ImportMode, fileCount: Int): ImportResult =
+    private suspend fun importData(
+        data: BackupData,
+        mode: ImportMode,
+        fileCount: Int,
+        manualReceiptIds: Set<Long>,
+    ): ImportResult =
         db.withTransaction {
-            if (mode == ImportMode.REPLACE) replaceAll(data, fileCount) else mergeAll(data, fileCount)
+            if (mode == ImportMode.REPLACE) replaceAll(data, fileCount, manualReceiptIds)
+            else mergeAll(data, fileCount, manualReceiptIds)
         }
 
-    private suspend fun replaceAll(data: BackupData, fileCount: Int): ImportResult {
+    private suspend fun replaceAll(data: BackupData, fileCount: Int, manualReceiptIds: Set<Long>): ImportResult {
         expenseDao.observeAll().first().forEach { expenseDao.delete(it) }
         expenseGroupDao.observeAll().first().forEach { expenseGroupDao.delete(it) }
         receiptDao.observeAll().first().forEach { receiptDao.delete(it) }
@@ -206,7 +214,9 @@ class BackupManager @Inject constructor(
         // バックアップ内の支払い id -> 復元後の id(割り勘の表の付け替えに使う)
         val receiptIdMap = HashMap<Long, Long>()
         data.receipts.forEach { r ->
-            receiptIdMap[r.id] = receiptDao.insert(r.toEntity(replaceItemsByReceipt[r.id].orEmpty(), legacyFormat = data.formatVersion < 5))
+            receiptIdMap[r.id] = receiptDao.insert(
+                r.toEntity(replaceItemsByReceipt[r.id].orEmpty(), legacyFormat = isLegacyReceipt(data, r.id, manualReceiptIds)),
+            )
         }
         // 品目は1件ずつ入れて、バックアップ内の id -> 復元後の id を控える(支出の receiptItemId の付け替えに使う)
         val itemIdMap = HashMap<Long, Long>()
@@ -248,13 +258,19 @@ class BackupManager @Inject constructor(
         )
     }
 
+    /**
+     * 旧形式(形式4以前)の支払いか。変換で作った手入力の支払いは、旧形式の合計判定(TotalSourceInit)を通さない。
+     */
+    private fun isLegacyReceipt(data: BackupData, receiptId: Long, manualReceiptIds: Set<Long>): Boolean =
+        data.formatVersion < 5 && receiptId !in manualReceiptIds
+
     /** バックアップ内のレシート id -> レシートの時刻 "HH:mm"(時刻が無ければ 00:00)。古いバックアップの支出の初期値に使う。 */
     private fun receiptTimes(data: BackupData): Map<Long, String> =
         data.receipts.associate { it.id to LedgerCalc.splitPurchasedAt(it.purchasedAt).second }
 
     private fun linkedTime(receiptId: Long?, times: Map<Long, String>): String? = receiptId?.let { times[it] }
 
-    private suspend fun mergeAll(data: BackupData, fileCount: Int): ImportResult {
+    private suspend fun mergeAll(data: BackupData, fileCount: Int, manualReceiptIds: Set<Long>): ImportResult {
         var skipped = 0
         var addedEntries = 0
         var addedPhotos = 0
@@ -297,7 +313,7 @@ class BackupManager @Inject constructor(
         val newReceiptIdMap = HashMap<Long, Long>()
         val newItemIdMap = HashMap<Long, Long>()
         for (r in data.receipts) {
-            val entity = r.toEntity(itemsByReceipt[r.id].orEmpty(), legacyFormat = data.formatVersion < 5)
+            val entity = r.toEntity(itemsByReceipt[r.id].orEmpty(), legacyFormat = isLegacyReceipt(data, r.id, manualReceiptIds))
             val existing = receiptIndex.take(entity)
             if (existing != null) {
                 receiptIdMap[r.id] = existing
