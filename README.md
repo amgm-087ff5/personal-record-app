@@ -12,7 +12,7 @@
 
 スマホのブラウザから常に最新版を取得できます:
 
-https://github.com/amgm-masamune/personal-record-app/releases/download/personal-log-debug-latest/personal-log-debug.apk
+https://github.com/amgm-087ff5/personal-record-app/releases/download/personal-log-debug-latest/personal-log-debug.apk
 
 **このリポジトリは公開です。公開リポジトリのReleaseに置かれるAPKも誰でも取得できます。** 個人の記録データはAPKに含まれず端末内にのみ保存されますが、公開されて困るものをコミットしないでください。
 
