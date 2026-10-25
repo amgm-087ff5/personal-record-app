@@ -3,6 +3,7 @@ package com.amgm.personallog.ui.ledger
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.width
@@ -55,16 +56,32 @@ internal fun ManualPaymentSheet(
     val drafts = remember { mutableStateListOf(DraftItem(), DraftItem()) }
     var errors by remember { mutableStateOf<List<String>>(emptyList()) }
     var saving by remember { mutableStateOf(false) }
+    var confirmDiscard by remember { mutableStateOf(false) }
 
     val itemsSum = DraftPayment.itemsSum(drafts)
     val sumText = DraftPayment.sumText(drafts)
 
-    InkSheet(onDismiss = { if (!saving) onDismiss() }) {
+    // 日時の初期値(今日など)は入力とみなさない。それ以外の欄に何か入っていれば未保存。
+    val dirty = totalText.isNotBlank() || memo.isNotBlank() || headcountText.isNotBlank() ||
+        dateText != initialDate || timeText != initialTime ||
+        drafts.any { it.name.isNotBlank() || it.amount.isNotBlank() || it.memo.isNotBlank() }
+    // 閉じる・戻る・シート外タップの共通の入口。未保存があれば確認を出す。保存中は閉じない。
+    val requestClose: () -> Unit = {
+        if (!saving) {
+            if (dirty) confirmDiscard = true else onDismiss()
+        }
+    }
+
+    InkSheet(onDismiss = requestClose, swipeToDismiss = false) {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding(),
             verticalArrangement = Arrangement.spacedBy(Space.m),
         ) {
-            Label("支払いを追加")
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Label("支払いを追加")
+                Spacer(Modifier.weight(1f))
+                TextAction("閉じる", enabled = !saving, onClick = requestClose, color = c.inkSoft)
+            }
 
             // 合計: 大きく中央。下に品目の合計と「合計に入れる」
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -161,8 +178,22 @@ internal fun ManualPaymentSheet(
                     }
                 },
             )
-            TextAction("キャンセル", enabled = !saving, onClick = onDismiss, color = c.inkSoft, modifier = Modifier.fillMaxWidth())
+            TextAction("キャンセル", enabled = !saving, onClick = requestClose, color = c.inkSoft, modifier = Modifier.fillMaxWidth())
         }
+    }
+
+    if (confirmDiscard) {
+        ConfirmSheet(
+            title = "未保存の内容が残っています",
+            message = "破棄しますか？ 入力した内容は保存されません。",
+            confirmText = "破棄",
+            dismissText = "入力に戻る",
+            onConfirm = {
+                confirmDiscard = false
+                onDismiss()
+            },
+            onDismiss = { confirmDiscard = false },
+        )
     }
 }
 

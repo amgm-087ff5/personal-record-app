@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -401,16 +402,23 @@ fun ProportionBand(parts: List<Pair<Float, Color>>, modifier: Modifier = Modifie
     }
 }
 
-/** 下から出る編集シート。ダイアログやインラインの入力欄の代わりに使う。 */
+/**
+ * 下から出る編集シート。ダイアログやインラインの入力欄の代わりに使う。
+ * swipeToDismiss=false なら下スワイプで閉じない(閉じるボタンや戻るキーで onDismiss を呼ぶ側で制御する)。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InkSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    swipeToDismiss: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = AppTheme.colors
-    val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val state = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+        confirmValueChange = { swipeToDismiss || it != SheetValue.Hidden },
+    )
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = state,
