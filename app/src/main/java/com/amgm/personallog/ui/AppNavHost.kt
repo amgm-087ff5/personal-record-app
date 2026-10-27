@@ -7,7 +7,6 @@ import androidx.navigation.compose.NavHost
 import com.amgm.personallog.ui.diary.DiaryRoutes
 import com.amgm.personallog.ui.diary.diaryGraph
 import com.amgm.personallog.ui.ledger.ledgerGraph
-import com.amgm.personallog.ui.meal.mealGraph
 import com.amgm.personallog.ui.receipt.receiptGraph
 import com.amgm.personallog.ui.settings.settingsGraph
 
@@ -21,7 +20,6 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         diaryGraph(navController)
         receiptGraph(navController)
         ledgerGraph(navController)
-        mealGraph(navController)
         settingsGraph(navController)
     }
 }

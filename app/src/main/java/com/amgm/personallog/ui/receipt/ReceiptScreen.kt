@@ -76,7 +76,7 @@ private fun buildEntries(receipts: List<Receipt>): List<SlipEntry> =
         SlipEntry(month = if (month != prev) month else null, receipt = r, lastOfMonth = month != next)
     }
 
-/** レシートタブのトップ画面: 取り込み状況、一覧、「撮る」「選ぶ(複数可)」。 */
+/** 支払い画面(ReceiptRoutes.ROOT)のトップ画面: 取り込み状況、一覧、「撮る」「選ぶ(複数可)」。 */
 @Composable
 fun ReceiptScreen(
     modifier: Modifier = Modifier,
