@@ -76,11 +76,33 @@ private fun buildEntries(receipts: List<Receipt>): List<SlipEntry> =
         SlipEntry(month = if (month != prev) month else null, receipt = r, lastOfMonth = month != next)
     }
 
-/** 支払い画面(ReceiptRoutes.ROOT)のトップ画面: 取り込み状況、一覧、「撮る」「選ぶ(複数可)」。 */
+/** 絞り込み(一覧の表示対象)。判定は画像の有無: imagePath が空なら手入力。 */
+private const val FILTER_ALL = 0
+private const val FILTER_RECEIPT = 1
+private const val FILTER_MANUAL = 2
+
+private fun Receipt.matches(filter: Int): Boolean = when (filter) {
+    FILTER_RECEIPT -> imagePath.isNotBlank()
+    FILTER_MANUAL -> imagePath.isBlank()
+    else -> true
+}
+
+/** 戻るボタン(家計簿から開いたとき用)。 */
+private fun headerBack(onBack: () -> Unit): @Composable () -> Unit = {
+    TextAction("戻る", onClick = onBack, color = AppTheme.colors.inkSoft)
+}
+
+/**
+ * 支払い画面(ReceiptRoutes.HOME)。取り込み状況、一覧(すべて/レシート/手入力で絞り込み)、「撮る」「選ぶ(複数可)」。
+ * autoCapture が true のときは、表示直後に一度だけ「撮る」と同じカメラを開く(家計簿の「レシートから登録」)。
+ * onBack があれば見出しに「戻る」を出す。
+ */
 @Composable
 fun ReceiptScreen(
     modifier: Modifier = Modifier,
     onOpenReceipt: (Long) -> Unit = {},
+    onBack: (() -> Unit)? = null,
+    autoCapture: Boolean = false,
     viewModel: ReceiptListViewModel = hiltViewModel(),
 ) {
     val receipts by viewModel.receipts.collectAsStateWithLifecycle()
@@ -91,6 +113,8 @@ fun ReceiptScreen(
     var pendingPath by rememberSaveable { mutableStateOf<String?>(null) }
     // 手入力の支払い(レシート画像なし)のシート
     var manualOpen by rememberSaveable { mutableStateOf(false) }
+    // 一覧の絞り込み(FILTER_* の値)
+    var filter by rememberSaveable { mutableStateOf(FILTER_ALL) }
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val path = pendingPath
@@ -103,6 +127,26 @@ fun ReceiptScreen(
         if (uris.isNotEmpty()) viewModel.onPicked(uris)
     }
 
+    // 「撮る」と同じ処理(カメラを開く。起動できなければ案内を出す)
+    val startCamera: () -> Unit = {
+        try {
+            val path = viewModel.newCameraPath()
+            pendingPath = path
+            takePicture.launch(viewModel.cameraUri(path))
+        } catch (e: Exception) {
+            pendingPath = null
+            viewModel.showError("カメラを起動できませんでした。「選ぶ」をお使いください。")
+        }
+    }
+    // 家計簿の「レシートから登録」から来たときは、表示直後に一度だけ開く(回転などで開き直さない)
+    var autoStarted by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(autoCapture) {
+        if (autoCapture && !autoStarted) {
+            autoStarted = true
+            startCamera()
+        }
+    }
+
     val pendingOpen by viewModel.pendingOpen.collectAsStateWithLifecycle()
     LaunchedEffect(pendingOpen) {
         pendingOpen?.let { id ->
@@ -112,25 +156,23 @@ fun ReceiptScreen(
     }
 
     val pending = state.imports.filter { it.phase == ImportPhase.DUPLICATE_PENDING }
-    val entries = remember(receipts) { buildEntries(receipts) }
+    val visible = remember(receipts, filter) { receipts.filter { it.matches(filter) } }
+    val entries = remember(visible) { buildEntries(visible) }
 
     PaperScreen(modifier = modifier) {
         LazyColumn(modifier = Modifier.fillMaxSize()) {
-            item(key = "header") { ScreenHeader(kicker = "領収の記録", title = "支払い") }
+            item(key = "header") {
+                ScreenHeader(
+                    kicker = "領収の記録",
+                    title = "支払い",
+                    trailing = if (onBack == null) null else headerBack(onBack),
+                )
+            }
 
             item(key = "capture") {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     CaptureBlocks(
-                        onCamera = {
-                            try {
-                                val path = viewModel.newCameraPath()
-                                pendingPath = path
-                                takePicture.launch(viewModel.cameraUri(path))
-                            } catch (e: Exception) {
-                                pendingPath = null
-                                viewModel.showError("カメラを起動できませんでした。「選ぶ」をお使いください。")
-                            }
-                        },
+                        onCamera = startCamera,
                         onGallery = {
                             pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                         },
@@ -163,10 +205,35 @@ fun ReceiptScreen(
                 }
             }
 
+            if (receipts.isNotEmpty()) {
+                item(key = "filter") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Space.edge)
+                            .padding(top = Space.m),
+                        horizontalArrangement = Arrangement.spacedBy(Space.s),
+                    ) {
+                        Pill(text = "すべて", selected = filter == FILTER_ALL, onClick = { filter = FILTER_ALL })
+                        Pill(text = "レシート", selected = filter == FILTER_RECEIPT, onClick = { filter = FILTER_RECEIPT })
+                        Pill(text = "手入力", selected = filter == FILTER_MANUAL, onClick = { filter = FILTER_MANUAL })
+                    }
+                }
+            }
+
             if (receipts.isEmpty()) {
                 item(key = "empty") {
                     Text(
                         "まだ支払いがありません。「撮る」「選ぶ」、または「手入力で追加」から追加してください。",
+                        style = AppTheme.type.body,
+                        color = AppTheme.colors.inkSoft,
+                        modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.l),
+                    )
+                }
+            } else if (visible.isEmpty()) {
+                item(key = "filter-empty") {
+                    Text(
+                        "この絞り込みに当てはまる支払いはありません。",
                         style = AppTheme.type.body,
                         color = AppTheme.colors.inkSoft,
                         modifier = Modifier.padding(horizontal = Space.edge, vertical = Space.l),

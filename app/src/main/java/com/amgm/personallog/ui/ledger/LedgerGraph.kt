@@ -33,6 +33,8 @@ fun NavGraphBuilder.ledgerGraph(navController: NavController) {
                 onOpenPayment = { kind, id -> navController.navigate(LedgerRoutes.payment(kind, id)) },
                 onOpenExcludedPayment = { receiptId -> navController.navigate(LedgerRoutes.excludedPayment(receiptId)) },
                 onOpenReceipt = { receiptId -> navController.navigate(ReceiptRoutes.detail(receiptId)) },
+                onOpenReceiptList = { navController.navigate(ReceiptRoutes.home()) },
+                onCaptureReceipt = { navController.navigate(ReceiptRoutes.home(autoCapture = true)) },
             )
         }
         composable(
