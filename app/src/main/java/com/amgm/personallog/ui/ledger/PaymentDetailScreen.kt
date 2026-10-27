@@ -58,12 +58,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/** 割り勘があるときの、支出の金額欄の注記(金額は全体支出で直す)。 */
-private const val LOCKED_AMOUNT_NOTE = "金額は負担割り画面(全体支出)で直す"
-
 /**
- * 支出の詳細画面。家計簿の支出(まとまり、または単独の支出)を、金額・日時・メモ・品目まで見て直す。
- * 支払い由来なら、日時・金額・品目・支払い先は支払いへ書き戻す。サムネイルと「レシートを開く」でレシートの詳細へ移れる。
+ * 支出の詳細画面。家計簿の支出(まとまり、または単独の支出)のうち、自分の分だけを見て直す。
+ * 支払い由来なら、日時・金額・品目は支払いへ書き戻す。支払い先・レシート・割り勘は「支払いを開く」から支払い詳細で見る。
  */
 @Composable
 fun PaymentDetailScreen(
@@ -112,16 +109,10 @@ fun PaymentDetailScreen(
                 item(key = "head") {
                     GroupHeader(group, onEdit = { editingGroup = true }, onRevert = { viewModel.revertGroupField(group, it) })
                 }
-                s.receipt?.let { r ->
-                    item(key = "store") { StoreRow(r.storeName, onEdit = { editingStore = true }) }
-                    item(key = "split") { SplitRow(s.splitPeople, r.id, onOpenSplit) }
-                    if (s.splitPeople >= 2) {
-                        item(key = "individual") { IndividualBlock(s.individual) }
-                    }
+                if (s.splitPeople >= 2) {
+                    item(key = "individual") { IndividualBlock(s.individual) }
                 }
-                item(key = "receipt") {
-                    ReceiptBlock(s.receipt?.imagePath, s.receipt?.id, onOpenReceipt)
-                }
+                item(key = "payment") { OpenPaymentRow(s.receipt?.id, onOpenReceipt) }
                 item(key = "items-title") {
                     Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(top = Space.l)) {
                         Label("品目")
@@ -192,16 +183,10 @@ fun PaymentDetailScreen(
                 item(key = "single") {
                     SingleBody(single, onEdit = { editingItemId = single.id }, onRevert = { viewModel.revertItemField(single, it) })
                 }
-                s.receipt?.let { r ->
-                    item(key = "store") { StoreRow(r.storeName, onEdit = { editingStore = true }) }
-                    item(key = "split") { SplitRow(s.splitPeople, r.id, onOpenSplit) }
-                    if (s.splitPeople >= 2) {
-                        item(key = "individual") { IndividualBlock(s.individual) }
-                    }
+                if (s.splitPeople >= 2) {
+                    item(key = "individual") { IndividualBlock(s.individual) }
                 }
-                item(key = "receipt") {
-                    ReceiptBlock(s.receipt?.imagePath, s.receipt?.id, onOpenReceipt)
-                }
+                item(key = "payment") { OpenPaymentRow(s.receipt?.id, onOpenReceipt) }
                 item(key = "pad") { Spacer(Modifier.height(Space.xl)) }
             } else if (s.selfExcluded) {
                 // 割り勘で自分が外れた支払い。家計簿には自分の行が無く、支払いと割り勘だけを見せる
@@ -247,7 +232,8 @@ fun PaymentDetailScreen(
             onDelete = null,
             title = "支出を編集",
             showName = false,
-            lockedAmountNote = if (s.splitPeople >= 2) LOCKED_AMOUNT_NOTE else null,
+            // 割り勘が2人以上なら金額は読み取り専用のまま(注記の文言は出さない。直し方は支払い詳細で案内する)
+            lockedAmountNote = if (s.splitPeople >= 2) "" else null,
         )
     }
     editingItem?.let { target ->
@@ -266,7 +252,8 @@ fun PaymentDetailScreen(
             },
             title = if (group != null) "品目を編集" else null,
             showDateTime = group == null,
-            lockedAmountNote = if (s.splitPeople >= 2) LOCKED_AMOUNT_NOTE else null,
+            // 割り勘が2人以上なら金額は読み取り専用のまま(注記の文言は出さない。直し方は支払い詳細で案内する)
+            lockedAmountNote = if (s.splitPeople >= 2) "" else null,
         )
     }
     if (addingItem && group != null) {
@@ -304,6 +291,23 @@ fun PaymentDetailScreen(
             onSave = { name, done -> viewModel.saveStore(receipt.id, name, done) },
         )
     }
+}
+
+/** 支払いを開く行(支払い詳細へ)。支払い先・レシート画像・割り勘は支払い詳細で見る。支払いが無ければ出さない。 */
+@Composable
+private fun OpenPaymentRow(receiptId: Long?, onOpenPayment: (Long) -> Unit) {
+    if (receiptId == null) return
+    val c = AppTheme.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .tappable { onOpenPayment(receiptId) }
+            .padding(horizontal = Space.edge, vertical = Space.m),
+    ) {
+        Label("支払い")
+        Text("支払いを開く  ›", style = AppTheme.type.title, color = c.accent)
+    }
+    Hairline()
 }
 
 /** 支払い先(支払いの店名)。タップで直す。支払いへ書き戻す。 */
