@@ -52,12 +52,19 @@ fun LedgerScreen(
     onOpenExcludedPayment: (Long) -> Unit = {},
     /** 手入力で保存した支払いの詳細(レシートの詳細)を開く。 */
     onOpenReceipt: (Long) -> Unit = {},
+    /** 支払い一覧(支払い画面)を開く。 */
+    onOpenReceiptList: () -> Unit = {},
+    /** 「レシートから登録」: 支払い画面を開き、そのまま撮影を始める。 */
+    onCaptureReceipt: () -> Unit = {},
     viewModel: LedgerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val c = AppTheme.colors
     // 家計簿の支出は、支払い(レシートの表)を保存したときに作られる。支出だけを単独で追加する入口は無い
+    // 「＋ 記録」で開く2択シート(レシートから登録 / 手動で登録)
     var creatingPayment by remember { mutableStateOf(false) }
+    // 「手動で登録」で開く手入力の支払いシート
+    var manualPaymentOpen by remember { mutableStateOf(false) }
     val expandedGroups = remember { mutableStateMapOf<Long, Boolean>() }
     var deletingGroup by remember { mutableStateOf<ExpenseGroup?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
@@ -212,6 +219,20 @@ fun LedgerScreen(
 
     if (menuOpen) {
         InkSheet(onDismiss = { menuOpen = false }) {
+            Text(
+                "支払い一覧",
+                style = AppTheme.type.body,
+                color = c.ink,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tappable {
+                        menuOpen = false
+                        onOpenReceiptList()
+                    }
+                    .padding(vertical = Space.m),
+            )
+            Hairline()
+            Spacer(Modifier.height(Space.l))
             Label("バックアップ")
             Spacer(Modifier.height(Space.s))
             Text(
@@ -243,11 +264,54 @@ fun LedgerScreen(
     }
 
     if (creatingPayment) {
+        InkSheet(onDismiss = { creatingPayment = false }) {
+            Label("記録の方法")
+            Spacer(Modifier.height(Space.s))
+            Text(
+                "レシートから登録",
+                style = AppTheme.type.body,
+                color = c.ink,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tappable {
+                        creatingPayment = false
+                        onCaptureReceipt()
+                    }
+                    .padding(vertical = Space.m),
+            )
+            Text(
+                "レシートを撮るか選ぶと、読み取った下書きを作ります。",
+                style = AppTheme.type.caption,
+                color = c.inkSoft,
+            )
+            Spacer(Modifier.height(Space.m))
+            Hairline()
+            Text(
+                "手動で登録",
+                style = AppTheme.type.body,
+                color = c.ink,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tappable {
+                        creatingPayment = false
+                        manualPaymentOpen = true
+                    }
+                    .padding(vertical = Space.m),
+            )
+            Text(
+                "日付や品目を自分で入力して作ります。",
+                style = AppTheme.type.caption,
+                color = c.inkSoft,
+            )
+        }
+    }
+
+    if (manualPaymentOpen) {
         val initialDate = LedgerLogic.defaultDate(state.month, LocalDate.now())
         ManualPaymentSheet(
             initialDate = initialDate,
             initialTime = LedgerLogic.defaultTime(initialDate, LocalDate.now(), LocalTime.now()),
-            onDismiss = { creatingPayment = false },
+            onDismiss = { manualPaymentOpen = false },
             onSave = { receipt, items, headcount, done ->
                 viewModel.addManualPayment(receipt, items, headcount) { id, err ->
                     done(err)

@@ -13,10 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -38,15 +36,11 @@ import androidx.navigation.compose.rememberNavController
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.diary.DiaryRoutes
 import com.amgm.personallog.ui.ledger.LedgerRoutes
-import com.amgm.personallog.ui.meal.MealRoutes
-import com.amgm.personallog.ui.receipt.ReceiptRoutes
 import com.amgm.personallog.ui.settings.SettingsRoutes
 
-/** 下部タブ。アイコンと文字を並べる。選ばれたタブは琥珀色になり、文字は太くなる。 */
+/** 下部タブ(日記・家計簿・設定)。アイコンと文字を並べる。選ばれたタブは琥珀色になり、文字は太くなる。 */
 enum class TopLevelTab(val route: String, val label: String, val icon: ImageVector) {
     Diary(DiaryRoutes.ROOT, "日記", Icons.Filled.Edit),
-    Receipt(ReceiptRoutes.ROOT, "支払い", Icons.Filled.Check),
-    Meal(MealRoutes.ROOT, "自分の内訳", Icons.Filled.List),
     Ledger(LedgerRoutes.ROOT, "家計簿", Icons.Filled.Home),
     Settings(SettingsRoutes.ROOT, "設定", Icons.Filled.Settings),
 }
