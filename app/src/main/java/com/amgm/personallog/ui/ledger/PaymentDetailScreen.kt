@@ -36,9 +36,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentWriteBack
 import com.amgm.personallog.domain.split.IndividualExpense
+import com.amgm.personallog.receipt.ReceiptDedup
 import com.amgm.personallog.receipt.ReceiptImageCodec
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.BareField
@@ -105,9 +107,15 @@ fun PaymentDetailScreen(
             }
             val group = s.group
             val single = s.single
+            val scanned = PaymentMarks.isScannedReceipt(s.receipt)
+            s.duplicateOf?.let { original ->
+                item(key = "duplicate") {
+                    DuplicateNotice(original, onOpenPayment = { s.receipt?.id?.let(onOpenReceipt) })
+                }
+            }
             if (group != null) {
                 item(key = "head") {
-                    GroupHeader(group, onEdit = { editingGroup = true }, onRevert = { viewModel.revertGroupField(group, it) })
+                    GroupHeader(group, scanned, onEdit = { editingGroup = true }, onRevert = { viewModel.revertGroupField(group, it) })
                 }
                 if (s.splitPeople >= 2) {
                     item(key = "individual") { IndividualBlock(s.individual) }
@@ -121,7 +129,7 @@ fun PaymentDetailScreen(
                     }
                 }
                 items(s.items.size, key = { "item-" + s.items[it].id }) { i ->
-                    ItemRow(s.items[i], onClick = { editingItemId = s.items[i].id }, onRevert = { viewModel.revertItemField(s.items[i], it) })
+                    ItemRow(s.items[i], scanned, onClick = { editingItemId = s.items[i].id }, onRevert = { viewModel.revertItemField(s.items[i], it) })
                 }
                 item(key = "sum") {
                     Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(top = Space.s)) {
@@ -181,7 +189,7 @@ fun PaymentDetailScreen(
                 }
             } else if (single != null) {
                 item(key = "single") {
-                    SingleBody(single, onEdit = { editingItemId = single.id }, onRevert = { viewModel.revertItemField(single, it) })
+                    SingleBody(single, scanned, onEdit = { editingItemId = single.id }, onRevert = { viewModel.revertItemField(single, it) })
                 }
                 if (s.splitPeople >= 2) {
                     item(key = "individual") { IndividualBlock(s.individual) }
@@ -225,6 +233,7 @@ fun PaymentDetailScreen(
             initialDate = group.date,
             initialTime = group.time,
             linkedReceiptAt = s.receiptAt,
+            fromScannedReceipt = PaymentMarks.isScannedReceipt(s.receipt),
             onDismiss = { editingGroup = false },
             onSave = { date, time, amount, category, _, memo, done ->
                 viewModel.saveGroup(group, date, time, amount, category, memo, done)
@@ -242,6 +251,7 @@ fun PaymentDetailScreen(
             initialDate = target.date,
             initialTime = target.time,
             linkedReceiptAt = s.receiptAt?.takeIf { target.receiptId != null },
+            fromScannedReceipt = PaymentMarks.isScannedReceipt(s.receipt),
             onDismiss = { editingItemId = null },
             onSave = { date, time, amount, category, name, memo, done ->
                 viewModel.saveItem(group, target, date, time, amount, category, name, memo, done)
@@ -306,6 +316,38 @@ private fun OpenPaymentRow(receiptId: Long?, onOpenPayment: (Long) -> Unit) {
     ) {
         Label("支払い")
         Text("支払いを開く  ›", style = AppTheme.type.title, color = c.accent)
+    }
+    Hairline()
+}
+
+/**
+ * 支払いの重複の候補があるときの注意。支払い一覧の「重複?」と同じ判定(後から作られた側にだけ出す)。
+ * 確認・まとめる・「重複ではない」は支払い詳細で行う。
+ */
+@Composable
+private fun DuplicateNotice(original: Receipt, onOpenPayment: () -> Unit) {
+    val c = AppTheme.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .tappable(onOpenPayment)
+            .padding(horizontal = Space.edge, vertical = Space.s),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Stamp("重複?", tone = StampTone.Danger)
+            Text(
+                "  元の支払いが重複している可能性があります",
+                style = AppTheme.type.caption,
+                color = c.danger,
+            )
+        }
+        Text(
+            "相手: ${ReceiptDedup.summary(original)}",
+            style = AppTheme.type.caption,
+            color = c.inkSoft,
+            modifier = Modifier.padding(top = Space.xs),
+        )
+        Text("支払いを開いて確認する  ›", style = AppTheme.type.caption, color = c.accent)
     }
     Hairline()
 }
@@ -465,9 +507,9 @@ private fun fieldLabel(f: PaymentField): String = when (f) {
 }
 
 @Composable
-private fun GroupHeader(group: ExpenseGroup, onEdit: () -> Unit, onRevert: (PaymentField) -> Unit) {
+private fun GroupHeader(group: ExpenseGroup, scanned: Boolean, onEdit: () -> Unit, onRevert: (PaymentField) -> Unit) {
     val c = AppTheme.colors
-    val marks = PaymentMarks.ofGroup(group)
+    val marks = PaymentMarks.ofGroup(group, scanned)
     Column(
         Modifier.fillMaxWidth().tappable(onEdit).padding(horizontal = Space.edge, vertical = Space.m),
     ) {
@@ -505,9 +547,9 @@ private fun GroupHeader(group: ExpenseGroup, onEdit: () -> Unit, onRevert: (Paym
 }
 
 @Composable
-private fun ItemRow(item: Expense, onClick: () -> Unit, onRevert: (PaymentField) -> Unit) {
+private fun ItemRow(item: Expense, scanned: Boolean, onClick: () -> Unit, onRevert: (PaymentField) -> Unit) {
     val c = AppTheme.colors
-    val marks = PaymentMarks.ofExpense(item)
+    val marks = PaymentMarks.ofExpense(item, scanned)
     val sub = listOfNotNull(
         item.category,
         item.memo.ifBlank { null },
@@ -537,9 +579,9 @@ private fun ItemRow(item: Expense, onClick: () -> Unit, onRevert: (PaymentField)
 }
 
 @Composable
-private fun SingleBody(e: Expense, onEdit: () -> Unit, onRevert: (PaymentField) -> Unit) {
+private fun SingleBody(e: Expense, scanned: Boolean, onEdit: () -> Unit, onRevert: (PaymentField) -> Unit) {
     val c = AppTheme.colors
-    val marks = PaymentMarks.ofExpense(e)
+    val marks = PaymentMarks.ofExpense(e, scanned)
     Column(Modifier.fillMaxWidth().tappable(onEdit).padding(horizontal = Space.edge, vertical = Space.m)) {
         Label("支出")
         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -8,7 +8,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -24,11 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -399,52 +393,6 @@ fun ProportionBand(parts: List<Pair<Float, Color>>, modifier: Modifier = Modifie
         parts.forEach { (share, color) ->
             Box(modifier = Modifier.weight(max(share, 0.0001f)).fillMaxSize().background(color))
         }
-    }
-}
-
-/**
- * 下から出る編集シート。ダイアログやインラインの入力欄の代わりに使う。
- * swipeToDismiss=false なら下スワイプで閉じない(閉じるボタンや戻るキーで onDismiss を呼ぶ側で制御する)。
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun InkSheet(
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-    swipeToDismiss: Boolean = true,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    val c = AppTheme.colors
-    val state = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true,
-        confirmValueChange = { swipeToDismiss || it != SheetValue.Hidden },
-    )
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = state,
-        containerColor = c.paperRaised,
-        contentColor = c.ink,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        tonalElevation = 0.dp,
-        dragHandle = {
-            Box(
-                modifier = Modifier
-                    .padding(vertical = Space.m)
-                    .width(40.dp)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(c.line),
-            )
-        },
-    ) {
-        Column(
-            modifier = modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = Space.edge)
-                .padding(bottom = Space.l),
-            content = content,
-        )
     }
 }
 

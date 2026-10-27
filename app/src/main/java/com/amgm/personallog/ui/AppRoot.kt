@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -36,6 +37,7 @@ import androidx.navigation.compose.rememberNavController
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.diary.DiaryRoutes
 import com.amgm.personallog.ui.ledger.LedgerRoutes
+import com.amgm.personallog.ui.receipt.ReceiptRoutes
 import com.amgm.personallog.ui.settings.SettingsRoutes
 
 /** 下部タブ(日記・家計簿・設定)。アイコンと文字を並べる。選ばれたタブは琥珀色になり、文字は太くなる。 */
@@ -54,15 +56,23 @@ fun AppRoot() {
         containerColor = AppTheme.colors.paper,
         bottomBar = {
             InkTabBar(
-                selectedRoute = TopLevelTab.entries.firstOrNull { tab ->
-                    destination?.hierarchy?.any { it.route == tab.route } == true
-                }?.route,
+                selectedRoute = selectedTabRoute(destination),
                 onSelect = { tab -> navigateToTab(navController, tab) },
             )
         },
     ) { innerPadding ->
         AppNavHost(navController = navController, modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding))
     }
+}
+
+/**
+ * 今いる画面がどのタブに属するか。支払い(一覧・詳細・負担割り)の画面は receipt グラフにあるが、
+ * 支払いタブは無くなり家計簿から開くので、家計簿のタブを選んだままにする。
+ */
+private fun selectedTabRoute(destination: NavDestination?): String? {
+    val routes = destination?.hierarchy?.mapNotNull { it.route }?.toList() ?: return null
+    TopLevelTab.entries.firstOrNull { it.route in routes }?.let { return it.route }
+    return if (ReceiptRoutes.ROOT in routes) TopLevelTab.Ledger.route else null
 }
 
 private fun navigateToTab(navController: NavController, tab: TopLevelTab) {

@@ -301,6 +301,8 @@ internal fun DayBlock(
     warnReceiptIds: Set<Long>,
     /** 画像のあるレシート(レシート由来の支払い)の id。行の「レシート由来」は、ここに含まれる支払いの行だけに付ける。 */
     imageReceiptIds: Set<Long>,
+    /** 重複の候補がある支払いの id(行に「重複?」を付ける)。 */
+    duplicateReceiptIds: Set<Long> = emptySet(),
     onToggleGroup: (Long) -> Unit,
     /** 行をタップ: 支出の詳細画面を開く。 */
     onOpen: (LedgerEntry) -> Unit,
@@ -346,12 +348,14 @@ internal fun DayBlock(
                             draftReceiptIds = draftReceiptIds,
                             warnReceiptIds = warnReceiptIds,
                             imageReceiptIds = imageReceiptIds,
+                            duplicateReceiptIds = duplicateReceiptIds,
                         )
                         is LedgerEntry.Group -> GroupLine(
                             entry = entry,
                             draftReceiptIds = draftReceiptIds,
                             warnReceiptIds = warnReceiptIds,
                             imageReceiptIds = imageReceiptIds,
+                            duplicateReceiptIds = duplicateReceiptIds,
                             expanded = expandedGroups[entry.group.id] == true,
                             onToggle = { onToggleGroup(entry.group.id) },
                             onOpen = { onOpen(entry) },
@@ -362,6 +366,7 @@ internal fun DayBlock(
                             onClick = { onOpen(entry) },
                             draftReceiptIds = draftReceiptIds,
                             warnReceiptIds = warnReceiptIds,
+                            duplicateReceiptIds = duplicateReceiptIds,
                         )
                     }
                 }
@@ -370,12 +375,21 @@ internal fun DayBlock(
     }
 }
 
-/** 行の印: レシートが下書きなら「下書き」、割り勘に警告があれば「要確認」。手入力の行には付けない。 */
+/**
+ * 行の印: 支払いが下書きなら「下書き」、割り勘に警告があれば「要確認」、重複の候補があれば「重複?」。
+ * 支払いに紐づかない行には付けない。
+ */
 @Composable
-private fun RowBadges(receiptId: Long?, draftReceiptIds: Set<Long>, warnReceiptIds: Set<Long>) {
+private fun RowBadges(
+    receiptId: Long?,
+    draftReceiptIds: Set<Long>,
+    warnReceiptIds: Set<Long>,
+    duplicateReceiptIds: Set<Long> = emptySet(),
+) {
     if (receiptId == null) return
     if (receiptId in draftReceiptIds) Stamp("下書き", modifier = Modifier.padding(start = Space.xs))
     if (receiptId in warnReceiptIds) Stamp("要確認", modifier = Modifier.padding(start = Space.xs), tone = StampTone.Danger)
+    if (receiptId in duplicateReceiptIds) Stamp("重複?", modifier = Modifier.padding(start = Space.xs), tone = StampTone.Danger)
 }
 
 @Composable
@@ -388,6 +402,7 @@ private fun ExpenseLine(
     warnReceiptIds: Set<Long> = emptySet(),
     /** 画像のあるレシートの id。「レシート由来」の印は、ここに含まれる支払いの行にだけ付ける(手入力の支払いには付けない)。 */
     imageReceiptIds: Set<Long> = emptySet(),
+    duplicateReceiptIds: Set<Long> = emptySet(),
 ) {
     val c = AppTheme.colors
     val title = listOf(expense.name, expense.memo).filter { it.isNotBlank() }.joinToString(" ").ifBlank { expense.category }
@@ -410,7 +425,7 @@ private fun ExpenseLine(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                if (showBadges) RowBadges(expense.receiptId, draftReceiptIds, warnReceiptIds)
+                if (showBadges) RowBadges(expense.receiptId, draftReceiptIds, warnReceiptIds, duplicateReceiptIds)
             }
             if (sub.isNotEmpty()) {
                 Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -428,6 +443,7 @@ private fun ExcludedLine(
     onClick: () -> Unit,
     draftReceiptIds: Set<Long>,
     warnReceiptIds: Set<Long>,
+    duplicateReceiptIds: Set<Long>,
 ) {
     val c = AppTheme.colors
     val time = LedgerCalc.splitPurchasedAt(entry.receipt.purchasedAt).second
@@ -449,7 +465,7 @@ private fun ExcludedLine(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds)
+                RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds, duplicateReceiptIds)
             }
             Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -464,6 +480,7 @@ private fun GroupLine(
     draftReceiptIds: Set<Long>,
     warnReceiptIds: Set<Long>,
     imageReceiptIds: Set<Long>,
+    duplicateReceiptIds: Set<Long>,
     expanded: Boolean,
     onToggle: () -> Unit,
     onOpen: () -> Unit,
@@ -497,7 +514,7 @@ private fun GroupLine(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds)
+                    RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds, duplicateReceiptIds)
                 }
                 Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -578,6 +595,11 @@ internal fun ExpenseEditorSheet(
     showDateTime: Boolean = true,
     /** 金額を読み取り専用にし、この注記を出す(割り勘が2人以上の支払い。金額は割り勘画面=全体支出で直す)。null なら直せる。 */
     lockedAmountNote: String? = null,
+    /**
+     * 紐づく支払いがレシート(画像・読取原文あり)か。手入力の支払いは false で、「レシート由来」の注記と
+     * 「レシートの日時と異なります」の確認を出さない(比べるレシートが無い。日時は支払いへ書き戻す)。
+     */
+    fromScannedReceipt: Boolean = true,
 ) {
     val c = AppTheme.colors
     var dateText by remember { mutableStateOf(initialDate) }
@@ -593,6 +615,17 @@ internal fun ExpenseEditorSheet(
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmDiscard by remember { mutableStateOf(false) }
+
+    // 開いた時の値から何か変えていれば未保存。閉じる(×・戻る・最小化からの下スワイプ)ときに破棄の確認を出す
+    val dirty = dateText != initialDate || timeText != initialTime ||
+        amountText != (original?.amount?.toString() ?: "") || category != original?.category ||
+        memo != (original?.memo ?: "") || name != (original?.name ?: "")
+    val requestClose: () -> Unit = {
+        if (!saving) {
+            if (dirty) confirmDiscard = true else onDismiss()
+        }
+    }
 
     val categories = remember(original) {
         val base = Categories.DEFAULTS.filter { it != Categories.UNCATEGORIZED }
@@ -608,13 +641,13 @@ internal fun ExpenseEditorSheet(
         }
     }
 
-    InkSheet(onDismiss = { if (!saving) onDismiss() }) {
+    // 入力のシート: 下スワイプでは閉じず最小化して入力を保持する
+    InkSheet(onDismiss = requestClose, swipeToDismiss = false, title = title ?: if (original == null) "支出を追加" else "支出を編集") {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding(),
             verticalArrangement = Arrangement.spacedBy(Space.m),
         ) {
-            Label(title ?: if (original == null) "支出を追加" else "支出を編集")
-            if (original?.receiptId != null) {
+            if (original?.receiptId != null && fromScannedReceipt) {
                 Text(
                     "レシート由来です" + (linkedReceiptAt?.let { "(レシート日時 $it)" } ?: ""),
                     style = AppTheme.type.caption,
@@ -715,7 +748,7 @@ internal fun ExpenseEditorSheet(
                     if (v.isValid) {
                         // 紐づくレシートと日時が違うまま日時を変えて保存しようとしたら、確認を挟む(レシートは変更しない)
                         val dateTimeChanged = original != null && (v.date != original.date || v.time != original.time)
-                        val mismatch = linkedReceiptAt != null && "${v.date} ${v.time}" != linkedReceiptAt
+                        val mismatch = fromScannedReceipt && linkedReceiptAt != null && "${v.date} ${v.time}" != linkedReceiptAt
                         if (dateTimeChanged && mismatch) pendingSave = v else doSave(v)
                     }
                 },
@@ -726,9 +759,23 @@ internal fun ExpenseEditorSheet(
                 } else {
                     Spacer(Modifier.width(Space.xs))
                 }
-                TextAction("キャンセル", enabled = !saving, onClick = onDismiss, color = c.inkSoft)
+                TextAction("キャンセル", enabled = !saving, onClick = requestClose, color = c.inkSoft)
             }
         }
+    }
+
+    if (confirmDiscard) {
+        ConfirmSheet(
+            title = "未保存の内容が残っています",
+            message = "破棄しますか？ 入力した内容は保存されません。",
+            confirmText = "破棄",
+            dismissText = "入力に戻る",
+            onConfirm = {
+                confirmDiscard = false
+                onDismiss()
+            },
+            onDismiss = { confirmDiscard = false },
+        )
     }
 
     pendingSave?.let { v ->
@@ -838,7 +885,7 @@ internal fun BackupSheets(
         }
     }
     state.progress?.let { p ->
-        InkSheet(onDismiss = {}) {
+        InkSheet(onDismiss = {}, closable = false) {
             Label("処理中")
             Spacer(Modifier.height(Space.s))
             Text(

@@ -18,6 +18,7 @@ import com.amgm.personallog.data.repository.ExpenseRepository
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.domain.LedgerCalc
+import com.amgm.personallog.receipt.ReceiptDedup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -62,6 +63,10 @@ data class LedgerUiState(
     val warnReceiptIds: Set<Long> = emptySet(),
     /** 画像のあるレシート(レシート由来の支払い)の id。行の「レシート由来」の印に使う。手入力の支払い(画像なし)は含まない。 */
     val imageReceiptIds: Set<Long> = emptySet(),
+    /** 重複の候補がある支払い(後から作られた側)の id。行の「重複?」の印に使う。支払い一覧と同じ判定。 */
+    val duplicateReceiptIds: Set<Long> = emptySet(),
+    /** この月の行のうち、重複の候補がある支払いの件数。 */
+    val duplicateCount: Int = 0,
     val error: String? = null,
     val backup: BackupUiState = BackupUiState(),
 )
@@ -79,6 +84,8 @@ private data class Snapshot(
     val draftReceiptIds: Set<Long>,
     val warnReceiptIds: Set<Long>,
     val imageReceiptIds: Set<Long>,
+    val duplicateReceiptIds: Set<Long>,
+    val duplicateCount: Int,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -113,10 +120,10 @@ class LedgerViewModel @Inject constructor(
                 combine(
                     repository.observeLedgerRows(from, to),
                     repository.observeGroupsBetween(from, to),
-                    receipts.observeReceipts(),
+                    combine(receipts.observeReceipts(), receipts.observeNotDuplicates()) { list, notDup -> list to notDup },
                     splits.observeSheets(),
                     db.expenseDao().observeReceiptIdsWithRows(),
-                ) { all, groups, receiptList, sheets, rowReceiptIds ->
+                ) { all, groups, (receiptList, notDup), sheets, rowReceiptIds ->
                     // 割り勘で自分を外した支払い(自分の分が0円で行が無い)は、0円の行として一覧に出す
                     val excluded = LedgerLogic.excludedReceipts(
                         receipts = receiptList,
@@ -130,6 +137,7 @@ class LedgerViewModel @Inject constructor(
                         draftIds = receiptList.filter { it.status == ReceiptStatus.DRAFT }.mapTo(HashSet()) { it.id },
                         warnIds = sheets.filter { it.warnings.isNotBlank() }.mapTo(HashSet()) { it.receiptId },
                         imageIds = receiptList.filter { it.imagePath.isNotEmpty() }.mapTo(HashSet()) { it.id },
+                        duplicateIds = ReceiptDedup.laterDuplicates(receiptList, ReceiptDedup.notDuplicateSet(notDup)).keys,
                         excluded = excluded,
                     )
                 }
@@ -152,6 +160,8 @@ class LedgerViewModel @Inject constructor(
                         draftReceiptIds = s.draftReceiptIds,
                         warnReceiptIds = s.warnReceiptIds,
                         imageReceiptIds = s.imageReceiptIds,
+                        duplicateReceiptIds = s.duplicateReceiptIds,
+                        duplicateCount = s.duplicateCount,
                     )
                 }
             }
@@ -166,6 +176,7 @@ class LedgerViewModel @Inject constructor(
         draftIds: Set<Long>,
         warnIds: Set<Long>,
         imageIds: Set<Long>,
+        duplicateIds: Set<Long>,
         excluded: List<LedgerEntry.Excluded>,
     ): Snapshot {
         val ym = YearMonth.from(f).toString()
@@ -186,6 +197,8 @@ class LedgerViewModel @Inject constructor(
             draftReceiptIds = draftIds,
             warnReceiptIds = warnIds,
             imageReceiptIds = imageIds,
+            duplicateReceiptIds = duplicateIds,
+            duplicateCount = current.mapNotNull { it.receiptId }.distinct().count { it in duplicateIds },
         )
     }
 
