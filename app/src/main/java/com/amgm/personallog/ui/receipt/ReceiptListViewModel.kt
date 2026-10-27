@@ -33,6 +33,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.time.LocalDate
 import javax.inject.Inject
 
 /** 同時に走らせる解析(Claude API)の上限。コピー/ハッシュ計算の並行数も同じ値にする。 */
@@ -69,7 +70,10 @@ data class ImportItem(
     /** filesDir からの相対パス(コピー後) */
     val imagePath: String? = null,
     val imageHash: String? = null,
-    /** 下書きとして保存済みのレシートID */
+    /**
+     * 読み取り開始時に作った下書きのレシートID。読み取りが失敗・中止しても下書きは残り、
+     * 再試行はこの下書きを読み直す。
+     */
     val receiptId: Long? = null,
     val message: String? = null,
     /** 重複の相手の要約(DUPLICATE_PENDING のとき) */
@@ -434,20 +438,26 @@ class ReceiptListViewModel @Inject constructor(
         return repository.receiptsByImageHash(hash).firstOrNull()
     }
 
-    /** Claude で解析して下書きを保存する。existingId があればその下書きを上書きする(読み直し)。 */
+    /**
+     * Claude で解析して下書きに保存する。読み取りの最初に下書きを作り、成功・失敗とも同じ下書きを上書きする。
+     * 失敗・中止・例外のときも下書きは消さない(読めなかった記録として残す)。
+     * existingId があればそれが既存の下書き(再読み取り)なので、新しく作らない。
+     */
     private suspend fun analyze(key: Long, rel: String, hash: String?, existingId: Long) {
         patchItem(key) { it.copy(phase = ImportPhase.WAITING, message = null) }
         // 読み直しは、取り込み時の補正ではなく、下書き(existingId)に保存してある最新の補正を使う
         val adjust = (if (existingId != 0L) repository.getReceipt(existingId)?.adjust() else null)
             ?: find(key)?.adjust ?: ReceiptAdjust.NONE
+        val draftId = if (existingId != 0L) existingId else createReadingDraft(rel, hash, adjust)
+        patchItem(key) { it.copy(receiptId = draftId) }
         val (result, id) = scanLimiter.withPermit {
             patchItem(key) { it.copy(phase = ImportPhase.SCANNING) }
             val scanned = scanner.scan(rel, adjust)
             val now = System.currentTimeMillis()
-            val createdAt = if (existingId != 0L) (repository.getReceipt(existingId)?.createdAt ?: now) else now
+            val createdAt = repository.getReceipt(draftId)?.createdAt ?: now
             val (receipt, items) = ReceiptMapper.draftReceipt(
                 scanned, rel, now,
-                existingId = existingId,
+                existingId = draftId,
                 imageHash = hash,
                 createdAt = createdAt,
                 adjust = adjust,
@@ -461,6 +471,31 @@ class ReceiptListViewModel @Inject constructor(
             scanned to savedId
         }
         finish(key, result, id)
+    }
+
+    /**
+     * 読み取り開始時の下書きを作り、家計簿に合わせる。合計も品目も無いので家計簿の行は増えない
+     * (既存の家計簿の規則どおり)。rawJson が空の下書きは、まだ読めていないか読み取りに失敗したもの。
+     */
+    private suspend fun createReadingDraft(rel: String, hash: String?, adjust: ReceiptAdjust): Long {
+        val draft = Receipt(
+            purchasedAt = LocalDate.now().toString(),
+            storeName = "",
+            totalAmount = null,
+            imagePath = rel,
+            rawJson = "",
+            status = ReceiptStatus.DRAFT,
+            createdAt = System.currentTimeMillis(),
+            imageHash = hash,
+            rotationDegrees = adjust.rotationDegrees,
+            cropLeft = adjust.cropLeft,
+            cropTop = adjust.cropTop,
+            cropRight = adjust.cropRight,
+            cropBottom = adjust.cropBottom,
+        )
+        val id = repository.save(draft, emptyList())
+        repository.syncLedger(id)
+        return id
     }
 
     private suspend fun finish(key: Long, outcome: ScanOutcome, id: Long) {
