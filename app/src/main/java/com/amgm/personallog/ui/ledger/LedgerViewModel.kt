@@ -17,6 +17,7 @@ import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.repository.ExpenseRepository
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.data.repository.SplitRepository
+import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.domain.LedgerCalc
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -62,6 +63,8 @@ data class LedgerUiState(
     val warnReceiptIds: Set<Long> = emptySet(),
     /** 画像のあるレシート(レシート由来の支払い)の id。行の「レシート由来」の印に使う。手入力の支払い(画像なし)は含まない。 */
     val imageReceiptIds: Set<Long> = emptySet(),
+    /** 未読の支払い(ExpenseGroup)の id。レシート読み取りで作られ、まだタップしていないもの。行の「未読」の印に使う。 */
+    val unreadGroupIds: Set<Long> = emptySet(),
     val error: String? = null,
     val backup: BackupUiState = BackupUiState(),
 )
@@ -79,6 +82,7 @@ private data class Snapshot(
     val draftReceiptIds: Set<Long>,
     val warnReceiptIds: Set<Long>,
     val imageReceiptIds: Set<Long>,
+    val unreadGroupIds: Set<Long> = emptySet(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -89,6 +93,7 @@ class LedgerViewModel @Inject constructor(
     private val splits: SplitRepository,
     private val backupManager: BackupManager,
     private val db: AppDatabase,
+    private val readStore: PaymentReadStore,
 ) : ViewModel() {
 
     /** 表示の基準日。月ヘッダーと積み上げグラフはこの日付から決まる。 */
@@ -110,7 +115,7 @@ class LedgerViewModel @Inject constructor(
                 val from = (if (ms.isBefore(chartStart)) ms else chartStart).toString()
                 val to = (if (me.isAfter(chartEnd)) me else chartEnd).toString()
                 // 下書きの印と割り勘の警告も、家計簿の行と同じ期間で読む
-                combine(
+                val snapshots = combine(
                     repository.observeLedgerRows(from, to),
                     repository.observeGroupsBetween(from, to),
                     receipts.observeReceipts(),
@@ -133,6 +138,8 @@ class LedgerViewModel @Inject constructor(
                         excluded = excluded,
                     )
                 }
+                // 未読の支払いは集計と同じ流れに重ねる(既読にすると行の印だけ変わる)
+                combine(snapshots, readStore.unreadIds) { s, unread -> s.copy(unreadGroupIds = unread) }
                     .catch { e ->
                         _uiState.update { it.copy(loading = false, error = "家計簿の読み込みに失敗しました: ${e.message}") }
                     }
@@ -152,6 +159,7 @@ class LedgerViewModel @Inject constructor(
                         draftReceiptIds = s.draftReceiptIds,
                         warnReceiptIds = s.warnReceiptIds,
                         imageReceiptIds = s.imageReceiptIds,
+                        unreadGroupIds = s.unreadGroupIds,
                     )
                 }
             }
@@ -208,6 +216,19 @@ class LedgerViewModel @Inject constructor(
         focus.value = bar.start
     }
     fun dismissError() { _uiState.update { it.copy(error = null) } }
+
+    /** 支払いを既読にする。行をタップして詳細を開く前に呼ぶ。 */
+    fun markRead(groupId: Long) {
+        viewModelScope.launch {
+            try {
+                readStore.markRead(groupId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "既読の記録に失敗しました: ${e.message ?: e.javaClass.simpleName}") }
+            }
+        }
+    }
 
     /** 支出が紐づくレシートの日時 "yyyy-MM-dd HH:mm"。紐づかなければ null。 */
     suspend fun linkedReceiptDateTime(expense: Expense): String? = repository.linkedReceiptDateTime(expense)

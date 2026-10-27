@@ -52,6 +52,8 @@ fun LedgerScreen(
     onOpenExcludedPayment: (Long) -> Unit = {},
     /** 手入力で保存した支払いの詳細(レシートの詳細)を開く。 */
     onOpenReceipt: (Long) -> Unit = {},
+    /** 重複の可能性がある支払いの一覧を開く(「重複を確認する」)。 */
+    onOpenDuplicates: () -> Unit = {},
     viewModel: LedgerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -85,6 +87,7 @@ fun LedgerScreen(
                         onPrev = viewModel::previousMonth,
                         onNext = viewModel::nextMonth,
                         onMenu = { menuOpen = true },
+                        onDuplicates = onOpenDuplicates,
                     )
                 }
                 state.error?.let { err ->
@@ -189,11 +192,16 @@ fun LedgerScreen(
                         draftReceiptIds = state.draftReceiptIds,
                         warnReceiptIds = state.warnReceiptIds,
                         imageReceiptIds = state.imageReceiptIds,
+                        unreadGroupIds = state.unreadGroupIds,
                         onToggleGroup = { id -> expandedGroups[id] = expandedGroups[id] != true },
                         onOpen = { entry ->
                             when (entry) {
                                 is LedgerEntry.Single -> onOpenPayment(PaymentKind.EXPENSE, entry.expense.id)
-                                is LedgerEntry.Group -> onOpenPayment(PaymentKind.GROUP, entry.group.id)
+                                is LedgerEntry.Group -> {
+                                    // 既読にしてから開く(未読の印は次の表示で消える)
+                                    viewModel.markRead(entry.group.id)
+                                    onOpenPayment(PaymentKind.GROUP, entry.group.id)
+                                }
                                 is LedgerEntry.Excluded -> onOpenExcludedPayment(entry.receipt.id)
                             }
                         },
@@ -285,6 +293,7 @@ private fun MonthHeader(
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onMenu: () -> Unit,
+    onDuplicates: () -> Unit,
 ) {
     val c = AppTheme.colors
     val ym = try {
@@ -293,7 +302,12 @@ private fun MonthHeader(
         YearMonth.now()
     }
     Column(Modifier.fillMaxWidth().statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextAction("重複を確認する", onClick = onDuplicates, color = c.accent)
             TextAction("⋯", onClick = onMenu, color = c.inkSoft)
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

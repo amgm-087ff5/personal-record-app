@@ -2,8 +2,15 @@
 
 package com.amgm.personallog.ui.ledger
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +29,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
@@ -43,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -301,6 +310,8 @@ internal fun DayBlock(
     warnReceiptIds: Set<Long>,
     /** 画像のあるレシート(レシート由来の支払い)の id。行の「レシート由来」は、ここに含まれる支払いの行だけに付ける。 */
     imageReceiptIds: Set<Long>,
+    /** 未読の支払い(グループ)の id。行に「未読」の印を付ける。 */
+    unreadGroupIds: Set<Long>,
     onToggleGroup: (Long) -> Unit,
     /** 行をタップ: 支出の詳細画面を開く。 */
     onOpen: (LedgerEntry) -> Unit,
@@ -352,6 +363,7 @@ internal fun DayBlock(
                             draftReceiptIds = draftReceiptIds,
                             warnReceiptIds = warnReceiptIds,
                             imageReceiptIds = imageReceiptIds,
+                            unreadGroupIds = unreadGroupIds,
                             expanded = expandedGroups[entry.group.id] == true,
                             onToggle = { onToggleGroup(entry.group.id) },
                             onOpen = { onOpen(entry) },
@@ -464,6 +476,7 @@ private fun GroupLine(
     draftReceiptIds: Set<Long>,
     warnReceiptIds: Set<Long>,
     imageReceiptIds: Set<Long>,
+    unreadGroupIds: Set<Long>,
     expanded: Boolean,
     onToggle: () -> Unit,
     onOpen: () -> Unit,
@@ -498,6 +511,8 @@ private fun GroupLine(
                         modifier = Modifier.weight(1f, fill = false),
                     )
                     RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds)
+                    // レシート読み取りで作られ、まだ開いていない支払い
+                    if (entry.group.id in unreadGroupIds) UnreadBadge(Modifier.padding(start = Space.xs))
                 }
                 Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -529,6 +544,47 @@ private fun GroupLine(
                 }
                 TextAction("この支出を削除", onClick = onDelete, color = c.danger)
             }
+        }
+    }
+}
+
+/**
+ * 未読の印。小さな「未読」の丸薬の外側に、薄い輪が広がって消えるリップルを重ねる。
+ * 色は琥珀(accent / onAccent)だけ使う。輪は無限アニメーションで、丸薬より少し大きくなりながら alpha が下がる。
+ */
+@Composable
+private fun UnreadBadge(modifier: Modifier = Modifier) {
+    val c = AppTheme.colors
+    val ripple by rememberInfiniteTransition(label = "unread").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "unreadRipple",
+    )
+    val pill = RoundedCornerShape(50)
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        // 輪は丸薬の後ろに描く(先に置く)
+        Box(
+            Modifier
+                .matchParentSize()
+                .graphicsLayer {
+                    val s = 1f + ripple * 0.9f
+                    scaleX = s
+                    scaleY = s
+                    alpha = (1f - ripple) * 0.6f
+                }
+                .border(1.dp, c.accent, pill),
+        )
+        Box(
+            Modifier
+                .clip(pill)
+                .background(c.accent)
+                .padding(horizontal = Space.s, vertical = Space.xs),
+        ) {
+            Text("未読", style = AppTheme.type.label, color = c.onAccent)
         }
     }
 }

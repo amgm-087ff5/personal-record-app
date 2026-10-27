@@ -285,4 +285,14 @@ interface ExpenseGroupDao {
 
     @Query("DELETE FROM expense_groups WHERE receiptId = :receiptId")
     suspend fun deleteByReceiptId(receiptId: Long)
+
+    @Query("SELECT * FROM expense_groups WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<ExpenseGroup>
+
+    /** 重複確認用: 登録日時の古い順(同じなら id 順)。 */
+    @Query("SELECT * FROM expense_groups ORDER BY createdAt, id")
+    fun observeAllByCreated(): Flow<List<ExpenseGroup>>
+
+    @Query("SELECT * FROM expense_groups ORDER BY createdAt, id")
+    suspend fun getAllByCreated(): List<ExpenseGroup>
 }

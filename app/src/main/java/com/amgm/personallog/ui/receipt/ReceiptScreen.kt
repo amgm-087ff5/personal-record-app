@@ -103,6 +103,7 @@ fun ReceiptScreen(
         if (uris.isNotEmpty()) viewModel.onPicked(uris)
     }
 
+    // 手入力の追加直後だけ詳細画面を開く(読み取り完了では開かない)
     val pendingOpen by viewModel.pendingOpen.collectAsStateWithLifecycle()
     LaunchedEffect(pendingOpen) {
         pendingOpen?.let { id ->

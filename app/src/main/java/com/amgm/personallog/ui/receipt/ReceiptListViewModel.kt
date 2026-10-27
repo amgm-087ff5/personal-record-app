@@ -3,9 +3,11 @@ package com.amgm.personallog.ui.receipt
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.amgm.personallog.data.db.ExpenseGroupDao
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptDedup
 import com.amgm.personallog.receipt.ReceiptImageHash
@@ -76,8 +78,6 @@ data class ImportItem(
     val duplicateNote: String? = null,
     /** 確認ダイアログで「それでも追加」にチェックしたか */
     val addAnyway: Boolean = false,
-    /** 1枚だけの取り込みなら、読み取り後に詳細画面を開く */
-    val autoOpen: Boolean = false,
     /** 補正画面で決めた回転・トリミング。解析と下書き保存で使う */
     val adjust: ReceiptAdjust = ReceiptAdjust.NONE,
 ) {
@@ -109,6 +109,8 @@ class ReceiptListViewModel @Inject constructor(
     private val repository: ReceiptRepository,
     private val store: ReceiptImageStore,
     private val scanner: ReceiptScanner,
+    private val expenseGroupDao: ExpenseGroupDao,
+    private val paymentReadStore: PaymentReadStore,
 ) : ViewModel() {
 
     val receipts: StateFlow<List<Receipt>> = repository.observeReceipts()
@@ -127,8 +129,8 @@ class ReceiptListViewModel @Inject constructor(
     private val _pendingOpen = MutableStateFlow<Long?>(null)
 
     /**
-     * 読み取り完了後に開くべきレシートID(1枚だけの取り込み)。画面が受け取ったら [consumeOpen] で消す。
-     * イベントとして溜めず、常に高々1件。
+     * 手入力の支払いを追加した直後に開く詳細画面のID。読み取り完了では画面を開かない。
+     * 画面が受け取ったら [consumeOpen] で消す。イベントとして溜めず、常に高々1件。
      */
     val pendingOpen: StateFlow<Long?> = _pendingOpen.asStateFlow()
 
@@ -139,9 +141,6 @@ class ReceiptListViewModel @Inject constructor(
     // 以下は ViewModel のメインスレッドからのみ触る
     private var nextKey = 1L
     private val sources = HashMap<Long, ImportSource>()
-
-    /** 補正画面の表示中に読み取りが終わった、開き待ちのレシートID。補正画面が閉じたら開く。 */
-    private val deferredOpen = DeferredOpen()
 
     /** 処理中の写真ピッカーのUri。同じ選択の連打で二重に投入しないため。 */
     private val inFlightUris = HashSet<String>()
@@ -297,13 +296,6 @@ class ReceiptListViewModel @Inject constructor(
             val rel = item.imagePath ?: continue
             launchAnalyze(item.key, rel, item.imageHash)
         }
-        flushDeferredOpens()
-    }
-
-    /** 補正画面が閉じていれば、保留していた詳細画面への移動を実行する。 */
-    private fun flushDeferredOpens() {
-        if (_state.value.adjustItems.isNotEmpty()) return
-        deferredOpen.release(adjustActive = false)?.let { _pendingOpen.value = it }
     }
 
     /** 「取り消し」: 補正待ちの全項目の取り込みをやめ、コピーした画像を消す。 */
@@ -316,7 +308,6 @@ class ReceiptListViewModel @Inject constructor(
             patchItem(item.key) { it.copy(phase = ImportPhase.CANCELLED, imagePath = null) }
             if (rel != null) viewModelScope.launch(Dispatchers.IO) { store.delete(rel) }
         }
-        flushDeferredOpens()
     }
 
     /** 終わった項目を一覧から消す(処理中・確認待ちが無いときだけ呼ぶ想定)。 */
@@ -327,11 +318,10 @@ class ReceiptListViewModel @Inject constructor(
     }
 
     private fun enqueue(list: List<ImportSource>) {
-        val autoOpen = list.size == 1
         val items = list.map { src ->
             val key = nextKey++
             sources[key] = src
-            ImportItem(key = key, autoOpen = autoOpen)
+            ImportItem(key = key)
         }
         _state.update { it.copy(imports = it.imports + items, error = null) }
         list.zip(items).forEach { (src, item) -> launchItem(item.key, src) }
@@ -458,9 +448,26 @@ class ReceiptListViewModel @Inject constructor(
             val savedId = repository.save(receipt, items, sharedFlags = sharedFlags)
             // 共通費の提案は保存の中でまとまりに反映済み。家計簿を今の割り勘に合わせる
             repository.syncLedger(savedId)
+            // 読み取りが完了した支払いは未読にする(画面は開かない。一覧で未読バッジを出す)
+            if (scanned is ScanOutcome.Parsed) markPaymentsUnread(savedId)
             scanned to savedId
         }
         finish(key, result, id)
+    }
+
+    /**
+     * このレシートから作られた支払い(ExpenseGroup)を未読にする。未読の記録は表示用の付随情報なので、
+     * 失敗しても取り込みを失敗扱いにはしない。
+     */
+    private suspend fun markPaymentsUnread(receiptId: Long) {
+        try {
+            val ids = expenseGroupDao.getByReceiptId(receiptId).map { it.id }
+            if (ids.isNotEmpty()) paymentReadStore.markUnread(ids)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // 未読の記録に失敗しても、読み取り結果には影響させない
+        }
     }
 
     private suspend fun finish(key: Long, outcome: ScanOutcome, id: Long) {
@@ -469,12 +476,7 @@ class ReceiptListViewModel @Inject constructor(
             is ScanOutcome.Unparsable -> ImportPhase.FAILED to "読み取り結果を解釈できませんでした。手入力で修正できます。"
             is ScanOutcome.Failed -> ImportPhase.FAILED to outcome.message
         }
-        val autoOpen = find(key)?.autoOpen == true
         patchItem(key) { it.copy(phase = phase, receiptId = id, message = message) }
-        if (autoOpen && outcome !is ScanOutcome.Failed) {
-            // 別の取り込みの補正画面を出している間は、詳細画面への移動を保留する(閉じた後に開く)
-            deferredOpen.offer(id, adjustActive = _state.value.adjustItems.isNotEmpty())?.let { _pendingOpen.value = it }
-        }
     }
 
     private fun fail(key: Long, message: String) {

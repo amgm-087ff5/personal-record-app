@@ -20,6 +20,7 @@ import com.amgm.personallog.domain.ItemSaver
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentLink
+import com.amgm.personallog.domain.PaymentMerge
 import com.amgm.personallog.domain.PaymentValues
 import com.amgm.personallog.domain.PaymentWriteBack
 import com.amgm.personallog.domain.ReceiptRevert
@@ -374,6 +375,19 @@ class ExpenseRepository @Inject constructor(
     fun observeLedgerRows(from: String, to: String): Flow<List<Expense>> = dao.observeLedgerRows(from, to)
     fun observeGroupsBetween(from: String, to: String): Flow<List<ExpenseGroup>> = groupDao.observeBetween(from, to)
 
+    /** 全ての支払い(登録日時の古い順)。重複の確認に使う。 */
+    fun observeAllGroups(): Flow<List<ExpenseGroup>> = groupDao.observeAllByCreated()
+    suspend fun allGroups(): List<ExpenseGroup> = groupDao.getAllByCreated()
+
+    /** ids の支払いを、ids の順に返す(見つからないものは除く)。 */
+    suspend fun groupsByIds(ids: List<Long>): List<ExpenseGroup> {
+        val byId = groupDao.getByIds(ids).associateBy { it.id }
+        return ids.mapNotNull { byId[it] }
+    }
+
+    /** 支払いの receiptId のレシートの店名。receiptId が null や無いレシートなら null。 */
+    suspend fun receiptStoreName(receiptId: Long?): String? = receiptId?.let { receipt(it)?.storeName }
+
     /** yearMonth は "yyyy-MM"。 */
     fun observeMonth(yearMonth: String): Flow<List<Expense>> {
         val (from, to) = LedgerCalc.monthRange(yearMonth)
@@ -456,5 +470,28 @@ class ExpenseRepository @Inject constructor(
     suspend fun deleteGroup(group: ExpenseGroup) = db.withTransaction {
         dao.deleteByGroupId(group.id)
         groupDao.delete(group)
+    }
+
+    /**
+     * 重複した支払いをマージする(1つのトランザクション)。group[0] がマージ先で、merged の内容で更新する。
+     * group[1..] の品目はマージ先へ付け替え、日時を merged の値に揃えてから、元の支払いを削除する。
+     */
+    suspend fun mergeGroups(group: List<ExpenseGroup>, finalTexts: Map<PaymentMerge.Field, String>) {
+        db.withTransaction {
+            val target = group.first()
+            val merged = PaymentMerge.merge(group, finalTexts)
+            val sources = group.drop(1)
+            // 品目は元の支払いを消す前に移す(消すと一緒に消えるため)
+            sources.forEach { source ->
+                val children = dao.getByGroupId(source.id)
+                if (children.isNotEmpty()) {
+                    dao.updateAll(children.map { it.copy(groupId = target.id, date = merged.date, time = merged.time) })
+                }
+            }
+            groupDao.update(merged)
+            // マージ先の既存の品目も、マージ後の日時に揃える
+            dao.syncGroupChildrenDateTime(target.id, merged.date, merged.time)
+            sources.forEach { groupDao.delete(it) }
+        }
     }
 }

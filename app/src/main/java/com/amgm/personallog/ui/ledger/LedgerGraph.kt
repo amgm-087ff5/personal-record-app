@@ -23,6 +23,15 @@ object LedgerRoutes {
      */
     const val EXCLUDED_KIND = "receipt"
     fun excludedPayment(receiptId: Long) = "ledger/payment/$EXCLUDED_KIND/$receiptId"
+
+    /** 重複の可能性がある支払いの一覧(「重複を確認する」)。 */
+    const val DUPLICATES = "ledger/duplicates"
+    fun duplicates() = DUPLICATES
+
+    /** 重複候補 1 組のマージ画面。ids は支払い(グループ)の id をカンマ区切り。先頭がマージ先(登録日時が最も古い)。 */
+    const val MERGE = "ledger/merge/{ids}"
+    const val MERGE_IDS_ARG = "ids"
+    fun merge(ids: List<Long>) = "ledger/merge/${ids.joinToString(",")}"
 }
 
 /** 家計簿機能のナビゲーショングラフ。AppNavHost から呼ばれるので、機能内の遷移はここで完結させる。 */
@@ -33,6 +42,23 @@ fun NavGraphBuilder.ledgerGraph(navController: NavController) {
                 onOpenPayment = { kind, id -> navController.navigate(LedgerRoutes.payment(kind, id)) },
                 onOpenExcludedPayment = { receiptId -> navController.navigate(LedgerRoutes.excludedPayment(receiptId)) },
                 onOpenReceipt = { receiptId -> navController.navigate(ReceiptRoutes.detail(receiptId)) },
+                onOpenDuplicates = { navController.navigate(LedgerRoutes.duplicates()) },
+            )
+        }
+        composable(LedgerRoutes.DUPLICATES) {
+            DuplicatesScreen(
+                onBack = { navController.popBackStack() },
+                onOpenPayment = { kind, id -> navController.navigate(LedgerRoutes.payment(kind, id)) },
+                onMerge = { ids -> navController.navigate(LedgerRoutes.merge(ids)) },
+            )
+        }
+        composable(
+            route = LedgerRoutes.MERGE,
+            arguments = listOf(navArgument(LedgerRoutes.MERGE_IDS_ARG) { type = NavType.StringType }),
+        ) {
+            PaymentMergeScreen(
+                onBack = { navController.popBackStack() },
+                onMerged = { navController.popBackStack() },
             )
         }
         composable(
