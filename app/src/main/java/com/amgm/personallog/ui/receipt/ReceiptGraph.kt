@@ -12,17 +12,26 @@ import com.amgm.personallog.ui.split.SplitSheetScreen
 
 object ReceiptRoutes {
     const val ROOT = "receipt"
-    const val HOME = "receipt/home"
+    /** 支払い一覧。autoCapture が true なら表示直後に撮影を開く(家計簿の「レシートから登録」)。 */
+    const val HOME = "receipt/home?autoCapture={autoCapture}"
     const val DETAIL = "receipt/detail/{id}"
 
+    fun home(autoCapture: Boolean = false) = "receipt/home?autoCapture=$autoCapture"
     fun detail(id: Long) = "receipt/detail/$id"
 }
 
 /** レシート機能のナビゲーショングラフ。AppNavHost から呼ばれるので、機能内の遷移はここで完結させる。 */
 fun NavGraphBuilder.receiptGraph(navController: NavController) {
     navigation(route = ReceiptRoutes.ROOT, startDestination = ReceiptRoutes.HOME) {
-        composable(ReceiptRoutes.HOME) {
-            ReceiptScreen(onOpenReceipt = { id -> navController.navigate(ReceiptRoutes.detail(id)) })
+        composable(
+            route = ReceiptRoutes.HOME,
+            arguments = listOf(navArgument("autoCapture") { type = NavType.BoolType; defaultValue = false }),
+        ) { entry ->
+            ReceiptScreen(
+                onOpenReceipt = { id -> navController.navigate(ReceiptRoutes.detail(id)) },
+                onBack = { navController.popBackStack() },
+                autoCapture = entry.arguments?.getBoolean("autoCapture") ?: false,
+            )
         }
         composable(
             route = ReceiptRoutes.DETAIL,
