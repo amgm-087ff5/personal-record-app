@@ -101,7 +101,8 @@ fun PaymentMergeScreen(
                         )
                     }
                     item(key = "fields-pad") { Spacer(Modifier.height(Space.m)) }
-                    items(s.fieldDiffs, key = { it.field.name }) { diff ->
+                    items(s.fieldDiffs.size, key = { s.fieldDiffs[it].field.name }) { i ->
+                        val diff = s.fieldDiffs[i]
                         FieldCard(
                             diff = diff,
                             s = s,
