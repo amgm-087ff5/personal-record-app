@@ -134,6 +134,14 @@ fun LedgerScreen(
                                 modifier = Modifier.padding(top = Space.xs),
                             )
                         }
+                        if (state.duplicateCount > 0) {
+                            Text(
+                                "重複の可能性がある支払い ${state.duplicateCount}件を含む(「重複?」の行)",
+                                style = AppTheme.type.caption,
+                                color = c.danger,
+                                modifier = Modifier.padding(top = Space.xs),
+                            )
+                        }
                     }
                 }
                 item(key = "cat") {
@@ -196,6 +204,7 @@ fun LedgerScreen(
                         draftReceiptIds = state.draftReceiptIds,
                         warnReceiptIds = state.warnReceiptIds,
                         imageReceiptIds = state.imageReceiptIds,
+                        duplicateReceiptIds = state.duplicateReceiptIds,
                         onToggleGroup = { id -> expandedGroups[id] = expandedGroups[id] != true },
                         onOpen = { entry ->
                             when (entry) {

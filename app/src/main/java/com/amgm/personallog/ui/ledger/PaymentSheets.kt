@@ -3,7 +3,6 @@ package com.amgm.personallog.ui.ledger
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.width
@@ -72,16 +71,12 @@ internal fun ManualPaymentSheet(
         }
     }
 
-    InkSheet(onDismiss = requestClose, swipeToDismiss = false) {
+    // 下スワイプでは閉じず最小化(入力を保持)。× ・戻る・最小化からの下スワイプで requestClose(未保存なら確認)
+    InkSheet(onDismiss = requestClose, swipeToDismiss = false, title = "手動で登録") {
         Column(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding(),
             verticalArrangement = Arrangement.spacedBy(Space.m),
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Label("支払いを追加")
-                Spacer(Modifier.weight(1f))
-                TextAction("閉じる", enabled = !saving, onClick = requestClose, color = c.inkSoft)
-            }
 
             // 合計: 大きく中央。下に品目の合計と「合計に入れる」
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {

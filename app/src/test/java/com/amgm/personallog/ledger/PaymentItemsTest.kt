@@ -3,6 +3,7 @@ package com.amgm.personallog.ledger
 import com.amgm.personallog.data.model.CategoryTotal
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentKind
 import com.amgm.personallog.domain.PaymentField
@@ -202,6 +203,22 @@ class PaymentItemsTest {
         assertTrue(PaymentMarks.ofExpense(e.copy(receiptId = null, receiptItemId = null)).isEmpty())
         // 手で足した品目(グループ内・レシートの品目と対応しない)は印なし
         assertTrue(PaymentMarks.ofExpense(item(2, 100, "食費").copy(amountEdited = true)).isEmpty())
+    }
+
+    @Test
+    fun marks_noneForManualPayment_evenWithReceiptId() {
+        // 手入力の支払いも receipts 表の1行なので receiptId を持つ。画像も読取原文も無ければレシートではない
+        val manual = Receipt(id = 1, purchasedAt = "2026-10-03 10:15", storeName = "", totalAmount = 700, imagePath = "", rawJson = "", createdAt = 1)
+        val scanned = manual.copy(imagePath = "receipts/1.jpg")
+        assertFalse(PaymentMarks.isScannedReceipt(manual))
+        assertTrue(PaymentMarks.isScannedReceipt(scanned))
+        assertTrue(PaymentMarks.isScannedReceipt(manual.copy(rawJson = "{}")))
+        assertFalse(PaymentMarks.isScannedReceipt(null))
+        val g = group(700).copy(receiptId = 1, categoryEdited = true)
+        assertTrue(PaymentMarks.ofGroup(g, fromScannedReceipt = false).isEmpty())
+        assertEquals(setOf(PaymentField.CATEGORY), PaymentMarks.ofGroup(g, fromScannedReceipt = true))
+        val single = Expense(id = 4, date = "2026-10-03", amount = 700, createdAt = 1, receiptId = 1, categoryEdited = true, memoEdited = true)
+        assertTrue(PaymentMarks.ofExpense(single, fromScannedReceipt = false).isEmpty())
     }
 
     @Test

@@ -18,6 +18,7 @@ import com.amgm.personallog.domain.PaymentValues
 import com.amgm.personallog.domain.WriteBackTarget
 import com.amgm.personallog.domain.split.IndividualExpense
 import com.amgm.personallog.domain.split.IndividualExpenses
+import com.amgm.personallog.receipt.ReceiptDedup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -52,6 +53,8 @@ data class PaymentUiState(
     val individual: IndividualExpense? = null,
     /** 割り勘で自分が参加者に入っていない(自分の分が0円で、家計簿に行が無い)支払い。receipt だけが入る。 */
     val selfExcluded: Boolean = false,
+    /** 紐づく支払いに重複の候補(先に作られた同じ内容の支払い)があれば、その相手。支払い一覧の「重複?」と同じ判定。 */
+    val duplicateOf: Receipt? = null,
     val error: String? = null,
     /** 削除などで、この画面の対象が無くなった。 */
     val finished: Boolean = false,
@@ -136,9 +139,14 @@ class PaymentDetailViewModel @Inject constructor(
                         }
                     }
             }
-            flow.catch { e ->
-                _state.update { it.copy(loading = false, error = "読み込みに失敗しました: ${e.message}") }
-            }.collect { s -> _state.update { s.copy(error = it.error, finished = it.finished) } }
+            // 重複の候補(支払い一覧と同じ判定。後から作られた側にだけ出す)
+            val duplicates = combine(receipts.observeReceipts(), receipts.observeNotDuplicates()) { list, notDup ->
+                ReceiptDedup.laterDuplicates(list, ReceiptDedup.notDuplicateSet(notDup))
+            }
+            combine(flow, duplicates) { st, dups -> st.copy(duplicateOf = st.receipt?.let { dups[it.id] }) }
+                .catch { e ->
+                    _state.update { it.copy(loading = false, error = "読み込みに失敗しました: ${e.message}") }
+                }.collect { s -> _state.update { s.copy(error = it.error, finished = it.finished) } }
         }
     }
 

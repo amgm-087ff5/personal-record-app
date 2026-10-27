@@ -457,7 +457,7 @@ private fun DuplicateSheet(
     onToggle: (Long) -> Unit,
     onResolve: (Boolean) -> Unit,
 ) {
-    InkSheet(onDismiss = {}) {
+    InkSheet(onDismiss = {}, closable = false) {
         SheetTitle("重複の可能性がある写真")
         Text(
             "次の写真は、既に取り込まれたレシートと同じ画像の可能性があります。「追加する」を選んだ写真だけ読み取ります。選ばない写真は起票しません(既定)。",
