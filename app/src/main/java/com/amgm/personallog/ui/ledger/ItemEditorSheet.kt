@@ -1,6 +1,6 @@
 package com.amgm.personallog.ui.ledger
 
-import androidx.compose.foundation.LocalOverscrollFactory
+import androidx.compose.foundation.LocalOverscrollConfiguration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -448,7 +448,7 @@ internal fun ItemEditorSheet(
                     .testTag("itemPager"),
             ) {
                 // 引いた先のオーバースクロールの伸びは使わない(指の引いた量を連携で数えるため、消費させない)
-                CompositionLocalProvider(LocalOverscrollFactory provides null) {
+                CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
                     HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { p ->
                         val draft = drafts.getOrNull(p) ?: return@HorizontalPager
                         val saved = draft.id?.let { latestExpense(it) }
