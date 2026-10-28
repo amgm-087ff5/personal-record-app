@@ -302,6 +302,8 @@ internal fun DayBlock(
     imageReceiptIds: Set<Long>,
     /** 重複の候補がある支払いの id(行に「重複?」を付ける)。 */
     duplicateReceiptIds: Set<Long> = emptySet(),
+    /** 支払いの id → 支払い先(店名)。行の見出しに使う。 */
+    storeNames: Map<Long, String> = emptyMap(),
     onToggleGroup: (Long) -> Unit,
     /** 行をタップ: 支出の詳細画面を開く。 */
     onOpen: (LedgerEntry) -> Unit,
@@ -342,6 +344,7 @@ internal fun DayBlock(
                     when (entry) {
                         is LedgerEntry.Group -> GroupLine(
                             entry = entry,
+                            storeName = entry.receiptId?.let { storeNames[it] },
                             draftReceiptIds = draftReceiptIds,
                             warnReceiptIds = warnReceiptIds,
                             imageReceiptIds = imageReceiptIds,
@@ -467,6 +470,8 @@ private fun ExcludedLine(
 @Composable
 private fun GroupLine(
     entry: LedgerEntry.Group,
+    /** 支払い先(店名)。空または無ければ見出しはカテゴリになる。 */
+    storeName: String?,
     draftReceiptIds: Set<Long>,
     warnReceiptIds: Set<Long>,
     imageReceiptIds: Set<Long>,
@@ -477,9 +482,12 @@ private fun GroupLine(
     onDelete: () -> Unit,
 ) {
     val c = AppTheme.colors
+    val title = LedgerLogic.rowTitle(storeName, entry.category)
+    // 見出しを店名にしたときは、カテゴリを副行に回す。メモは空でなければ副行に出す
     val sub = listOfNotNull(
         entry.time.ifEmpty { null },
-        if (entry.group.memo.isNotBlank()) entry.category else null,
+        entry.category.takeIf { !storeName.isNullOrBlank() },
+        entry.group.memo.ifBlank { null },
         "${entry.items.size}品",
     ).joinToString(" · ")
     Column(Modifier.fillMaxWidth()) {
@@ -497,7 +505,7 @@ private fun GroupLine(
             Column(Modifier.weight(1f).padding(vertical = Space.s + Space.xs)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        entry.group.memo.ifBlank { entry.category },
+                        title,
                         style = AppTheme.type.title,
                         color = c.ink,
                         maxLines = 1,

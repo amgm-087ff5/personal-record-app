@@ -71,6 +71,8 @@ data class LedgerUiState(
     val imageReceiptIds: Set<Long> = emptySet(),
     /** 重複の候補がある支払い(後から作られた側)の id。行の「重複?」の印に使う。支払い一覧と同じ判定。 */
     val duplicateReceiptIds: Set<Long> = emptySet(),
+    /** 支払いの id → 支払い先(店名)。家計簿の行の見出しに使う。 */
+    val storeNames: Map<Long, String> = emptyMap(),
     /** この月の行のうち、重複の候補がある支払いの件数。 */
     val duplicateCount: Int = 0,
     val error: String? = null,
@@ -92,6 +94,7 @@ private data class Snapshot(
     val imageReceiptIds: Set<Long>,
     val duplicateReceiptIds: Set<Long>,
     val duplicateCount: Int,
+    val storeNames: Map<Long, String>,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -190,6 +193,7 @@ class LedgerViewModel @Inject constructor(
                         imageIds = receiptList.filter { it.imagePath.isNotEmpty() }.mapTo(HashSet()) { it.id },
                         duplicateIds = ReceiptDedup.laterDuplicates(receiptList, ReceiptDedup.notDuplicateSet(notDup)).keys,
                         excluded = excluded,
+                        storeNames = receiptList.associate { it.id to it.storeName },
                     )
                 }
                     .catch { e ->
@@ -213,6 +217,7 @@ class LedgerViewModel @Inject constructor(
                         imageReceiptIds = s.imageReceiptIds,
                         duplicateReceiptIds = s.duplicateReceiptIds,
                         duplicateCount = s.duplicateCount,
+                        storeNames = s.storeNames,
                     )
                 }
             }
@@ -229,6 +234,7 @@ class LedgerViewModel @Inject constructor(
         imageIds: Set<Long>,
         duplicateIds: Set<Long>,
         excluded: List<LedgerEntry.Excluded>,
+        storeNames: Map<Long, String>,
     ): Snapshot {
         val ym = YearMonth.from(f).toString()
         // 集計は自分の分だけ。0円の行(自分が外れた支払い)は金額もカテゴリ内訳も0なので、合計には足さない
@@ -250,6 +256,7 @@ class LedgerViewModel @Inject constructor(
             imageReceiptIds = imageIds,
             duplicateReceiptIds = duplicateIds,
             duplicateCount = current.mapNotNull { it.receiptId }.distinct().count { it in duplicateIds },
+            storeNames = storeNames,
         )
     }
 

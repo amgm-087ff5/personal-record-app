@@ -14,6 +14,7 @@ import com.amgm.personallog.data.repository.ConfirmOutcome
 import com.amgm.personallog.data.repository.PaymentConfirmer
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.domain.PaymentLink
+import kotlinx.coroutines.flow.first
 import com.amgm.personallog.domain.TaxBreakdown
 import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.domain.UnknownAmounts
@@ -207,6 +208,8 @@ data class DetailUiState(
     val error: String? = null,
     val info: String? = null,
     val finished: Boolean = false,
+    /** 確定が済んだときの、この支払いから作られた支出(まとまり)。登録の手順で次の画面を決めるのに使う。無ければ null。 */
+    val finishedLink: PaymentLink? = null,
     /** 原本画像のハッシュ。保存時に引き継ぐ(フォームからは変えない)。 */
     val imageHash: String? = null,
     /** 重複の可能性がある先行のレシート(「重複ではない」の組は除く)。警告カードに相手ごとに出す。 */
@@ -785,7 +788,9 @@ class ReceiptDetailViewModel @Inject constructor(
             when (val outcome = confirmer.confirm(built.first, built.second, checkDuplicate, rebuildAccepted)) {
                 ConfirmOutcome.Confirmed -> {
                     storedHeadcount = built.first.headcount
-                    _state.update { it.copy(busy = false, confirmed = true, finished = true) }
+                    // 確定で作られた支出(まとまり)を、finished と一緒に出す(確定の直後は DB の観測より先に来るため、ここで読む)
+                    val link = repository.observePaymentLink(receiptId).first()
+                    _state.update { it.copy(busy = false, confirmed = true, finished = true, finishedLink = link) }
                 }
                 is ConfirmOutcome.NeedsDuplicateDecision -> _state.update {
                     it.copy(busy = false, duplicateWarning = outcome.duplicates.map { d -> DuplicateRef(d.id, ReceiptDedup.summary(d)) })

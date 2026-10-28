@@ -6,13 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptStatus
-import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.model.ReceiptItem
-import com.amgm.personallog.data.repository.ConfirmImpact
-import com.amgm.personallog.data.repository.ConfirmOutcome
 import com.amgm.personallog.data.repository.ExpenseRepository
-import com.amgm.personallog.data.repository.PaymentConfirmer
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.data.repository.toBuild
@@ -27,7 +22,6 @@ import com.amgm.personallog.domain.WriteBackTarget
 import com.amgm.personallog.domain.split.IndividualExpense
 import com.amgm.personallog.domain.split.IndividualExpenses
 import com.amgm.personallog.receipt.ReceiptDedup
-import com.amgm.personallog.ui.receipt.DuplicateRef
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -74,14 +68,6 @@ data class PaymentUiState(
     val error: String? = null,
     /** 削除などで、この画面の対象が無くなった。 */
     val finished: Boolean = false,
-    /** 下書きの確定を実行中(二重に押させない)。 */
-    val confirming: Boolean = false,
-    /** 確定時に同じ内容の確定済みの支払いが見つかった(確認を出す)。空なら出さない。 */
-    val confirmDuplicates: List<DuplicateRef> = emptyList(),
-    /** 確定時に合計が未入力(確認を出す)。値は品目の計算合計。null なら出さない。 */
-    val confirmMissingTotal: Long? = null,
-    /** 確定時に家計簿の行が作り直される・消えるもの(確認を出す)。null なら出さない。 */
-    val confirmRebuild: ConfirmImpact? = null,
 ) {
     val itemSum: Long get() = items.sumOf { it.amount.toLong() }
 
@@ -126,7 +112,6 @@ class PaymentDetailViewModel @Inject constructor(
     private val repository: ExpenseRepository,
     private val receipts: ReceiptRepository,
     private val splits: SplitRepository,
-    private val confirmer: PaymentConfirmer,
 ) : ViewModel() {
     private val rawKind: String? = savedStateHandle.get<String>("kind")
     /** 割り勘で自分が外れた支払い(家計簿に行が無い)の詳細か。id は支払い(レシート)の id。 */
@@ -218,14 +203,8 @@ class PaymentDetailViewModel @Inject constructor(
                 .catch { e ->
                     _state.update { it.copy(loading = false, error = "読み込みに失敗しました: ${e.message}") }
                 }.collect { s ->
-                    // 確定の途中経過(確認の表示)は、DB から来た値で消さない
-                    _state.update {
-                        s.copy(
-                            error = it.error, finished = it.finished, confirming = it.confirming,
-                            confirmDuplicates = it.confirmDuplicates, confirmMissingTotal = it.confirmMissingTotal,
-                            confirmRebuild = it.confirmRebuild,
-                        )
-                    }
+                    // 画面のエラーと削除の完了は、DB から来た値で消さない
+                    _state.update { st -> s.copy(error = st.error, finished = st.finished) }
                 }
         }
     }
@@ -356,95 +335,6 @@ class PaymentDetailViewModel @Inject constructor(
         } else {
             receipts.saveStoreName(receiptId, storeName)
             null
-        }
-    }
-
-    /** 確定の対象(支払いと品目)。確認のあとに同じ内容で続けるために覚える。 */
-    private var pendingConfirm: Pair<Receipt, List<ReceiptItem>>? = null
-
-    /** 下書きの確定(支出の画面の「確定」)。判定と保存は PaymentConfirmer が行う。 */
-    fun confirmDraft() {
-        val s = _state.value
-        val r = s.receipt ?: return
-        if (s.confirming || r.status != ReceiptStatus.DRAFT) return
-        runConfirm(r, s.paymentItems, checkDuplicate = true)
-    }
-
-    /** 重複の確認で「追加する」を選んだ。 */
-    fun confirmAnyway() = continueConfirm(checkDuplicate = false)
-
-    /** 重複の確認で「重複ではない(今後表示しない)」を選んだ: 組を保存して確定を続ける。 */
-    fun confirmMarkingNotDuplicate() {
-        val r = pendingConfirm?.first ?: return
-        val dups = _state.value.confirmDuplicates
-        if (dups.isEmpty() || _state.value.confirming) return
-        _state.update { it.copy(confirmDuplicates = emptyList(), confirming = true, error = null) }
-        viewModelScope.launch {
-            try {
-                dups.forEach { receipts.markNotDuplicate(r.id, it.id) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(confirming = false, error = "保存に失敗しました: ${e.message.orEmpty()}") }
-                return@launch
-            }
-            _state.update { it.copy(confirming = false) }
-            continueConfirm(checkDuplicate = false)
-        }
-    }
-
-    /** 合計が未入力のとき、品目の計算合計を合計に入れて確定する。 */
-    fun confirmWithItemsSum() {
-        val (r, items) = pendingConfirm ?: return
-        if (items.isEmpty()) return
-        val sum = confirmer.itemsSumOf(items)
-        if (sum <= 0L || sum > Int.MAX_VALUE) return
-        runConfirm(r.copy(totalAmount = sum.toInt(), totalSource = TotalSource.ITEMS), items, checkDuplicate = true)
-    }
-
-    /** 合計が未入力のとき、入力した金額で確定する。 */
-    fun confirmWithTotal(total: Int) {
-        val (r, items) = pendingConfirm ?: return
-        if (total <= 0) return
-        runConfirm(r.copy(totalAmount = total, totalSource = TotalSource.MANUAL), items, checkDuplicate = true)
-    }
-
-    /** 家計簿の作り直し・消えるものの確認で「作り直して確定」を選んだ。 */
-    fun confirmRebuildAccepted() = continueConfirm(checkDuplicate = false, rebuildAccepted = true)
-
-    /** 確定の確認を閉じる(やめる)。何も保存しない。 */
-    fun dismissConfirmSheets() {
-        pendingConfirm = null
-        _state.update { it.copy(confirmDuplicates = emptyList(), confirmMissingTotal = null, confirmRebuild = null) }
-    }
-
-    private fun continueConfirm(checkDuplicate: Boolean, rebuildAccepted: Boolean = false) {
-        val (r, items) = pendingConfirm ?: return
-        runConfirm(r, items, checkDuplicate, rebuildAccepted)
-    }
-
-    private fun runConfirm(receipt: Receipt, items: List<ReceiptItem>, checkDuplicate: Boolean, rebuildAccepted: Boolean = false) {
-        if (_state.value.confirming) return
-        pendingConfirm = receipt to items
-        _state.update {
-            it.copy(confirming = true, error = null, confirmDuplicates = emptyList(), confirmMissingTotal = null, confirmRebuild = null)
-        }
-        viewModelScope.launch {
-            val outcome = confirmer.confirm(receipt, items, checkDuplicate, rebuildAccepted)
-            if (outcome == ConfirmOutcome.Confirmed) pendingConfirm = null
-            _state.update { st ->
-                val base = st.copy(confirming = false)
-                when (outcome) {
-                    // 確定したら、支払いの状態が DB 経由で届き、帯は消える(この画面は開いたまま)
-                    ConfirmOutcome.Confirmed -> base
-                    is ConfirmOutcome.NeedsDuplicateDecision -> base.copy(
-                        confirmDuplicates = outcome.duplicates.map { DuplicateRef(it.id, ReceiptDedup.summary(it)) },
-                    )
-                    is ConfirmOutcome.MissingTotal -> base.copy(confirmMissingTotal = outcome.itemsSum)
-                    is ConfirmOutcome.NeedsRebuildDecision -> base.copy(confirmRebuild = outcome.impact)
-                    is ConfirmOutcome.Error -> base.copy(error = outcome.message)
-                }
-            }
         }
     }
 

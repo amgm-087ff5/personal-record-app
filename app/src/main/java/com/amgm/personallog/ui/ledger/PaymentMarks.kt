@@ -17,10 +17,6 @@ object PaymentMarks {
     /** 支払いがレシート(画像か読取原文がある)か。手入力の支払いは false。 */
     fun isScannedReceipt(r: Receipt?): Boolean = r != null && (r.imagePath.isNotEmpty() || r.rawJson.isNotEmpty())
 
-    /** 下書きの支払いの確認を促す文言(支出の画面の最上部の帯)。読み取り由来は結果の確認、手入力は合計の入力を促す。 */
-    fun draftBannerText(r: Receipt): String =
-        if (isScannedReceipt(r)) "読み取り結果を確認して確定してください" else "合計を入れて確定してください"
-
     /** 支出の品目の副行に出す税率の表示。例: 税込の8%は「8%」、税抜なら「8%」「税抜」。 */
     fun taxLabels(item: ReceiptItem): List<String> =
         listOfNotNull("${item.taxRate}%", "税抜".takeIf { !item.priceIncludesTax })

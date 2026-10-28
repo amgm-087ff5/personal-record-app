@@ -58,6 +58,8 @@ fun LedgerScreen(
     onOpenPayment: (PaymentKind, Long) -> Unit = { _, _ -> },
     /** 割り勘で自分が外れた支払い(0円の行)の詳細を、支払い(レシート)の id で開く。 */
     onOpenExcludedPayment: (Long) -> Unit = {},
+    /** 下書きの支払いを、登録の手順(支払い → 自分の支出)で開く。支払いの id。 */
+    onRegisterPayment: (Long) -> Unit = {},
     /** 手入力で保存した支払いの詳細(レシートの詳細)を開く。取り込みの「開く ›」で支出が無いときも使う。 */
     onOpenReceipt: (Long) -> Unit = {},
     /** 支払い一覧(支払い画面)を開く。 */
@@ -97,10 +99,15 @@ fun LedgerScreen(
         }
     }
     // 取り込みの「開く ›」: その支払いの支出(まとまり)を開く。支出が無ければ支払いの詳細
+    // 下書きは登録の手順で開く(「確認する ›」)。確定済みは支出の画面(「開く ›」)
     val openImported: (Long) -> Unit = { receiptId ->
-        scope.launch {
-            val groupId = viewModel.paymentGroupIdOfReceipt(receiptId)
-            if (groupId != null) onOpenPayment(PaymentKind.GROUP, groupId) else onOpenReceipt(receiptId)
+        if (receiptId in importDrafts) {
+            onRegisterPayment(receiptId)
+        } else {
+            scope.launch {
+                val groupId = viewModel.paymentGroupIdOfReceipt(receiptId)
+                if (groupId != null) onOpenPayment(PaymentKind.GROUP, groupId) else onOpenReceipt(receiptId)
+            }
         }
     }
     // 「手動で登録」で開く手入力の支払いシート
@@ -259,11 +266,18 @@ fun LedgerScreen(
                         warnReceiptIds = state.warnReceiptIds,
                         imageReceiptIds = state.imageReceiptIds,
                         duplicateReceiptIds = state.duplicateReceiptIds,
+                        storeNames = state.storeNames,
                         onToggleGroup = { id -> expandedGroups[id] = expandedGroups[id] != true },
                         onOpen = { entry ->
-                            when (entry) {
-                                is LedgerEntry.Group -> onOpenPayment(PaymentKind.GROUP, entry.group.id)
-                                is LedgerEntry.Excluded -> onOpenExcludedPayment(entry.receipt.id)
+                            // 下書きの行は、登録の手順(支払いの画面から)で開く。確定済みの行は支出の画面
+                            val draftId = entry.receiptId?.takeIf { it in state.draftReceiptIds }
+                            if (draftId != null) {
+                                onRegisterPayment(draftId)
+                            } else {
+                                when (entry) {
+                                    is LedgerEntry.Group -> onOpenPayment(PaymentKind.GROUP, entry.group.id)
+                                    is LedgerEntry.Excluded -> onOpenExcludedPayment(entry.receipt.id)
+                                }
                             }
                         },
                         onDeleteGroup = { deletingGroup = it.group },
