@@ -35,6 +35,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.amgm.personallog.ui.design.AppTheme
+import com.amgm.personallog.ui.design.SheetHost
 import com.amgm.personallog.ui.diary.DiaryRoutes
 import com.amgm.personallog.ui.ledger.LedgerRoutes
 import com.amgm.personallog.ui.receipt.ReceiptRoutes
@@ -52,16 +53,19 @@ fun AppRoot() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val destination = backStackEntry?.destination
-    Scaffold(
-        containerColor = AppTheme.colors.paper,
-        bottomBar = {
-            InkTabBar(
-                selectedRoute = selectedTabRoute(destination),
-                onSelect = { tab -> navigateToTab(navController, tab) },
-            )
-        },
-    ) { innerPadding ->
-        AppNavHost(navController = navController, modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding))
+    // シート(ドロワー)は Scaffold の外側の重ね表示に出す。Scaffold のインセット処理の影響を受けないように
+    SheetHost {
+        Scaffold(
+            containerColor = AppTheme.colors.paper,
+            bottomBar = {
+                InkTabBar(
+                    selectedRoute = selectedTabRoute(destination),
+                    onSelect = { tab -> navigateToTab(navController, tab) },
+                )
+            },
+        ) { innerPadding ->
+            AppNavHost(navController = navController, modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding))
+        }
     }
 }
 

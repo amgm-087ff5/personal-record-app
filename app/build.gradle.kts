@@ -120,6 +120,10 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
+    // Robolectric 上の Compose UI テスト(シートの位置・操作の確認)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
 // DB の版を上げた直後、kspDebugKotlin と kspReleaseKotlin が同時に app/schemas へ同じ版の JSON を書き、

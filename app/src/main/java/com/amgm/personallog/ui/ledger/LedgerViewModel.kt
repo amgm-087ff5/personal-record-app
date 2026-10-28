@@ -18,7 +18,10 @@ import com.amgm.personallog.data.repository.ExpenseRepository
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.domain.LedgerCalc
+import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptDedup
+import com.amgm.personallog.ui.receipt.ReceiptImportCoordinator
+import com.amgm.personallog.ui.receipt.ReceiptListUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -96,6 +99,7 @@ class LedgerViewModel @Inject constructor(
     private val splits: SplitRepository,
     private val backupManager: BackupManager,
     private val db: AppDatabase,
+    private val importer: ReceiptImportCoordinator,
 ) : ViewModel() {
 
     /** 表示の基準日。月ヘッダーと積み上げグラフはこの日付から決まる。 */
@@ -103,6 +107,45 @@ class LedgerViewModel @Inject constructor(
     private val level = MutableStateFlow(ChartLevel.YEAR)
     private val _uiState = MutableStateFlow(LedgerUiState())
     val uiState: StateFlow<LedgerUiState> = _uiState.asStateFlow()
+
+    /** レシートの取り込みの状態(アプリで1つ。支払い一覧と共有)。 */
+    val imports: StateFlow<ReceiptListUiState> = importer.state
+
+    fun newImportCameraPath(): String = importer.newCameraPath()
+
+    fun importCameraUri(relativePath: String): Uri = importer.cameraUri(relativePath)
+
+    fun discardImportCapture(relativePath: String) = importer.discardCapture(relativePath)
+
+    fun onImportCaptured(relativePath: String) = importer.onCaptured(relativePath)
+
+    fun onImportPhotosPicked(uris: List<Uri>) = importer.onPicked(uris)
+
+    fun showImportError(message: String) = importer.showError(message)
+
+    fun dismissImportError() = importer.dismissError()
+
+    fun retryImport(key: Long) = importer.retry(key)
+
+    fun clearImports() = importer.clearFinished()
+
+    fun toggleImportAddAnyway(key: Long) = importer.toggleAddAnyway(key)
+
+    fun resolveImportDuplicates(addChecked: Boolean) = importer.resolveDuplicates(addChecked)
+
+    fun setImportAdjust(key: Long, adjust: ReceiptAdjust) = importer.setAdjust(key, adjust)
+
+    fun analyzeImportAdjusted() = importer.analyzeAdjusted()
+
+    fun analyzeImportWithoutAdjust() = importer.analyzeWithoutAdjust()
+
+    fun cancelImportAdjust() = importer.cancelAdjust()
+
+    /**
+     * 取り込んだレシートから作られた支出(まとまり)の id。支出が無ければ null(その場合は支払いの詳細を開く)。
+     */
+    suspend fun paymentGroupIdOfReceipt(receiptId: Long): Long? =
+        repository.groupsOfReceipt(receiptId).firstOrNull()?.id
 
     init {
         viewModelScope.launch {
