@@ -120,8 +120,9 @@ class BackupTest {
     }
 
     @Test
-    fun formatVersionIsNine() {
-        assertEquals(9, BACKUP_FORMAT_VERSION)
+    fun formatVersionIsTen() {
+        // 形式10: 品目の金額不明(unknownAmount)。単独の支出は無い(形式9以前は取り込み時にまとまり+1品目へ変える)
+        assertEquals(10, BACKUP_FORMAT_VERSION)
     }
 
     @Test

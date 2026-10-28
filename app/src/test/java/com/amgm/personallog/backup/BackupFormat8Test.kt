@@ -136,12 +136,13 @@ class BackupFormat8Test {
     }
 
     @Test
-    fun checkVersion_acceptsUpToNine_rejectsTen() {
+    fun checkVersion_acceptsUpToTen_rejectsEleven() {
         BackupManager.checkVersion(7)
         BackupManager.checkVersion(8)
         BackupManager.checkVersion(9)
+        BackupManager.checkVersion(10)
         try {
-            BackupManager.checkVersion(10)
+            BackupManager.checkVersion(11)
             fail("expected BackupException")
         } catch (e: BackupException) {
             assertTrue(e.message!!.contains("新しい"))

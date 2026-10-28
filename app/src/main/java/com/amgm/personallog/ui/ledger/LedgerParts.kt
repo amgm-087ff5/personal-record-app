@@ -72,7 +72,6 @@ import java.time.ZoneOffset
 
 
 internal fun entryKey(entry: LedgerEntry): String = when (entry) {
-    is LedgerEntry.Single -> "exp-" + entry.expense.id
     is LedgerEntry.Group -> "grp-" + entry.group.id
     is LedgerEntry.Excluded -> "rcp-" + entry.receipt.id
 }
@@ -341,15 +340,6 @@ internal fun DayBlock(
                 day.items.forEachIndexed { index, entry ->
                     if (index > 0) Hairline()
                     when (entry) {
-                        is LedgerEntry.Single -> ExpenseLine(
-                            entry.expense,
-                            onClick = { onOpen(entry) },
-                            showBadges = true,
-                            draftReceiptIds = draftReceiptIds,
-                            warnReceiptIds = warnReceiptIds,
-                            imageReceiptIds = imageReceiptIds,
-                            duplicateReceiptIds = duplicateReceiptIds,
-                        )
                         is LedgerEntry.Group -> GroupLine(
                             entry = entry,
                             draftReceiptIds = draftReceiptIds,

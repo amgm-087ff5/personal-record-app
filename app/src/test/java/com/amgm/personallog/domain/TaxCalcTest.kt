@@ -88,22 +88,29 @@ class TaxCalcTest {
     }
 
     @Test
-    fun expensesFromReceipt_advanceUsesReceiptOwn_nonAdvanceIgnoresIt() {
+    fun groupFromReceipt_advanceUsesReceiptOwn_nonAdvanceIgnoresIt() {
+        // v14: 立て替えも支出(まとまり)+ 品目。品目は自分の分を品目の税込金額の比で配る(合計は自分の分と一致)
         val items = listOf(
             item(120, taxRate = 8, included = false),
             item(500, included = true),
         )
-        // 立て替え: レシート全体の自分の分(200円)を1行
+        // 立て替え: レシート全体の自分の分(200円)。129.6:500 の比(税込の円 129:500)で 41 + 159
         val advance = receipt(advance = true, own = 200)
-        assertEquals(listOf(200L), LedgerCalc.expensesFromReceipt(advance, items, perItem = true, now = 1).map { it.amount.toLong() })
+        val a = LedgerCalc.groupFromReceipt(advance, items, now = 1)!!
+        assertEquals(200, a.group.amount)
+        assertEquals(listOf(41L, 159L), a.items.map { it.amount.toLong() })
 
-        // 立て替えで未入力: 支払総額の全額(629.6 -> 629)を1行
+        // 立て替えで未入力: 支払総額の全額(629.6 -> 629)
         val advanceWhole = receipt(advance = true, own = null)
-        assertEquals(listOf(629L), LedgerCalc.expensesFromReceipt(advanceWhole, items, perItem = false, now = 1).map { it.amount.toLong() })
+        val w = LedgerCalc.groupFromReceipt(advanceWhole, items, now = 1)!!
+        assertEquals(629, w.group.amount)
+        assertEquals(listOf(129L, 500L), w.items.map { it.amount.toLong() })
 
-        // 立て替えでない: own は無視、品目ごとに税込の行
+        // 立て替えでない: own は無視、品目ごとに税込の行。支出の金額は合計欄
         val normal = receipt(advance = false, own = 200)
-        assertEquals(listOf(129L, 500L), LedgerCalc.expensesFromReceipt(normal, items, perItem = true, now = 1).map { it.amount.toLong() })
+        val n = LedgerCalc.groupFromReceipt(normal, items, now = 1)!!
+        assertEquals(762, n.group.amount)
+        assertEquals(listOf(129L, 500L), n.items.map { it.amount.toLong() })
     }
 
     @Test

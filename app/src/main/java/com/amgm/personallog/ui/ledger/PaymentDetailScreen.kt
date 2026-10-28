@@ -30,13 +30,17 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentWriteBack
 import com.amgm.personallog.domain.split.IndividualExpense
@@ -50,6 +54,7 @@ import com.amgm.personallog.ui.design.InkSheet
 import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.LeaderRow
 import com.amgm.personallog.ui.design.PaperScreen
+import com.amgm.personallog.ui.design.nestedLine
 import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.Stamp
 import com.amgm.personallog.ui.design.StampTone
@@ -61,8 +66,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * 支出の詳細画面。家計簿の支出(まとまり、または単独の支出)のうち、自分の分だけを見て直す。
- * 支払い由来なら、日時・金額・品目は支払いへ書き戻す。支払い先・レシート・割り勘は「支払いを開く」から支払い詳細で見る。
+ * 自分の支出の詳細画面。最上部に親の支払い(「支払い」の行)を置き、その下に自分の支出(負担額・カテゴリ・メモ)と品目を入れ子で並べる。
+ * 支払い由来なら、日時・金額・品目は支払いへ書き戻す。支払い先・レシート・割り勘は親の支払いの行から支払い詳細で見る。
  */
 @Composable
 fun PaymentDetailScreen(
@@ -82,7 +87,6 @@ fun PaymentDetailScreen(
     var addingItem by rememberSaveable { mutableStateOf(false) }
     var deletingGroup by rememberSaveable { mutableStateOf(false) }
     var editingStore by rememberSaveable { mutableStateOf(false) }
-    val editingItem: Expense? = editingItemId?.let { id -> s.items.firstOrNull { it.id == id } }
 
     // 削除などで対象が無くなった(または開いた時点で無かった)ら戻る
     LaunchedEffect(s.finished, s.notFound) { if (s.finished || s.notFound) onBack() }
@@ -93,6 +97,11 @@ fun PaymentDetailScreen(
                 Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = Space.s)) {
                     TextAction("戻る", onClick = onBack, color = c.inkSoft)
                 }
+            }
+            // 親: この支出の元の支払い(画面の最上部。タップで支払いを開く)
+            val parent = s.receipt?.takeIf { s.group != null }
+            if (parent != null) {
+                item(key = "parent") { ParentPaymentRow(parent, onOpen = { onOpenReceipt(parent.id) }) }
             }
             s.error?.let { err ->
                 item(key = "error") {
@@ -106,7 +115,6 @@ fun PaymentDetailScreen(
                 }
             }
             val group = s.group
-            val single = s.single
             val scanned = PaymentMarks.isScannedReceipt(s.receipt)
             s.duplicateOf?.let { original ->
                 item(key = "duplicate") {
@@ -114,25 +122,31 @@ fun PaymentDetailScreen(
                 }
             }
             if (group != null) {
+                // 子: 自分の支出。親の支払いの下に字下げして、左に罫線を引く(nestedLine)
                 item(key = "head") {
-                    GroupHeader(group, scanned, onEdit = { editingGroup = true }, onRevert = { viewModel.revertGroupField(group, it) })
+                    Column(Modifier.fillMaxWidth().nestedLine(c.line)) {
+                        GroupHeader(group, scanned, onEdit = { editingGroup = true }, onRevert = { viewModel.revertGroupField(group, it) })
+                    }
                 }
                 if (s.splitPeople >= 2) {
-                    item(key = "individual") { IndividualBlock(s.individual) }
+                    item(key = "individual") {
+                        Column(Modifier.fillMaxWidth().nestedLine(c.line)) { IndividualBlock(s.individual) }
+                    }
                 }
-                item(key = "payment") { OpenPaymentRow(s.receipt?.id, onOpenReceipt) }
                 item(key = "items-title") {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(top = Space.l)) {
+                    Column(Modifier.fillMaxWidth().nestedLine(c.line).padding(horizontal = Space.edge).padding(top = Space.l)) {
                         Label("品目")
                         Spacer(Modifier.height(Space.xs))
                         Hairline(color = c.ink)
                     }
                 }
                 items(s.items.size, key = { "item-" + s.items[it].id }) { i ->
-                    ItemRow(s.items[i], scanned, onClick = { editingItemId = s.items[i].id }, onRevert = { viewModel.revertItemField(s.items[i], it) })
+                    Column(Modifier.fillMaxWidth().nestedLine(c.line)) {
+                        ItemRow(s.items[i], scanned, onClick = { editingItemId = s.items[i].id }, onRevert = { viewModel.revertItemField(s.items[i], it) })
+                    }
                 }
                 item(key = "sum") {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(top = Space.s)) {
+                    Column(Modifier.fillMaxWidth().nestedLine(c.line).padding(horizontal = Space.edge).padding(top = Space.s)) {
                         Hairline(dashed = true)
                         Spacer(Modifier.height(Space.s))
                         LeaderRow(
@@ -143,9 +157,10 @@ fun PaymentDetailScreen(
                             labelColor = c.inkSoft,
                             valueColor = c.inkSoft,
                         )
-                        if (s.difference != 0L) {
+                        // 不一致の表示と「不明」の判定は、金額不明の品目を除いて数える(ExpenseItems.mismatch)
+                        s.mismatch?.let { mismatch ->
                             Text(
-                                "差額 ${LedgerLogic.formatYen(s.difference)}(支出金額 ${LedgerLogic.formatYen(group.amount.toLong())} − 品目の合計)。" +
+                                "差額 ${LedgerLogic.formatYen(mismatch)}(支出金額 ${LedgerLogic.formatYen(group.amount.toLong())} − 分かっている品目の合計)。" +
                                     "カテゴリ別の集計では、差額は支出のカテゴリ「${group.category}」に入ります。",
                                 style = AppTheme.type.caption,
                                 color = c.danger,
@@ -159,6 +174,16 @@ fun PaymentDetailScreen(
                                     onClick = viewModel::useItemsSumAsTotal,
                                 )
                             }
+                            // 金額の分からない品目で埋める(支払いの品目を直す。割り勘が2人以上なら出ない)
+                            if (s.canMarkBlankAsUnknown) {
+                                TextAction("未入力を全て不明にする", onClick = { viewModel.markBlankItemsUnknown() })
+                            }
+                            s.differenceForUnknownItem?.let { d ->
+                                TextAction(
+                                    "差額 ${LedgerLogic.formatYen(d)} を不明の品目として足す",
+                                    onClick = { viewModel.addDifferenceAsUnknownItem() },
+                                )
+                            }
                         }
                         TextAction("＋ 品目を追加", onClick = { addingItem = true })
                         if (group.receiptId != null) {
@@ -168,7 +193,7 @@ fun PaymentDetailScreen(
                 }
                 if (s.deletedItems.isNotEmpty()) {
                     item(key = "deleted-title") {
-                        Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge).padding(top = Space.l)) {
+                        Column(Modifier.fillMaxWidth().nestedLine(c.line).padding(horizontal = Space.edge).padding(top = Space.l)) {
                             Label("消した品目 ${s.deletedItems.size}件")
                             Spacer(Modifier.height(Space.xs))
                             Hairline(color = c.ink)
@@ -176,26 +201,21 @@ fun PaymentDetailScreen(
                         }
                     }
                     items(s.deletedItems.size, key = { "deleted-" + s.deletedItems[it].id }) { i ->
-                        DeletedItemRow(s.deletedItems[i], onRestore = { viewModel.restoreItem(s.deletedItems[i]) })
+                        Column(Modifier.fillMaxWidth().nestedLine(c.line)) {
+                            DeletedItemRow(s.deletedItems[i], onRestore = { viewModel.restoreItem(s.deletedItems[i]) })
+                        }
                     }
                 }
                 item(key = "delete") {
-                    TextAction(
-                        "この支出を削除",
-                        onClick = { deletingGroup = true },
-                        color = c.danger,
-                        modifier = Modifier.padding(horizontal = Space.s, vertical = Space.l),
-                    )
+                    Column(Modifier.fillMaxWidth().nestedLine(c.line)) {
+                        TextAction(
+                            "この支出を削除",
+                            onClick = { deletingGroup = true },
+                            color = c.danger,
+                            modifier = Modifier.padding(horizontal = Space.s, vertical = Space.l),
+                        )
+                    }
                 }
-            } else if (single != null) {
-                item(key = "single") {
-                    SingleBody(single, scanned, onEdit = { editingItemId = single.id }, onRevert = { viewModel.revertItemField(single, it) })
-                }
-                if (s.splitPeople >= 2) {
-                    item(key = "individual") { IndividualBlock(s.individual) }
-                }
-                item(key = "payment") { OpenPaymentRow(s.receipt?.id, onOpenReceipt) }
-                item(key = "pad") { Spacer(Modifier.height(Space.xl)) }
             } else if (s.selfExcluded) {
                 // 割り勘で自分が外れた支払い。家計簿には自分の行が無く、支払いと割り勘だけを見せる
                 s.receipt?.let { r ->
@@ -245,40 +265,24 @@ fun PaymentDetailScreen(
             lockedAmountNote = if (s.splitPeople >= 2) "" else null,
         )
     }
-    editingItem?.let { target ->
-        ExpenseEditorSheet(
-            original = target,
-            initialDate = target.date,
-            initialTime = target.time,
-            linkedReceiptAt = s.receiptAt?.takeIf { target.receiptId != null },
-            fromScannedReceipt = PaymentMarks.isScannedReceipt(s.receipt),
-            onDismiss = { editingItemId = null },
-            onSave = { date, time, amount, category, name, memo, done ->
-                viewModel.saveItem(group, target, date, time, amount, category, name, memo, done)
-            },
-            onDelete = {
-                viewModel.deleteItem(target)
+    // 品目の編集(横スワイプで前後の品目へ移れるドロワー)。追加のときは末尾に空の品目を足して開く
+    if (group != null && (editingItemId != null || addingItem)) {
+        ItemEditorSheet(
+            group = group,
+            items = s.items,
+            startItemId = editingItemId,
+            adding = addingItem,
+            splitPeople = s.splitPeople,
+            onlyOneItem = s.onlyOneItem,
+            onDismiss = {
                 editingItemId = null
+                addingItem = false
             },
-            title = if (group != null) "品目を編集" else null,
-            showDateTime = group == null,
-            // 割り勘が2人以上なら金額は読み取り専用のまま(注記の文言は出さない。直し方は支払い詳細で案内する)
-            lockedAmountNote = if (s.splitPeople >= 2) "" else null,
-        )
-    }
-    if (addingItem && group != null) {
-        ExpenseEditorSheet(
-            original = null,
-            initialDate = group.date,
-            initialTime = group.time,
-            linkedReceiptAt = null,
-            onDismiss = { addingItem = false },
-            onSave = { date, time, amount, category, name, memo, done ->
-                viewModel.saveItem(group, null, date, time, amount, category, name, memo, done)
+            onSaveItem = { original, amount, category, name, memo, done ->
+                viewModel.saveItem(group, original, group.date, group.time, amount, category, name, memo, done)
             },
-            onDelete = null,
-            title = "品目を追加",
-            showDateTime = false,
+            onSetUnknown = { expense, unknown, done -> viewModel.setItemUnknown(expense, unknown, done) },
+            onDeleteItem = { expense -> viewModel.deleteItem(expense) },
         )
     }
     if (deletingGroup && group != null) {
@@ -303,19 +307,34 @@ fun PaymentDetailScreen(
     }
 }
 
-/** 支払いを開く行(支払い詳細へ)。支払い先・レシート画像・割り勘は支払い詳細で見る。支払いが無ければ出さない。 */
+/**
+ * 親の支払いの行(画面の最上部)。「支払い」の小さな見出しの下に「店名 · 日時 · 合計 ›」を1行で出す。
+ * タップで支払い詳細を開く。支払い先・レシート画像・割り勘は支払い詳細で見る。
+ */
 @Composable
-private fun OpenPaymentRow(receiptId: Long?, onOpenPayment: (Long) -> Unit) {
-    if (receiptId == null) return
+private fun ParentPaymentRow(receipt: Receipt, onOpen: () -> Unit) {
     val c = AppTheme.colors
+    val (date, time) = LedgerCalc.splitPurchasedAt(receipt.purchasedAt)
+    val dateText = LedgerLogic.dayLabel(date) + if (time.isNotEmpty()) " $time" else ""
+    val totalText = receipt.totalAmount?.let { LedgerLogic.formatYen(it.toLong()) } ?: "未入力"
+    val summary = listOf(receipt.storeName.ifBlank { "(店名未入力)" }, dateText, "合計 $totalText").joinToString(" · ")
     Column(
         Modifier
             .fillMaxWidth()
-            .tappable { onOpenPayment(receiptId) }
+            .tappable(onOpen)
             .padding(horizontal = Space.edge, vertical = Space.m),
     ) {
         Label("支払い")
-        Text("支払いを開く  ›", style = AppTheme.type.title, color = c.accent)
+        Text(
+            buildAnnotatedString {
+                append(summary)
+                withStyle(SpanStyle(color = c.accent)) { append("  ›") }
+            },
+            style = AppTheme.type.title,
+            color = c.ink,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
     Hairline()
 }
@@ -513,7 +532,7 @@ private fun GroupHeader(group: ExpenseGroup, scanned: Boolean, onEdit: () -> Uni
     Column(
         Modifier.fillMaxWidth().tappable(onEdit).padding(horizontal = Space.edge, vertical = Space.m),
     ) {
-        Label("支出")
+        Label("自分の支出")
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 LedgerLogic.dayLabel(group.date) + if (group.time.isNotEmpty()) " ${group.time}" else "",
@@ -572,51 +591,12 @@ private fun ItemRow(item: Expense, scanned: Boolean, onClick: () -> Unit, onReve
                 }
             }
             Spacer(Modifier.width(Space.s))
+            // 金額が分からない品目(不明)は、金額は合計から求めた値を出し、印を付ける
+            if (item.unknownAmount) Stamp("不明", modifier = Modifier.padding(end = Space.s))
             Text(LedgerLogic.formatYen(item.amount.toLong()), style = AppTheme.type.numeral, color = c.ink)
         }
         Hairline()
     }
-}
-
-@Composable
-private fun SingleBody(e: Expense, scanned: Boolean, onEdit: () -> Unit, onRevert: (PaymentField) -> Unit) {
-    val c = AppTheme.colors
-    val marks = PaymentMarks.ofExpense(e, scanned)
-    Column(Modifier.fillMaxWidth().tappable(onEdit).padding(horizontal = Space.edge, vertical = Space.m)) {
-        Label("支出")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                LedgerLogic.dayLabel(e.date) + if (e.time.isNotEmpty()) " ${e.time}" else "",
-                style = AppTheme.type.body,
-                color = c.inkSoft,
-            )
-            if (PaymentField.TIME in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.TIME) })
-        }
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(LedgerLogic.formatYen(e.amount.toLong()), style = AppTheme.type.numeralXL, color = c.ink)
-            if (PaymentField.AMOUNT in marks) EditedMark(Modifier.padding(start = Space.s, bottom = Space.s), onRevert = { onRevert(PaymentField.AMOUNT) })
-        }
-        if (e.name.isNotBlank()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(e.name, style = AppTheme.type.title, color = c.ink)
-                if (PaymentField.NAME in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.NAME) })
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                e.memo.ifBlank { "(メモなし)" },
-                style = AppTheme.type.body,
-                color = if (e.memo.isBlank()) c.inkFaint else c.ink,
-            )
-            if (PaymentField.MEMO in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.MEMO) })
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("カテゴリ ${e.category}", style = AppTheme.type.caption, color = c.inkSoft)
-            if (PaymentField.CATEGORY in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.CATEGORY) })
-        }
-        Text("タップで直す", style = AppTheme.type.caption, color = c.inkFaint)
-    }
-    Hairline()
 }
 
 /** 家計簿で消した品目の行。「元に戻す」で品目に戻る。 */

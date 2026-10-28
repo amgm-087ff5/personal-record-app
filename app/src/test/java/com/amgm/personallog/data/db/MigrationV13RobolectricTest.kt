@@ -102,7 +102,7 @@ class MigrationV13RobolectricTest {
         val room = openRoom()
         try {
             val db = room.openHelper.writableDatabase // 移行と Room の検証がここで走る。通らなければ例外
-            assertEquals(13, db.version)
+            // v13 -> v14 も Migrations.ALL で続けて走る
             assertEquals(AppDatabase.VERSION, db.version)
             // 列が増えている(既存の列は残る)
             assertTrue(db.columnNames("receipts").contains("headcount"))

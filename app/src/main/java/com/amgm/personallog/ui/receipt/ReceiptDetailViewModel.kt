@@ -14,6 +14,8 @@ import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.domain.PaymentLink
 import com.amgm.personallog.domain.TaxBreakdown
 import com.amgm.personallog.domain.TaxCalc
+import com.amgm.personallog.domain.UnknownAmounts
+import com.amgm.personallog.domain.UnknownItems
 import com.amgm.personallog.receipt.ReceiptCalc
 import com.amgm.personallog.receipt.ReceiptDedup
 import com.amgm.personallog.receipt.ReceiptAdjust
@@ -47,7 +49,12 @@ data class ItemForm(
     val id: Long = 0L,
     /** 割り勘の補助: この品目を「自分の払う分」の計算に含めるか(画面だけの状態。保存しない)。 */
     val picked: Boolean = false,
-)
+    /** 金額が分からない品目(「不明」)。金額は 合計 − 分かっている品目の合計 から求める(UnknownAmounts)。 */
+    val unknownAmount: Boolean = false,
+) {
+    /** 金額が未入力(数字として読めない)で、不明でもない品目。「未入力を全て不明にする」の対象。 */
+    val isAmountBlank: Boolean get() = !unknownAmount && amount.trim().toIntOrNull() == null
+}
 
 /** 同じ品名・金額・税率・税込/税抜・カテゴリの行をまとめた表示単位(データにグループは持たない)。 */
 data class ItemGroup(val head: ItemForm, val units: List<ItemForm>) {
@@ -60,9 +67,10 @@ private data class GroupKey(
     val taxRate: String,
     val priceIncludesTax: Boolean,
     val category: String,
+    val unknownAmount: Boolean,
 )
 
-private fun ItemForm.groupKey() = GroupKey(name.trim(), amount.trim(), taxRate.trim(), priceIncludesTax, category)
+private fun ItemForm.groupKey() = GroupKey(name.trim(), amount.trim(), taxRate.trim(), priceIncludesTax, category, unknownAmount)
 
 /** 同じ内容の行を1つの表示単位にまとめる。元の並び順を保つ。 */
 internal fun groupItemForms(items: List<ItemForm>): List<ItemGroup> =
@@ -78,6 +86,7 @@ internal fun ItemForm.toItemModel(receiptId: Long = 0L): ReceiptItem = ReceiptIt
     taxRate = TaxCalc.normalizeTaxRate(taxRate.toIntOrNull()),
     priceIncludesTax = priceIncludesTax,
     memo = memo.trim(),
+    unknownAmount = unknownAmount,
 )
 
 /** 金額の入力: 数字と、先頭の「-」(値引き)だけを通す。 */
@@ -92,6 +101,7 @@ private fun ReceiptItem.toForm(key: Long) = ItemForm(
     category = category,
     taxRate = taxRate.toString(),
     priceIncludesTax = priceIncludesTax,
+    unknownAmount = unknownAmount,
 )
 
 private fun UnitRow.toForm(key: Long) = ItemForm(
@@ -142,7 +152,7 @@ internal fun carryOverItemIds(previous: List<ItemForm>, incoming: List<ItemForm>
 /** 重複の相手(警告の表示と「重複ではない」の保存に使う)。 */
 data class DuplicateRef(val id: Long, val summary: String)
 
-/** items から求めた計算結果。 */
+/** items から求めた計算結果。sum は分かっている品目(金額不明でない)の税込合計。 */
 private class ItemsCalc(val items: List<ItemForm>, val sum: Long, val breakdown: TaxBreakdown)
 
 /** 直近1件だけ覚える。copy() で items の参照が変わらない限り(合計欄や日付の入力など)、再計算しない。 */
@@ -152,7 +162,8 @@ private object ItemsCalcCache {
 
     fun of(items: List<ItemForm>): ItemsCalc {
         last?.let { if (it.items === items) return it }
-        val models = items.map { it.toItemModel() }
+        // 金額不明の品目は、分かっている品目の合計にも税の内訳にも入れない(金額は合計から求める)
+        val models = items.map { it.toItemModel() }.filterNot { it.unknownAmount }
         return ItemsCalc(items, TaxCalc.paidYen(models), TaxCalc.breakdownByRate(models)).also { last = it }
     }
 }
@@ -212,7 +223,7 @@ data class DetailUiState(
     val lostEditedCount: Int = 0,
     /** 警告の中身: 家計簿で消した品目のうち、消したまま残る件数。 */
     val keptDeletedCount: Int = 0,
-    /** このレシートに紐づく家計簿の支払い(グループか単独の支出)。無ければ null。 */
+    /** このレシートに紐づく家計簿の自分の支出(まとまり)。無ければ null。 */
     val paymentLink: PaymentLink? = null,
     /** 参加人数(整数。空は未入力)。保存で receipts.headcount に入り、割り勘の参加者もそれに合わせる。 */
     val headcount: String = "",
@@ -222,8 +233,22 @@ data class DetailUiState(
     /** 手入力の支払い(レシート画像なし)か。画像の表示・補正・再読取は出さない。読み込み後だけ意味がある。 */
     val manualEntry: Boolean get() = !loading && !notFound && imagePath.isBlank()
 
-    /** 税込の支払総額(品目ごとの税込価格の合計、円は切り捨て)。items が変わったときだけ計算する。 */
+    /**
+     * 税込の支払総額(品目ごとの税込価格の合計、円は切り捨て)。金額不明の品目は含めない(分かっている品目の合計)。
+     * items が変わったときだけ計算する。
+     */
     val itemsSum: Long get() = ItemsCalcCache.of(items).sum
+
+    /** 金額不明の品目があるか。 */
+    val hasUnknownItem: Boolean get() = items.any { it.unknownAmount }
+
+    /** 金額不明の品目に入る金額の合計(合計 − 分かっている品目の合計。負なら0)。不明の品目が無い・合計が未入力なら null。 */
+    val unknownTotal: Long?
+        get() {
+            if (!hasUnknownItem) return null
+            val t = total.toIntOrNull() ?: return null
+            return (t.toLong() - itemsSum).coerceAtLeast(0L)
+        }
 
     /** 自分の払う分(円)。立て替えでなければ支払総額と同じ。立て替えで未入力なら支払総額の全額。 */
     val ownTotal: Long
@@ -232,13 +257,28 @@ data class DetailUiState(
     /** 貰う分(立て替えのときだけ意味がある): 支払総額 - 自分の払う分。 */
     val theirTotal: Long get() = itemsSum - ownTotal
 
-    /** 合計欄 - 税込支払総額。一致、または合計欄が未入力なら null。 */
+    /**
+     * 合計欄 - 分かっている品目の税込合計。エラーでなければ null(合計欄が未入力でも null)。
+     * 金額不明の品目があるときは、差が0以上ならエラーにしない(差は不明の品目に入る)。差が負のときだけエラー。
+     */
     val mismatch: Long?
-        get() {
-            val t = total.toIntOrNull() ?: return null
-            val diff = t.toLong() - itemsSum
-            return if (diff == 0L) null else diff
-        }
+        get() = UnknownAmounts.mismatch(total.toIntOrNull()?.toLong(), itemsSum, hasUnknownItem)
+
+    /** 「未入力を全て不明にする」を出せるか(markBlankItemsUnknown)。合計と品目が合わず、金額が未入力の品目があるとき。 */
+    val canMarkBlankAsUnknown: Boolean
+        get() = mismatch != null && UnknownItems.canMarkBlankAsUnknown(items) { it.isAmountBlank }
+
+    /**
+     * 「差額を不明の品目として足す」で足す金額(addDifferenceAsUnknownItem)。出さないときは null。
+     * 金額が未入力の品目・不明の品目が無く、合計 − 品目の合計 が正のとき。
+     */
+    val differenceForUnknownItem: Long?
+        get() = UnknownItems.differenceForUnknownItem(
+            total = total.toIntOrNull()?.toLong(),
+            knownSum = itemsSum,
+            hasBlank = items.any { it.isAmountBlank },
+            hasUnknown = hasUnknownItem,
+        )
 
     /** 合計欄が未入力(数字として読めない)か。 */
     val totalMissing: Boolean get() = total.toIntOrNull() == null
@@ -520,6 +560,44 @@ class ReceiptDetailViewModel @Inject constructor(
     /** 同じ品目のまとまりごと削除する。 */
     fun removeGroup(keys: Set<Long>) = _state.update { s -> s.copy(items = s.items.filterNot { it.key in keys }) }
 
+    // ------------------------------------------------------------ 金額不明(段階2の画面から呼ぶ)
+
+    /** 1つの品目(key)の「金額不明」を切り替える。不明にしても入力済みの金額は消さない(不明を外すと戻る)。 */
+    fun setUnitUnknown(key: Long, unknown: Boolean) = updateKeys(setOf(key)) { it.copy(unknownAmount = unknown) }
+
+    /** 「未入力を全て不明にする」: 金額が未入力の品目をすべて金額不明にする(画面の入力だけ。保存は確定・下書き保存で行う)。 */
+    fun markBlankItemsUnknown() = _state.update { s ->
+        s.copy(items = UnknownItems.markBlankAsUnknown(s.items, { it.isAmountBlank }) { it.copy(unknownAmount = true) })
+    }
+
+    /**
+     * 「差額を不明の品目として足す」: 合計 − 品目の合計 を受け持つ、金額不明の品目を1つ末尾に足す
+     * (品名は空・未分類・税込10%。金額欄は空)。足せないとき(differenceForUnknownItem が null)は何もしない。
+     */
+    fun addDifferenceAsUnknownItem() = _state.update { s ->
+        s.copy(
+            items = UnknownItems.withDifferenceItem(
+                items = s.items,
+                total = s.total.toIntOrNull()?.toLong(),
+                knownSum = s.itemsSum,
+                isBlank = { it.isAmountBlank },
+                isUnknown = { it.unknownAmount },
+                newUnknownItem = {
+                    ItemForm(
+                        key = newKey(),
+                        name = "",
+                        memo = "",
+                        amount = "",
+                        category = Categories.UNCATEGORIZED,
+                        taxRate = TaxCalc.DEFAULT_TAX_RATE.toString(),
+                        priceIncludesTax = true,
+                        unknownAmount = true,
+                    )
+                },
+            ),
+        )
+    }
+
     /** 品目の計算合計(税込の支払合計)を合計に入れる。出所は items。 */
     fun useItemsSumAsTotal() {
         _state.update { it.copy(total = it.itemsSum.toString(), totalSource = TotalSource.ITEMS) }
@@ -543,7 +621,8 @@ class ReceiptDetailViewModel @Inject constructor(
             return null
         }
         if (strict) {
-            val bad = s.items.indexOfFirst { it.amount.toIntOrNull() == null }
+            // 金額不明の品目は金額が空でよい(金額は合計から求める)
+            val bad = s.items.indexOfFirst { it.isAmountBlank }
             if (bad >= 0) {
                 _state.update { it.copy(error = "品目${bad + 1}の金額が入力されていません。") }
                 return null

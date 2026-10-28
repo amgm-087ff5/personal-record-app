@@ -67,7 +67,11 @@ class PaymentItemsTest {
     @Test
     fun mixedEntries_sumToTheirAmounts_andDailyTotalsAreNotDoubleCounted() {
         val g = LedgerEntry.Group(group(700), listOf(item(1, 200, "食費"), item(2, 500, "日用品")))
-        val single = LedgerEntry.Single(Expense(id = 9, date = "2026-10-03", amount = 300, category = "食費", createdAt = 6))
+        // 品目の無い支払いの支出(品名が空の1品目)
+        val single = LedgerEntry.Group(
+            group(300, "食費").copy(id = 8),
+            listOf(Expense(id = 9, date = "2026-10-03", amount = 300, category = "食費", groupId = 8, createdAt = 6)),
+        )
         val entries = listOf(g, single)
         val totals = LedgerLogic.totalsByCategory(entries)
         assertEquals(1000L, totals.sumOf { it.total })
@@ -222,16 +226,14 @@ class PaymentItemsTest {
     }
 
     @Test
-    fun paymentLink_prefersGroup_thenSingleExpense() {
+    fun paymentLink_isTheGroup_orNull() {
+        // v14〜 支払いの子は自分の支出(まとまり)だけ。単独の支出は無い
         val g = group(700).copy(receiptId = 1)
-        val single = Expense(id = 4, date = "2026-10-03", amount = 300, createdAt = 1, receiptId = 1)
-        val child = item(5, 200, "食費").copy(receiptId = 1)
-        assertEquals(PaymentLink(PaymentKind.GROUP, 7, 700), PaymentLink.resolve(listOf(g), listOf(child)))
-        assertEquals(PaymentLink(PaymentKind.EXPENSE, 4, 300), PaymentLink.resolve(emptyList(), listOf(single)))
-        // グループの品目だけが残っていても、単独の支出としては出さない
-        assertNull(PaymentLink.resolve(emptyList(), listOf(child)))
-        assertNull(PaymentLink.resolve(emptyList(), emptyList()))
+        assertEquals(PaymentLink(PaymentKind.GROUP, 7, 700), PaymentLink.resolve(listOf(g)))
+        assertNull(PaymentLink.resolve(emptyList()))
         assertEquals(PaymentKind.GROUP, PaymentKind.of("group"))
+        // 旧ルートの種類は読める(その品目が属する支出を開く)
+        assertEquals(PaymentKind.EXPENSE, PaymentKind.of("expense"))
         assertNull(PaymentKind.of("x"))
     }
 }

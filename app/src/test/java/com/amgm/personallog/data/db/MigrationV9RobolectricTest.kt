@@ -274,7 +274,9 @@ class MigrationV9RobolectricTest {
             val db = room.openHelper.writableDatabase // 移行と Room の検証がここで走る。通らなければ例外
             assertEquals(AppDatabase.VERSION, db.version) // v9 -> v10 も Migrations.ALL で続けて走る
             assertEquals(3L, db.long("SELECT COUNT(*) FROM expenses"))
-            assertEquals(2L, db.long("SELECT COUNT(*) FROM expense_groups"))
+            // v14 の移行で、単独の支出2件(id 2・3)もまとまりになる
+            assertEquals(4L, db.long("SELECT COUNT(*) FROM expense_groups"))
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses WHERE groupId IS NULL"))
             assertEquals(3L, db.long("SELECT COUNT(*) FROM receipt_items"))
             db.query("PRAGMA foreign_key_check").use { assertFalse(it.moveToFirst()) }
         } finally {

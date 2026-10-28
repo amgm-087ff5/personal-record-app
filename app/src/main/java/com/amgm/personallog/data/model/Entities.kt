@@ -163,11 +163,18 @@ data class ReceiptItem(
     val priceIncludesTax: Boolean = true,
     /** この1個へのメモ。 */
     val memo: String = "",
+    /**
+     * 金額が分からない品目(「不明」)。true なら amount は計算に使わない。
+     * 不明の金額 = 合計 − 分かっている品目の合計(UnknownAmounts で求める。計算の正は合計額)。
+     */
+    @ColumnInfo(defaultValue = "0")
+    val unknownAmount: Boolean = false,
 )
 
 /**
- * 1回の支払い(レシートなど)をまとめる親。amount は支払い金額(店への払い総額。確定値で、正)。
- * 品目は Expense.groupId で紐づく。品目の合計と amount がずれる場合は表示で差額を示す。
+ * 自分の支出(支払い1件に対する自分の負担)。amount は自分の負担額(確定値で、正)。
+ * 品目は Expense.groupId で紐づき、必ず1行以上ある(品目の無い支払いは、品名が空の1品目を持つ)。
+ * 品目が1つのとき、その品目の金額は amount と同じ。品目の合計と amount がずれる場合は表示で差額を示す。
  */
 @Entity(
     tableName = "expense_groups",
@@ -210,8 +217,8 @@ data class ExpenseGroup(
 fun newUid(): String = UUID.randomUUID().toString()
 
 /**
- * 家計簿の1行。amount は円で、支出は正の値。receiptId はレシート由来の場合のみ。
- * groupId は支払いグループの品目の場合のみ(単独の支出は null)。
+ * 支出の品目(自分の支出 expense_groups の子)。amount は円で、支出は正の値。receiptId は支払い由来の場合のみ。
+ * groupId は必ず入る(v14 で「単独の支出」= groupId なし をやめた)。null は v13 以前の古い行と、取り込み前の旧形式だけ。
  */
 @Entity(
     tableName = "expenses",
@@ -276,6 +283,12 @@ data class Expense(
      */
     @ColumnInfo(defaultValue = "0")
     val deletedByUser: Boolean = false,
+    /**
+     * 金額が分からない品目(「不明」)。amount には、支出の金額 − 分かっている品目の合計を配った値が入る
+     * (UnknownAmounts.resolveExpenseItems。計算の正は支出の金額)。
+     */
+    @ColumnInfo(defaultValue = "0")
+    val unknownAmount: Boolean = false,
 )
 
 /** カテゴリ別の合計1行(画面の集計で使う)。 */

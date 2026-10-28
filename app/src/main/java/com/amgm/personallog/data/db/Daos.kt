@@ -215,24 +215,21 @@ interface ExpenseDao {
     suspend fun deleteByGroupId(groupId: Long)
 
     /**
-     * 家計簿の画面用: 単独の支出は支出の日付で、品目(groupId あり)はグループの日付で期間に入れる。
+     * 家計簿の画面用: 支出(グループ)の日付で期間に入る品目。v14〜 品目は必ずグループに属する。
      * 品目の日付が古いままでも、グループが期間内ならその品目が入る(月をまたいだ二重計上を防ぐ)。
      */
     @Query(
-        "SELECT * FROM expenses WHERE (groupId IS NULL AND date BETWEEN :from AND :to) " +
-            "OR groupId IN (SELECT id FROM expense_groups WHERE date BETWEEN :from AND :to) " +
+        "SELECT * FROM expenses WHERE groupId IN (SELECT id FROM expense_groups WHERE date BETWEEN :from AND :to) " +
             "ORDER BY date DESC, id DESC",
     )
     fun observeLedgerRows(from: String, to: String): Flow<List<Expense>>
 
     /**
-     * 家計簿の行(支出またはグループ)が1つでもあるレシートの id。期間に関係なく全件を見る
-     * (割り勘で自分の分が 0 円の支払いを見分けるため。行が無いレシートだけが対象になる)。
+     * 自分の支出(グループ)が1つでもあるレシートの id。期間に関係なく全件を見る
+     * (割り勘で自分の分が 0 円の支払いを見分けるため。支出が無いレシートだけが対象になる)。
+     * 自分の分が0円の間に非表示で残す消した品目(groupId なし)は、支出ではないので数えない。
      */
-    @Query(
-        "SELECT receiptId FROM expenses WHERE receiptId IS NOT NULL " +
-            "UNION SELECT receiptId FROM expense_groups WHERE receiptId IS NOT NULL",
-    )
+    @Query("SELECT receiptId FROM expense_groups WHERE receiptId IS NOT NULL")
     fun observeReceiptIdsWithRows(): Flow<List<Long>>
 
     /** グループの日時が変わったとき、その品目の日時を合わせる。 */

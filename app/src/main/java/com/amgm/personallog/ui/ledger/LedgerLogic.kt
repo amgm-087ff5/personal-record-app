@@ -15,8 +15,9 @@ import java.time.format.ResolverStyle
 import java.util.Locale
 
 /**
- * 家計簿の一覧に並ぶ1行。単独の支出か、支払いグループ(品目をまとめたもの)。
- * amount / category はこの行が家計簿の合計・カテゴリ集計に入る値(グループは支払い金額)。
+ * 家計簿の一覧に並ぶ1行。自分の支出(品目をまとめたもの)か、割り勘で自分を外した支払いの0円の行。
+ * amount / category はこの行が家計簿の合計・カテゴリ集計に入る値(支出は自分の負担額)。
+ * v14 で「単独の支出」(品目なしの行)は無くなった。品目の無い支払いの支出も、品名が空の1品目を持つ Group になる。
  */
 sealed interface LedgerEntry {
     val date: String
@@ -31,19 +32,9 @@ sealed interface LedgerEntry {
 
     /**
      * この行をカテゴリ別に数えるときの内訳(合計は amount と一致する)。
-     * 単独の支出は自分のカテゴリ。グループは品目ごとのカテゴリで数え、差額(支払い金額 − 品目の合計)はグループのカテゴリに入れる。
+     * 支出は品目ごとのカテゴリで数え、差額(支払い金額 − 品目の合計)は支出のカテゴリに入れる。
      */
     val categoryParts: List<CategoryTotal>
-
-    data class Single(val expense: Expense) : LedgerEntry {
-        override val date: String get() = expense.date
-        override val time: String get() = expense.time
-        override val amount: Long get() = expense.amount.toLong()
-        override val category: String get() = expense.category
-        override val createdAt: Long get() = expense.createdAt
-        override val receiptId: Long? get() = expense.receiptId
-        override val categoryParts: List<CategoryTotal> get() = listOf(CategoryTotal(expense.category, amount))
-    }
 
     /** items は品目(支出)。amount は支払い金額(正)。 */
     data class Group(val group: ExpenseGroup, val items: List<Expense>) : LedgerEntry {
@@ -134,9 +125,9 @@ object LedgerLogic {
         (count - 1 downTo 0).map { shiftMonth(yearMonth, -it) }
 
     /**
-     * 支出と支払いグループを一覧用の行にする。グループの品目は group の行に入り、単独の行には入らない
-     * (合計が二重にならない)。groupId のある行は、グループが渡されていなくても単独の行としては数えない
-     * (グループが別の月に動いたとき、品目が元の月に単独で残って二重に数えられるのを防ぐ)。
+     * 支出の品目と支出(グループ)を一覧用の行にする。品目は group の行に入る。
+     * グループが渡されていない品目・グループに属さない行(v13 以前の古い行、自分の分が0円の間の消した品目)は数えない
+     * (グループが別の月に動いたとき、品目が元の月に残って二重に数えられるのを防ぐ)。
      * 月・日の振り分けはグループの日付に従う。並びは日付の降順、同じ日は作成の新しい順。
      * excluded は割り勘で自分を外した支払いの0円の行(excludedReceipts で作る)。金額は 0 なので合計には影響しない。
      */
@@ -150,11 +141,8 @@ object LedgerLogic {
         val itemsByGroup = expenses
             .filter { e -> e.groupId != null && e.groupId in groupIds && !e.deletedByUser }
             .groupBy { it.groupId!! }
-        val singles = expenses
-            .filter { e -> e.groupId == null && !e.deletedByUser }
-            .map { LedgerEntry.Single(it) }
         val grouped = groups.map { LedgerEntry.Group(it, itemsByGroup[it.id].orEmpty().sortedBy { x -> x.id }) }
-        val all: List<LedgerEntry> = singles + grouped + excluded
+        val all: List<LedgerEntry> = grouped + excluded
         return all.sortedWith(
             compareByDescending<LedgerEntry> { it.date }.thenByDescending { it.createdAt },
         )

@@ -18,6 +18,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -198,7 +199,7 @@ class ReceiptPaymentFlowRobolectricTest {
     fun groupMovedToNextMonth_childrenFollow_andBothMonthsAreCorrect() {
         val (r, _) = confirmedReceipt()
         val g = runBlocking { db.expenseGroupDao().getByReceiptId(r.id) }.single()
-        // 単独の支出も、支払い(合計だけの手入力)を保存して作る
+        // 品目の無い支出も、支払い(合計だけの手入力)を保存して作る
         runBlocking { receipts.saveAndConfirm(receipt(total = 50, at = "2026-10-20 10:00", store = "単独"), emptyList()) }
         fun total(from: String, to: String): Long = runBlocking {
             val rows = expenses.observeLedgerRows(from, to).first()
@@ -260,22 +261,21 @@ class ReceiptPaymentFlowRobolectricTest {
         val (r, items) = confirmedReceipt()
         val soap = children(r.id)[1]
         runBlocking { expenses.delete(soap) }
-        // 立て替えにする: 確認は「作り直す」で、消した品目は消したまま残ると知らせる
+        // 立て替えにする: v14〜 立て替えも支出+品目なので作り直さない(確認は不要)
         val advance = r.copy(isAdvance = true, ownAmount = 300)
         val impact = runBlocking { receipts.confirmImpact(advance, items) }
-        assertTrue(impact.rebuild)
-        assertEquals(1, impact.keptDeleted)
+        assertFalse(impact.rebuild)
         assertEquals(0, impact.lostEdited)
         runBlocking { receipts.saveAndConfirm(advance, items) }
+        val gid = runBlocking { db.expenseGroupDao().getByReceiptId(r.id) }.single().id
         val whileAdvance = children(r.id)
-        assertEquals(1, whileAdvance.count { !it.deletedByUser })
-        assertEquals(300, whileAdvance.single { !it.deletedByUser }.amount)
-        assertTrue(whileAdvance.single { it.deletedByUser }.groupId == null)
+        assertEquals(300, runBlocking { db.expenseGroupDao().getById(gid) }!!.amount)
+        assertTrue(whileAdvance.all { it.groupId == gid })
+        assertEquals(listOf("洗剤"), whileAdvance.filter { it.deletedByUser }.map { it.name })
         // 立て替えをやめて通常に戻す: 洗剤は復活しない
         runBlocking { receipts.saveAndConfirm(advance.copy(isAdvance = false, ownAmount = null), items) }
         val back = children(r.id)
         assertEquals(2, back.size)
-        val gid = runBlocking { db.expenseGroupDao().getByReceiptId(r.id) }.single().id
         assertTrue(back.all { it.groupId == gid })
         assertEquals(listOf("洗剤"), back.filter { it.deletedByUser }.map { it.name })
         assertEquals(listOf("牛乳"), back.filter { !it.deletedByUser }.map { it.name })
@@ -285,22 +285,76 @@ class ReceiptPaymentFlowRobolectricTest {
     }
 
     @Test
-    fun revertSingleRow_ofAdvanceReceiptWithSeveralItems_usesOwnAmount() {
+    fun advanceReceiptWithSeveralItems_isGroupOfOwnAmount_andRevertUsesIt() {
         val id = runBlocking {
             receipts.saveAndConfirm(
                 receipt().copy(isAdvance = true, ownAmount = 300), listOf(item("牛乳", 200), item("洗剤", 500)),
             )
         }
-        val single = children(id).single()
-        assertEquals(300, single.amount)
-        runBlocking { expenses.update(PaymentEdit.editExpense(single, single.date, single.time, 999, single.category, single.name, "自分で")) }
-        assertTrue(runBlocking { expenses.revertExpenseField(single.id, PaymentField.AMOUNT) })
-        assertTrue(runBlocking { expenses.revertExpenseField(single.id, PaymentField.MEMO) })
-        val after = children(id).single()
+        // 自分の分 300 を品目の金額の比(200:500)で配る
+        assertEquals(listOf(86, 214), children(id).map { it.amount })
+        val g = runBlocking { db.expenseGroupDao().getByReceiptId(id) }.single()
+        assertEquals(300, g.amount)
+        runBlocking { expenses.updateGroup(PaymentEdit.editGroup(g, g.date, g.time, 999, g.category, "自分で")) }
+        assertTrue(runBlocking { expenses.revertGroupField(g.id, PaymentField.AMOUNT) })
+        assertTrue(runBlocking { expenses.revertGroupField(g.id, PaymentField.MEMO) })
+        val after = runBlocking { db.expenseGroupDao().getByReceiptId(id) }.single()
         assertEquals(300, after.amount)
         assertFalse(after.amountEdited)
         assertEquals("店", after.memo)
         assertFalse(after.memoEdited)
+    }
+
+    @Test
+    fun itemlessPayment_isGroupWithOneBlankItem_thatFollowsTheGroupAmount() {
+        val id = runBlocking { receipts.saveAndConfirm(receipt(total = 1200, store = "コンビニ"), emptyList()) }
+        val g = runBlocking { db.expenseGroupDao().getByReceiptId(id) }.single()
+        val only = children(id).single()
+        assertEquals(g.id, only.groupId)
+        assertEquals("", only.name)
+        assertEquals(1200, only.amount)
+        assertEquals("コンビニ", only.memo)
+        // 支出の金額を家計簿で直すと、1品目の金額も追従する
+        runBlocking { expenses.updateGroup(PaymentEdit.editGroup(g, g.date, g.time, 1500, "外食", g.memo)) }
+        val after = children(id).single()
+        assertEquals(1500, after.amount)
+        assertEquals("外食", after.category)
+        // 合計を変えて再確定すると、まとまりと1品目は同じ行のまま追従する(金額は編集済みなので残る)
+        runBlocking { receipts.saveAndConfirm(receipts.getReceipt(id)!!.copy(totalAmount = 1300), emptyList()) }
+        assertEquals(listOf(only.id), children(id).map { it.id })
+        assertEquals(1500, children(id).single().amount)
+        // 最後の1品目は消せない
+        try {
+            runBlocking { expenses.delete(children(id).single()) }
+            fail("最後の品目は消せないはず")
+        } catch (e: IllegalStateException) {
+            assertEquals(ExpenseRepository.MESSAGE_LAST_ITEM, e.message)
+        }
+        assertEquals(1, children(id).size)
+    }
+
+    @Test
+    fun unknownItems_markBlank_andAddDifference_rebuildTheLedger() {
+        // 品目の金額が未入力(0円)のまま、合計 1000 の支払い
+        val id = runBlocking { receipts.saveAndConfirm(receipt(total = 1000), listOf(item("牛乳", 200), item("何か", 0))) }
+        // 0円の品目は家計簿に作らない。残った1品目は、支出の金額(合計 1000)と同じ金額になる
+        assertEquals(listOf(1000), children(id).map { it.amount })
+        // 未入力を全て不明にする: 何かが 800 を受け持つ
+        assertNull(runBlocking { receipts.markBlankItemsUnknown(id) })
+        assertEquals(listOf(true), runBlocking { receipts.getItems(id) }.filter { it.name == "何か" }.map { it.unknownAmount })
+        assertEquals(listOf(200, 800), children(id).map { it.amount })
+        // もう未入力は無い
+        assertEquals(ReceiptRepository.MESSAGE_NO_BLANK_ITEM, runBlocking { receipts.markBlankItemsUnknown(id) })
+
+        // 差額を不明の品目として足す: 未入力も不明も無く、合計が品目より多いとき
+        val id2 = runBlocking { receipts.saveAndConfirm(receipt(total = 1000), listOf(item("牛乳", 200), item("洗剤", 500))) }
+        assertNull(runBlocking { receipts.addDifferenceAsUnknownItem(id2) })
+        val items2 = runBlocking { receipts.getItems(id2) }
+        assertEquals(3, items2.size)
+        assertTrue(items2.last().unknownAmount)
+        assertEquals(listOf(200, 500, 300), children(id2).map { it.amount })
+        // 不明の品目が既にあるので、もう足せない
+        assertEquals(ReceiptRepository.MESSAGE_NO_DIFFERENCE, runBlocking { receipts.addDifferenceAsUnknownItem(id2) })
     }
 
     @Test

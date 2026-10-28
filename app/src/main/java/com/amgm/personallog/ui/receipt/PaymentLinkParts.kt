@@ -1,12 +1,10 @@
 package com.amgm.personallog.ui.receipt
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.amgm.personallog.domain.PaymentLink
 import com.amgm.personallog.ui.design.AppTheme
@@ -15,26 +13,28 @@ import com.amgm.personallog.ui.design.InkSheet
 import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.TextAction
+import com.amgm.personallog.ui.design.nestedLine
 import com.amgm.personallog.ui.design.tappable
 
-/** 「支出を開く(家計簿 ¥N)」。確定済みで、家計簿に紐づく支出があるときだけ出す。 */
-internal fun paymentLinkLabel(link: PaymentLink): String = "支出を開く(家計簿 ${formatYen(link.amount)})"
-
+/**
+ * 自分の支出(この支払いの子)の行。支払いの最下部に、支払いの下に字下げして入れる(左に罫線)。
+ * 確定済みで、家計簿に紐づく支出があるときだけ出す。タップで自分の支出を開く。
+ */
 @Composable
 internal fun PaymentLinkRow(link: PaymentLink, onClick: () -> Unit) {
     val c = AppTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .tappable(onClick)
-            .padding(horizontal = Space.edge, vertical = Space.s),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Label("家計簿")
-        Text(paymentLinkLabel(link) + "  ›", style = AppTheme.type.title, color = c.accent)
+    Column(Modifier.fillMaxWidth().nestedLine(c.line)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .tappable(onClick)
+                .padding(horizontal = Space.edge, vertical = Space.s),
+        ) {
+            Label("自分の支出")
+            Text("${formatYen(link.amount)}  ›", style = AppTheme.type.title, color = c.accent)
+        }
+        Hairline()
     }
-    Hairline()
 }
 
 /** 再確定で家計簿の行が作り直されるときの確認。 */

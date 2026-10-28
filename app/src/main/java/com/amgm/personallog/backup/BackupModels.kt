@@ -23,6 +23,7 @@ import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.model.WholeShare
 import com.amgm.personallog.data.model.newUid
 import com.amgm.personallog.domain.PricedLine
+import com.amgm.personallog.domain.SingleExpenseConversion
 import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.domain.legacyReceiptOwnYen
 import com.amgm.personallog.receipt.LegacyRow
@@ -33,8 +34,11 @@ import com.amgm.personallog.domain.LedgerCalc
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** バックアップZIPのフォーマット版。互換性を壊す変更をしたら上げる。 */
-const val BACKUP_FORMAT_VERSION = 9
+/**
+ * バックアップZIPのフォーマット版。互換性を壊す変更をしたら上げる。
+ * 10: 品目・支出の品目に金額不明(unknownAmount)。単独の支出(groupId なし)は書き出さない(取り込みでは、まとまり+1品目に変える)。
+ */
+const val BACKUP_FORMAT_VERSION = 10
 const val BACKUP_DATA_ENTRY = "data.json"
 const val BACKUP_FILES_PREFIX = "files/"
 
@@ -241,6 +245,8 @@ data class BackupReceiptItem(
     val quantity: Double? = null,
     val unitPrice: Int? = null,
     val ownPercent: Int? = null,
+    /** 形式10以降。金額が分からない品目。古い形式には無いので false。 */
+    val unknownAmount: Boolean = false,
 ) {
     /** 1個ずつの行に変換する。旧形式の数量は1個ずつの行に展開する。 */
     fun toUnitRows(): List<UnitRow> {
@@ -264,14 +270,14 @@ data class BackupReceiptItem(
     fun toEntities(): List<ReceiptItem> = toUnitRows().map {
         ReceiptItem(
             receiptId = receiptId, name = it.name, amount = it.amount, category = it.category,
-            taxRate = it.taxRate, priceIncludesTax = it.priceIncludesTax, memo = memo,
+            taxRate = it.taxRate, priceIncludesTax = it.priceIncludesTax, memo = memo, unknownAmount = unknownAmount,
         )
     }
 
     companion object {
         fun from(e: ReceiptItem) = BackupReceiptItem(
             id = e.id, receiptId = e.receiptId, name = e.name, memo = e.memo, amount = e.amount, category = e.category,
-            taxRate = e.taxRate, priceIncludesTax = e.priceIncludesTax,
+            taxRate = e.taxRate, priceIncludesTax = e.priceIncludesTax, unknownAmount = e.unknownAmount,
         )
     }
 }
@@ -304,6 +310,8 @@ data class BackupExpense(
     val uid: String = "",
     /** v6 以降。家計簿で消したレシート由来の品目の印。古い形式には無いので false。 */
     val deletedByUser: Boolean = false,
+    /** 形式10以降。金額が分からない品目。古い形式には無いので false。 */
+    val unknownAmount: Boolean = false,
 ) {
     /** linkedTime: 紐づくレシートの時刻(レシートがあれば)。time が空のときの初期値に使う。 */
     fun toEntity(linkedTime: String? = null) = Expense(
@@ -325,6 +333,7 @@ data class BackupExpense(
         memoEdited = memoEdited,
         uid = uid.ifBlank { newUid() },
         deletedByUser = deletedByUser,
+        unknownAmount = unknownAmount,
     )
     companion object {
         fun from(e: Expense) = BackupExpense(
@@ -332,7 +341,7 @@ data class BackupExpense(
             receiptId = e.receiptId, createdAt = e.createdAt, groupId = e.groupId, timeEdited = e.timeEdited,
             receiptItemId = e.receiptItemId, name = e.name,
             amountEdited = e.amountEdited, categoryEdited = e.categoryEdited, nameEdited = e.nameEdited,
-            memoEdited = e.memoEdited, uid = e.uid, deletedByUser = e.deletedByUser,
+            memoEdited = e.memoEdited, uid = e.uid, deletedByUser = e.deletedByUser, unknownAmount = e.unknownAmount,
         )
     }
 }
@@ -581,6 +590,61 @@ fun convertOrphanExpensesToManualPayments(data: BackupData): ManualPaymentConver
         expenseGroups = groups,
     )
     return ManualPaymentConversion(out, newReceipts.map { it.id }.toSet())
+}
+
+// ---------------------------------------------------------------- 単独の支出(形式9以前の取り込み)
+
+/**
+ * 単独の支出(groupId が無く、家計簿で消していない支出)を、自分の支出(まとまり)+ 品名が空の1品目に変える(純Kotlin)。
+ * 変換内容は DB の MIGRATION_13_14 と同じ(SingleExpenseConversion)。家計簿で消した groupId の無い行は、同じ支払いの
+ * 単独の支出から作ったまとまりがあれば、そこに付け替える(消したまま)。支払いに属さない支出の変換
+ * (convertOrphanExpensesToManualPayments)の後に呼ぶ(そこで作った単独の支出も変える)。
+ * 作るまとまりの id は、バックアップ内のどのまとまりの id とも重ならない値にする。
+ */
+fun convertSingleExpensesToGroups(data: BackupData): BackupData {
+    val targets = data.expenses.filter { SingleExpenseConversion.isTarget(it.groupId, it.deletedByUser) }
+    if (targets.isEmpty()) return data
+    var nextId = (data.expenseGroups.map { it.id } + data.expenses.mapNotNull { it.groupId }).maxOrNull()?.plus(1) ?: 1L
+    val newGroups = ArrayList<BackupExpenseGroup>()
+    // 支払い -> その支払いで最初に作ったまとまり(消した行の付け替え先)
+    val groupOfReceipt = HashMap<Long, Long>()
+    val converted = data.expenses.map { e ->
+        if (!SingleExpenseConversion.isTarget(e.groupId, e.deletedByUser)) return@map e
+        val gid = nextId++
+        e.receiptId?.let { groupOfReceipt.putIfAbsent(it, gid) }
+        // 時刻が空の古い行は、取り込み時の既定(作成時刻)をまとまりと品目の両方に入れる(品目の時刻はまとまりに従う)
+        val time = e.time.ifBlank { LedgerCalc.timeOfMillis(e.createdAt) }
+        newGroups += BackupExpenseGroup(
+            id = gid,
+            date = e.date,
+            time = time,
+            amount = e.amount,
+            category = e.category,
+            memo = e.memo,
+            receiptId = e.receiptId,
+            createdAt = e.createdAt,
+            uid = SingleExpenseConversion.groupUid(e.uid),
+            amountEdited = e.amountEdited,
+            categoryEdited = e.categoryEdited,
+            memoEdited = e.memoEdited,
+            timeEdited = e.timeEdited,
+        )
+        e.copy(
+            time = time,
+            groupId = gid,
+            name = "",
+            amountEdited = false,
+            categoryEdited = false,
+            nameEdited = false,
+            memoEdited = false,
+            timeEdited = false,
+        )
+    }
+    val expenses = converted.map { e ->
+        val gid = e.receiptId?.let { groupOfReceipt[it] }
+        if (e.groupId == null && e.deletedByUser && gid != null) e.copy(groupId = gid) else e
+    }
+    return data.copy(expenses = expenses, expenseGroups = data.expenseGroups + newGroups)
 }
 
 /** 手入力の支払い(画像なし・確定・合計のみ)。MIGRATION_11_12 の insertV12ManualReceipt と同じ内容。 */

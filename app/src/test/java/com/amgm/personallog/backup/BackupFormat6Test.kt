@@ -90,14 +90,15 @@ class BackupFormat6Test {
     }
 
     @Test
-    fun checkVersion_acceptsFiveSixSevenEightAndNine_rejectsTen() {
+    fun checkVersion_acceptsFiveToTen_rejectsEleven() {
         BackupManager.checkVersion(5)
         BackupManager.checkVersion(6)
         BackupManager.checkVersion(7)
         BackupManager.checkVersion(8)
         BackupManager.checkVersion(9)
+        BackupManager.checkVersion(10)
         try {
-            BackupManager.checkVersion(10)
+            BackupManager.checkVersion(11)
             org.junit.Assert.fail("expected BackupException")
         } catch (e: BackupException) {
             assertTrue(e.message!!.contains("新しい"))
