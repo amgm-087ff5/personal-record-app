@@ -64,6 +64,8 @@ class InkSheetHostTest {
                                 onDismiss()
                             },
                             title = "テスト",
+                            // 入力のシート: 下スワイプは閉じずに最小化する
+                            swipeToDismiss = false,
                             modifier = if (tall) Modifier.verticalScroll(rememberScrollState()) else Modifier,
                         ) {
                             if (tall) {
