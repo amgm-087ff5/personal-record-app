@@ -1,7 +1,7 @@
 package com.amgm.personallog.ui.ledger
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.LocalOverscrollConfiguration
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,7 +20,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -33,16 +32,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.data.model.Expense
@@ -271,8 +268,6 @@ private val PAGER_HEIGHT: Dp = 330.dp
  *
  * 画面の入力は remember で持つ(画面の回転・再生成では失われる。品目の内容は保存済みから作り直す)。
  */
-// 引きしろのオーバースクロールを切る API は実験的(foundation)。指の操作を連携で数えるために使う
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun ItemEditorSheet(
     group: ExpenseGroup,
@@ -347,31 +342,6 @@ internal fun ItemEditorSheet(
         pagerState.animateScrollToPage(drafts.lastIndex)
     }
 
-    // 過度なスワイプ: 指の操作で最後の品目より右へ引いた距離を数える。プログラムによるスクロール(ボタン・
-    // アニメーション)は数えないので、追加のあとに勝手に足されることはない。
-    val pullConnection = object : NestedScrollConnection {
-        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-            if (source == NestedScrollSource.Drag && pagerState.currentPage == drafts.lastIndex) {
-                // 左へ引くと available.x は負(最後のページより先へは動けず、余りとして届く)。右へ戻すと減らす
-                pullPx = (pullPx - available.x).coerceAtLeast(0f)
-            }
-            return Offset.Zero
-        }
-
-        override suspend fun onPreFling(available: Velocity): Velocity {
-            // 指を離した。閾値を超えていれば、品目を1つ足して移る(追加は scope で行う)
-            val add = pagerState.currentPage == drafts.lastIndex &&
-                ItemPagerLogic.addOnRelease(ItemPagerLogic.pullFraction(pullPx, pageWidthPx))
-            pullPx = 0f
-            if (add && !saving) scope.launch { addAndGo() }
-            return Velocity.Zero
-        }
-
-        override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-            pullPx = 0f
-            return Velocity.Zero
-        }
-    }
 
     /** 閉じる。未保存があれば破棄の確認を出す。保存中は閉じない。 */
     val requestClose: () -> Unit = {
@@ -447,35 +417,54 @@ internal fun ItemEditorSheet(
                     .fillMaxWidth()
                     .height(PAGER_HEIGHT)
                     .onSizeChanged { pageWidthPx = it.width }
-                    .nestedScroll(pullConnection)
-                    .testTag("itemPager"),
+                    .testTag("itemPager")
+                    // 過度なスワイプ: 最後の品目より右へ、指で引いた距離を数える。指の動きを Initial の段で見るだけで、
+                    // 消費しない(ページ送りはそのまま動く)。プログラムによるスクロール(ボタン・アニメーション)は指ではないので数えない。
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                            var dragX = 0f
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                if (!change.pressed) break
+                                dragX += change.positionChange().x
+                                // 最後の品目にいるときだけ、左へ引いた距離を数える(右へ戻すと減る)
+                                if (pagerState.currentPage == drafts.lastIndex) {
+                                    pullPx = (-dragX).coerceAtLeast(0f)
+                                }
+                            }
+                            // 指を離した: 閾値を超えていれば、品目を1つ足して移る(追加は scope で行う)
+                            val add = pagerState.currentPage == drafts.lastIndex &&
+                                ItemPagerLogic.addOnRelease(ItemPagerLogic.pullFraction(pullPx, pageWidthPx))
+                            pullPx = 0f
+                            if (add && !saving) scope.launch { addAndGo() }
+                        }
+                    },
             ) {
-                // 引いた先のオーバースクロールの伸びは使わない(指の引いた量を連携で数えるため、消費させない)
-                CompositionLocalProvider(LocalOverscrollConfiguration provides null) {
-                    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { p ->
-                        val draft = drafts.getOrNull(p) ?: return@HorizontalPager
-                        val saved = draft.id?.let { latestExpense(it) }
-                        val toggle = ItemPagerLogic.unknownToggle(
-                            isNew = draft.id == null,
-                            receiptLinked = receiptLinked,
-                            splitPeople = splitPeople,
-                            onlyOneItem = onlyOneItem,
-                            hasReceiptItem = saved?.receiptItemId != null,
-                        )
-                        ItemPage(
-                            draft = draft,
-                            categories = ItemPagerLogic.categoryOptions(draft.category),
-                            amountLock = amountLock,
-                            computedAmount = saved?.amount?.toString(),
-                            unknownToggle = toggle,
-                            detailOpen = detailOpen[draft.key] == true,
-                            canDelete = ItemPagerLogic.canDelete(isNew = draft.id == null, visibleCount = items.size),
-                            errors = if (saveAttempted && isDirty(draft)) ItemPagerLogic.validate(draft) else null,
-                            onChange = { replaceDraft(it) },
-                            onToggleDetail = { detailOpen[draft.key] = detailOpen[draft.key] != true },
-                            onDelete = { confirmDeleteId = draft.id },
-                        )
-                    }
+                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { p ->
+                    val draft = drafts.getOrNull(p) ?: return@HorizontalPager
+                    val saved = draft.id?.let { latestExpense(it) }
+                    val toggle = ItemPagerLogic.unknownToggle(
+                        isNew = draft.id == null,
+                        receiptLinked = receiptLinked,
+                        splitPeople = splitPeople,
+                        onlyOneItem = onlyOneItem,
+                        hasReceiptItem = saved?.receiptItemId != null,
+                    )
+                    ItemPage(
+                        draft = draft,
+                        categories = ItemPagerLogic.categoryOptions(draft.category),
+                        amountLock = amountLock,
+                        computedAmount = saved?.amount?.toString(),
+                        unknownToggle = toggle,
+                        detailOpen = detailOpen[draft.key] == true,
+                        canDelete = ItemPagerLogic.canDelete(isNew = draft.id == null, visibleCount = items.size),
+                        errors = if (saveAttempted && isDirty(draft)) ItemPagerLogic.validate(draft) else null,
+                        onChange = { replaceDraft(it) },
+                        onToggleDetail = { detailOpen[draft.key] = detailOpen[draft.key] != true },
+                        onDelete = { confirmDeleteId = draft.id },
+                    )
                 }
                 if (pull > 0.02f) {
                     val ready = pull >= ItemPagerLogic.ADD_THRESHOLD
