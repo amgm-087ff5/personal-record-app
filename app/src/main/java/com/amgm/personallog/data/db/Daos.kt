@@ -134,6 +134,14 @@ interface ReceiptDao {
     @Query("DELETE FROM receipt_items WHERE receiptId = :receiptId")
     suspend fun deleteItemsByReceipt(receiptId: Long)
 
+    /** マージ: 品目を別の支払いへ付け替える(品目の id は変えない)。 */
+    @Query("UPDATE receipt_items SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
+    suspend fun moveItems(fromReceiptId: Long, toReceiptId: Long)
+
+    /** マージ: 支払いを id で削除する(品目・割り勘・「重複ではない」の組は CASCADE で消える)。 */
+    @Query("DELETE FROM receipts WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>)
+
     /** 「重複ではない」の組を追加する。既にある組は何もしない。 */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertNotDuplicate(pair: ReceiptNotDuplicate)
@@ -214,6 +222,10 @@ interface ExpenseDao {
     @Query("DELETE FROM expenses WHERE groupId = :groupId")
     suspend fun deleteByGroupId(groupId: Long)
 
+    /** マージ: 支出を別の支払いへ付け替える。 */
+    @Query("UPDATE expenses SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
+    suspend fun moveToReceipt(fromReceiptId: Long, toReceiptId: Long)
+
     /**
      * 家計簿の画面用: 支出(グループ)の日付で期間に入る品目。v14〜 品目は必ずグループに属する。
      * 品目の日付が古いままでも、グループが期間内ならその品目が入る(月をまたいだ二重計上を防ぐ)。
@@ -282,4 +294,8 @@ interface ExpenseGroupDao {
 
     @Query("DELETE FROM expense_groups WHERE receiptId = :receiptId")
     suspend fun deleteByReceiptId(receiptId: Long)
+
+    /** マージ: 自分の支出(グループ)を別の支払いへ付け替える。 */
+    @Query("UPDATE expense_groups SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
+    suspend fun moveToReceipt(fromReceiptId: Long, toReceiptId: Long)
 }

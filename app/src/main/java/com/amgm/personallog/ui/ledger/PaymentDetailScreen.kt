@@ -44,7 +44,6 @@ import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentWriteBack
 import com.amgm.personallog.domain.split.IndividualExpense
-import com.amgm.personallog.receipt.ReceiptDedup
 import com.amgm.personallog.receipt.ReceiptImageCodec
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.BareField
@@ -77,6 +76,8 @@ fun PaymentDetailScreen(
     onOpenReceipt: (Long) -> Unit,
     /** 割り勘シートを開く(支払いの id)。支払いに紐づく支出のときだけボタンを出す。 */
     onOpenSplit: (Long) -> Unit = {},
+    /** 重複の組を開いてマージする(組の支払いの id。マージ先が先頭)。 */
+    onOpenMerge: (List<Long>) -> Unit = {},
     /** 登録の途中か(支払いの確定の後に開かれた)。手順の表示と「完了」を出す。 */
     register: Boolean = false,
     /** 登録の「完了」。家計簿へ戻る。 */
@@ -125,9 +126,14 @@ fun PaymentDetailScreen(
             val scanned = PaymentMarks.isScannedReceipt(s.receipt)
             // 品目の税率は、対応する支払いの品目から引く(表示のみ。データは持たない)
             val paymentItemById = s.paymentItems.associateBy { it.id }
-            s.duplicateOf?.let { original ->
+            s.duplicate?.let { dup ->
                 item(key = "duplicate") {
-                    DuplicateNotice(original, onOpenPayment = { s.receipt?.id?.let(onOpenReceipt) })
+                    DuplicateNotice(
+                        dup,
+                        currentId = s.receipt?.id,
+                        onOpenPayment = { s.receipt?.id?.let(onOpenReceipt) },
+                        onOpenMerge = { onOpenMerge(dup.setIds) },
+                    )
                 }
             }
             if (group != null) {
@@ -373,29 +379,48 @@ private fun ParentPaymentRow(receipt: Receipt, onOpen: () -> Unit) {
  * 確認・まとめる・「重複ではない」は支払い詳細で行う。
  */
 @Composable
-private fun DuplicateNotice(original: Receipt, onOpenPayment: () -> Unit) {
+private fun DuplicateNotice(dup: DuplicateInfo, currentId: Long?, onOpenPayment: () -> Unit, onOpenMerge: () -> Unit) {
     val c = AppTheme.colors
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .tappable(onOpenPayment)
-            .padding(horizontal = Space.edge, vertical = Space.s),
-    ) {
+    val target = dup.members.first()
+    Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge, vertical = Space.s)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Stamp("重複?", tone = StampTone.Danger)
             Text(
-                "  元の支払いが重複している可能性があります",
+                "  同じ内容の支払いがあります",
                 style = AppTheme.type.caption,
                 color = c.danger,
             )
         }
         Text(
-            "相手: ${ReceiptDedup.summary(original)}",
+            if (dup.isTarget) "この支払いはマージ先です" else "この支払いはマージ元です（マージ先: ${target.summary}）",
             style = AppTheme.type.caption,
             color = c.inkSoft,
             modifier = Modifier.padding(top = Space.xs),
         )
-        Text("支払いを開いて確認する  ›", style = AppTheme.type.caption, color = c.accent)
+        // 組の全員を「マージ先 ← マージ元」の順で並べる
+        Text(
+            "マージ先 ← マージ元",
+            style = AppTheme.type.caption,
+            color = c.inkFaint,
+            modifier = Modifier.padding(top = Space.xs),
+        )
+        dup.members.forEachIndexed { i, m ->
+            val role = if (i == 0) "マージ先" else "← マージ元"
+            val mine = if (m.receiptId == currentId) "（この支払い）" else ""
+            Text(
+                "$role  ${m.summary}$mine",
+                style = AppTheme.type.caption,
+                color = c.inkSoft,
+            )
+        }
+        Text(
+            if (dup.hasDifference) "項目に違いがあります（マージの画面で選びます）" else "内容は同じです（差分なし）",
+            style = AppTheme.type.caption,
+            color = if (dup.hasDifference) c.ink else c.inkSoft,
+            modifier = Modifier.padding(top = Space.xs),
+        )
+        TextAction("重複を確認する  ›", onClick = onOpenMerge, modifier = Modifier.padding(top = Space.xs))
+        TextAction("支払いを開いて確認する  ›", onClick = onOpenPayment, color = c.inkSoft)
     }
     Hairline()
 }

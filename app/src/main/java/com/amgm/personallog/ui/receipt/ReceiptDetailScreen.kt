@@ -101,6 +101,8 @@ fun ReceiptDetailScreen(
     modifier: Modifier = Modifier,
     onOpenPayment: (PaymentLink) -> Unit = {},
     onOpenSplit: () -> Unit = {},
+    /** 重複の組をマージする(組の支払いの id。マージ先が先頭)。 */
+    onOpenMerge: (List<Long>) -> Unit = {},
     /** 登録の途中(家計簿の下書きから開いた)か。手順「① 支払い」を出し、確定の後は [onRegistered] へ進む。 */
     register: Boolean = false,
     /** 登録の途中で確定できたときの、この支払いの支出(無ければ null)。 */
@@ -312,6 +314,9 @@ fun ReceiptDetailScreen(
                                         )
                                         TextAction("重複ではない", onClick = { viewModel.markNotDuplicate(other.id) }, color = c.inkSoft)
                                     }
+                                }
+                                if (s.mergeIds.size >= 2) {
+                                    TextAction("マージする  ›", onClick = { onOpenMerge(s.mergeIds) }, modifier = Modifier.padding(top = Space.xs))
                                 }
                             }
                         }

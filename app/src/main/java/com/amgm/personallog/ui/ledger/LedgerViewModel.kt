@@ -17,6 +17,7 @@ import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.repository.ExpenseRepository
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.data.repository.SplitRepository
+import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptDedup
@@ -75,6 +76,8 @@ data class LedgerUiState(
     val storeNames: Map<Long, String> = emptyMap(),
     /** この月の行のうち、重複の候補がある支払いの件数。 */
     val duplicateCount: Int = 0,
+    /** 未読の支払い(取り込みを読み終えて、まだ開いていない)の id。行の「未読」の印に使う。 */
+    val unreadReceiptIds: Set<Long> = emptySet(),
     val error: String? = null,
     val backup: BackupUiState = BackupUiState(),
 )
@@ -95,6 +98,7 @@ private data class Snapshot(
     val duplicateReceiptIds: Set<Long>,
     val duplicateCount: Int,
     val storeNames: Map<Long, String>,
+    val unreadReceiptIds: Set<Long>,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -106,6 +110,7 @@ class LedgerViewModel @Inject constructor(
     private val backupManager: BackupManager,
     private val db: AppDatabase,
     private val importer: ReceiptImportCoordinator,
+    private val readStore: PaymentReadStore,
 ) : ViewModel() {
 
     /** 表示の基準日。月ヘッダーと積み上げグラフはこの日付から決まる。 */
@@ -174,10 +179,14 @@ class LedgerViewModel @Inject constructor(
                 combine(
                     repository.observeLedgerRows(from, to),
                     repository.observeGroupsBetween(from, to),
-                    combine(receipts.observeReceipts(), receipts.observeNotDuplicates()) { list, notDup -> list to notDup },
+                    // レシートと重複の除外、未読の id をまとめる(combine の本数の上限を超えないため入れ子にする)
+                    combine(
+                        combine(receipts.observeReceipts(), receipts.observeNotDuplicates()) { list, notDup -> list to notDup },
+                        readStore.unreadIds,
+                    ) { (list, notDup), unread -> Triple(list, notDup, unread) },
                     splits.observeSheets(),
                     db.expenseDao().observeReceiptIdsWithRows(),
-                ) { all, groups, (receiptList, notDup), sheets, rowReceiptIds ->
+                ) { all, groups, (receiptList, notDup, unread), sheets, rowReceiptIds ->
                     // 割り勘で自分を外した支払い(自分の分が0円で行が無い)は、0円の行として一覧に出す
                     val excluded = LedgerLogic.excludedReceipts(
                         receipts = receiptList,
@@ -194,6 +203,7 @@ class LedgerViewModel @Inject constructor(
                         duplicateIds = ReceiptDedup.laterDuplicates(receiptList, ReceiptDedup.notDuplicateSet(notDup)).keys,
                         excluded = excluded,
                         storeNames = receiptList.associate { it.id to it.storeName },
+                        unreadIds = unread,
                     )
                 }
                     .catch { e ->
@@ -218,6 +228,7 @@ class LedgerViewModel @Inject constructor(
                         duplicateReceiptIds = s.duplicateReceiptIds,
                         duplicateCount = s.duplicateCount,
                         storeNames = s.storeNames,
+                        unreadReceiptIds = s.unreadReceiptIds,
                     )
                 }
             }
@@ -235,6 +246,7 @@ class LedgerViewModel @Inject constructor(
         duplicateIds: Set<Long>,
         excluded: List<LedgerEntry.Excluded>,
         storeNames: Map<Long, String>,
+        unreadIds: Set<Long>,
     ): Snapshot {
         val ym = YearMonth.from(f).toString()
         // 集計は自分の分だけ。0円の行(自分が外れた支払い)は金額もカテゴリ内訳も0なので、合計には足さない
@@ -257,6 +269,7 @@ class LedgerViewModel @Inject constructor(
             duplicateReceiptIds = duplicateIds,
             duplicateCount = current.mapNotNull { it.receiptId }.distinct().count { it in duplicateIds },
             storeNames = storeNames,
+            unreadReceiptIds = unreadIds,
         )
     }
 

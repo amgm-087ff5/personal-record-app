@@ -25,6 +25,15 @@ object LedgerRoutes {
      */
     const val EXCLUDED_KIND = "receipt"
     fun excludedPayment(receiptId: Long) = "ledger/payment/$EXCLUDED_KIND/$receiptId"
+
+    /** 重複の可能性がある支払いの一覧(「重複を確認する」)。 */
+    const val DUPLICATES = "ledger/duplicates"
+    fun duplicates() = DUPLICATES
+
+    /** 重複の候補1組のマージ画面。ids は支払い(receipts)の id のカンマ区切り。並びは画面側で登録日時順に直す。 */
+    const val MERGE = "ledger/merge/{ids}"
+    const val MERGE_IDS_ARG = "ids"
+    fun merge(receiptIds: List<Long>) = "ledger/merge/${receiptIds.joinToString(",")}"
 }
 
 /** 家計簿機能のナビゲーショングラフ。AppNavHost から呼ばれるので、機能内の遷移はここで完結させる。 */
@@ -38,6 +47,25 @@ fun NavGraphBuilder.ledgerGraph(navController: NavController) {
                 onRegisterPayment = { receiptId -> navController.navigate(ReceiptRoutes.detail(receiptId, register = true)) },
                 onOpenReceipt = { receiptId -> navController.navigate(ReceiptRoutes.detail(receiptId)) },
                 onOpenReceiptList = { navController.navigate(ReceiptRoutes.home()) },
+                onOpenDuplicates = { navController.navigate(LedgerRoutes.duplicates()) },
+            )
+        }
+        composable(LedgerRoutes.DUPLICATES) {
+            DuplicatesScreen(
+                onBack = { navController.popBackStack() },
+                onOpenPayment = { receiptId -> navController.navigate(ReceiptRoutes.detail(receiptId)) },
+                onMerge = { ids -> navController.navigate(LedgerRoutes.merge(ids)) },
+            )
+        }
+        composable(
+            route = LedgerRoutes.MERGE,
+            arguments = listOf(navArgument(LedgerRoutes.MERGE_IDS_ARG) { type = NavType.StringType }),
+        ) {
+            PaymentMergeScreen(
+                onBack = { navController.popBackStack() },
+                onOpenPayment = { receiptId -> navController.navigate(ReceiptRoutes.detail(receiptId)) },
+                // マージ元の画面は消えた支払いを指すので、家計簿まで戻る
+                onMerged = { navController.popBackStack(LedgerRoutes.HOME, inclusive = false) },
             )
         }
         composable(
@@ -54,6 +82,7 @@ fun NavGraphBuilder.ledgerGraph(navController: NavController) {
                 onDone = { navController.popBackStack(LedgerRoutes.HOME, inclusive = false) },
                 onBack = { navController.popBackStack() },
                 onOpenSplit = { receiptId -> navController.navigate(SplitRoutes.sheet(receiptId)) },
+                onOpenMerge = { ids -> navController.navigate(LedgerRoutes.merge(ids)) },
                 onOpenReceipt = { receiptId ->
                     // レシートの詳細から来たなら、新しく積まずに戻る(行き来で履歴が伸びない)
                     val prev = navController.previousBackStackEntry

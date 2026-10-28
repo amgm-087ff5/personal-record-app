@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptDedup
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,10 +22,15 @@ import javax.inject.Inject
 class ReceiptListViewModel @Inject constructor(
     private val repository: ReceiptRepository,
     private val importer: ReceiptImportCoordinator,
+    private val readStore: PaymentReadStore,
 ) : ViewModel() {
 
     val receipts: StateFlow<List<Receipt>> = repository.observeReceipts()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** 未読の支払いの id(一覧の1枚に「未読」を付ける)。 */
+    val unreadReceiptIds: StateFlow<Set<Long>> = readStore.unreadIds
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     /** 同じ内容の別レシートがある「後から作られた側」 -> 原本。一覧の警告に使う。 */
     val possibleDuplicates: StateFlow<Map<Long, Receipt>> =

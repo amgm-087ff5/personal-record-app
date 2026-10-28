@@ -64,6 +64,8 @@ fun LedgerScreen(
     onOpenReceipt: (Long) -> Unit = {},
     /** 支払い一覧(支払い画面)を開く。 */
     onOpenReceiptList: () -> Unit = {},
+    /** 重複の一覧を開く(月の合計の「重複を確認する ›」から)。 */
+    onOpenDuplicates: () -> Unit = {},
     viewModel: LedgerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -200,8 +202,9 @@ fun LedgerScreen(
                                 "重複の可能性がある支払い ${state.duplicateCount}件を含む(「重複?」の行)",
                                 style = AppTheme.type.caption,
                                 color = c.danger,
-                                modifier = Modifier.padding(top = Space.xs),
+                                modifier = Modifier.padding(top = Space.xs).tappable(onOpenDuplicates),
                             )
+                            TextAction("重複を確認する  ›", onClick = onOpenDuplicates, color = c.accent)
                         }
                     }
                 }
@@ -266,6 +269,7 @@ fun LedgerScreen(
                         warnReceiptIds = state.warnReceiptIds,
                         imageReceiptIds = state.imageReceiptIds,
                         duplicateReceiptIds = state.duplicateReceiptIds,
+                        unreadReceiptIds = state.unreadReceiptIds,
                         storeNames = state.storeNames,
                         onToggleGroup = { id -> expandedGroups[id] = expandedGroups[id] != true },
                         onOpen = { entry ->

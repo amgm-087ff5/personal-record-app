@@ -4,6 +4,7 @@ import android.net.Uri
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptDedup
 import com.amgm.personallog.receipt.ReceiptImageHash
@@ -113,6 +114,7 @@ class ReceiptImportCoordinator @Inject constructor(
     private val repository: ReceiptRepository,
     private val store: ReceiptImageStore,
     private val scanner: ReceiptScanner,
+    private val readStore: PaymentReadStore,
 ) {
     /**
      * アプリの寿命で動くスコープ。下の HashMap などの状態はメインスレッドからだけ触る(従来の ViewModel と同じ)。
@@ -448,6 +450,8 @@ class ReceiptImportCoordinator @Inject constructor(
             is ScanOutcome.Unparsable -> ImportPhase.FAILED to "読み取り結果を解釈できませんでした。手入力で修正できます。"
             is ScanOutcome.Failed -> ImportPhase.FAILED to outcome.message
         }
+        // 読み取りが終わった支払いは、開くまで未読にする(家計簿と支払い一覧の「未読」の印)
+        if (phase == ImportPhase.DONE) scope.launch { readStore.markUnread(id) }
         // 読み取りが終わっても画面を移さない。進捗の行の「開く」から開いてもらう
         patchItem(key) { it.copy(phase = phase, receiptId = id, message = message) }
     }
