@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -30,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -53,6 +55,7 @@ import com.amgm.personallog.ui.design.Pill
 import com.amgm.personallog.ui.design.Pills
 import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.TextAction
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 // ------------------------------------------------------------ 純粋ロジック(JVM でテスト可能)
@@ -324,6 +327,8 @@ internal fun ItemEditorSheet(
     var pullPx by remember { mutableFloatStateOf(0f) }
     // 画面の幅(px)。ページの幅と同じ。引いた距離を割合にするのに使う
     var pageWidthPx by remember { mutableIntStateOf(0) }
+    // 指で引いて離したときに増える。増えたら品目を足す(下の LaunchedEffect)
+    var addTick by remember { mutableIntStateOf(0) }
 
     val receiptLinked = group.receiptId != null
     val amountLock: String? = when {
@@ -340,6 +345,14 @@ internal fun ItemEditorSheet(
     suspend fun addAndGo() {
         drafts.add(blankDraft())
         pagerState.animateScrollToPage(drafts.lastIndex)
+    }
+
+    // 指で引いて離したときの追加。離したあとの惰性のスクロールが止まってから足す(スクロールと競合させない)
+    LaunchedEffect(addTick) {
+        if (addTick > 0) {
+            snapshotFlow { pagerState.isScrollInProgress }.first { !it }
+            addAndGo()
+        }
     }
 
 
@@ -438,7 +451,7 @@ internal fun ItemEditorSheet(
                             val add = pagerState.currentPage == drafts.lastIndex &&
                                 ItemPagerLogic.addOnRelease(ItemPagerLogic.pullFraction(pullPx, pageWidthPx))
                             pullPx = 0f
-                            if (add && !saving) scope.launch { addAndGo() }
+                            if (add && !saving) addTick++
                         }
                     },
             ) {
