@@ -373,7 +373,8 @@ data class BackupExpenseGroup(
         amount = amount,
         category = category,
         memo = memo,
-        receiptId = receiptId,
+        // 取り込みでは、支払いに属さない支出を先に手入力の支払いに変えている(convertOrphanExpensesToManualPayments)
+        receiptId = requireNotNull(receiptId) { "支払いに属さない支出は取り込めません(id=$id)" },
         createdAt = createdAt,
         uid = uid.ifBlank { newUid() },
         amountEdited = amountEdited,

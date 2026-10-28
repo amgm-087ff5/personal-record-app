@@ -21,6 +21,7 @@ import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptDedup
+import com.amgm.personallog.receipt.ReceiptImageStore
 import com.amgm.personallog.ui.receipt.ReceiptImportCoordinator
 import com.amgm.personallog.ui.receipt.ReceiptListUiState
 import com.amgm.personallog.ui.receipt.draftReceiptIds
@@ -111,6 +112,7 @@ class LedgerViewModel @Inject constructor(
     private val db: AppDatabase,
     private val importer: ReceiptImportCoordinator,
     private val readStore: PaymentReadStore,
+    private val images: ReceiptImageStore,
 ) : ViewModel() {
 
     /** 表示の基準日。月ヘッダーと積み上げグラフはこの日付から決まる。 */
@@ -328,11 +330,11 @@ class LedgerViewModel @Inject constructor(
         }
     }
 
-    /** 支払いグループを品目ごと消す。 */
-    fun deleteGroup(group: ExpenseGroup) {
+    /** 支出を、元の支払い・レシート画像ごと削除する(支払い ⇒ 支出 の親子をまとめて消す)。 */
+    fun deletePayment(group: ExpenseGroup) {
         viewModelScope.launch {
             try {
-                repository.deleteGroup(group)
+                receipts.deletePayment(group.receiptId)?.let { images.delete(it.imagePath) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

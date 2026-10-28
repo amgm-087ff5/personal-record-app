@@ -24,6 +24,7 @@ import com.amgm.personallog.domain.WriteBackTarget
 import com.amgm.personallog.domain.split.IndividualExpense
 import com.amgm.personallog.domain.split.IndividualExpenses
 import com.amgm.personallog.receipt.ReceiptDedup
+import com.amgm.personallog.receipt.ReceiptImageStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -131,6 +132,7 @@ class PaymentDetailViewModel @Inject constructor(
     private val receipts: ReceiptRepository,
     private val splits: SplitRepository,
     private val readStore: PaymentReadStore,
+    private val images: ReceiptImageStore,
 ) : ViewModel() {
     private val rawKind: String? = savedStateHandle.get<String>("kind")
     /** 割り勘で自分が外れた支払い(家計簿に行が無い)の詳細か。id は支払い(レシート)の id。 */
@@ -189,7 +191,7 @@ class PaymentDetailViewModel @Inject constructor(
             } else {
                 val (receipt, paymentItems) = payment
                 val (gone, visible) = items.sortedBy { it.id }.partition { it.deletedByUser }
-                val people = g.receiptId?.let { receipts.participantCount(it) } ?: 1
+                val people = receipts.participantCount(g.receiptId)
                 PaymentUiState(
                     loading = false, kind = PaymentKind.GROUP, group = g, items = visible, deletedItems = gone,
                     receipt = receipt, paymentItems = paymentItems, receiptAt = repository.receiptDateTime(g.receiptId),
@@ -389,7 +391,7 @@ class PaymentDetailViewModel @Inject constructor(
             }
         } else if (group != null) {
             // 品目は支払いの品目として足す。家計簿の品目は、支払いを保存するときに作られる(支出だけを単独では作らない)
-            val receiptId = checkNotNull(group.receiptId) { "支払いに紐づかない支出には品目を足せません" }
+            val receiptId = group.receiptId
             val receipt = checkNotNull(receipts.getReceipt(receiptId)) { "支払いが見つかりません" }
             val item = ReceiptItem(
                 receiptId = receiptId, name = name.trim(), amount = amount, category = category, memo = memo.trim(),
@@ -418,15 +420,10 @@ class PaymentDetailViewModel @Inject constructor(
         val sum = s.itemSum
         if (sum <= 0L || sum > Int.MAX_VALUE) return
         write(null) {
-            if (g.receiptId == null) {
-                repository.updateGroup(PaymentEdit.editGroup(g, g.date, g.time, sum.toInt(), g.category, g.memo))
-                null
-            } else {
-                receipts.writeBackFromLedger(
-                    WriteBackTarget.Group(g),
-                    PaymentValues(g.date, g.time, sum.toInt(), g.category, name = "", memo = g.memo),
-                )
-            }
+            receipts.writeBackFromLedger(
+                WriteBackTarget.Group(g),
+                PaymentValues(g.date, g.time, sum.toInt(), g.category, name = "", memo = g.memo),
+            )
         }
     }
 
@@ -447,7 +444,7 @@ class PaymentDetailViewModel @Inject constructor(
         }
     }
 
-    /** 品目を消す。支出の品目は1つ以上必要なので、最後の1つは消さずに理由を出す(支出ごと消すのは deleteGroup)。 */
+    /** 品目を消す。支出の品目は1つ以上必要なので、最後の1つは消さずに理由を出す(支出ごと消すのは支払いの削除 deletePayment)。 */
     fun deleteItem(expense: Expense) {
         if (_state.value.items.size <= 1) {
             _state.update { it.copy(error = ExpenseRepository.MESSAGE_LAST_ITEM) }
@@ -465,7 +462,7 @@ class PaymentDetailViewModel @Inject constructor(
      */
     fun markBlankItemsUnknown(onDone: ((String?) -> Unit)? = null) = write(onDone) {
         val g = _state.value.group ?: return@write null
-        val receiptId = g.receiptId ?: return@write MESSAGE_NOT_LINKED
+        val receiptId = g.receiptId
         if (_state.value.splitPeople >= 2) return@write MESSAGE_SPLIT_UNKNOWN
         receipts.markBlankItemsUnknown(receiptId)
     }
@@ -476,7 +473,7 @@ class PaymentDetailViewModel @Inject constructor(
      */
     fun addDifferenceAsUnknownItem(onDone: ((String?) -> Unit)? = null) = write(onDone) {
         val g = _state.value.group ?: return@write null
-        val receiptId = g.receiptId ?: return@write MESSAGE_NOT_LINKED
+        val receiptId = g.receiptId
         if (_state.value.splitPeople >= 2) return@write MESSAGE_SPLIT_UNKNOWN
         receipts.addDifferenceAsUnknownItem(receiptId)
     }
@@ -498,10 +495,15 @@ class PaymentDetailViewModel @Inject constructor(
         const val MESSAGE_BLANK_ITEM_UNKNOWN = "品目が1つのときは、品目の金額は支出の金額と同じです。"
     }
 
-    fun deleteGroup() {
-        val g = _state.value.group ?: return
+    /**
+     * この支出を、元の支払い・レシート画像ごと削除する(支払い ⇒ 支出 の親子をまとめて消す)。
+     * 割り勘で自分が外れた支払い(支出が無い)の画面では、その支払いを削除する。
+     */
+    fun deletePayment() {
+        val receiptId = _state.value.group?.receiptId ?: _state.value.receipt?.id ?: return
         run {
-            repository.deleteGroup(g)
+            val deleted = receipts.deletePayment(receiptId)
+            deleted?.let { images.delete(it.imagePath) }
             _state.update { it.copy(finished = true) }
         }
     }

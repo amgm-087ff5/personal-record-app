@@ -526,19 +526,14 @@ fun ReceiptDetailScreen(
         SHEET_DELETE -> InkSheet(onDismiss = { sheet = SHEET_NONE }) {
             SheetTitle("支払いを削除")
             Text(
-                "レシート画像があれば端末から削除されます。この支払いから作った家計簿の行はどうしますか?",
+                "この支払いと、ここから作った自分の支出(家計簿の行)を削除します。レシート画像があれば端末から削除されます。",
                 style = AppTheme.type.body,
                 color = AppTheme.colors.inkSoft,
                 modifier = Modifier.padding(bottom = Space.m),
             )
             TextAction(
-                "家計簿の行も消す",
-                onClick = { sheet = SHEET_NONE; viewModel.delete(alsoExpenses = true) },
-                color = AppTheme.colors.danger,
-            )
-            TextAction(
-                "家計簿の行は残す",
-                onClick = { sheet = SHEET_NONE; viewModel.delete(alsoExpenses = false) },
+                "削除",
+                onClick = { sheet = SHEET_NONE; viewModel.delete() },
                 color = AppTheme.colors.danger,
             )
             TextAction("キャンセル", onClick = { sheet = SHEET_NONE }, color = AppTheme.colors.inkSoft)

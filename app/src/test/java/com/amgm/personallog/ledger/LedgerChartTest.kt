@@ -16,7 +16,7 @@ class LedgerChartTest {
 
     /** 支出1件ずつを、品名が空の1品目だけを持つ支出(v14〜 の品目なしの支出の形)にして一覧の行にする。 */
     private fun build(list: List<Expense>): List<LedgerEntry> {
-        val groups = list.map { ExpenseGroup(id = it.id, date = it.date, time = it.time, amount = it.amount, category = it.category, createdAt = it.createdAt) }
+        val groups = list.map { ExpenseGroup(receiptId = 1L, id = it.id, date = it.date, time = it.time, amount = it.amount, category = it.category, createdAt = it.createdAt) }
         return LedgerLogic.buildEntries(list.map { it.copy(groupId = it.id) }, groups)
     }
 

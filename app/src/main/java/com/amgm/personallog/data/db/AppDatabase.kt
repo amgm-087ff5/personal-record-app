@@ -32,9 +32,10 @@ import com.amgm.personallog.data.model.WholeShare
         SplitParticipant::class, SplitLabelAmount::class,
         // v13: レシートの参加人数(receipts.headcount)
         // v15: 支出のメモに写していた店名を消す(表の形は同じ。支払い先は支払いだけに持つ)
+        // v16: 支出は必ず支払いに属し(receiptId NOT NULL)、支払いを消すと支出も消える(CASCADE)。支出の無い支払いを消す
         // v14: 品目の金額不明 receipt_items・expenses の unknownAmount。単独の支出をまとまり+1品目に変える
     ],
-    version = 15, // AppDatabase.VERSION と同じにする(テストで確認)
+    version = 16, // AppDatabase.VERSION と同じにする(テストで確認)
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -48,6 +49,6 @@ abstract class AppDatabase : RoomDatabase() {
         const val NAME = "personal_log.db"
 
         /** Room の版。@Database の version と PreMigrationBackup が共有する。 */
-        const val VERSION = 15
+        const val VERSION = 16
     }
 }

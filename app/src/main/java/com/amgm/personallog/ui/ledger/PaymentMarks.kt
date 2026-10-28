@@ -22,7 +22,7 @@ object PaymentMarks {
         listOfNotNull("${item.taxRate}%", "税抜".takeIf { !item.priceIncludesTax })
 
     fun ofGroup(g: ExpenseGroup, fromScannedReceipt: Boolean = true): Set<PaymentField> {
-        if (g.receiptId == null || !fromScannedReceipt) return emptySet()
+        if (!fromScannedReceipt) return emptySet()
         return buildSet {
             if (g.amountEdited) add(PaymentField.AMOUNT)
             if (g.categoryEdited) add(PaymentField.CATEGORY)

@@ -113,9 +113,8 @@ class BackupFormat6Test {
         // uid が同じなら、メモが違っても同じ支払い
         val incoming = group.copy(id = 0, memo = "スーパー")
         assertEquals(100L, idx.find("g-uid-1", incoming))
-        // uid が違えば、他の欄が全部同じでも別の支払い(レシートに属さない手入力のグループ)
-        val manual = GroupMergeIndex(listOf(group.copy(id = 100, receiptId = null, memo = "別の名前に直した")))
-        assertNull(manual.find("other", group.copy(id = 0, receiptId = null, memo = "別の名前に直した")))
+        // uid が違い、別の支払いのグループなら別の支出(支出は必ず支払いに属する。v16〜)
+        assertNull(idx.find("other", group.copy(id = 0, receiptId = 999, memo = "別の名前に直した")))
     }
 
     @Test
@@ -159,12 +158,15 @@ class BackupFormat6Test {
 
     @Test
     fun groupMerge_oldFormatWithoutUid_usesLegacyKey() {
-        val idx = GroupMergeIndex(listOf(group.copy(id = 100, uid = "whatever", receiptId = null)))
-        val sameKey = group.copy(id = 0, uid = "generated", receiptId = null)
+        val idx = GroupMergeIndex(listOf(group.copy(id = 100, uid = "whatever")))
+        val sameKey = group.copy(id = 0, uid = "generated")
         assertEquals(100L, idx.find("", sameKey))
-        assertNull(idx.find("", sameKey.copy(amount = 701)))
+        // 1つの支払いに支出は1つ: 欄が違っても、同じ支払いに支出があれば追加しない
+        assertEquals(100L, idx.find("", sameKey.copy(amount = 701)))
+        // 別の支払いなら別の支出
+        assertNull(idx.find("", sameKey.copy(amount = 701, receiptId = 999)))
         // 新しく入れた行も登録され、同じバックアップ内の重複に効く
-        val fresh = sameKey.copy(amount = 5)
+        val fresh = sameKey.copy(amount = 5, receiptId = 998)
         assertNull(idx.find("", fresh))
         idx.add(fresh, 200)
         assertEquals(200L, idx.find("", fresh))

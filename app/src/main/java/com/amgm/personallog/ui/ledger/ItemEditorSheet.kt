@@ -330,7 +330,7 @@ internal fun ItemEditorSheet(
     // 指で引いて離したときに増える。増えたら品目を足す(下の LaunchedEffect)
     var addTick by remember { mutableIntStateOf(0) }
 
-    val receiptLinked = group.receiptId != null
+    val receiptLinked = true // 支出は必ず支払いに属する(v16〜)
     val amountLock: String? = when {
         splitPeople >= 2 -> "割り勘が2人以上のため、金額は支払いの画面で直します"
         onlyOneItem -> "品目が1つのときは、支出の金額と同じです"

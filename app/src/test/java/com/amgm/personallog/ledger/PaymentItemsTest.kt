@@ -24,7 +24,7 @@ import java.time.LocalDate
 
 class PaymentItemsTest {
     private fun group(amount: Int, category: String = "日用品") =
-        ExpenseGroup(id = 7, date = "2026-10-03", time = "10:15", amount = amount, category = category, memo = "スーパー", createdAt = 5)
+        ExpenseGroup(receiptId = 1L, id = 7, date = "2026-10-03", time = "10:15", amount = amount, category = category, memo = "スーパー", createdAt = 5)
 
     private fun item(id: Long, amount: Int, category: String) =
         Expense(id = id, date = "2026-10-03", time = "10:15", amount = amount, category = category, groupId = 7, createdAt = 5)
@@ -201,7 +201,7 @@ class PaymentItemsTest {
         val g = group(700).copy(receiptId = 1, amountEdited = true, timeEdited = true)
         assertEquals(setOf(PaymentField.AMOUNT, PaymentField.TIME), PaymentMarks.ofGroup(g))
         // 手入力の支払いは、直してもレシートと比べるものがない
-        assertTrue(PaymentMarks.ofGroup(g.copy(receiptId = null)).isEmpty())
+        assertTrue(PaymentMarks.ofGroup(g, fromScannedReceipt = false).isEmpty())
         val e = item(1, 200, "食費").copy(receiptId = 1, receiptItemId = 11, nameEdited = true, memoEdited = true, categoryEdited = true)
         assertEquals(setOf(PaymentField.NAME, PaymentField.MEMO, PaymentField.CATEGORY), PaymentMarks.ofExpense(e))
         assertTrue(PaymentMarks.ofExpense(e.copy(receiptId = null, receiptItemId = null)).isEmpty())

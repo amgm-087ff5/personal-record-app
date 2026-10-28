@@ -94,7 +94,7 @@ class UnknownAmountsTest {
 
     // ---- 支出の品目(ExpenseItems)
 
-    private fun group(amount: Int) = ExpenseGroup(id = 5, date = "2026-10-05", time = "12:00", amount = amount, category = "食費", memo = "店", createdAt = 0)
+    private fun group(amount: Int) = ExpenseGroup(receiptId = 1L, id = 5, date = "2026-10-05", time = "12:00", amount = amount, category = "食費", memo = "店", createdAt = 0)
     private fun row(id: Long, amount: Int, unknown: Boolean = false, deleted: Boolean = false, itemId: Long? = id) = Expense(
         id = id, date = "2026-10-01", amount = amount, category = "日用品", memo = "x", groupId = 5, receiptItemId = itemId,
         createdAt = 0, unknownAmount = unknown, deletedByUser = deleted,

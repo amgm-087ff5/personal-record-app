@@ -212,9 +212,7 @@ fun PaymentDetailScreen(
                             }
                         }
                         TextAction("＋ 品目を追加", onClick = { addingItem = true })
-                        if (group.receiptId != null) {
-                            Text(ALLOCATION_NOTE, style = AppTheme.type.caption, color = c.inkFaint)
-                        }
+                        Text(ALLOCATION_NOTE, style = AppTheme.type.caption, color = c.inkFaint)
                     }
                 }
                 if (s.deletedItems.isNotEmpty()) {
@@ -257,6 +255,14 @@ fun PaymentDetailScreen(
                     item(key = "split") { SplitRow(s.splitPeople, r.id, onOpenSplit) }
                     item(key = "receipt") {
                         ReceiptBlock(r.imagePath, r.id, onOpenReceipt)
+                    }
+                    item(key = "delete") {
+                        TextAction(
+                            "この支払いを削除",
+                            onClick = { deletingGroup = true },
+                            color = c.danger,
+                            modifier = Modifier.padding(horizontal = Space.s, vertical = Space.l),
+                        )
                     }
                 }
                 item(key = "pad") { Spacer(Modifier.height(Space.xl)) }
@@ -320,15 +326,15 @@ fun PaymentDetailScreen(
             onDeleteItem = { expense -> viewModel.deleteItem(expense) },
         )
     }
-    if (deletingGroup && group != null) {
+    if (deletingGroup && (group != null || s.selfExcluded)) {
         ConfirmSheet(
-            title = "支出を削除",
-            message = "「${group.memo.ifBlank { group.category }}」の支出と品目をすべて削除します。支払いは残ります。",
+            title = if (s.selfExcluded) "支払いを削除" else "支出を削除",
+            message = deletePaymentMessage(s.receipt, isExpense = !s.selfExcluded),
             confirmText = "削除",
             onDismiss = { deletingGroup = false },
             onConfirm = {
                 deletingGroup = false
-                viewModel.deleteGroup()
+                viewModel.deletePayment()
             },
         )
     }
@@ -750,5 +756,22 @@ private fun ReceiptThumb(imagePath: String?) {
             contentScale = ContentScale.Crop,
             modifier = shape,
         )
+    }
+}
+
+/**
+ * 削除の確認文。支出は支払いの子なので、支出を消すと元の支払い(店名・日時・合計)とレシート画像も消える。
+ * 支出だけを消すと「払ったのに自分の負担が無い支払い」が残り、0円の支払いと区別できず、再保存で支出が復活するため。
+ */
+internal fun deletePaymentMessage(receipt: Receipt?, isExpense: Boolean): String {
+    val what = receipt?.let { r ->
+        listOf(r.storeName.ifBlank { null }, r.purchasedAt, r.totalAmount?.let { LedgerLogic.formatYen(it.toLong()) })
+            .filterNotNull().joinToString(" · ")
+    }.orEmpty()
+    val payment = if (what.isEmpty()) "元の支払い" else "元の支払い($what)"
+    return if (isExpense) {
+        "この支出を削除します。$payment とレシート画像も一緒に削除されます。"
+    } else {
+        "この支払い${if (what.isEmpty()) "" else "($what)"}とレシート画像を削除します。"
     }
 }

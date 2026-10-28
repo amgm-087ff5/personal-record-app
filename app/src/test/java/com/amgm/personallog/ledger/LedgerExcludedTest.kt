@@ -61,7 +61,7 @@ class LedgerExcludedTest {
     @Test
     fun totals_countOnlySelfShare_excludedRowAddsNothing() {
         // 品目の無い支払いの支出(品名が空の1品目)
-        val singleGroup = ExpenseGroup(id = 9, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1)
+        val singleGroup = ExpenseGroup(receiptId = 1L, id = 9, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1)
         val single = Expense(id = 1, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1, groupId = 9)
         val group = ExpenseGroup(id = 10, date = "2026-10-04", amount = 900, category = "外食", createdAt = 2, receiptId = 20)
         val groupItem = Expense(id = 2, date = "2026-10-04", amount = 900, category = "外食", createdAt = 2, groupId = 10)
@@ -90,7 +90,7 @@ class LedgerExcludedTest {
 
     @Test
     fun entries_excludedRowIsSortedByDateLikeOthers() {
-        val singleGroup = ExpenseGroup(id = 9, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1)
+        val singleGroup = ExpenseGroup(receiptId = 1L, id = 9, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1)
         val single = Expense(id = 1, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1, groupId = 9)
         val excluded = LedgerLogic.excludedReceipts(
             listOf(receipt(30, "2026-10-05 12:00", 3000)),

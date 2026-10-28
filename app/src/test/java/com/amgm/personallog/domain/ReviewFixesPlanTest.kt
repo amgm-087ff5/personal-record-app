@@ -61,14 +61,14 @@ class ReviewFixesPlanTest {
     fun lostEditedCount_countsEditedRowsOfRemovedItems() {
         val edited = Expense(id = 1, date = "d", amount = 1, createdAt = 0, groupId = 5, receiptItemId = 11, amountEdited = true)
         val plain = Expense(id = 2, date = "d", amount = 1, createdAt = 0, groupId = 5, receiptItemId = 12)
-        val update = ConfirmPlan.UpdateGroup(ExpenseGroup(id = 5, date = "d", amount = 1, createdAt = 0), emptyList(), emptyList(), emptyList())
+        val update = ConfirmPlan.UpdateGroup(ExpenseGroup(receiptId = 1L, id = 5, date = "d", amount = 1, createdAt = 0), emptyList(), emptyList(), emptyList())
         assertEquals(1, ConfirmPlanner.lostEditedCount(update, emptyList(), emptyList(), listOf(edited, plain)))
         assertEquals(0, ConfirmPlanner.lostEditedCount(update, emptyList(), emptyList(), listOf(plain)))
     }
 
     @Test
     fun lostEditedCount_rebuildCountsAllEditedExistingRows() {
-        val g = ExpenseGroup(id = 5, date = "d", amount = 1, createdAt = 0, memoEdited = true)
+        val g = ExpenseGroup(receiptId = 1L, id = 5, date = "d", amount = 1, createdAt = 0, memoEdited = true)
         val e1 = Expense(id = 1, date = "d", amount = 1, createdAt = 0, groupId = 5, receiptItemId = 11, nameEdited = true)
         val e2 = Expense(id = 2, date = "d", amount = 1, createdAt = 0, groupId = 5, receiptItemId = 12)
         val rebuild = ConfirmPlan.Rebuild(null, emptyList())
