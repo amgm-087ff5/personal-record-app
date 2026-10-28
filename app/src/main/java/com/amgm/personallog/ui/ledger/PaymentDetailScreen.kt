@@ -106,7 +106,6 @@ fun PaymentDetailScreen(
                 }
             }
             val group = s.group
-            val single = s.single
             val scanned = PaymentMarks.isScannedReceipt(s.receipt)
             s.duplicateOf?.let { original ->
                 item(key = "duplicate") {
@@ -187,15 +186,6 @@ fun PaymentDetailScreen(
                         modifier = Modifier.padding(horizontal = Space.s, vertical = Space.l),
                     )
                 }
-            } else if (single != null) {
-                item(key = "single") {
-                    SingleBody(single, scanned, onEdit = { editingItemId = single.id }, onRevert = { viewModel.revertItemField(single, it) })
-                }
-                if (s.splitPeople >= 2) {
-                    item(key = "individual") { IndividualBlock(s.individual) }
-                }
-                item(key = "payment") { OpenPaymentRow(s.receipt?.id, onOpenReceipt) }
-                item(key = "pad") { Spacer(Modifier.height(Space.xl)) }
             } else if (s.selfExcluded) {
                 // 割り勘で自分が外れた支払い。家計簿には自分の行が無く、支払いと割り勘だけを見せる
                 s.receipt?.let { r ->
@@ -256,14 +246,22 @@ fun PaymentDetailScreen(
             onSave = { date, time, amount, category, name, memo, done ->
                 viewModel.saveItem(group, target, date, time, amount, category, name, memo, done)
             },
-            onDelete = {
-                viewModel.deleteItem(target)
-                editingItemId = null
+            // 品目は1つ以上必要なので、最後の1つは消せない(支出ごと消す)
+            onDelete = if (s.lastVisibleItem) null else {
+                {
+                    viewModel.deleteItem(target)
+                    editingItemId = null
+                }
             },
             title = if (group != null) "品目を編集" else null,
             showDateTime = group == null,
             // 割り勘が2人以上なら金額は読み取り専用のまま(注記の文言は出さない。直し方は支払い詳細で案内する)
-            lockedAmountNote = if (s.splitPeople >= 2) "" else null,
+            // 品目が1つなら、金額は支出の金額と同じ(支出の金額で直す)
+            lockedAmountNote = when {
+                s.splitPeople >= 2 -> ""
+                s.onlyOneItem -> "品目が1つのときは、支出の金額と同じです"
+                else -> null
+            },
         )
     }
     if (addingItem && group != null) {
@@ -576,47 +574,6 @@ private fun ItemRow(item: Expense, scanned: Boolean, onClick: () -> Unit, onReve
         }
         Hairline()
     }
-}
-
-@Composable
-private fun SingleBody(e: Expense, scanned: Boolean, onEdit: () -> Unit, onRevert: (PaymentField) -> Unit) {
-    val c = AppTheme.colors
-    val marks = PaymentMarks.ofExpense(e, scanned)
-    Column(Modifier.fillMaxWidth().tappable(onEdit).padding(horizontal = Space.edge, vertical = Space.m)) {
-        Label("支出")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                LedgerLogic.dayLabel(e.date) + if (e.time.isNotEmpty()) " ${e.time}" else "",
-                style = AppTheme.type.body,
-                color = c.inkSoft,
-            )
-            if (PaymentField.TIME in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.TIME) })
-        }
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(LedgerLogic.formatYen(e.amount.toLong()), style = AppTheme.type.numeralXL, color = c.ink)
-            if (PaymentField.AMOUNT in marks) EditedMark(Modifier.padding(start = Space.s, bottom = Space.s), onRevert = { onRevert(PaymentField.AMOUNT) })
-        }
-        if (e.name.isNotBlank()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(e.name, style = AppTheme.type.title, color = c.ink)
-                if (PaymentField.NAME in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.NAME) })
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                e.memo.ifBlank { "(メモなし)" },
-                style = AppTheme.type.body,
-                color = if (e.memo.isBlank()) c.inkFaint else c.ink,
-            )
-            if (PaymentField.MEMO in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.MEMO) })
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("カテゴリ ${e.category}", style = AppTheme.type.caption, color = c.inkSoft)
-            if (PaymentField.CATEGORY in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.CATEGORY) })
-        }
-        Text("タップで直す", style = AppTheme.type.caption, color = c.inkFaint)
-    }
-    Hairline()
 }
 
 /** 家計簿で消した品目の行。「元に戻す」で品目に戻る。 */

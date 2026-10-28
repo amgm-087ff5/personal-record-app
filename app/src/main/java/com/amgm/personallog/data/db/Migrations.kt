@@ -3,6 +3,7 @@ package com.amgm.personallog.data.db
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.amgm.personallog.domain.PricedLine
+import com.amgm.personallog.domain.SingleExpenseConversion
 import com.amgm.personallog.domain.legacyReceiptOwnYen
 import com.amgm.personallog.receipt.LegacyRow
 import com.amgm.personallog.receipt.ReceiptUnits
@@ -23,6 +24,9 @@ import com.amgm.personallog.receipt.TotalSourceInit
  * v12(支出は支払いから作る): 支払いに属さない支出グループ・単独の支出を、手入力の支払い(receipts)に変える(MIGRATION_11_12)。表の形は変えない。
  *
  * v13(参加人数): receipts に headcount を ALTER TABLE ADD COLUMN で足す(MIGRATION_12_13)。既存の行は null。
+ *
+ * v14(支出は必ず品目つき・金額不明): receipt_items と expenses に unknownAmount を足し、単独の支出(groupId なし)を
+ * 自分の支出(expense_groups)+ 品名が空の1品目に変える(MIGRATION_13_14)。
  */
 object Migrations {
     /**
@@ -979,8 +983,95 @@ object Migrations {
         }
     }
 
+    /** v14 で足す列(receipt_items・expenses の unknownAmount)。Entity の @ColumnInfo(defaultValue = "0") と一致させること。 */
+    internal val V14_ADD_COLUMN_SQLS: List<String> = listOf(
+        "ALTER TABLE `receipt_items` ADD COLUMN `unknownAmount` INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE `expenses` ADD COLUMN `unknownAmount` INTEGER NOT NULL DEFAULT 0",
+    )
+
+    /** v14 の移行の前後で比べる値(件数と金額の合計。支出の金額の合計は、単独の支出がまとまりに移っても変わらない)。 */
+    internal val V14_COUNT_QUERIES: List<Pair<String, String>> = listOf(
+        "expenses" to "SELECT COUNT(*) FROM `expenses`",
+        "expenses の金額の合計" to "SELECT COALESCE(SUM(`amount`), 0) FROM `expenses`",
+        "家計簿に入る金額の合計" to
+            "SELECT (SELECT COALESCE(SUM(`amount`), 0) FROM `expense_groups`) + " +
+            "(SELECT COALESCE(SUM(`amount`), 0) FROM `expenses` WHERE `groupId` IS NULL AND `deletedByUser` = 0)",
+    )
+
+    /**
+     * v13 -> v14: 支出は必ず「まとまり(expense_groups)+ 品目1行以上」にし、金額不明の印を足す。
+     *  - receipt_items・expenses に unknownAmount(INTEGER NOT NULL DEFAULT 0)を足す。既存の行は 0(金額は分かっている)。
+     *  - 単独の支出(groupId が無く、家計簿で消していない行)ごとに、まとまりを1つ作る(SingleExpenseConversion と同じ規則):
+     *    日付・時刻・金額・カテゴリ・メモ・receiptId・作成時刻・編集済みの印を写し、uid は元の行の uid から決まる新しい値。
+     *    元の行は、そのまとまりの品目にする(groupId を張り、品名は空。編集済みの印は下ろす)。id と uid は変えない。
+     *  - 家計簿で消した行(deletedByUser = 1)で groupId が無いもの(立て替えの間に消した品目など。一覧・集計に出ない)は、
+     *    同じ支払いの単独の支出から作ったまとまりがあれば、そのまとまりに付け替える(消したまま)。無ければ変えない。
+     * 安全策: 移行の前後で、支出の件数・金額の合計・家計簿に入る金額の合計が変わったら止める(トランザクションが戻る)。
+     */
+    val MIGRATION_13_14: Migration = object : Migration(13, 14) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            V14_ADD_COLUMN_SQLS.forEach { db.execSQL(it) }
+            val before = V14_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+
+            class SingleRow(
+                val id: Long, val date: String, val time: String, val amount: Long, val category: String, val memo: String,
+                val receiptId: Long?, val createdAt: Long, val uid: String,
+                val amountEdited: Long, val categoryEdited: Long, val memoEdited: Long, val timeEdited: Long,
+            )
+            // 読み出しきってから書く
+            val singles = ArrayList<SingleRow>()
+            db.query(
+                "SELECT `id`, `date`, `time`, `amount`, `category`, `memo`, `receiptId`, `createdAt`, `uid`, " +
+                    "`amountEdited`, `categoryEdited`, `memoEdited`, `timeEdited` FROM `expenses` " +
+                    "WHERE `groupId` IS NULL AND `deletedByUser` = 0 ORDER BY `id`",
+            ).use { c ->
+                while (c.moveToNext()) {
+                    singles += SingleRow(
+                        id = c.getLong(0), date = c.getString(1), time = c.getString(2), amount = c.getLong(3),
+                        category = c.getString(4), memo = c.getString(5), receiptId = if (c.isNull(6)) null else c.getLong(6),
+                        createdAt = c.getLong(7), uid = c.getString(8),
+                        amountEdited = c.getLong(9), categoryEdited = c.getLong(10), memoEdited = c.getLong(11), timeEdited = c.getLong(12),
+                    )
+                }
+            }
+            // 支払い -> その支払いで最初に作ったまとまり(消した行の付け替え先)
+            val groupOfReceipt = HashMap<Long, Long>()
+            for (e in singles) {
+                db.execSQL(
+                    "INSERT INTO `expense_groups` (`date`, `time`, `amount`, `category`, `memo`, `receiptId`, `createdAt`, `uid`, " +
+                        "`amountEdited`, `categoryEdited`, `memoEdited`, `timeEdited`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    arrayOf<Any?>(
+                        e.date, e.time, e.amount, e.category, e.memo, e.receiptId, e.createdAt,
+                        SingleExpenseConversion.groupUid(e.uid),
+                        e.amountEdited, e.categoryEdited, e.memoEdited, e.timeEdited,
+                    ),
+                )
+                val gid = db.lastRowId()
+                db.execSQL(
+                    "UPDATE `expenses` SET `groupId` = ?, `name` = '', `amountEdited` = 0, `categoryEdited` = 0, " +
+                        "`nameEdited` = 0, `memoEdited` = 0, `timeEdited` = 0 WHERE `id` = ?",
+                    arrayOf<Any?>(gid, e.id),
+                )
+                e.receiptId?.let { groupOfReceipt.putIfAbsent(it, gid) }
+            }
+            for ((rid, gid) in groupOfReceipt) {
+                db.execSQL(
+                    "UPDATE `expenses` SET `groupId` = ? WHERE `groupId` IS NULL AND `deletedByUser` = 1 AND `receiptId` = ?",
+                    arrayOf<Any?>(gid, rid),
+                )
+            }
+
+            val after = V14_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+            if (before != after) {
+                throw IllegalStateException("v14 への移行を中止しました: 件数または金額の合計が変わりました $before -> $after")
+            }
+            val left = db.count("SELECT COUNT(*) FROM `expenses` WHERE `groupId` IS NULL AND `deletedByUser` = 0")
+            if (left != 0L) throw IllegalStateException("v14 への移行を中止しました: 単独の支出が $left 件残りました")
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
+        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14,
     )
 }

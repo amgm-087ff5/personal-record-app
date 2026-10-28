@@ -117,16 +117,18 @@ class MigrationV12RobolectricTest {
             assertEquals(AppDatabase.VERSION, db.version)
             // 行の数と id は変わらない
             assertEquals(listOf(1L, 2L, 3L, 4L, 5L, 6L), db.ids("SELECT id FROM expenses ORDER BY id"))
-            assertEquals(listOf(1L, 2L), db.ids("SELECT id FROM expense_groups ORDER BY id"))
+            // v14 の移行(Migrations.ALL で続けて走る)で、単独の支出2つもまとまりになる(id 3, 4)
+            assertEquals(listOf(1L, 2L, 3L, 4L), db.ids("SELECT id FROM expense_groups ORDER BY id"))
             // 支払いは、支払いに属さなかった支出グループ2つ + 単独の支出2つ
             assertEquals(4L, db.long("SELECT COUNT(*) FROM receipts"))
             // 品目は、グループの中の支出の行の数(3 + 1)
             assertEquals(4L, db.long("SELECT COUNT(*) FROM receipt_items"))
             // すべての支出に支払いが付く
             assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses WHERE receiptId IS NULL"))
-            // グループの品目は、品目の行に対応が付く(子は receiptItemId あり)。単独の支出は品目なし
+            // グループの品目は、品目の行に対応が付く(子は receiptItemId あり)。単独の支出は品目なし(v14 で品名が空の1品目)
             assertEquals(4L, db.long("SELECT COUNT(*) FROM expenses WHERE groupId IS NOT NULL AND receiptItemId IS NOT NULL"))
-            assertEquals(2L, db.long("SELECT COUNT(*) FROM expenses WHERE groupId IS NULL AND receiptItemId IS NULL"))
+            assertEquals(2L, db.long("SELECT COUNT(*) FROM expenses WHERE groupId IS NOT NULL AND receiptItemId IS NULL"))
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses WHERE groupId IS NULL"))
             // 支払いは1件ずつ: 支払いの行どうしが別々に付いている
             val g1 = db.long("SELECT receiptId FROM expense_groups WHERE id = 1")
             val g2 = db.long("SELECT receiptId FROM expense_groups WHERE id = 2")
@@ -189,7 +191,7 @@ class MigrationV12RobolectricTest {
             // 金額の合計は変わらない。行の数と id も変わらない
             assertEquals(before, sums())
             assertEquals(listOf(1L, 2L, 3L, 4L, 5L, 6L), db.ids("SELECT id FROM expenses ORDER BY id"))
-            assertEquals(listOf(1L, 2L), db.ids("SELECT id FROM expense_groups ORDER BY id"))
+            assertEquals(listOf(1L, 2L, 3L, 4L), db.ids("SELECT id FROM expense_groups ORDER BY id"))
             // 同期のあとも、支払いごとの行は各支払いに残る(別の支払いの行を取り込まない)
             val g1 = db.long("SELECT receiptId FROM expense_groups WHERE id = 1")
             assertEquals(3L, db.long("SELECT COUNT(*) FROM expenses WHERE receiptId = $g1"))
@@ -198,8 +200,11 @@ class MigrationV12RobolectricTest {
             assertEquals("食費", db.str("SELECT category FROM expense_groups WHERE id = 1"))
             assertEquals("電車", db.str("SELECT memo FROM expenses WHERE id = 5"))
             assertEquals("交通費", db.str("SELECT category FROM expenses WHERE id = 5"))
-            // 単独の支出は単独1行のまま(グループは作られない)
-            assertTrue(db.long("SELECT COUNT(*) FROM expense_groups WHERE receiptId = (SELECT receiptId FROM expenses WHERE id = 5)") == 0L)
+            // 単独の支出だった行は、v14 で作ったまとまりの1品目のまま(同期で作り直されない。id も同じ)
+            val g5 = db.long("SELECT groupId FROM expenses WHERE id = 5")
+            assertEquals(1L, db.long("SELECT COUNT(*) FROM expense_groups WHERE id = $g5 AND receiptId = (SELECT receiptId FROM expenses WHERE id = 5)"))
+            assertEquals("電車", db.str("SELECT memo FROM expense_groups WHERE id = $g5"))
+            assertEquals("交通費", db.str("SELECT category FROM expense_groups WHERE id = $g5"))
         } finally {
             room.close()
         }

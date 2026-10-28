@@ -1,6 +1,8 @@
 package com.amgm.personallog.ledger
 
 import com.amgm.personallog.data.model.Expense
+import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.ui.ledger.LedgerEntry
 import com.amgm.personallog.ui.ledger.ChartLevel
 import com.amgm.personallog.ui.ledger.LedgerChart
 import com.amgm.personallog.ui.ledger.LedgerLogic
@@ -12,7 +14,13 @@ class LedgerChartTest {
     private fun e(id: Long, date: String, amount: Int, cat: String) =
         Expense(id = id, date = date, amount = amount, category = cat, createdAt = 0)
 
-    private fun entries(vararg list: Expense) = LedgerLogic.buildEntries(list.toList(), emptyList())
+    /** 支出1件ずつを、品名が空の1品目だけを持つ支出(v14〜 の品目なしの支出の形)にして一覧の行にする。 */
+    private fun build(list: List<Expense>): List<LedgerEntry> {
+        val groups = list.map { ExpenseGroup(id = it.id, date = it.date, time = it.time, amount = it.amount, category = it.category, createdAt = it.createdAt) }
+        return LedgerLogic.buildEntries(list.map { it.copy(groupId = it.id) }, groups)
+    }
+
+    private fun entries(vararg list: Expense) = build(list.toList())
 
     private val oct14 = LocalDate.of(2026, 10, 14)
 
@@ -145,7 +153,7 @@ class LedgerChartTest {
     @Test
     fun hourOf_blankTime_isStartOfDay_butNotFilled() {
         // 時刻が無い行は 0 時の棒に入るが、行の time は空のまま(補完しない)
-        val entry = LedgerLogic.buildEntries(listOf(t(1, "2026-10-14", "", 700, "食費")), emptyList()).first()
+        val entry = build(listOf(t(1, "2026-10-14", "", 700, "食費"))).first()
         assertEquals(0, LedgerChart.hourOf(entry))
         assertEquals("", entry.time)
         val bars = LedgerChart.bars(ChartLevel.DAY, oct14, listOf(entry))
@@ -154,6 +162,6 @@ class LedgerChartTest {
 
     @Test
     fun hourOf_invalidTime_isMinusOne() {
-        assertEquals(-1, LedgerChart.hourOf(LedgerLogic.buildEntries(listOf(t(1, "2026-10-14", "--:--", 1, "食費")), emptyList()).first()))
+        assertEquals(-1, LedgerChart.hourOf(build(listOf(t(1, "2026-10-14", "--:--", 1, "食費"))).first()))
     }
 }

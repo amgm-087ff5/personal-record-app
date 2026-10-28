@@ -16,7 +16,7 @@ import com.amgm.personallog.data.model.SplitMode
 import com.amgm.personallog.data.model.SplitParticipant
 import com.amgm.personallog.data.model.SplitSheet
 import com.amgm.personallog.data.model.WholeShare
-import com.amgm.personallog.domain.TaxCalc
+import com.amgm.personallog.domain.UnknownAmounts
 import com.amgm.personallog.domain.split.ItemYen
 import com.amgm.personallog.domain.split.ShareInput
 import com.amgm.personallog.domain.split.SplitGroupInput
@@ -54,11 +54,12 @@ data class SplitBuild(val input: SplitInput, val itemYen: List<ItemYen>, val sel
 
 /**
  * SplitSheetData を計算の入力にする(純粋な変換。画面のプレビューと家計簿の両方が使う)。
- * total は支払いの合計(null なら品目の合計)、items は支払いの品目(ReceiptItem)。品目の税込円は TaxCalc.paidYenPerItem で求める。
+ * total は支払いの合計(null なら品目の合計)、items は支払いの品目(ReceiptItem)。品目の税込円は UnknownAmounts.paidYenPerItem で求める
+ * (金額不明の品目は、合計 − 分かっている品目の合計 を配った金額)。
  * 品目の並びは items と同じ。まとまりの金額は、そこに入っている品目(items の中のもの)の税込円の合計。
  */
 fun SplitSheetData.toBuild(total: Int?, items: List<ReceiptItem>): SplitBuild {
-    val yenPerItem = TaxCalc.paidYenPerItem(items)
+    val yenPerItem = UnknownAmounts.paidYenPerItem(items, total)
     val groupOfItem = HashMap<Long, Long>()
     for (g in groups) for (itemId in g.itemIds) groupOfItem[itemId] = g.group.id
     val itemYen = items.mapIndexed { i, item -> ItemYen(item.id, groupOfItem[item.id], yenPerItem[i], item.category) }

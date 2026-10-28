@@ -11,7 +11,10 @@ import com.amgm.personallog.data.repository.ExpenseRepository
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.data.repository.toBuild
+import com.amgm.personallog.domain.ExpenseItems
 import com.amgm.personallog.domain.PaymentEdit
+import com.amgm.personallog.domain.UnknownAmounts
+import com.amgm.personallog.domain.UnknownItems
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentKind
 import com.amgm.personallog.domain.PaymentValues
@@ -28,12 +31,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** 支出の詳細画面の表示内容。group が非 null ならまとまり(支払い全体)、single が非 null なら単独の支出。 */
+/**
+ * 支出の詳細画面の表示内容。group が非 null なら自分の支出(まとまり)。items はその品目(必ず1つ以上)。
+ * v14 で単独の支出は無くなった(旧ルートの EXPENSE は、その品目が属する支出を開く)。
+ */
 data class PaymentUiState(
     val loading: Boolean = true,
     val notFound: Boolean = false,
@@ -42,9 +49,10 @@ data class PaymentUiState(
     val items: List<Expense> = emptyList(),
     /** 家計簿で消した支払い由来の品目(一覧・合計には入らない。「元に戻す」で品目に戻る)。 */
     val deletedItems: List<Expense> = emptyList(),
-    val single: Expense? = null,
     /** 紐づく支払い。サムネイル・支払い先・「レシートを開く」に使う。 */
     val receipt: Receipt? = null,
+    /** 紐づく支払いの品目(金額不明の判定に使う。計算の正は支払い)。 */
+    val paymentItems: List<ReceiptItem> = emptyList(),
     /** 支払いの日時 "yyyy-MM-dd HH:mm"。日時を変えるときの警告に使う。 */
     val receiptAt: String? = null,
     /** 割り勘の参加者の数(割り勘が無ければ1)。2人以上では金額をここで直せない。 */
@@ -61,8 +69,38 @@ data class PaymentUiState(
 ) {
     val itemSum: Long get() = items.sumOf { it.amount.toLong() }
 
-    /** 支出金額 - 品目の合計。まとまりでなければ 0。 */
+    /** 支出金額 - 品目の合計。まとまりでなければ 0。金額不明の品目は差を受け持つので、差が0以上なら 0 になる。 */
     val difference: Long get() = group?.let { it.amount.toLong() - itemSum } ?: 0L
+
+    /**
+     * 品目が1つだけか(消した品目も含めた行の数。ExpenseItems.normalize と同じ数え方)。
+     * 1つだけなら品目の金額は支出の金額と同じ(品目の側では直せない)。
+     */
+    val onlyOneItem: Boolean get() = items.size + deletedItems.size == 1
+
+    /** 消していない品目が1つだけか。最後の1つは消せない(支出の品目は1つ以上)。 */
+    val lastVisibleItem: Boolean get() = items.size <= 1
+
+    /** 金額不明の品目があるか。 */
+    val hasUnknownItem: Boolean get() = items.any { it.unknownAmount }
+
+    /** 支出の金額と品目の不一致(支出の金額 − 分かっている品目の合計)。エラーでなければ null(ExpenseItems.mismatch)。 */
+    val mismatch: Long? get() = group?.let { ExpenseItems.mismatch(it, items) }
+
+    /** 支払いの合計と品目の不一致(合計 − 分かっている品目の合計)。エラーでなければ null。支払いが無ければ null。 */
+    val paymentMismatch: Long?
+        get() = receipt?.takeIf { paymentItems.isNotEmpty() }?.let { UnknownAmounts.mismatch(it.totalAmount, paymentItems) }
+
+    /**
+     * 「未入力を全て不明にする」を出せるか(markBlankItemsUnknown)。
+     * 支払いの合計と品目が合わず、金額が未入力(0円)の支払いの品目があるとき。
+     */
+    val canMarkBlankAsUnknown: Boolean
+        get() = paymentMismatch != null && UnknownItems.canMarkBlankAsUnknown(paymentItems, UnknownAmounts::isBlank)
+
+    /** 「差額を不明の品目として足す」で足す金額(addDifferenceAsUnknownItem)。出さないときは null。 */
+    val differenceForUnknownItem: Long?
+        get() = receipt?.takeIf { paymentItems.isNotEmpty() }?.let { UnknownAmounts.differenceForUnknownItem(it.totalAmount, paymentItems) }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -103,41 +141,46 @@ class PaymentDetailViewModel @Inject constructor(
                 }
             }
 
+    /** 支出(まとまり)の画面。 */
+    private fun groupFlow(gid: Long): Flow<PaymentUiState> =
+        combine(repository.observeGroup(gid), repository.observeGroupItems(gid)) { g, items -> g to items }
+            .map { (g, items) ->
+                if (g == null) {
+                    PaymentUiState(loading = false, notFound = true, kind = PaymentKind.GROUP)
+                } else {
+                    val receipt = g.receiptId?.let { repository.receipt(it) }
+                    val paymentItems = g.receiptId?.let { receipts.getItems(it) }.orEmpty()
+                    val (gone, visible) = items.sortedBy { it.id }.partition { it.deletedByUser }
+                    val people = g.receiptId?.let { receipts.participantCount(it) } ?: 1
+                    PaymentUiState(
+                        loading = false, kind = PaymentKind.GROUP, group = g, items = visible, deletedItems = gone,
+                        receipt = receipt, paymentItems = paymentItems, receiptAt = repository.receiptDateTime(g.receiptId),
+                        splitPeople = people,
+                        individual = if (people >= 2) selfIndividual(g.receiptId) else null,
+                    )
+                }
+            }
+
     init {
         viewModelScope.launch {
-            val flow: Flow<PaymentUiState> = if (excludedMode) excludedFlow(id) else when (kind) {
-                PaymentKind.GROUP ->
-                    combine(repository.observeGroup(id), repository.observeGroupItems(id)) { g, items -> g to items }
-                        .map { (g, items) ->
-                            if (g == null) {
-                                PaymentUiState(loading = false, notFound = true, kind = kind)
-                            } else {
-                                val receipt = g.receiptId?.let { repository.receipt(it) }
-                                val (gone, visible) = items.sortedBy { it.id }.partition { it.deletedByUser }
-                                val people = g.receiptId?.let { receipts.participantCount(it) } ?: 1
-                                PaymentUiState(
-                                    loading = false, kind = kind, group = g, items = visible, deletedItems = gone,
-                                    receipt = receipt, receiptAt = repository.receiptDateTime(g.receiptId),
-                                    splitPeople = people,
-                                    individual = if (people >= 2) selfIndividual(g.receiptId) else null,
-                                )
-                            }
-                        }
-                PaymentKind.EXPENSE ->
-                    repository.observeExpense(id).map { e ->
-                        if (e == null) {
-                            PaymentUiState(loading = false, notFound = true, kind = kind)
-                        } else {
-                            val receipt = e.receiptId?.let { repository.receipt(it) }
-                            val people = e.receiptId?.let { receipts.participantCount(it) } ?: 1
-                            PaymentUiState(
-                                loading = false, kind = kind, single = e, items = listOf(e),
-                                receipt = receipt, receiptAt = repository.receiptDateTime(e.receiptId),
-                                splitPeople = people,
-                                individual = if (people >= 2) selfIndividual(e.receiptId) else null,
-                            )
-                        }
+            val flow: Flow<PaymentUiState> = when {
+                excludedMode -> excludedFlow(id)
+                kind == PaymentKind.GROUP -> groupFlow(id)
+                else -> {
+                    // 旧ルート(単独の支出の id): 移行で品目になったので、その品目が属する支出を開く
+                    val gid = try {
+                        repository.groupIdOfExpense(id)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
                     }
+                    if (gid == null) {
+                        flowOf(PaymentUiState(loading = false, notFound = true, kind = PaymentKind.GROUP))
+                    } else {
+                        groupFlow(gid)
+                    }
+                }
             }
             // 重複の候補(支払い一覧と同じ判定。後から作られた側にだけ出す)
             val duplicates = combine(receipts.observeReceipts(), receipts.observeNotDuplicates()) { list, notDup ->
@@ -228,7 +271,7 @@ class PaymentDetailViewModel @Inject constructor(
         }
     }
 
-    /** 品目(または単独の支出)を直す。original が null なら、まとまりへ品目を足す。 */
+    /** 品目を直す。original が null なら、まとまりへ品目を足す。 */
     fun saveItem(
         group: ExpenseGroup?,
         original: Expense?,
@@ -248,12 +291,12 @@ class PaymentDetailViewModel @Inject constructor(
                 repository.update(PaymentEdit.editExpense(original, d, t, amount, category, name, memo))
                 null
             } else {
-                val target = if (original.receiptItemId != null) {
-                    WriteBackTarget.Item(original)
-                } else {
-                    WriteBackTarget.Single(original)
-                }
-                receipts.writeBackFromLedger(target, PaymentValues(d, t, amount, category, name, memo))
+                // 品目が1つだけなら、その金額は支出の金額と同じ(品目の側では直せない)
+                val onlyItem = _state.value.onlyOneItem
+                receipts.writeBackFromLedger(
+                    WriteBackTarget.Item(original, onlyItem = onlyItem),
+                    PaymentValues(d, t, amount, category, name, memo),
+                )
             }
         } else if (group != null) {
             // 品目は支払いの品目として足す。家計簿の品目は、支払いを保存するときに作られる(支出だけを単独では作らない)
@@ -301,7 +344,7 @@ class PaymentDetailViewModel @Inject constructor(
     /** 家計簿で消した品目を元に戻す。 */
     fun restoreItem(expense: Expense) = run { repository.restore(expense) }
 
-    /** 品目(または単独の支出)の1つの欄を、支払いの値に戻す。 */
+    /** 品目の1つの欄を、支払いの値に戻す。 */
     fun revertItemField(expense: Expense, field: PaymentField) = run {
         if (!repository.revertExpenseField(expense.id, field)) {
             _state.update { it.copy(error = "支払いの値を求められませんでした。") }
@@ -315,9 +358,55 @@ class PaymentDetailViewModel @Inject constructor(
         }
     }
 
-    fun deleteItem(expense: Expense) = run {
-        repository.delete(expense)
-        if (kind == PaymentKind.EXPENSE) _state.update { it.copy(finished = true) }
+    /** 品目を消す。支出の品目は1つ以上必要なので、最後の1つは消さずに理由を出す(支出ごと消すのは deleteGroup)。 */
+    fun deleteItem(expense: Expense) {
+        if (_state.value.items.size <= 1) {
+            _state.update { it.copy(error = ExpenseRepository.MESSAGE_LAST_ITEM) }
+            return
+        }
+        run { repository.delete(expense) }
+    }
+
+    // ------------------------------------------------------------ 金額不明(段階2の画面から呼ぶ)
+
+    /**
+     * 「未入力を全て不明にする」。支出の品目のうち金額が未入力(0円)のものを、金額不明にする。
+     * 支払いに紐づく支出では、計算の正は支払いなので、支払いの品目(金額が0のもの)を不明にして家計簿を作り直す
+     * (ReceiptRepository.markBlankItemsUnknown)。割り勘が2人以上のときは、金額の内訳は割り勘で決まるので行わない。
+     */
+    fun markBlankItemsUnknown(onDone: ((String?) -> Unit)? = null) = write(onDone) {
+        val g = _state.value.group ?: return@write null
+        val receiptId = g.receiptId ?: return@write MESSAGE_NOT_LINKED
+        if (_state.value.splitPeople >= 2) return@write MESSAGE_SPLIT_UNKNOWN
+        receipts.markBlankItemsUnknown(receiptId)
+    }
+
+    /**
+     * 「差額を不明の品目として足す」。支払いの合計 − 分かっている品目の合計 を、金額不明の品目1つとして支払いに足す
+     * (ReceiptRepository.addDifferenceAsUnknownItem)。割り勘が2人以上のときは行わない。
+     */
+    fun addDifferenceAsUnknownItem(onDone: ((String?) -> Unit)? = null) = write(onDone) {
+        val g = _state.value.group ?: return@write null
+        val receiptId = g.receiptId ?: return@write MESSAGE_NOT_LINKED
+        if (_state.value.splitPeople >= 2) return@write MESSAGE_SPLIT_UNKNOWN
+        receipts.addDifferenceAsUnknownItem(receiptId)
+    }
+
+    /**
+     * 1つの品目の「金額不明」を切り替える。支払いの品目に紐づく品目だけ(支払いの品目の印を変えて家計簿を作り直す)。
+     * 品目の無い支払いの1品目(receiptItemId なし)は、金額が支出と同じなので不明にできない。
+     */
+    fun setItemUnknown(expense: Expense, unknown: Boolean, onDone: ((String?) -> Unit)? = null) = write(onDone) {
+        val receiptId = expense.receiptId ?: return@write MESSAGE_NOT_LINKED
+        val itemId = expense.receiptItemId ?: return@write MESSAGE_BLANK_ITEM_UNKNOWN
+        if (_state.value.splitPeople >= 2) return@write MESSAGE_SPLIT_UNKNOWN
+        receipts.setItemUnknown(receiptId, itemId, unknown)
+    }
+
+    companion object {
+        const val MESSAGE_NOT_LINKED = "この支出は支払いに紐づいていません。"
+        const val MESSAGE_SPLIT_UNKNOWN = "負担割りがあるため、品目の金額は支払いの画面で直してください。"
+        const val MESSAGE_BLANK_ITEM_UNKNOWN = "品目が1つのときは、品目の金額は支出の金額と同じです。"
     }
 
     fun deleteGroup() {

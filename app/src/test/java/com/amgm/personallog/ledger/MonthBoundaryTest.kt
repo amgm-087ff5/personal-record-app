@@ -24,10 +24,11 @@ class MonthBoundaryTest {
     @Test
     fun groupMovedToNextMonth_countsOnlyInTheGroupsMonth_evenIfItemDatesAreStale() {
         val items = listOf(child(1, "2026-10-31", 400, "食費"), child(2, "2026-10-31", 300, "日用品"))
-        val single = Expense(id = 3, date = "2026-10-20", amount = 50, category = "その他", createdAt = 1)
+        val single = Expense(id = 3, date = "2026-10-20", amount = 50, category = "その他", groupId = 8, createdAt = 1)
+        val singleGroup = ExpenseGroup(id = 8, date = "2026-10-20", amount = 50, category = "その他", createdAt = 1)
         val movedGroup = ExpenseGroup(id = 7, date = "2026-11-01", amount = 1000, category = "食費", createdAt = 1)
-        // 品目の日付が古いまま(10月)でも、10月に単独の行として残らない
-        val t = monthTotals(items + single, listOf(movedGroup))
+        // 品目の日付が古いまま(10月)でも、10月に残らない
+        val t = monthTotals(items + single, listOf(movedGroup, singleGroup))
         assertEquals(50L, t["2026-10"])
         assertEquals(1000L, t["2026-11"])
         assertEquals(1050L, t.values.sum())

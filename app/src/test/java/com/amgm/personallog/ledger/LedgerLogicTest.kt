@@ -17,6 +17,12 @@ class LedgerLogicTest {
     private fun e(id: Long, date: String, amount: Int, cat: String = "食費") =
         Expense(id = id, date = date, amount = amount, category = cat, createdAt = 0)
 
+    /** 品名が空の1品目だけを持つ支出(v14〜 の品目なしの支出の形)。 */
+    private fun one(id: Long, date: String, amount: Int, cat: String = "食費") = LedgerEntry.Group(
+        ExpenseGroup(id = id, date = date, amount = amount, category = cat, createdAt = 0),
+        listOf(e(id * 100, date, amount, cat).copy(groupId = id)),
+    )
+
     @Test
     fun shiftMonth_crossesYear() {
         assertEquals("2026-09", LedgerLogic.shiftMonth("2026-10", -1))
@@ -42,7 +48,7 @@ class LedgerLogicTest {
     @Test
     fun groupByDate_sortsDescendingAndSums() {
         val groups = LedgerLogic.groupByDate(
-            listOf(e(1, "2026-10-01", 100), e(2, "2026-10-03", 300), e(3, "2026-10-01", 50)).map { LedgerEntry.Single(it) },
+            listOf(one(1, "2026-10-01", 100), one(2, "2026-10-03", 300), one(3, "2026-10-01", 50)),
         )
         assertEquals(listOf("2026-10-03", "2026-10-01"), groups.map { it.date })
         assertEquals(150L, groups[1].total)
@@ -61,7 +67,7 @@ class LedgerLogicTest {
     @Test
     fun monthlyTotals_includesEmptyMonths() {
         val totals = LedgerLogic.monthlyTotals(
-            listOf(e(1, "2026-10-01", 100), e(2, "2026-08-15", 200), e(3, "2026-10-31", 5)).map { LedgerEntry.Single(it) },
+            listOf(one(1, "2026-10-01", 100), one(2, "2026-08-15", 200), one(3, "2026-10-31", 5)),
             listOf("2026-08", "2026-09", "2026-10"),
         )
         assertEquals(listOf(200L, 0L, 105L), totals.map { it.total })
@@ -74,13 +80,17 @@ class LedgerLogicTest {
             Expense(id = 11, date = "2026-10-03", amount = 400, category = "食費", groupId = 7, createdAt = 5),
             Expense(id = 12, date = "2026-10-03", amount = 300, category = "日用品", groupId = 7, createdAt = 5),
         )
-        val single = e(13, "2026-10-03", 50, "その他")
-        val entries = LedgerLogic.buildEntries(items + single, listOf(group))
+        // 品目の無い支払いの支出(品名が空の1品目)
+        val blankGroup = ExpenseGroup(id = 8, date = "2026-10-03", amount = 50, category = "その他", createdAt = 4)
+        val blank = e(13, "2026-10-03", 50, "その他").copy(groupId = 8)
+        // まとまりの無い行(v13 以前の単独の支出の形)は一覧に入れない
+        val ungrouped = e(14, "2026-10-03", 999, "その他")
+        val entries = LedgerLogic.buildEntries(items + blank + ungrouped, listOf(group, blankGroup))
 
-        // 単独1行 + グループ1行。品目は行の中に入り、二重計上しない。
+        // 支出2行。品目は行の中に入り、二重計上しない。
         assertEquals(2, entries.size)
         assertEquals(1050L, LedgerLogic.monthlyTotals(entries, listOf("2026-10"))[0].total)
-        val g = entries.filterIsInstance<LedgerEntry.Group>().single()
+        val g = entries.filterIsInstance<LedgerEntry.Group>().single { it.group.id == 7L }
         assertEquals(listOf(11L, 12L), g.items.map { it.id })
         assertEquals(700L, g.itemSum)
         assertEquals(300L, g.difference)
@@ -92,8 +102,8 @@ class LedgerLogicTest {
     }
 
     @Test
-    fun buildEntries_childWithoutItsGroupIsNotCountedAsSingle() {
-        // groupId のある行は、グループが渡されていなくても単独の行として数えない(月をまたいだ二重計上の防止)
+    fun buildEntries_childWithoutItsGroupIsNotCounted() {
+        // groupId のある行は、グループが渡されていなければ数えない(月をまたいだ二重計上の防止)
         val orphan = Expense(id = 1, date = "2026-10-01", amount = 10, groupId = 99, createdAt = 1)
         val entries = LedgerLogic.buildEntries(listOf(orphan), emptyList())
         assertTrue(entries.isEmpty())
@@ -167,8 +177,9 @@ class LedgerLogicTest {
     @Test
     fun entries_carryTimeFromExpenseAndGroup() {
         val g = ExpenseGroup(id = 3, date = "2026-10-03", time = "18:45", amount = 100, category = "食費", createdAt = 1)
-        val single = Expense(id = 4, date = "2026-10-03", time = "08:10", amount = 50, category = "食費", createdAt = 1)
-        val rows = LedgerLogic.buildEntries(listOf(single), listOf(g))
+        val g2 = ExpenseGroup(id = 5, date = "2026-10-03", time = "08:10", amount = 50, category = "食費", createdAt = 1)
+        val single = Expense(id = 4, date = "2026-10-03", time = "08:10", amount = 50, category = "食費", groupId = 5, createdAt = 1)
+        val rows = LedgerLogic.buildEntries(listOf(single), listOf(g, g2))
         assertEquals(setOf("18:45", "08:10"), rows.map { it.time }.toSet())
     }
 }

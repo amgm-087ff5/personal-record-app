@@ -60,7 +60,9 @@ class LedgerExcludedTest {
 
     @Test
     fun totals_countOnlySelfShare_excludedRowAddsNothing() {
-        val single = Expense(id = 1, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1)
+        // 品目の無い支払いの支出(品名が空の1品目)
+        val singleGroup = ExpenseGroup(id = 9, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1)
+        val single = Expense(id = 1, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1, groupId = 9)
         val group = ExpenseGroup(id = 10, date = "2026-10-04", amount = 900, category = "外食", createdAt = 2, receiptId = 20)
         val groupItem = Expense(id = 2, date = "2026-10-04", amount = 900, category = "外食", createdAt = 2, groupId = 10)
         val excluded = LedgerLogic.excludedReceipts(
@@ -71,8 +73,8 @@ class LedgerExcludedTest {
             "2026-10-31",
         )
 
-        val without = LedgerLogic.buildEntries(listOf(single, groupItem), listOf(group))
-        val with = LedgerLogic.buildEntries(listOf(single, groupItem), listOf(group), excluded)
+        val without = LedgerLogic.buildEntries(listOf(single, groupItem), listOf(singleGroup, group))
+        val with = LedgerLogic.buildEntries(listOf(single, groupItem), listOf(singleGroup, group), excluded)
 
         // 自分が外れた支払いは0円。月の合計・カテゴリ別の合計は変わらない
         assertEquals(LedgerLogic.totalsByCategory(without), LedgerLogic.totalsByCategory(with))
@@ -88,7 +90,8 @@ class LedgerExcludedTest {
 
     @Test
     fun entries_excludedRowIsSortedByDateLikeOthers() {
-        val single = Expense(id = 1, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1)
+        val singleGroup = ExpenseGroup(id = 9, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1)
+        val single = Expense(id = 1, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1, groupId = 9)
         val excluded = LedgerLogic.excludedReceipts(
             listOf(receipt(30, "2026-10-05 12:00", 3000)),
             setOf(30L),
@@ -96,7 +99,8 @@ class LedgerExcludedTest {
             "2026-10-01",
             "2026-10-31",
         )
-        val entries = LedgerLogic.buildEntries(listOf(single), emptyList(), excluded)
+        val entries = LedgerLogic.buildEntries(listOf(single), listOf(singleGroup), excluded)
+        assertEquals(2, entries.size)
         assertTrue(entries.first() is LedgerEntry.Excluded)
         assertEquals("2026-10-05", entries.first().date)
     }

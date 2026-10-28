@@ -157,9 +157,11 @@ class BackupManager @Inject constructor(
                 validatePaths(backup)
                 // 支払いに属さない支出は、手入力の支払いに変えてから入れる(支出は必ず支払いから作る)
                 val conversion = convertOrphanExpensesToManualPayments(backup)
+                // 単独の支出(形式9以前)は、自分の支出(まとまり)+ 品名が空の1品目に変えてから入れる(DB の v14 の移行と同じ)
+                val converted = convertSingleExpensesToGroups(conversion.data)
 
                 onProgress(BackupProgress("データベースに取り込んでいます"))
-                val result = importData(conversion.data, mode, fileCount, conversion.manualReceiptIds)
+                val result = importData(converted, mode, fileCount, conversion.manualReceiptIds)
 
                 onProgress(BackupProgress("画像を配置しています"))
                 try {

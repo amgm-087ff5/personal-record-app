@@ -20,13 +20,11 @@ data class PaymentValues(
 sealed interface WriteBackTarget {
     val receiptId: Long?
 
-    /** 品目の支出(receiptItemId あり)。 */
-    data class Item(val expense: Expense) : WriteBackTarget {
-        override val receiptId: Long? get() = expense.receiptId
-    }
-
-    /** 単独の支出(品目なし)。 */
-    data class Single(val expense: Expense) : WriteBackTarget {
+    /**
+     * 支出の品目。receiptItemId があれば支払いの品目へ書き戻す。無ければ品目の無い支払いの1品目(支出だけに持つ)。
+     * onlyItem: 支出の品目がこれ1つだけか。1つだけなら金額は支出の金額と同じなので、品目の金額は直せない(支出の金額で直す)。
+     */
+    data class Item(val expense: Expense, val onlyItem: Boolean = false) : WriteBackTarget {
         override val receiptId: Long? get() = expense.receiptId
     }
 
@@ -42,7 +40,7 @@ sealed interface WriteBackPlan {
      * 支払い・品目を変え、対象の支出の行を更新する。その後の家計簿の作り直しは呼び出し側が行う。
      * @param receipt 更新後の支払い(変わらなければ元のまま)
      * @param changedItems 変えた品目だけ
-     * @param expense 対象が品目・単独の支出のときの、更新後の行(書き戻した欄の編集済みは下ろしてある)
+     * @param expense 対象が品目のときの、更新後の行(書き戻した欄の編集済みは下ろしてある)
      * @param group 対象が支出のまとまりのときの、更新後の行
      * @param expectedAmount 金額を直したときの、家計簿に入るはずの金額(作り直し後に確かめる。直していなければ null)
      */
@@ -64,9 +62,10 @@ sealed interface WriteBackPlan {
  * 書き戻し先:
  *  - 日時 → 支払いの purchasedAt(品目・支出の日時は支払いに従う)
  *  - 品目の品名・カテゴリ・メモ → その品目(receipt_items)。金額 → その品目を税込にして金額を入れる
- *  - 単独の支出・支出のまとまりの金額 → 支払いの合計(手入力の支払いだけ。印字のある支払いは変えない)
+ *  - 支出のまとまりの金額 → 支払いの合計(手入力の支払いだけ。印字のある支払いは変えない)
  *  - 支払い先 → 支払いの storeName(別の操作。withStoreName)
- * 支払いに対応する欄が無いもの(支出のまとまりのカテゴリ・メモ、単独の支出のカテゴリ・メモ・品名)は、支出だけに持つ(編集済みで保護)。
+ * 支払いに対応する欄が無いもの(支出のまとまりのカテゴリ・メモ、品目の無い支払いの1品目の品名・カテゴリ・メモ)は、
+ * 支出だけに持つ(編集済みで保護)。品目の無い支払いの1品目の金額は支出の金額に従うので、品目の側では直せない(支出の金額で直す)。
  *
  * 金額は、割り勘の参加者が1人のときだけ書き戻す(people が 2 以上なら拒否)。
  */
@@ -75,6 +74,8 @@ object PaymentWriteBack {
     const val MESSAGE_PRINTED_TOTAL = "レシートに印字された合計は変えられません。"
     const val MESSAGE_ITEMS_AMOUNT = "品目のある支払いの金額は、品目の金額で直してください。"
     const val MESSAGE_ADVANCE_AMOUNT = "立て替えの支払いの金額は、ここでは直せません。"
+    const val MESSAGE_BLANK_ITEM_AMOUNT = "品目の無い支払いの品目の金額は、支出の金額で直してください。"
+    const val MESSAGE_ONLY_ITEM_AMOUNT = "品目が1つのときは、品目の金額は支出の金額と同じです。支出の金額で直してください。"
 
     /** 日時から支払いの purchasedAt を作る("yyyy-MM-dd HH:mm"。時刻が空なら日付だけ)。 */
     fun purchasedAtOf(date: String, time: String): String = if (time.isBlank()) date else "$date $time"
@@ -96,8 +97,11 @@ object PaymentWriteBack {
         items: List<ReceiptItem>,
         people: Int,
     ): WriteBackPlan = when (target) {
-        is WriteBackTarget.Item -> planItem(target.expense, values, receipt, items, people)
-        is WriteBackTarget.Single -> planSingle(target.expense, values, receipt, items, people)
+        is WriteBackTarget.Item -> when {
+            target.expense.receiptItemId == null -> planBlankItem(target.expense, values, receipt)
+            target.onlyItem && values.amount != target.expense.amount -> WriteBackPlan.Reject(MESSAGE_ONLY_ITEM_AMOUNT)
+            else -> planItem(target.expense, values, receipt, items, people)
+        }
         is WriteBackTarget.Group -> planGroup(target.group, values, receipt, people)
     }
 
@@ -123,14 +127,16 @@ object PaymentWriteBack {
         if (nameChanged) newItem = newItem.copy(name = name)
         if (categoryChanged) newItem = newItem.copy(category = v.category)
         if (memoChanged) newItem = newItem.copy(memo = memo)
-        if (amountChanged) newItem = newItem.copy(amount = v.amount, priceIncludesTax = true)
+        // 金額を入れたら、その品目は金額不明ではなくなる
+        if (amountChanged) newItem = newItem.copy(amount = v.amount, priceIncludesTax = true, unknownAmount = false)
         val newItems = items.map { if (it.id == itemId) newItem else it }
 
         var newReceipt = receipt
         if (amountChanged) {
             // 手入力の支払いで、直す前の合計が品目の合計と一致していたときだけ、合計も新しい品目の合計に合わせる
+            // (金額不明の品目があるときは、差は不明の品目に入るので合計は変えない)
             val oldSum = TaxCalc.paidYen(items)
-            if (!isPrinted(receipt) && receipt.totalAmount?.toLong() == oldSum) {
+            if (!isPrinted(receipt) && items.none { it.unknownAmount } && receipt.totalAmount?.toLong() == oldSum) {
                 newReceipt = receipt.copy(totalAmount = TaxCalc.paidYen(newItems).toInt(), totalSource = TotalSource.ITEMS)
             }
         }
@@ -144,6 +150,7 @@ object PaymentWriteBack {
             categoryEdited = if (categoryChanged) false else e.categoryEdited,
             memoEdited = if (memoChanged) false else e.memoEdited,
             amountEdited = if (amountChanged) false else e.amountEdited,
+            unknownAmount = if (amountChanged) false else e.unknownAmount,
         )
         return WriteBackPlan.Apply(
             receipt = newReceipt,
@@ -154,37 +161,19 @@ object PaymentWriteBack {
         )
     }
 
-    private fun planSingle(
-        e: Expense,
-        v: PaymentValues,
-        receipt: Receipt,
-        items: List<ReceiptItem>,
-        people: Int,
-    ): WriteBackPlan {
-        val dateChanged = v.date != e.date || v.time != e.time
-        val amountChanged = v.amount != e.amount
-        if (amountChanged) {
-            if (people >= 2) return WriteBackPlan.Reject(MESSAGE_SPLIT_AMOUNT)
-            if (receipt.isAdvance) return WriteBackPlan.Reject(MESSAGE_ADVANCE_AMOUNT)
-            if (items.isNotEmpty()) return WriteBackPlan.Reject(MESSAGE_ITEMS_AMOUNT)
-            if (isPrinted(receipt)) return WriteBackPlan.Reject(MESSAGE_PRINTED_TOTAL)
-        }
-
-        var newReceipt = receipt
-        if (dateChanged) newReceipt = newReceipt.copy(purchasedAt = purchasedAtOf(v.date, v.time))
-        if (amountChanged) newReceipt = newReceipt.copy(totalAmount = v.amount, totalSource = TotalSource.MANUAL)
-
-        // 品名・カテゴリ・メモは支出だけに持つ(PaymentEdit と同じ規則で編集済みを立てる)
-        val expense = PaymentEdit.editExpense(e, v.date, v.time, v.amount, v.category, v.name, v.memo).copy(
-            amountEdited = if (amountChanged) false else e.amountEdited,
-            timeEdited = if (dateChanged) false else e.timeEdited,
-        )
+    /**
+     * 品目の無い支払いの1品目(receiptItemId なし)。品名・カテゴリ・メモは支出の品目だけに持つ(編集済みを立てる)。
+     * 金額は支出の金額に従うので、ここでは直せない。日時は支出(まとまり)に従うので、書き戻さない。
+     */
+    private fun planBlankItem(e: Expense, v: PaymentValues, receipt: Receipt): WriteBackPlan {
+        if (v.amount != e.amount) return WriteBackPlan.Reject(MESSAGE_BLANK_ITEM_AMOUNT)
+        val expense = PaymentEdit.editExpense(e, e.date, e.time, e.amount, v.category, v.name, v.memo)
         return WriteBackPlan.Apply(
-            receipt = newReceipt,
+            receipt = receipt,
             changedItems = emptyList(),
             expense = expense,
             group = null,
-            expectedAmount = if (amountChanged) v.amount else null,
+            expectedAmount = null,
         )
     }
 
@@ -198,6 +187,8 @@ object PaymentWriteBack {
         val amountChanged = v.amount != g.amount
         if (amountChanged) {
             if (people >= 2) return WriteBackPlan.Reject(MESSAGE_SPLIT_AMOUNT)
+            // 立て替えの支出の金額は自分の分(ownAmount)で、支払いの合計ではない
+            if (receipt.isAdvance) return WriteBackPlan.Reject(MESSAGE_ADVANCE_AMOUNT)
             if (isPrinted(receipt)) return WriteBackPlan.Reject(MESSAGE_PRINTED_TOTAL)
         }
 

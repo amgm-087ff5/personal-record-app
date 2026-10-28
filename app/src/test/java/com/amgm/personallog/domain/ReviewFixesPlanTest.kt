@@ -30,26 +30,26 @@ class ReviewFixesPlanTest {
     fun zeroYenItem_withEditedAmount_isKept_otherwiseDeleted() {
         val milk = item(11, "牛乳", 200)
         val soap = item(12, "洗剤", 500)
-        val first = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), emptyList(), true, 1) as ConfirmPlan.Rebuild
+        val first = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), emptyList(), 1) as ConfirmPlan.Rebuild
         val g = first.group!!.copy(id = 5)
         val children = first.children.mapIndexed { i, e -> e.copy(id = 100L + i, groupId = 5) }
         // 洗剤を0円にした(レシート側)。家計簿で洗剤の金額を直していれば残す
         val soapZero = soap.copy(amount = 0)
         val keepEdited = listOf(children[0], children[1].copy(amount = 480, amountEdited = true))
-        val p1 = ConfirmPlanner.plan(receipt(), listOf(milk, soapZero), listOf(g), keepEdited, true, 2) as ConfirmPlan.UpdateGroup
+        val p1 = ConfirmPlanner.plan(receipt(), listOf(milk, soapZero), listOf(g), keepEdited, 2) as ConfirmPlan.UpdateGroup
         assertTrue(p1.deleteIds.isEmpty())
-        val p2 = ConfirmPlanner.plan(receipt(), listOf(milk, soapZero), listOf(g), children, true, 2) as ConfirmPlan.UpdateGroup
+        val p2 = ConfirmPlanner.plan(receipt(), listOf(milk, soapZero), listOf(g), children, 2) as ConfirmPlan.UpdateGroup
         assertEquals(listOf(101L), p2.deleteIds)
     }
 
     @Test
     fun updateGroup_childrenFollowTheGroupDateTime() {
         val milk = item(11, "牛乳", 200)
-        val first = ConfirmPlanner.plan(receipt(), listOf(milk), emptyList(), emptyList(), true, 1) as ConfirmPlan.Rebuild
+        val first = ConfirmPlanner.plan(receipt(), listOf(milk), emptyList(), emptyList(), 1) as ConfirmPlan.Rebuild
         // 家計簿でグループの日時を翌月に直した(timeEdited)
         val g = first.group!!.copy(id = 5, date = "2026-11-01", time = "09:00", timeEdited = true)
         val child = first.children[0].copy(id = 100, groupId = 5)
-        val p = ConfirmPlanner.plan(receipt(), listOf(milk), listOf(g), listOf(child), true, 2) as ConfirmPlan.UpdateGroup
+        val p = ConfirmPlanner.plan(receipt(), listOf(milk), listOf(g), listOf(child), 2) as ConfirmPlan.UpdateGroup
         assertEquals("2026-11-01", p.group.date)
         assertEquals("2026-11-01", p.updates.single().date)
         assertEquals("09:00", p.updates.single().time)
@@ -111,21 +111,22 @@ class ReviewFixesPlanTest {
     fun rebuild_keepsDeletedItems_hiddenAndOutOfChildren() {
         val milk = item(11, "牛乳", 200)
         val soap = item(12, "洗剤", 500)
-        val first = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), emptyList(), true, 1) as ConfirmPlan.Rebuild
+        val first = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), emptyList(), 1) as ConfirmPlan.Rebuild
         val g = first.group!!.copy(id = 5)
         val children = first.children.mapIndexed { i, e -> e.copy(id = 100L + i, groupId = 5) }
         val deleted = children[1].copy(deletedByUser = true)
-        // 立て替えにした: 単独の1行へ作り直す。消した品目は keepDeleted に残る
+        // 立て替えにした(v14〜 立て替えも支出+品目なので作り直さない)。消した品目は消したまま、自分の分は品目の比で配る
         val toAdvance = ConfirmPlanner.plan(
-            receipt().copy(isAdvance = true, ownAmount = 300), listOf(milk, soap), listOf(g), listOf(children[0], deleted), true, 2,
-        ) as ConfirmPlan.Rebuild
-        assertEquals(null, toAdvance.group)
-        assertEquals(listOf(deleted), toAdvance.keepDeleted)
-        assertTrue(toAdvance.children.none { it.deletedByUser })
+            receipt().copy(isAdvance = true, ownAmount = 300), listOf(milk, soap), listOf(g), listOf(children[0], deleted), 2,
+        ) as ConfirmPlan.UpdateGroup
+        assertEquals(300, toAdvance.group.amount)
+        assertEquals(listOf(86, 214), toAdvance.updates.map { it.amount })
+        assertEquals(listOf(false, true), toAdvance.updates.map { it.deletedByUser })
+        assertTrue(toAdvance.deleteIds.isEmpty())
         // 消した品目は「家計簿で直した」件数に入らない
         assertEquals(0, ConfirmPlanner.lostEditedCount(toAdvance, listOf(g), listOf(children[0], deleted), emptyList()))
-        // 通常に戻した: グループへ作り直す。消した品目の行は children に入らない
-        val back = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), listOf(children[0].copy(groupId = null), deleted.copy(groupId = null)), true, 3) as ConfirmPlan.Rebuild
+        // 自分の分が0円の間に非表示で置いた行(groupId なし)から、支出へ作り直す。消した品目の行は children に入らない
+        val back = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), listOf(children[0].copy(groupId = null), deleted.copy(groupId = null)), 3) as ConfirmPlan.Rebuild
         assertEquals(listOf(11L), back.children.map { it.receiptItemId })
         assertEquals(listOf(12L), back.keepDeleted.map { it.receiptItemId })
     }

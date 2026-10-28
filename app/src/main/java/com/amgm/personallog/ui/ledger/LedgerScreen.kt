@@ -208,7 +208,6 @@ fun LedgerScreen(
                         onToggleGroup = { id -> expandedGroups[id] = expandedGroups[id] != true },
                         onOpen = { entry ->
                             when (entry) {
-                                is LedgerEntry.Single -> onOpenPayment(PaymentKind.EXPENSE, entry.expense.id)
                                 is LedgerEntry.Group -> onOpenPayment(PaymentKind.GROUP, entry.group.id)
                                 is LedgerEntry.Excluded -> onOpenExcludedPayment(entry.receipt.id)
                             }

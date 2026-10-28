@@ -225,29 +225,87 @@ class PaymentWriteBackTest {
     }
 
     @Test
-    fun singleAmountChangeWithItemsIsRejected() {
-        val single = Expense(id = 41, date = "2026-10-31", time = "20:00", amount = 700, receiptId = 1, createdAt = 0)
-        val plan = PaymentWriteBack.plan(
-            WriteBackTarget.Single(single),
+    fun blankItem_amountChangeIsRejected_nameCategoryMemoStayOnTheItem() {
+        // 品目の無い支払いの1品目(receiptItemId なし)。金額は支出の金額に従うので、品目の側では直せない
+        val blank = Expense(id = 41, date = "2026-10-31", time = "20:00", amount = 700, receiptId = 1, groupId = 31, createdAt = 0)
+        val reject = PaymentWriteBack.plan(
+            WriteBackTarget.Item(blank, onlyItem = true),
             PaymentValues("2026-10-31", "20:00", 800, "食費", "", ""),
-            receipt(), items, people = 1,
+            receipt(), emptyList(), people = 1,
         )
-        assertEquals(PaymentWriteBack.MESSAGE_ITEMS_AMOUNT, (plan as WriteBackPlan.Reject).message)
+        assertEquals(PaymentWriteBack.MESSAGE_BLANK_ITEM_AMOUNT, (reject as WriteBackPlan.Reject).message)
+
+        val p = apply(
+            PaymentWriteBack.plan(
+                WriteBackTarget.Item(blank, onlyItem = true),
+                PaymentValues("2026-10-31", "20:00", 700, "外食", "ランチ", "ひとこと"),
+                receipt(), emptyList(), people = 1,
+            ),
+        )
+        assertEquals(receipt(), p.receipt) // 支払いは変わらない
+        assertTrue(p.changedItems.isEmpty())
+        assertEquals("ランチ", p.expense!!.name)
+        assertEquals("外食", p.expense!!.category)
+        assertEquals("ひとこと", p.expense!!.memo)
+        assertTrue(p.expense!!.nameEdited && p.expense!!.categoryEdited && p.expense!!.memoEdited)
     }
 
     @Test
-    fun singleAmountChangeWithoutItemsWritesManualTotal() {
-        val single = Expense(id = 41, date = "2026-10-31", time = "20:00", amount = 700, receiptId = 1, createdAt = 0)
+    fun onlyItem_amountChangeIsRejected() {
+        // 品目が1つなら、品目の金額は支出の金額と同じ(支出の金額で直す)
+        val plan = PaymentWriteBack.plan(
+            WriteBackTarget.Item(milkExpense(), onlyItem = true),
+            values(amount = 250),
+            receipt(), items, people = 1,
+        )
+        assertEquals(PaymentWriteBack.MESSAGE_ONLY_ITEM_AMOUNT, (plan as WriteBackPlan.Reject).message)
+    }
+
+    @Test
+    fun groupAmountChangeWithoutItemsWritesManualTotal() {
+        // 品目の無い手入力の支払い: 支出の金額は支払いの合計へ書き戻す(以前の単独の支出と同じ)
         val p = apply(
             PaymentWriteBack.plan(
-                WriteBackTarget.Single(single),
-                PaymentValues("2026-10-31", "20:00", 800, "食費", "", ""),
+                WriteBackTarget.Group(group()),
+                values(amount = 800, category = "食費", memo = "店"),
                 receipt(total = 700), emptyList(), people = 1,
             ),
         )
         assertEquals(800, p.receipt.totalAmount)
         assertEquals(TotalSource.MANUAL, p.receipt.totalSource)
-        assertFalse(p.expense!!.amountEdited)
+        assertFalse(p.group!!.amountEdited)
+    }
+
+    @Test
+    fun groupAmountChangeOfAdvanceIsRejected() {
+        val plan = PaymentWriteBack.plan(
+            WriteBackTarget.Group(group()),
+            values(amount = 800, category = "食費", memo = "店"),
+            receipt().copy(isAdvance = true, ownAmount = 300), items, people = 1,
+        )
+        assertEquals(PaymentWriteBack.MESSAGE_ADVANCE_AMOUNT, (plan as WriteBackPlan.Reject).message)
+    }
+
+    @Test
+    fun itemAmountChange_clearsUnknown_andKeepsTotalWhenOtherUnknownRemains() {
+        val unknownItem = ReceiptItem(id = 13, receiptId = 1, name = "?", amount = 0, category = "食費", unknownAmount = true)
+        val withUnknown = items + unknownItem
+        val unknownExpense = Expense(
+            id = 23, date = "2026-10-31", time = "20:00", amount = 300, category = "食費", receiptId = 1, receiptItemId = 13,
+            groupId = 31, name = "?", createdAt = 0, unknownAmount = true,
+        )
+        val p = apply(
+            PaymentWriteBack.plan(
+                WriteBackTarget.Item(unknownExpense),
+                values(amount = 280, name = "?"),
+                receipt(total = 1000), withUnknown, people = 1,
+            ),
+        )
+        assertFalse(p.changedItems.single().unknownAmount)
+        assertEquals(280, p.changedItems.single().amount)
+        assertFalse(p.expense!!.unknownAmount)
+        // 合計は変えない(計算の正は合計額)
+        assertEquals(1000, p.receipt.totalAmount)
     }
 
     @Test
