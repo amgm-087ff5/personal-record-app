@@ -770,7 +770,7 @@ internal fun deletePaymentMessage(receipt: Receipt?, isExpense: Boolean): String
     }.orEmpty()
     val payment = if (what.isEmpty()) "元の支払い" else "元の支払い($what)"
     return if (isExpense) {
-        "この支出を削除します。$payment とレシート画像も一緒に削除されます。"
+        "この支出を削除します。${payment}とレシート画像も一緒に削除されます。"
     } else {
         "この支払い${if (what.isEmpty()) "" else "($what)"}とレシート画像を削除します。"
     }
