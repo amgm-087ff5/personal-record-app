@@ -9,10 +9,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -136,7 +137,7 @@ class InkSheetHostTest {
         // 見出しをタップすると開き直る
         title.performClick()
         settle()
-        composeRule.onNodeWithText("タップで開く", useUnmergedTree = true).assertDoesNotExist()
+        composeRule.onAllNodesWithText("タップで開く", useUnmergedTree = true).assertCountEquals(0)
         val reopenedTop = title.fetchSemanticsNode().boundsInRoot.top
         assertTrue("開き直すと見出しが上に戻ること", reopenedTop < minimizedTop)
     }
@@ -150,6 +151,6 @@ class InkSheetHostTest {
         settle()
 
         assertEquals(1, dismissCount)
-        composeRule.onNodeWithText("テスト", useUnmergedTree = true).assertDoesNotExist()
+        composeRule.onAllNodesWithText("テスト", useUnmergedTree = true).assertCountEquals(0)
     }
 }
