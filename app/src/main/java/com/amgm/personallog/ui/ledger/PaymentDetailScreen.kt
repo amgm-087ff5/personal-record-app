@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentWriteBack
@@ -98,6 +99,11 @@ fun PaymentDetailScreen(
                     TextAction("戻る", onClick = onBack, color = c.inkSoft)
                 }
             }
+            // 下書きの支払いの確認への入口(支払いの確定は支払いの画面で行う。ここは開くだけ)
+            val draft = s.receipt?.takeIf { s.group != null && it.status == ReceiptStatus.DRAFT }
+            if (draft != null) {
+                item(key = "draft") { DraftPaymentBanner(draft, onConfirmClick = { onOpenReceipt(draft.id) }) }
+            }
             // 親: この支出の元の支払い(画面の最上部。タップで支払いを開く)
             val parent = s.receipt?.takeIf { s.group != null }
             if (parent != null) {
@@ -116,6 +122,8 @@ fun PaymentDetailScreen(
             }
             val group = s.group
             val scanned = PaymentMarks.isScannedReceipt(s.receipt)
+            // 品目の税率は、対応する支払いの品目から引く(表示のみ。データは持たない)
+            val paymentItemById = s.paymentItems.associateBy { it.id }
             s.duplicateOf?.let { original ->
                 item(key = "duplicate") {
                     DuplicateNotice(original, onOpenPayment = { s.receipt?.id?.let(onOpenReceipt) })
@@ -142,7 +150,11 @@ fun PaymentDetailScreen(
                 }
                 items(s.items.size, key = { "item-" + s.items[it].id }) { i ->
                     Column(Modifier.fillMaxWidth().nestedLine(c.line)) {
-                        ItemRow(s.items[i], scanned, onClick = { editingItemId = s.items[i].id }, onRevert = { viewModel.revertItemField(s.items[i], it) })
+                        val taxLabels = s.items[i].receiptItemId?.let { paymentItemById[it] }?.let(PaymentMarks::taxLabels).orEmpty()
+                        ItemRow(
+                            s.items[i], scanned, taxLabels = taxLabels,
+                            onClick = { editingItemId = s.items[i].id }, onRevert = { viewModel.revertItemField(s.items[i], it) },
+                        )
                     }
                 }
                 item(key = "sum") {
@@ -304,6 +316,24 @@ fun PaymentDetailScreen(
             onDismiss = { editingStore = false },
             onSave = { name, done -> viewModel.saveStore(receipt.id, name, done) },
         )
+    }
+}
+
+/**
+ * 下書きの支払いの確認を促す帯(支出の画面の最上部)。主ボタンで支払いの画面を開く。
+ * 確定の処理(重複・合計未入力の確認など)は支払いの画面(ReceiptDetailViewModel)が持つ。ここでは持たない。
+ */
+@Composable
+internal fun DraftPaymentBanner(receipt: Receipt, onConfirmClick: () -> Unit) {
+    val c = AppTheme.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Space.edge, vertical = Space.m),
+    ) {
+        Text(PaymentMarks.draftBannerText(receipt), style = AppTheme.type.body, color = c.ink)
+        Spacer(Modifier.height(Space.s))
+        InkButton("確認して確定する ›", onClick = onConfirmClick, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -566,14 +596,14 @@ private fun GroupHeader(group: ExpenseGroup, scanned: Boolean, onEdit: () -> Uni
 }
 
 @Composable
-private fun ItemRow(item: Expense, scanned: Boolean, onClick: () -> Unit, onRevert: (PaymentField) -> Unit) {
+private fun ItemRow(item: Expense, scanned: Boolean, taxLabels: List<String>, onClick: () -> Unit, onRevert: (PaymentField) -> Unit) {
     val c = AppTheme.colors
     val marks = PaymentMarks.ofExpense(item, scanned)
     val sub = listOfNotNull(
         item.category,
         item.memo.ifBlank { null },
         item.time.ifEmpty { null }.takeIf { PaymentField.TIME in marks },
-    ).joinToString(" · ")
+    ).plus(taxLabels).joinToString(" · ")
     Column(Modifier.fillMaxWidth().tappable(onClick).padding(horizontal = Space.edge)) {
         Row(Modifier.fillMaxWidth().padding(vertical = Space.s + Space.xs), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {

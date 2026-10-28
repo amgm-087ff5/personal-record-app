@@ -22,15 +22,18 @@ import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptDedup
 import com.amgm.personallog.ui.receipt.ReceiptImportCoordinator
 import com.amgm.personallog.ui.receipt.ReceiptListUiState
+import com.amgm.personallog.ui.receipt.draftReceiptIds
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -110,6 +113,11 @@ class LedgerViewModel @Inject constructor(
 
     /** レシートの取り込みの状態(アプリで1つ。支払い一覧と共有)。 */
     val imports: StateFlow<ReceiptListUiState> = importer.state
+
+    /** 取り込みの結果のうち、まだ下書きの支払いの id(「開く ›」を「確認する ›」にする)。 */
+    val importDraftIds: StateFlow<Set<Long>> = combine(imports, receipts.observeReceipts()) { st, list ->
+        draftReceiptIds(st.imports.map { it.receiptId }, list)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     fun newImportCameraPath(): String = importer.newCameraPath()
 

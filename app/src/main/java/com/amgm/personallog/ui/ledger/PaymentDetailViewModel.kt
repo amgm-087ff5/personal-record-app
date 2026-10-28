@@ -31,6 +31,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -141,25 +143,36 @@ class PaymentDetailViewModel @Inject constructor(
                 }
             }
 
+    /**
+     * まとまりに紐づく支払いと、その品目。確定(下書き→確定)は支払いの行を書き換えるので、支払いも観測する。
+     * 支出の行が変わらなくても、支払いの状態(下書きか)の変化がこの画面に届くようにする。
+     */
+    private fun paymentFlow(gid: Long): Flow<Pair<Receipt?, List<ReceiptItem>>> =
+        repository.observeGroup(gid).map { it?.receiptId }.distinctUntilChanged().flatMapLatest { rid ->
+            if (rid == null) {
+                flowOf<Pair<Receipt?, List<ReceiptItem>>>(null to emptyList())
+            } else {
+                combine(receipts.observeReceipt(rid), receipts.observeItems(rid)) { r, items -> r to items }
+            }
+        }
+
     /** 支出(まとまり)の画面。 */
     private fun groupFlow(gid: Long): Flow<PaymentUiState> =
-        combine(repository.observeGroup(gid), repository.observeGroupItems(gid)) { g, items -> g to items }
-            .map { (g, items) ->
-                if (g == null) {
-                    PaymentUiState(loading = false, notFound = true, kind = PaymentKind.GROUP)
-                } else {
-                    val receipt = g.receiptId?.let { repository.receipt(it) }
-                    val paymentItems = g.receiptId?.let { receipts.getItems(it) }.orEmpty()
-                    val (gone, visible) = items.sortedBy { it.id }.partition { it.deletedByUser }
-                    val people = g.receiptId?.let { receipts.participantCount(it) } ?: 1
-                    PaymentUiState(
-                        loading = false, kind = PaymentKind.GROUP, group = g, items = visible, deletedItems = gone,
-                        receipt = receipt, paymentItems = paymentItems, receiptAt = repository.receiptDateTime(g.receiptId),
-                        splitPeople = people,
-                        individual = if (people >= 2) selfIndividual(g.receiptId) else null,
-                    )
-                }
+        combine(repository.observeGroup(gid), repository.observeGroupItems(gid), paymentFlow(gid)) { g, items, payment ->
+            if (g == null) {
+                PaymentUiState(loading = false, notFound = true, kind = PaymentKind.GROUP)
+            } else {
+                val (receipt, paymentItems) = payment
+                val (gone, visible) = items.sortedBy { it.id }.partition { it.deletedByUser }
+                val people = g.receiptId?.let { receipts.participantCount(it) } ?: 1
+                PaymentUiState(
+                    loading = false, kind = PaymentKind.GROUP, group = g, items = visible, deletedItems = gone,
+                    receipt = receipt, paymentItems = paymentItems, receiptAt = repository.receiptDateTime(g.receiptId),
+                    splitPeople = people,
+                    individual = if (people >= 2) selfIndividual(g.receiptId) else null,
+                )
             }
+        }
 
     init {
         viewModelScope.launch {

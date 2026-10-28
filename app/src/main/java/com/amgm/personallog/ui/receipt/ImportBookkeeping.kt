@@ -1,5 +1,17 @@
 package com.amgm.personallog.ui.receipt
 
+import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.ReceiptStatus
+
+/**
+ * 取り込みの結果(支払いの id)のうち、まだ下書きの支払いの id(純Kotlin)。
+ * 取り込みの「開く ›」を「確認する ›」に変えるのに使う(確定が済んだものは含まない)。
+ */
+fun draftReceiptIds(importReceiptIds: List<Long?>, receipts: List<Receipt>): Set<Long> {
+    val drafts = receipts.filter { it.status == ReceiptStatus.DRAFT }.map { it.id }.toSet()
+    return importReceiptIds.filterNotNull().filter { it in drafts }.toSet()
+}
+
 /** 同じ選択内の重複検出用: 画像ハッシュ -> 予約している項目(純Kotlin)。 */
 class HashClaims {
     private val map = HashMap<String, Long>()
