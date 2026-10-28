@@ -71,7 +71,7 @@ class ItemEditorSheetPagerTest {
     }
 
     /** 時間だけ進める(入力なしで待つ)。 */
-    private fun wait(ms: Long) {
+    private fun advance(ms: Long) {
         composeRule.mainClock.advanceTimeBy(ms)
         composeRule.waitForIdle()
     }
@@ -81,7 +81,7 @@ class ItemEditorSheetPagerTest {
         setSheet()
         composeRule.onNodeWithText("2 / 2").assertIsDisplayed()
 
-        wait(3000)
+        advance(3000)
 
         composeRule.onNodeWithText("2 / 2").assertIsDisplayed()
         composeRule.onAllNodesWithText("3 / 3").assertCountEquals(0)
@@ -93,11 +93,11 @@ class ItemEditorSheetPagerTest {
 
         composeRule.onNodeWithText("＋ 追加").performClick()
         settle()
-        wait(3000)
+        advance(3000)
 
         composeRule.onNodeWithText("3 / 3").assertIsDisplayed()
 
-        wait(3000)
+        advance(3000)
 
         composeRule.onNodeWithText("3 / 3").assertIsDisplayed()
         composeRule.onAllNodesWithText("4 / 4").assertCountEquals(0)
@@ -116,11 +116,11 @@ class ItemEditorSheetPagerTest {
             )
         }
         settle()
-        wait(3000)
+        advance(3000)
 
         composeRule.onNodeWithText("3 / 3").assertIsDisplayed()
 
-        wait(3000)
+        advance(3000)
 
         composeRule.onNodeWithText("3 / 3").assertIsDisplayed()
         composeRule.onAllNodesWithText("4 / 4").assertCountEquals(0)
@@ -139,7 +139,7 @@ class ItemEditorSheetPagerTest {
             )
         }
         settle()
-        wait(3000)
+        advance(3000)
 
         composeRule.onNodeWithText("2 / 2").assertIsDisplayed()
         composeRule.onAllNodesWithText("3 / 3").assertCountEquals(0)
