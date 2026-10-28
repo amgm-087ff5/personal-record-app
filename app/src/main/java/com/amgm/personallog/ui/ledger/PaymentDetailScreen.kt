@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentWriteBack
@@ -98,6 +99,11 @@ fun PaymentDetailScreen(
                     TextAction("戻る", onClick = onBack, color = c.inkSoft)
                 }
             }
+            // 下書きの支払いの確定への入口(支出の画面で確定する。支払いの画面は開かない)
+            val draft = s.receipt?.takeIf { s.group != null && it.status == ReceiptStatus.DRAFT }
+            if (draft != null) {
+                item(key = "draft") { DraftPaymentBanner(draft, busy = s.confirming, onConfirmClick = viewModel::confirmDraft) }
+            }
             // 親: この支出の元の支払い(画面の最上部。タップで支払いを開く)
             val parent = s.receipt?.takeIf { s.group != null }
             if (parent != null) {
@@ -116,6 +122,8 @@ fun PaymentDetailScreen(
             }
             val group = s.group
             val scanned = PaymentMarks.isScannedReceipt(s.receipt)
+            // 品目の税率は、対応する支払いの品目から引く(表示のみ。データは持たない)
+            val paymentItemById = s.paymentItems.associateBy { it.id }
             s.duplicateOf?.let { original ->
                 item(key = "duplicate") {
                     DuplicateNotice(original, onOpenPayment = { s.receipt?.id?.let(onOpenReceipt) })
@@ -142,7 +150,11 @@ fun PaymentDetailScreen(
                 }
                 items(s.items.size, key = { "item-" + s.items[it].id }) { i ->
                     Column(Modifier.fillMaxWidth().nestedLine(c.line)) {
-                        ItemRow(s.items[i], scanned, onClick = { editingItemId = s.items[i].id }, onRevert = { viewModel.revertItemField(s.items[i], it) })
+                        val taxLabels = s.items[i].receiptItemId?.let { paymentItemById[it] }?.let(PaymentMarks::taxLabels).orEmpty()
+                        ItemRow(
+                            s.items[i], scanned, taxLabels = taxLabels,
+                            onClick = { editingItemId = s.items[i].id }, onRevert = { viewModel.revertItemField(s.items[i], it) },
+                        )
                     }
                 }
                 item(key = "sum") {
@@ -297,12 +309,93 @@ fun PaymentDetailScreen(
             },
         )
     }
+    // 下書きの確定の確認(重複・合計未入力・家計簿の作り直し)。判定は PaymentConfirmer
+    DraftConfirmSheets(
+        state = s,
+        onConfirmAnyway = viewModel::confirmAnyway,
+        onNotDuplicate = viewModel::confirmMarkingNotDuplicate,
+        onUseItemsSum = viewModel::confirmWithItemsSum,
+        onInputTotal = viewModel::confirmWithTotal,
+        onRebuildConfirm = viewModel::confirmRebuildAccepted,
+        onDismiss = viewModel::dismissConfirmSheets,
+    )
     val receipt = s.receipt
     if (editingStore && receipt != null) {
         StoreSheet(
             current = receipt.storeName,
             onDismiss = { editingStore = false },
             onSave = { name, done -> viewModel.saveStore(receipt.id, name, done) },
+        )
+    }
+}
+
+/**
+ * 下書きの支払いの確定欄(支出の画面の最上部)。「下書き」の印・読み取り結果の案内・レシート画像(タップで下に広げる)・主ボタン「確定」。
+ * 確定の判定と保存は PaymentConfirmer が行い、ここは押すだけ。確定後は支払いが DB 経由で確定済みになり、この欄は消える。
+ */
+@Composable
+internal fun DraftPaymentBanner(receipt: Receipt, onConfirmClick: () -> Unit, busy: Boolean = false) {
+    val c = AppTheme.colors
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val hasImage = receipt.imagePath.isNotBlank()
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Space.edge, vertical = Space.m),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+            if (hasImage && !expanded) {
+                DraftReceiptImage(
+                    receipt.imagePath,
+                    expanded = false,
+                    modifier = Modifier.size(width = 64.dp, height = 84.dp).tappable { expanded = true },
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                Stamp("下書き")
+                Text(
+                    PaymentMarks.draftBannerText(receipt),
+                    style = AppTheme.type.body,
+                    color = c.ink,
+                    modifier = Modifier.padding(top = Space.xs),
+                )
+            }
+        }
+        if (hasImage && expanded) {
+            DraftReceiptImage(
+                receipt.imagePath,
+                expanded = true,
+                modifier = Modifier.fillMaxWidth().height(360.dp).padding(top = Space.s).tappable { expanded = false },
+            )
+        }
+        Spacer(Modifier.height(Space.s))
+        InkButton("確定", onClick = onConfirmClick, modifier = Modifier.fillMaxWidth(), enabled = !busy)
+    }
+}
+
+/** 下書きのレシート画像。縮小表示(thumb)と、タップで広げた表示(expanded)を同じ読み込みで出す。画像が無ければ「画像なし」。 */
+@Composable
+private fun DraftReceiptImage(imagePath: String, expanded: Boolean, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val maxPx = if (expanded) 1024 else 256
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, imagePath, maxPx) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                ReceiptImageCodec.decodeScaled(File(context.filesDir, imagePath), maxPx)?.asImageBitmap()
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+    val bmp = bitmap
+    if (bmp == null) {
+        Box(modifier.background(AppTheme.colors.paperRaised), contentAlignment = Alignment.Center) { Label("画像なし") }
+    } else {
+        Image(
+            bitmap = bmp,
+            contentDescription = "レシート画像",
+            contentScale = if (expanded) ContentScale.Fit else ContentScale.Crop,
+            modifier = modifier,
         )
     }
 }
@@ -566,14 +659,14 @@ private fun GroupHeader(group: ExpenseGroup, scanned: Boolean, onEdit: () -> Uni
 }
 
 @Composable
-private fun ItemRow(item: Expense, scanned: Boolean, onClick: () -> Unit, onRevert: (PaymentField) -> Unit) {
+private fun ItemRow(item: Expense, scanned: Boolean, taxLabels: List<String>, onClick: () -> Unit, onRevert: (PaymentField) -> Unit) {
     val c = AppTheme.colors
     val marks = PaymentMarks.ofExpense(item, scanned)
     val sub = listOfNotNull(
         item.category,
         item.memo.ifBlank { null },
         item.time.ifEmpty { null }.takeIf { PaymentField.TIME in marks },
-    ).joinToString(" · ")
+    ).plus(taxLabels).joinToString(" · ")
     Column(Modifier.fillMaxWidth().tappable(onClick).padding(horizontal = Space.edge)) {
         Row(Modifier.fillMaxWidth().padding(vertical = Space.s + Space.xs), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {

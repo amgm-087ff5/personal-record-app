@@ -66,6 +66,7 @@ fun LedgerScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val imports by viewModel.imports.collectAsStateWithLifecycle()
+    val importDrafts by viewModel.importDraftIds.collectAsStateWithLifecycle()
     val c = AppTheme.colors
     val scope = rememberCoroutineScope()
     // 家計簿の支出は、支払い(レシートの表)を保存したときに作られる。支出だけを単独で追加する入口は無い
@@ -142,6 +143,7 @@ fun LedgerScreen(
                             onDismissError = viewModel::dismissImportError,
                             onRetry = viewModel::retryImport,
                             onOpen = openImported,
+                            draftReceiptIds = importDrafts,
                             onClear = viewModel::clearImports,
                         )
                     }

@@ -10,6 +10,8 @@ import com.amgm.personallog.data.model.ReceiptStatus
 import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.repository.HeadcountSyncChange
 import com.amgm.personallog.data.repository.ParticipantSyncService
+import com.amgm.personallog.data.repository.ConfirmOutcome
+import com.amgm.personallog.data.repository.PaymentConfirmer
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.domain.PaymentLink
 import com.amgm.personallog.domain.TaxBreakdown
@@ -302,6 +304,7 @@ class ReceiptDetailViewModel @Inject constructor(
     private val store: ReceiptImageStore,
     private val scanner: ReceiptScanner,
     private val syncService: ParticipantSyncService,
+    private val confirmer: PaymentConfirmer,
 ) : ViewModel() {
 
     private val receiptId: Long = savedStateHandle.get<Long>("id") ?: 0L
@@ -778,35 +781,26 @@ class ReceiptDetailViewModel @Inject constructor(
         }
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
-            try {
-                if (checkDuplicate) {
-                    val notDup = ReceiptDedup.notDuplicateSet(repository.notDuplicates())
-                    val confirmed = repository.allReceipts().filter { it.status == ReceiptStatus.CONFIRMED }
-                    val dups = ReceiptDedup.sameContent(built.first, confirmed, notDup)
-                    if (dups.isNotEmpty()) {
-                        _state.update {
-                            it.copy(busy = false, duplicateWarning = dups.map { d -> DuplicateRef(d.id, ReceiptDedup.summary(d)) })
-                        }
-                        return@launch
-                    }
+            // 確定の判定は PaymentConfirmer(支出の画面と共通)。ここは結果に応じた確認を出すだけ
+            when (val outcome = confirmer.confirm(built.first, built.second, checkDuplicate, rebuildAccepted)) {
+                ConfirmOutcome.Confirmed -> {
+                    storedHeadcount = built.first.headcount
+                    _state.update { it.copy(busy = false, confirmed = true, finished = true) }
                 }
-                // 再確定で家計簿の行が作り直される(立て替えの切り替え・古い形式)なら、先に知らせる
-                // 品目の削除で、家計簿で直した行が消える場合も知らせる
-                if (!rebuildAccepted) {
-                    val impact = repository.confirmImpact(built.first, built.second)
-                    if (impact.needsWarning) {
-                        _state.update { it.copy(busy = false, rebuildWarning = true, rebuildRebuilds = impact.rebuild, lostEditedCount = impact.lostEdited, keptDeletedCount = impact.keptDeleted) }
-                        return@launch
-                    }
+                is ConfirmOutcome.NeedsDuplicateDecision -> _state.update {
+                    it.copy(busy = false, duplicateWarning = outcome.duplicates.map { d -> DuplicateRef(d.id, ReceiptDedup.summary(d)) })
                 }
-                // 保存と確定は1つのトランザクション(途中で失敗しても保存だけ残らない)
-                repository.saveAndConfirm(built.first, built.second, perItem = true)
-                storedHeadcount = built.first.headcount
-                _state.update { it.copy(busy = false, confirmed = true, finished = true) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(busy = false, error = "確定に失敗しました: ${e.message.orEmpty()}") }
+                is ConfirmOutcome.MissingTotal -> _state.update { it.copy(busy = false, missingTotalPrompt = true) }
+                is ConfirmOutcome.NeedsRebuildDecision -> _state.update {
+                    it.copy(
+                        busy = false,
+                        rebuildWarning = true,
+                        rebuildRebuilds = outcome.impact.rebuild,
+                        lostEditedCount = outcome.impact.lostEdited,
+                        keptDeletedCount = outcome.impact.keptDeleted,
+                    )
+                }
+                is ConfirmOutcome.Error -> _state.update { it.copy(busy = false, error = outcome.message) }
             }
         }
     }
