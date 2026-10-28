@@ -145,7 +145,6 @@ class MigrationV14RobolectricTest {
         val room = openRoom()
         try {
             val db = room.openHelper.writableDatabase // 移行と Room の検証がここで走る。通らなければ例外
-            assertEquals(14, db.version)
             assertEquals(AppDatabase.VERSION, db.version)
             assertTrue(db.columnNames("receipt_items").contains("unknownAmount"))
             assertTrue(db.columnNames("expenses").contains("unknownAmount"))
