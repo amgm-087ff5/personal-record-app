@@ -1,5 +1,6 @@
 package com.amgm.personallog.ui.ledger
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalOverscrollConfiguration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -270,6 +271,8 @@ private val PAGER_HEIGHT: Dp = 330.dp
  *
  * 画面の入力は remember で持つ(画面の回転・再生成では失われる。品目の内容は保存済みから作り直す)。
  */
+// 引きしろのオーバースクロールを切る API は実験的(foundation)。指の操作を連携で数えるために使う
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun ItemEditorSheet(
     group: ExpenseGroup,
