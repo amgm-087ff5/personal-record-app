@@ -87,7 +87,6 @@ fun PaymentDetailScreen(
     var addingItem by rememberSaveable { mutableStateOf(false) }
     var deletingGroup by rememberSaveable { mutableStateOf(false) }
     var editingStore by rememberSaveable { mutableStateOf(false) }
-    val editingItem: Expense? = editingItemId?.let { id -> s.items.firstOrNull { it.id == id } }
 
     // 削除などで対象が無くなった(または開いた時点で無かった)ら戻る
     LaunchedEffect(s.finished, s.notFound) { if (s.finished || s.notFound) onBack() }
@@ -266,48 +265,24 @@ fun PaymentDetailScreen(
             lockedAmountNote = if (s.splitPeople >= 2) "" else null,
         )
     }
-    editingItem?.let { target ->
-        ExpenseEditorSheet(
-            original = target,
-            initialDate = target.date,
-            initialTime = target.time,
-            linkedReceiptAt = s.receiptAt?.takeIf { target.receiptId != null },
-            fromScannedReceipt = PaymentMarks.isScannedReceipt(s.receipt),
-            onDismiss = { editingItemId = null },
-            onSave = { date, time, amount, category, name, memo, done ->
-                viewModel.saveItem(group, target, date, time, amount, category, name, memo, done)
+    // 品目の編集(横スワイプで前後の品目へ移れるドロワー)。追加のときは末尾に空の品目を足して開く
+    if (group != null && (editingItemId != null || addingItem)) {
+        ItemEditorSheet(
+            group = group,
+            items = s.items,
+            startItemId = editingItemId,
+            adding = addingItem,
+            splitPeople = s.splitPeople,
+            onlyOneItem = s.onlyOneItem,
+            onDismiss = {
+                editingItemId = null
+                addingItem = false
             },
-            // 品目は1つ以上必要なので、最後の1つは消せない(支出ごと消す)
-            onDelete = if (s.lastVisibleItem) null else {
-                {
-                    viewModel.deleteItem(target)
-                    editingItemId = null
-                }
+            onSaveItem = { original, amount, category, name, memo, done ->
+                viewModel.saveItem(group, original, group.date, group.time, amount, category, name, memo, done)
             },
-            title = if (group != null) "品目を編集" else null,
-            showDateTime = group == null,
-            // 割り勘が2人以上なら金額は読み取り専用のまま(注記の文言は出さない。直し方は支払い詳細で案内する)
-            // 品目が1つなら、金額は支出の金額と同じ(支出の金額で直す)
-            lockedAmountNote = when {
-                s.splitPeople >= 2 -> ""
-                s.onlyOneItem -> "品目が1つのときは、支出の金額と同じです"
-                else -> null
-            },
-        )
-    }
-    if (addingItem && group != null) {
-        ExpenseEditorSheet(
-            original = null,
-            initialDate = group.date,
-            initialTime = group.time,
-            linkedReceiptAt = null,
-            onDismiss = { addingItem = false },
-            onSave = { date, time, amount, category, name, memo, done ->
-                viewModel.saveItem(group, null, date, time, amount, category, name, memo, done)
-            },
-            onDelete = null,
-            title = "品目を追加",
-            showDateTime = false,
+            onSetUnknown = { expense, unknown, done -> viewModel.setItemUnknown(expense, unknown, done) },
+            onDeleteItem = { expense -> viewModel.deleteItem(expense) },
         )
     }
     if (deletingGroup && group != null) {
