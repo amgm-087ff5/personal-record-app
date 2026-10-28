@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -324,56 +325,19 @@ fun LedgerScreen(
 
     if (creatingPayment) {
         InkSheet(onDismiss = { creatingPayment = false }) {
-            Label("記録の方法")
-            Spacer(Modifier.height(Space.s))
-            Text(
-                "レシートを撮る",
-                style = AppTheme.type.body,
-                color = c.ink,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .tappable {
-                        creatingPayment = false
-                        startCamera()
-                    }
-                    .padding(vertical = Space.m),
-            )
-            Hairline()
-            Text(
-                "写真から選ぶ",
-                style = AppTheme.type.body,
-                color = c.ink,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .tappable {
-                        creatingPayment = false
-                        pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }
-                    .padding(vertical = Space.m),
-            )
-            Text(
-                "レシートを撮るか選ぶと、読み取った下書きを作ります。(写真は最大${RECEIPT_PICK_MAX}枚)",
-                style = AppTheme.type.caption,
-                color = c.inkSoft,
-            )
-            Spacer(Modifier.height(Space.m))
-            Hairline()
-            Text(
-                "手動で登録",
-                style = AppTheme.type.body,
-                color = c.ink,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .tappable {
-                        creatingPayment = false
-                        manualPaymentOpen = true
-                    }
-                    .padding(vertical = Space.m),
-            )
-            Text(
-                "日付や品目を自分で入力して作ります。",
-                style = AppTheme.type.caption,
-                color = c.inkSoft,
+            RecordMethodContent(
+                onCamera = {
+                    creatingPayment = false
+                    startCamera()
+                },
+                onPickPhotos = {
+                    creatingPayment = false
+                    pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                },
+                onManual = {
+                    creatingPayment = false
+                    manualPaymentOpen = true
+                },
             )
         }
     }
@@ -459,5 +423,38 @@ private fun MonthHeader(
             }
             TextAction("›", onClick = onNext, color = c.ink)
         }
+    }
+}
+
+/**
+ * 「＋ 記録」の3択シートの中身(記録の方法)。各項目は見出しと説明を1つの押せる行にし、説明をタップしても動く。
+ */
+@Composable
+internal fun ColumnScope.RecordMethodContent(
+    onCamera: () -> Unit,
+    onPickPhotos: () -> Unit,
+    onManual: () -> Unit,
+) {
+    Label("記録の方法")
+    Spacer(Modifier.height(Space.s))
+    RecordMethodRow("レシートを撮る", "カメラで撮って読み取ります。", onCamera)
+    Hairline()
+    RecordMethodRow("撮影済みの写真から選ぶ", "最大${RECEIPT_PICK_MAX}枚。読み取った下書きを作ります。", onPickPhotos)
+    Hairline()
+    RecordMethodRow("手動で登録", "日付や品目を自分で入力して作ります。", onManual)
+}
+
+/** 記録の方法の1行。見出しと説明の全体が押せる。 */
+@Composable
+private fun RecordMethodRow(title: String, caption: String, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .tappable(onClick)
+            .padding(vertical = Space.m),
+    ) {
+        Text(title, style = AppTheme.type.body, color = c.ink)
+        Text(caption, style = AppTheme.type.caption, color = c.inkSoft)
     }
 }

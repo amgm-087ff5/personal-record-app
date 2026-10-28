@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -48,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -282,7 +284,10 @@ private fun InkSheetBody(
                 .offset { IntOffset(0, if (offset.value == Float.MAX_VALUE) maxSheet.roundToPx() else offset.value.roundToInt()) }
                 .onSizeChanged { sheetHeight = it.height }
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                .background(c.paperRaised),
+                .background(c.paperRaised)
+                // シートの面でタップを受け止める。押せない所(説明文・余白)のタップが後ろの面へ抜けて閉じないようにする。
+                // 子の clickable は先に受け取るので、ボタンなどの動きには影響しない
+                .pointerInput(Unit) { detectTapGestures { } },
         ) {
             // つまみ・見出し・×。ここだけがスワイプでシートを動かせる
             Column(
