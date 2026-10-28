@@ -19,6 +19,7 @@ import com.amgm.personallog.domain.ConfirmPlanner
 import com.amgm.personallog.domain.ExpenseItems
 import com.amgm.personallog.domain.ItemSaver
 import com.amgm.personallog.domain.LedgerCalc
+import com.amgm.personallog.domain.PaymentMerge
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.PaymentLink
 import com.amgm.personallog.domain.PaymentValues
@@ -239,6 +240,64 @@ class ReceiptRepository @Inject constructor(
     suspend fun deleteExpensesOf(receiptId: Long) {
         expenseDao.deleteByReceiptId(receiptId)
         expenseGroupDao.deleteByReceiptId(receiptId)
+    }
+
+    // ------------------------------------------------------------ 重複した支払いのマージ
+
+    /** マージの比較の材料(支払い・品目・割り勘の有無)を集め、登録順(createdAt、id)に並べて返す。見つからない id は除く。 */
+    suspend fun mergeSnapshots(ids: List<Long>): List<PaymentMerge.Snapshot> {
+        val snapshots = ids.distinct().mapNotNull { id ->
+            val receipt = receiptDao.getById(id) ?: return@mapNotNull null
+            PaymentMerge.Snapshot(
+                receipt = receipt,
+                items = receiptDao.getItems(id),
+                hasSplit = db.splitDao().countSplitRows(id) > 0,
+            )
+        }
+        return PaymentMerge.ordered(snapshots)
+    }
+
+    /**
+     * マージを実行する(1つのトランザクション)。マージ先(plan.receipt.id)の中身を、plan.contentFrom の支払いの一式に置き換え、
+     * マージ元(plan.removed)を消して、家計簿を作り直す。もう使われない画像の相対パスを返す(呼び出し側が消す)。
+     */
+    suspend fun mergePayments(plan: PaymentMerge.Plan, now: Long = System.currentTimeMillis()): List<String> = db.withTransaction {
+        val target = plan.receipt.id
+        val from = plan.contentFrom
+        val split = db.splitDao()
+        val removedReceipts = plan.removed.mapNotNull { receiptDao.getById(it) }
+        val oldTarget = receiptDao.getById(target)
+        val unused = (removedReceipts.map { it.imagePath } + listOfNotNull(oldTarget?.imagePath))
+            .filter { it.isNotBlank() && it != plan.receipt.imagePath }
+            .distinct()
+
+        if (from != target) {
+            // マージ先の中身を消す(消すのは receiptId = マージ先の行だけ。split_sheets / whole_shares は主キーに receiptId を含むので先に空ける)
+            deleteExpensesOf(target)
+            receiptDao.deleteItemsByReceipt(target)
+            split.deleteLabelAmounts(target)
+            split.deleteSheet(target)
+            split.deleteGroupsOfReceipt(target)
+            split.deleteParticipantsOfReceipt(target)
+            split.deleteWholeShares(target)
+            split.deletePayers(target)
+            // 採る側の中身をマージ先へ付け替える(id は変えないので、まとまり・割当・家計簿の品目との対応も保たれる)
+            receiptDao.moveItems(from, target)
+            split.moveSheet(from, target)
+            split.moveParticipants(from, target)
+            split.moveLabelAmounts(from, target)
+            split.moveGroups(from, target)
+            split.moveWholeShares(from, target)
+            split.movePayers(from, target)
+            expenseGroupDao.moveToReceipt(from, target)
+            expenseDao.moveToReceipt(from, target)
+        }
+        // マージ元に残る自分の支出・品目を消す(expense_groups は SET_NULL なので、消さないと孤児になる)
+        plan.removed.forEach { deleteExpensesOf(it) }
+        receiptDao.update(plan.receipt)
+        if (plan.removed.isNotEmpty()) receiptDao.deleteByIds(plan.removed)
+        applyLedger(target, now)
+        unused
     }
 
     /**

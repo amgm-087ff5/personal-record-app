@@ -13,7 +13,9 @@ import com.amgm.personallog.data.repository.ParticipantSyncService
 import com.amgm.personallog.data.repository.ConfirmOutcome
 import com.amgm.personallog.data.repository.PaymentConfirmer
 import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.domain.PaymentLink
+import com.amgm.personallog.domain.PaymentMerge
 import kotlinx.coroutines.flow.first
 import com.amgm.personallog.domain.TaxBreakdown
 import com.amgm.personallog.domain.TaxCalc
@@ -214,6 +216,8 @@ data class DetailUiState(
     val imageHash: String? = null,
     /** 重複の可能性がある先行のレシート(「重複ではない」の組は除く)。警告カードに相手ごとに出す。 */
     val possibleDuplicates: List<DuplicateRef> = emptyList(),
+    /** 重複の組(支払いの id。マージ先が先頭)。組に2件以上あるときだけ空でない。警告カードの「マージする」に使う。 */
+    val mergeIds: List<Long> = emptyList(),
     /** 確定時に重複の候補の確定済みレシートが見つかった場合、その相手(確認ダイアログ用)。空なら出さない。 */
     val duplicateWarning: List<DuplicateRef> = emptyList(),
     /** 確定しようとしたが合計が未入力のとき true(「合計が未入力です」の確認用)。 */
@@ -308,6 +312,7 @@ class ReceiptDetailViewModel @Inject constructor(
     private val scanner: ReceiptScanner,
     private val syncService: ParticipantSyncService,
     private val confirmer: PaymentConfirmer,
+    private val readStore: PaymentReadStore,
 ) : ViewModel() {
 
     private val receiptId: Long = savedStateHandle.get<Long>("id") ?: 0L
@@ -325,6 +330,11 @@ class ReceiptDetailViewModel @Inject constructor(
     /** 重複の判定に使う、このレシート以外の保存済みレシートと「重複ではない」の組(読み込み時に取得)。 */
     private var otherReceipts: List<Receipt> = emptyList()
     private var notDuplicateSet: MutableSet<Pair<Long, Long>> = HashSet()
+
+    /** 重複の組(支払いの id。マージ先が先頭)。組に入っていなければ空。 */
+    private fun mergeIdsOf(r: Receipt): List<Long> =
+        PaymentMerge.setContaining(r.id, PaymentMerge.duplicateSets(listOf(r) + otherReceipts, notDuplicateSet))
+            ?.map { it.id }.orEmpty()
 
     private val _state = MutableStateFlow(DetailUiState())
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
@@ -350,6 +360,7 @@ class ReceiptDetailViewModel @Inject constructor(
                 createdAt = r.createdAt,
                 imageHash = r.imageHash,
                 possibleDuplicates = earlier.map { DuplicateRef(it.id, ReceiptDedup.summary(it)) },
+                mergeIds = mergeIdsOf(r),
                 confirmed = r.status == ReceiptStatus.CONFIRMED,
                 isAdvance = r.isAdvance,
                 ownAmount = r.ownAmount?.toString().orEmpty(),
@@ -364,9 +375,21 @@ class ReceiptDetailViewModel @Inject constructor(
                 adjust = r.adjust(),
                 headcount = r.headcount?.toString().orEmpty(),
             )
+            markRead()
             repository.observePaymentLink(receiptId).collect { link ->
                 _state.update { it.copy(paymentLink = link) }
             }
+        }
+    }
+
+    /** 支払いを開いたので既読にする。既読の保存に失敗しても、画面は続ける。 */
+    private suspend fun markRead() {
+        try {
+            readStore.markRead(receiptId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 未読の印が残るだけなので、無視する
         }
     }
 
@@ -761,7 +784,13 @@ class ReceiptDetailViewModel @Inject constructor(
             try {
                 repository.markNotDuplicate(receiptId, otherId)
                 notDuplicateSet.add(ReceiptDedup.pairOf(receiptId, otherId))
-                _state.update { s -> s.copy(possibleDuplicates = s.possibleDuplicates.filterNot { it.id == otherId }) }
+                val base = loadedReceipt
+                _state.update { s ->
+                    s.copy(
+                        possibleDuplicates = s.possibleDuplicates.filterNot { it.id == otherId },
+                        mergeIds = base?.let { mergeIdsOf(it) } ?: s.mergeIds,
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

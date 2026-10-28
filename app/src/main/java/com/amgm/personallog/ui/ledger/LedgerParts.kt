@@ -302,6 +302,8 @@ internal fun DayBlock(
     imageReceiptIds: Set<Long>,
     /** 重複の候補がある支払いの id(行に「重複?」を付ける)。 */
     duplicateReceiptIds: Set<Long> = emptySet(),
+    /** 未読の支払いの id(行に「未読」を付ける)。 */
+    unreadReceiptIds: Set<Long> = emptySet(),
     /** 支払いの id → 支払い先(店名)。行の見出しに使う。 */
     storeNames: Map<Long, String> = emptyMap(),
     onToggleGroup: (Long) -> Unit,
@@ -349,6 +351,7 @@ internal fun DayBlock(
                             warnReceiptIds = warnReceiptIds,
                             imageReceiptIds = imageReceiptIds,
                             duplicateReceiptIds = duplicateReceiptIds,
+                            unreadReceiptIds = unreadReceiptIds,
                             expanded = expandedGroups[entry.group.id] == true,
                             onToggle = { onToggleGroup(entry.group.id) },
                             onOpen = { onOpen(entry) },
@@ -360,6 +363,7 @@ internal fun DayBlock(
                             draftReceiptIds = draftReceiptIds,
                             warnReceiptIds = warnReceiptIds,
                             duplicateReceiptIds = duplicateReceiptIds,
+                            unreadReceiptIds = unreadReceiptIds,
                         )
                     }
                 }
@@ -369,8 +373,8 @@ internal fun DayBlock(
 }
 
 /**
- * 行の印: 支払いが下書きなら「下書き」、割り勘に警告があれば「要確認」、重複の候補があれば「重複?」。
- * 支払いに紐づかない行には付けない。
+ * 行の印: 未読なら「未読」(リップル付き)、支払いが下書きなら「下書き」、割り勘に警告があれば「要確認」、
+ * 重複の候補があれば「重複?」。支払いに紐づかない行には付けない。
  */
 @Composable
 private fun RowBadges(
@@ -378,8 +382,10 @@ private fun RowBadges(
     draftReceiptIds: Set<Long>,
     warnReceiptIds: Set<Long>,
     duplicateReceiptIds: Set<Long> = emptySet(),
+    unreadReceiptIds: Set<Long> = emptySet(),
 ) {
     if (receiptId == null) return
+    if (receiptId in unreadReceiptIds) UnreadBadge(modifier = Modifier.padding(start = Space.xs))
     if (receiptId in draftReceiptIds) Stamp("下書き", modifier = Modifier.padding(start = Space.xs))
     if (receiptId in warnReceiptIds) Stamp("要確認", modifier = Modifier.padding(start = Space.xs), tone = StampTone.Danger)
     if (receiptId in duplicateReceiptIds) Stamp("重複?", modifier = Modifier.padding(start = Space.xs), tone = StampTone.Danger)
@@ -437,6 +443,7 @@ private fun ExcludedLine(
     draftReceiptIds: Set<Long>,
     warnReceiptIds: Set<Long>,
     duplicateReceiptIds: Set<Long>,
+    unreadReceiptIds: Set<Long>,
 ) {
     val c = AppTheme.colors
     val time = LedgerCalc.splitPurchasedAt(entry.receipt.purchasedAt).second
@@ -458,7 +465,7 @@ private fun ExcludedLine(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds, duplicateReceiptIds)
+                RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds, duplicateReceiptIds, unreadReceiptIds)
             }
             Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -476,6 +483,7 @@ private fun GroupLine(
     warnReceiptIds: Set<Long>,
     imageReceiptIds: Set<Long>,
     duplicateReceiptIds: Set<Long>,
+    unreadReceiptIds: Set<Long>,
     expanded: Boolean,
     onToggle: () -> Unit,
     onOpen: () -> Unit,
@@ -512,7 +520,7 @@ private fun GroupLine(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds, duplicateReceiptIds)
+                    RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds, duplicateReceiptIds, unreadReceiptIds)
                 }
                 Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

@@ -53,6 +53,7 @@ fun NavGraphBuilder.receiptGraph(navController: NavController) {
                     }
                 },
                 onOpenSplit = { navController.navigate(SplitRoutes.sheet(receiptId)) },
+                onOpenMerge = { ids -> navController.navigate(LedgerRoutes.merge(ids)) },
                 onOpenPayment = { link ->
                     // 支払いの詳細から来たなら、新しく積まずに戻る(行き来で履歴が伸びない)
                     val prev = navController.previousBackStackEntry

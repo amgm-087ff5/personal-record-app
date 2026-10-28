@@ -188,4 +188,42 @@ interface SplitDao {
 
     @Insert
     suspend fun insertPayers(payers: List<PaymentPayer>)
+
+    // 支払いのマージ(中身の付け替え)。share_group_items / item_shares は親の id にぶら下がるので、親の receiptId を付け替えれば一緒に移る
+
+    /** 割り勘の入力(シートか参加者)があるか。 */
+    @Query(
+        "SELECT (SELECT COUNT(*) FROM split_sheets WHERE receiptId = :receiptId) + " +
+            "(SELECT COUNT(*) FROM split_participants WHERE receiptId = :receiptId)",
+    )
+    suspend fun countSplitRows(receiptId: Long): Int
+
+    @Query("DELETE FROM split_sheets WHERE receiptId = :receiptId")
+    suspend fun deleteSheet(receiptId: Long)
+
+    /** 参加者を消すと、その参加者の item_shares・whole_shares・payment_payers も CASCADE で消える。 */
+    @Query("DELETE FROM split_participants WHERE receiptId = :receiptId")
+    suspend fun deleteParticipantsOfReceipt(receiptId: Long)
+
+    /** まとまりを消すと、share_group_items・item_shares も CASCADE で消える。 */
+    @Query("DELETE FROM share_groups WHERE receiptId = :receiptId")
+    suspend fun deleteGroupsOfReceipt(receiptId: Long)
+
+    @Query("UPDATE split_sheets SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
+    suspend fun moveSheet(fromReceiptId: Long, toReceiptId: Long)
+
+    @Query("UPDATE split_participants SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
+    suspend fun moveParticipants(fromReceiptId: Long, toReceiptId: Long)
+
+    @Query("UPDATE split_label_amounts SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
+    suspend fun moveLabelAmounts(fromReceiptId: Long, toReceiptId: Long)
+
+    @Query("UPDATE share_groups SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
+    suspend fun moveGroups(fromReceiptId: Long, toReceiptId: Long)
+
+    @Query("UPDATE whole_shares SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
+    suspend fun moveWholeShares(fromReceiptId: Long, toReceiptId: Long)
+
+    @Query("UPDATE payment_payers SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
+    suspend fun movePayers(fromReceiptId: Long, toReceiptId: Long)
 }

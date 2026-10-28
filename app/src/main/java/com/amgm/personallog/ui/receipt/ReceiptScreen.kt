@@ -35,6 +35,7 @@ import com.amgm.personallog.ui.design.StampTone
 import com.amgm.personallog.ui.design.TextAction
 import com.amgm.personallog.ui.design.sheet
 import com.amgm.personallog.ui.design.tappable
+import com.amgm.personallog.ui.ledger.UnreadBadge
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 /** 月見出し付きの一覧の1行分。 */
@@ -90,6 +91,7 @@ fun ReceiptScreen(
 ) {
     val receipts by viewModel.receipts.collectAsStateWithLifecycle()
     val duplicates by viewModel.possibleDuplicates.collectAsStateWithLifecycle()
+    val unread by viewModel.unreadReceiptIds.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // 一覧の絞り込み(FILTER_* の値)
@@ -170,6 +172,7 @@ fun ReceiptScreen(
                             ReceiptSlip(
                                 r = e.receipt,
                                 isDuplicate = duplicates[e.receipt.id] != null,
+                                isUnread = e.receipt.id in unread,
                                 onClick = { onOpenReceipt(e.receipt.id) },
                             )
                         }
@@ -194,7 +197,7 @@ fun ReceiptScreen(
 
 /** 一覧の1枚: 左に日付と店名、右に金額と状態の判子。 */
 @Composable
-private fun ReceiptSlip(r: Receipt, isDuplicate: Boolean, onClick: () -> Unit) {
+private fun ReceiptSlip(r: Receipt, isDuplicate: Boolean, isUnread: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -218,6 +221,7 @@ private fun ReceiptSlip(r: Receipt, isDuplicate: Boolean, onClick: () -> Unit) {
             } else {
                 Text(formatYen(total.toLong()), style = AppTheme.type.numeralL, color = AppTheme.colors.ink)
             }
+            if (isUnread) UnreadBadge()
             if (isDuplicate) Stamp("重複の可能性", tone = StampTone.Danger)
             // 画像の無い支払いは手入力
             if (r.imagePath.isBlank()) Stamp("手入力", tone = StampTone.Neutral)

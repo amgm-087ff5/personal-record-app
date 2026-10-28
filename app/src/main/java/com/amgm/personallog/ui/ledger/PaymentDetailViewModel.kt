@@ -11,8 +11,10 @@ import com.amgm.personallog.data.repository.ExpenseRepository
 import com.amgm.personallog.data.repository.ReceiptRepository
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.data.repository.toBuild
+import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.domain.ExpenseItems
 import com.amgm.personallog.domain.PaymentEdit
+import com.amgm.personallog.domain.PaymentMerge
 import com.amgm.personallog.domain.UnknownAmounts
 import com.amgm.personallog.domain.UnknownItems
 import com.amgm.personallog.domain.PaymentField
@@ -35,9 +37,25 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** 重複の組の1件(支払い)。summary は ReceiptDedup.summary。 */
+data class DuplicateMember(val receiptId: Long, val summary: String)
+
+/**
+ * 紐づく支払いの重複の組。members は組の全員で、先頭がマージ先(登録日時の古い順・同じなら id の小さい順)。
+ * hasDifference は、マージのときに選ぶ必要がある項目(比較キーが2種類以上)が1つでもあるか。
+ */
+data class DuplicateInfo(
+    val setIds: List<Long>,
+    val members: List<DuplicateMember>,
+    /** この支払いがマージ先か。 */
+    val isTarget: Boolean,
+    val hasDifference: Boolean,
+)
 
 /**
  * 支出の詳細画面の表示内容。group が非 null なら自分の支出(まとまり)。items はその品目(必ず1つ以上)。
@@ -63,8 +81,8 @@ data class PaymentUiState(
     val individual: IndividualExpense? = null,
     /** 割り勘で自分が参加者に入っていない(自分の分が0円で、家計簿に行が無い)支払い。receipt だけが入る。 */
     val selfExcluded: Boolean = false,
-    /** 紐づく支払いに重複の候補(先に作られた同じ内容の支払い)があれば、その相手。支払い一覧の「重複?」と同じ判定。 */
-    val duplicateOf: Receipt? = null,
+    /** 紐づく支払いが重複の組に入っていれば、その組の情報(マージ先・マージ元のどちらの画面にも出す)。 */
+    val duplicate: DuplicateInfo? = null,
     val error: String? = null,
     /** 削除などで、この画面の対象が無くなった。 */
     val finished: Boolean = false,
@@ -112,6 +130,7 @@ class PaymentDetailViewModel @Inject constructor(
     private val repository: ExpenseRepository,
     private val receipts: ReceiptRepository,
     private val splits: SplitRepository,
+    private val readStore: PaymentReadStore,
 ) : ViewModel() {
     private val rawKind: String? = savedStateHandle.get<String>("kind")
     /** 割り勘で自分が外れた支払い(家計簿に行が無い)の詳細か。id は支払い(レシート)の id。 */
@@ -121,6 +140,12 @@ class PaymentDetailViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(PaymentUiState(kind = kind))
     val state: StateFlow<PaymentUiState> = _state.asStateFlow()
+
+    /** 既読にした支払い(同じ支払いを何度も既読にしないため)。 */
+    private var markedReadId: Long? = null
+
+    /** 組の差分の計算結果(組の id が変わったときだけ計算し直す。mergeSnapshots は DB を読む)。 */
+    private var differenceCache: Pair<List<Long>, Boolean>? = null
 
     /**
      * 自分が外れた支払いの画面。家計簿に行が無いので、支払いと割り勘だけを見る。
@@ -195,14 +220,20 @@ class PaymentDetailViewModel @Inject constructor(
                     }
                 }
             }
-            // 重複の候補(支払い一覧と同じ判定。後から作られた側にだけ出す)
-            val duplicates = combine(receipts.observeReceipts(), receipts.observeNotDuplicates()) { list, notDup ->
-                ReceiptDedup.laterDuplicates(list, ReceiptDedup.notDuplicateSet(notDup))
+            // 重複の組(支払い一覧と同じ判定。マージ先・マージ元のどちらの画面にも出す)
+            val sets = combine(receipts.observeReceipts(), receipts.observeNotDuplicates()) { list, notDup ->
+                PaymentMerge.duplicateSets(list, ReceiptDedup.notDuplicateSet(notDup))
             }
-            combine(flow, duplicates) { st, dups -> st.copy(duplicateOf = st.receipt?.let { dups[it.id] }) }
+            combine(flow, sets) { st, all -> st to all }
+                .mapLatest { (st, all) ->
+                    val rid = st.receipt?.id
+                    st.copy(duplicate = rid?.let { duplicateInfo(it, PaymentMerge.setContaining(it, all)) })
+                }
                 .catch { e ->
                     _state.update { it.copy(loading = false, error = "読み込みに失敗しました: ${e.message}") }
                 }.collect { s ->
+                    // 支払いが分かった時点で既読にする
+                    s.receipt?.id?.let { markRead(it) }
                     // 画面のエラーと削除の完了は、DB から来た値で消さない
                     _state.update { st -> s.copy(error = st.error, finished = st.finished) }
                 }
@@ -210,6 +241,48 @@ class PaymentDetailViewModel @Inject constructor(
     }
 
     fun dismissError() = _state.update { it.copy(error = null) }
+
+    /** 支払いを既読にする(1回だけ)。既読の保存に失敗しても、画面は続ける。 */
+    private fun markRead(receiptId: Long) {
+        if (markedReadId == receiptId) return
+        markedReadId = receiptId
+        viewModelScope.launch {
+            try {
+                readStore.markRead(receiptId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 未読の印が残るだけなので、無視する
+            }
+        }
+    }
+
+    /**
+     * 支払いの組の情報。set が null(組に入っていない)なら null。読めなければ、差分の無い組として扱わず null にする。
+     */
+    private suspend fun duplicateInfo(receiptId: Long, set: List<Receipt>?): DuplicateInfo? {
+        if (set == null) return null
+        val ids = set.map { it.id }
+        val cached = differenceCache
+        val differs = if (cached != null && cached.first == ids) {
+            cached.second
+        } else {
+            try {
+                PaymentMerge.hasDifference(PaymentMerge.fieldDiffs(receipts.mergeSnapshots(ids)))
+                    .also { differenceCache = ids to it }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return null
+            }
+        }
+        return DuplicateInfo(
+            setIds = ids,
+            members = set.map { DuplicateMember(it.id, ReceiptDedup.summary(it)) },
+            isTarget = ids.first() == receiptId,
+            hasDifference = differs,
+        )
+    }
 
     /**
      * 支払いの割り勘から、自分の個別支出を作る(読み込みは SplitRepository.load と toBuild。保存はしない)。
