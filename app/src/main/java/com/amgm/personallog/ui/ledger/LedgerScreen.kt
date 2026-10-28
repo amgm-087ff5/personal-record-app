@@ -1,6 +1,7 @@
 package com.amgm.personallog.ui.ledger
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +42,10 @@ import com.amgm.personallog.ui.design.ProportionBand
 import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.TextAction
 import com.amgm.personallog.ui.design.tappable
+import com.amgm.personallog.ui.receipt.ImportPanel
+import com.amgm.personallog.ui.receipt.RECEIPT_PICK_MAX
+import com.amgm.personallog.ui.receipt.ReceiptImportDialogs
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
@@ -50,19 +57,50 @@ fun LedgerScreen(
     onOpenPayment: (PaymentKind, Long) -> Unit = { _, _ -> },
     /** 割り勘で自分が外れた支払い(0円の行)の詳細を、支払い(レシート)の id で開く。 */
     onOpenExcludedPayment: (Long) -> Unit = {},
-    /** 手入力で保存した支払いの詳細(レシートの詳細)を開く。 */
+    /** 手入力で保存した支払いの詳細(レシートの詳細)を開く。取り込みの「開く ›」で支出が無いときも使う。 */
     onOpenReceipt: (Long) -> Unit = {},
     /** 支払い一覧(支払い画面)を開く。 */
     onOpenReceiptList: () -> Unit = {},
-    /** 「レシートから登録」: 支払い画面を開き、そのまま撮影を始める。 */
-    onCaptureReceipt: () -> Unit = {},
     viewModel: LedgerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val imports by viewModel.imports.collectAsStateWithLifecycle()
     val c = AppTheme.colors
+    val scope = rememberCoroutineScope()
     // 家計簿の支出は、支払い(レシートの表)を保存したときに作られる。支出だけを単独で追加する入口は無い
-    // 「＋ 記録」で開く2択シート(レシートから登録 / 手動で登録)
+    // 「＋ 記録」で開く3択シート(レシートを撮る / 写真から選ぶ / 手動で登録)
     var creatingPayment by remember { mutableStateOf(false) }
+    // 撮影中の保存先(画面回転・プロセス再生成後も結果を受け取れるよう保存する)
+    var pendingCapturePath by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val path = pendingCapturePath
+        pendingCapturePath = null
+        if (path != null) {
+            if (ok) viewModel.onImportCaptured(path) else viewModel.discardImportCapture(path)
+        }
+    }
+    val pickImages = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(RECEIPT_PICK_MAX)) { uris ->
+        if (uris.isNotEmpty()) viewModel.onImportPhotosPicked(uris)
+    }
+    // 「レシートを撮る」と同じ処理(カメラを開く。起動できなければ案内を出す)
+    val startCamera: () -> Unit = {
+        try {
+            val path = viewModel.newImportCameraPath()
+            pendingCapturePath = path
+            takePicture.launch(viewModel.importCameraUri(path))
+        } catch (e: Exception) {
+            pendingCapturePath = null
+            viewModel.showImportError("カメラを起動できませんでした。「写真から選ぶ」をお使いください。")
+        }
+    }
+    // 取り込みの「開く ›」: その支払いの支出(まとまり)を開く。支出が無ければ支払いの詳細
+    val openImported: (Long) -> Unit = { receiptId ->
+        scope.launch {
+            val groupId = viewModel.paymentGroupIdOfReceipt(receiptId)
+            if (groupId != null) onOpenPayment(PaymentKind.GROUP, groupId) else onOpenReceipt(receiptId)
+        }
+    }
     // 「手動で登録」で開く手入力の支払いシート
     var manualPaymentOpen by remember { mutableStateOf(false) }
     val expandedGroups = remember { mutableStateMapOf<Long, Boolean>() }
@@ -93,6 +131,19 @@ fun LedgerScreen(
                         onNext = viewModel::nextMonth,
                         onMenu = { menuOpen = true },
                     )
+                }
+                // 取り込みの進捗は合計の上。取り込みが無ければ出さない
+                if (imports.imports.isNotEmpty() || imports.error != null) {
+                    item(key = "imports") {
+                        ImportPanel(
+                            imports = imports.imports,
+                            error = imports.error,
+                            onDismissError = viewModel::dismissImportError,
+                            onRetry = viewModel::retryImport,
+                            onOpen = openImported,
+                            onClear = viewModel::clearImports,
+                        )
+                    }
                 }
                 state.error?.let { err ->
                     item(key = "error") {
@@ -276,19 +327,32 @@ fun LedgerScreen(
             Label("記録の方法")
             Spacer(Modifier.height(Space.s))
             Text(
-                "レシートから登録",
+                "レシートを撮る",
                 style = AppTheme.type.body,
                 color = c.ink,
                 modifier = Modifier
                     .fillMaxWidth()
                     .tappable {
                         creatingPayment = false
-                        onCaptureReceipt()
+                        startCamera()
+                    }
+                    .padding(vertical = Space.m),
+            )
+            Hairline()
+            Text(
+                "写真から選ぶ",
+                style = AppTheme.type.body,
+                color = c.ink,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .tappable {
+                        creatingPayment = false
+                        pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     }
                     .padding(vertical = Space.m),
             )
             Text(
-                "レシートを撮るか選ぶと、読み取った下書きを作ります。",
+                "レシートを撮るか選ぶと、読み取った下書きを作ります。(写真は最大${RECEIPT_PICK_MAX}枚)",
                 style = AppTheme.type.caption,
                 color = c.inkSoft,
             )
@@ -313,6 +377,17 @@ fun LedgerScreen(
             )
         }
     }
+
+    // 取り込みの確認(同じ画像の確認・向きと範囲の補正)。支払い一覧と同じ状態を出す
+    ReceiptImportDialogs(
+        state = imports,
+        onToggleAddAnyway = viewModel::toggleImportAddAnyway,
+        onResolveDuplicates = viewModel::resolveImportDuplicates,
+        onSetAdjust = viewModel::setImportAdjust,
+        onAnalyze = viewModel::analyzeImportAdjusted,
+        onAnalyzeWithout = viewModel::analyzeImportWithoutAdjust,
+        onCancelAdjust = viewModel::cancelImportAdjust,
+    )
 
     if (manualPaymentOpen) {
         val initialDate = LedgerLogic.defaultDate(state.month, LocalDate.now())

@@ -422,6 +422,8 @@ class ExpenseRepository @Inject constructor(
         return dao.observeBetween(from, to)
     }
 
+    /** そのレシートから作られた支出(まとまり)。自分の支出が無い(割り勘で外れた)なら空。 */
+    suspend fun groupsOfReceipt(receiptId: Long): List<ExpenseGroup> = groupDao.getByReceiptId(receiptId)
     fun observeGroup(id: Long): Flow<ExpenseGroup?> = groupDao.observeById(id)
     fun observeGroupItems(groupId: Long): Flow<List<Expense>> = dao.observeByGroupId(groupId)
     fun observeExpense(id: Long): Flow<Expense?> = dao.observeById(id)
