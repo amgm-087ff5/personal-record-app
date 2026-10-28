@@ -27,6 +27,8 @@ import com.amgm.personallog.receipt.TotalSourceInit
  *
  * v14(支出は必ず品目つき・金額不明): receipt_items と expenses に unknownAmount を足し、単独の支出(groupId なし)を
  * 自分の支出(expense_groups)+ 品名が空の1品目に変える(MIGRATION_13_14)。
+ * v15: 支出のメモに写していた店名を消す(MIGRATION_14_15)。
+ * v16(支払い ⇒ 支出 の親子を崩さない): 支出は必ず支払いに属し、支払いを消すと支出も消える。支出だけ消して残った支払いを消す(MIGRATION_15_16)。
  */
 object Migrations {
     /**
@@ -889,6 +891,55 @@ object Migrations {
     }
 
     /**
+     * 支払いに属さない支出(まとまり)を、手入力の支払い(receipts の行)に変える(v12・v16 で使う)。
+     * where は expense_groups の対象を選ぶ条件(SQL)。対象ごとに支払いを1つ作り(画像なし・確定・合計のみ・店名は空)、
+     * まとまりの品目(支出の行。家計簿で消したものも含む)を receipt_items に写して receiptId・receiptItemId を張る。
+     * まとまりには receiptId を張り、メモ・カテゴリを編集済みにする(店名が空なので、次の同期で既定値に戻らないように)。
+     * 読み出しきってから書く。既存の id・金額・品名・カテゴリ・メモ・日時は変えない。
+     */
+    private fun SupportSQLiteDatabase.convertOrphanGroupsToManualReceipts(where: String) {
+        val db = this
+        class GroupRow(val id: Long, val date: String, val time: String, val amount: Long, val createdAt: Long)
+        class ChildRow(val id: Long, val name: String, val amount: Long, val category: String, val memo: String)
+        val groups = ArrayList<GroupRow>()
+        db.query(
+            "SELECT `id`, `date`, `time`, `amount`, `createdAt` FROM `expense_groups` WHERE $where ORDER BY `id`",
+        ).use { c ->
+            while (c.moveToNext()) {
+                groups += GroupRow(c.getLong(0), c.getString(1), c.getString(2), c.getLong(3), c.getLong(4))
+            }
+        }
+        for (g in groups) {
+            val rid = db.insertV12ManualReceipt(v12PurchasedAt(g.date, g.time), g.amount, g.createdAt)
+            db.execSQL(
+                "UPDATE `expense_groups` SET `receiptId` = ?, `categoryEdited` = 1, `memoEdited` = 1 WHERE `id` = ?",
+                arrayOf<Any?>(rid, g.id),
+            )
+            // 品目: グループの中の支出の行。写した品目の id を支出に張る
+            val children = ArrayList<ChildRow>()
+            db.query(
+                "SELECT `id`, `name`, `amount`, `category`, `memo` FROM `expenses` WHERE `groupId` = ${g.id} ORDER BY `id`",
+            ).use { c ->
+                while (c.moveToNext()) {
+                    children += ChildRow(c.getLong(0), c.getString(1), c.getLong(2), c.getString(3), c.getString(4))
+                }
+            }
+            for (ch in children) {
+                db.execSQL(
+                    "INSERT INTO `receipt_items` (`receiptId`, `name`, `amount`, `category`, `taxRate`, `priceIncludesTax`, `memo`) " +
+                        "VALUES (?, ?, ?, ?, 10, 1, ?)",
+                    arrayOf<Any?>(rid, ch.name, ch.amount, ch.category, ch.memo),
+                )
+                val itemId = db.lastRowId()
+                db.execSQL(
+                    "UPDATE `expenses` SET `receiptId` = ?, `receiptItemId` = ? WHERE `id` = ?",
+                    arrayOf<Any?>(rid, itemId, ch.id),
+                )
+            }
+        }
+    }
+
+    /**
      * v11 -> v12: 支払いに属さない支出を、手入力の支払い(receipts の行)に変える。支出は必ず支払いから作る、という規則に合わせる。
      *  - 対象: receiptId が null の支出グループ(品目はグループの中の支出の行)と、groupId も receiptId も無い単独の支出。
      *  - 支払いの行を対象ごとに1つ作る: imagePath='', rawJson='{}', status='confirmed', totalSource='manual', storeName=''。
@@ -904,49 +955,12 @@ object Migrations {
      */
     val MIGRATION_11_12: Migration = object : Migration(11, 12) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            class GroupRow(val id: Long, val date: String, val time: String, val amount: Long, val createdAt: Long)
-            class ChildRow(val id: Long, val name: String, val amount: Long, val category: String, val memo: String)
             class SingleRow(val id: Long, val date: String, val time: String, val amount: Long, val createdAt: Long)
 
             val before = V12_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
 
-            // 1. 支払いに属さないグループ: 読み出しきってから書く
-            val groups = ArrayList<GroupRow>()
-            db.query(
-                "SELECT `id`, `date`, `time`, `amount`, `createdAt` FROM `expense_groups` WHERE `receiptId` IS NULL ORDER BY `id`",
-            ).use { c ->
-                while (c.moveToNext()) {
-                    groups += GroupRow(c.getLong(0), c.getString(1), c.getString(2), c.getLong(3), c.getLong(4))
-                }
-            }
-            for (g in groups) {
-                val rid = db.insertV12ManualReceipt(v12PurchasedAt(g.date, g.time), g.amount, g.createdAt)
-                db.execSQL(
-                    "UPDATE `expense_groups` SET `receiptId` = ?, `categoryEdited` = 1, `memoEdited` = 1 WHERE `id` = ?",
-                    arrayOf<Any?>(rid, g.id),
-                )
-                // 品目: グループの中の支出の行。写した品目の id を支出に張る
-                val children = ArrayList<ChildRow>()
-                db.query(
-                    "SELECT `id`, `name`, `amount`, `category`, `memo` FROM `expenses` WHERE `groupId` = ${g.id} ORDER BY `id`",
-                ).use { c ->
-                    while (c.moveToNext()) {
-                        children += ChildRow(c.getLong(0), c.getString(1), c.getLong(2), c.getString(3), c.getString(4))
-                    }
-                }
-                for (ch in children) {
-                    db.execSQL(
-                        "INSERT INTO `receipt_items` (`receiptId`, `name`, `amount`, `category`, `taxRate`, `priceIncludesTax`, `memo`) " +
-                            "VALUES (?, ?, ?, ?, 10, 1, ?)",
-                        arrayOf<Any?>(rid, ch.name, ch.amount, ch.category, ch.memo),
-                    )
-                    val itemId = db.lastRowId()
-                    db.execSQL(
-                        "UPDATE `expenses` SET `receiptId` = ?, `receiptItemId` = ? WHERE `id` = ?",
-                        arrayOf<Any?>(rid, itemId, ch.id),
-                    )
-                }
-            }
+            // 1. 支払いに属さないグループ
+            db.convertOrphanGroupsToManualReceipts("`receiptId` IS NULL")
 
             // 2. 単独の支出: 支払いの行を作り、支出に張る(品目は作らない)
             val singles = ArrayList<SingleRow>()
@@ -1089,8 +1103,170 @@ object Migrations {
         }
     }
 
+    /** v16 の expense_groups(receiptId は NOT NULL、支払いを消すと消える)。Room の Entity(ExpenseGroup)と一致させること。 */
+    internal fun groupsV16CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, " +
+            "`time` TEXT NOT NULL DEFAULT '', `amount` INTEGER NOT NULL, `category` TEXT NOT NULL, `memo` TEXT NOT NULL, " +
+            "`receiptId` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `uid` TEXT NOT NULL DEFAULT '', " +
+            "`amountEdited` INTEGER NOT NULL DEFAULT 0, `categoryEdited` INTEGER NOT NULL DEFAULT 0, " +
+            "`memoEdited` INTEGER NOT NULL DEFAULT 0, `timeEdited` INTEGER NOT NULL DEFAULT 0, " +
+            "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+
+    internal fun groupsV16IndexSqls(table: String): List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_expense_groups_receiptId` ON `$table` (`receiptId`)",
+        "CREATE INDEX IF NOT EXISTS `index_expense_groups_date` ON `$table` (`date`)",
+    )
+
+    /** v16 の expenses(receiptId の外部キーを CASCADE に。他は v15 と同じ)。Room の Entity(Expense)と一致させること。 */
+    internal fun expensesV16CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, " +
+            "`time` TEXT NOT NULL DEFAULT '', `amount` INTEGER NOT NULL, `category` TEXT NOT NULL, `memo` TEXT NOT NULL, " +
+            "`receiptId` INTEGER, `createdAt` INTEGER NOT NULL, `groupId` INTEGER, `timeEdited` INTEGER NOT NULL DEFAULT 0, " +
+            "`receiptItemId` INTEGER, `name` TEXT NOT NULL DEFAULT '', `amountEdited` INTEGER NOT NULL DEFAULT 0, " +
+            "`categoryEdited` INTEGER NOT NULL DEFAULT 0, `nameEdited` INTEGER NOT NULL DEFAULT 0, " +
+            "`memoEdited` INTEGER NOT NULL DEFAULT 0, `uid` TEXT NOT NULL, `deletedByUser` INTEGER NOT NULL DEFAULT 0, " +
+            "`unknownAmount` INTEGER NOT NULL DEFAULT 0, " +
+            "FOREIGN KEY(`receiptId`) REFERENCES `receipts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+            "FOREIGN KEY(`groupId`) REFERENCES `expense_groups`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+            "FOREIGN KEY(`receiptItemId`) REFERENCES `receipt_items`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )"
+
+    internal fun expensesV16IndexSqls(table: String): List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_expenses_receiptId` ON `$table` (`receiptId`)",
+        "CREATE INDEX IF NOT EXISTS `index_expenses_date` ON `$table` (`date`)",
+        "CREATE INDEX IF NOT EXISTS `index_expenses_groupId` ON `$table` (`groupId`)",
+        "CREATE INDEX IF NOT EXISTS `index_expenses_receiptItemId` ON `$table` (`receiptItemId`)",
+    )
+
+    private const val GROUPS_V16_COLUMNS =
+        "`id`, `date`, `time`, `amount`, `category`, `memo`, `receiptId`, `createdAt`, `uid`, " +
+            "`amountEdited`, `categoryEdited`, `memoEdited`, `timeEdited`"
+
+    private const val EXPENSES_V16_COLUMNS =
+        "`id`, `date`, `time`, `amount`, `category`, `memo`, `receiptId`, `createdAt`, `groupId`, `timeEdited`, " +
+            "`receiptItemId`, `name`, `amountEdited`, `categoryEdited`, `nameEdited`, `memoEdited`, `uid`, " +
+            "`deletedByUser`, `unknownAmount`"
+
+    /**
+     * v16 で消す「支出の無い支払い」の条件(receipts の別名 r に対する SQL)。
+     * 確定済みで、支出(まとまり)が無く、割り勘のシートも無く(=自分の負担が0円の支払いではない)、合計か品目がある(=家計簿の対象)支払い。
+     * これは「支出だけを削除した」ことで残った支払いで、利用者は消したつもりのもの。
+     * 割り勘のシートがあるものは、自分の負担が0円の正当な支払い(家計簿に0円の行として出る)の可能性があるので残す。
+     * 下書きは利用者がまだ確認していない可能性がある(古い版では下書きに支出を作らなかった)ので消さず、
+     * 起動後に家計簿の行を作り直して確認待ちとして出す(ReceiptRepository.repairDraftsWithoutExpense)。
+     */
+    internal const val V16_ORPHAN_PAYMENT_WHERE =
+        "r.`status` = 'confirmed' " +
+            "AND NOT EXISTS (SELECT 1 FROM `expense_groups` g WHERE g.`receiptId` = r.`id`) " +
+            "AND NOT EXISTS (SELECT 1 FROM `split_sheets` s WHERE s.`receiptId` = r.`id`) " +
+            "AND (r.`totalAmount` IS NOT NULL OR EXISTS (SELECT 1 FROM `receipt_items` i WHERE i.`receiptId` = r.`id`))"
+
+    /** v16 の移行の前後で比べる値(家計簿に入る支出は変えない)。 */
+    internal val V16_COUNT_QUERIES: List<Pair<String, String>> = listOf(
+        "expense_groups" to "SELECT COUNT(*) FROM `expense_groups`",
+        "expense_groups の金額の合計" to "SELECT COALESCE(SUM(`amount`), 0) FROM `expense_groups`",
+        "支出の品目(まとまりあり)" to "SELECT COUNT(*) FROM `expenses` WHERE `groupId` IS NOT NULL",
+        "支出の品目の金額の合計(まとまりあり)" to "SELECT COALESCE(SUM(`amount`), 0) FROM `expenses` WHERE `groupId` IS NOT NULL",
+    )
+
+    /** 外部キー違反を数える表(移行の前後で比べ、増えたら止める)。 */
+    private val V16_FK_TABLES = listOf(
+        "expense_groups", "expenses", "receipt_items", "receipt_not_duplicates", "split_sheets", "share_groups",
+        "share_group_items", "item_shares", "whole_shares", "payment_payers", "split_participants", "split_label_amounts",
+    )
+
+    private fun SupportSQLiteDatabase.fkViolations(tables: List<String>): Long {
+        var n = 0L
+        for (t in tables) query("PRAGMA foreign_key_check(`$t`)").use { c -> while (c.moveToNext()) n++ }
+        return n
+    }
+
+    /** AUTOINCREMENT の表を作り直す(新しい表に写して入れ替え、採番を引き継ぐ)。外部キーが無効な状態で呼ぶこと。 */
+    private fun SupportSQLiteDatabase.rebuildV16(table: String, columns: String, createSql: (String) -> String, indexSqls: (String) -> List<String>) {
+        val oldSeq = query("SELECT `seq` FROM `sqlite_sequence` WHERE `name` = '$table'")
+            .use { c -> if (c.moveToFirst()) c.getLong(0) else null }
+        execSQL("DROP TABLE IF EXISTS `${table}_new`")
+        execSQL(createSql("${table}_new"))
+        execSQL("INSERT INTO `${table}_new` ($columns) SELECT $columns FROM `$table`")
+        execSQL("DROP TABLE `$table`")
+        execSQL("ALTER TABLE `${table}_new` RENAME TO `$table`")
+        val maxId = count("SELECT COALESCE(MAX(`id`), 0) FROM `$table`")
+        val seq = maxOf(oldSeq ?: 0L, maxId)
+        execSQL("DELETE FROM `sqlite_sequence` WHERE `name` = '$table'")
+        if (seq > 0L) execSQL("INSERT INTO `sqlite_sequence` (`name`, `seq`) VALUES ('$table', ?)", arrayOf<Any?>(seq))
+        for (sql in indexSqls(table)) execSQL(sql)
+    }
+
+    /**
+     * v15 -> v16(支払い ⇒ 支出 の親子を崩さない): 支出は必ず支払いに属し、支払いを消すと支出も消える形にする。
+     *  1. 支払いに属さない支出(receiptId が無い、または無い支払いを指すまとまり)は、手入力の支払いに変える(v12 と同じ)。
+     *  2. 品目(expenses)の receiptId を、属するまとまりの支払いに揃える。まとまりにも支払いにも属さない消した品目(非表示)は消す。
+     *  3. 支出の無い確定済みの支払い(V16_ORPHAN_PAYMENT_WHERE。支出だけを消して残ったもの)を、品目・割り勘・重複でない印ごと消す。
+     *     移行中は外部キーが無効なので、子の表を明示して消す。レシート画像は、起動時の未参照画像の掃除で消える。
+     *  4. expense_groups(receiptId NOT NULL・CASCADE)と expenses(receiptId CASCADE)を作り直す。
+     * 安全策: 外部キーが有効なら止める / 家計簿に入る支出の件数・金額の合計が変わったら止める / 外部キー違反が増えたら止める。
+     */
+    val MIGRATION_15_16: Migration = object : Migration(15, 16) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val fkOn = db.query("PRAGMA foreign_keys").use { c -> c.moveToFirst() && c.getInt(0) == 1 }
+            if (fkOn) {
+                throw IllegalStateException(
+                    "v16 への移行を中止しました: 外部キー(PRAGMA foreign_keys)が有効です。" +
+                        "有効なまま表を作り直すと、子のデータが連鎖で変わるおそれがあるため、何も変更せずに止めました。",
+                )
+            }
+            val fkBefore = db.fkViolations(V16_FK_TABLES)
+            val before = V16_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+
+            // 1. 支払いに属さない支出 → 手入力の支払い
+            db.convertOrphanGroupsToManualReceipts(
+                "`receiptId` IS NULL OR `receiptId` NOT IN (SELECT `id` FROM `receipts`)",
+            )
+            // 2. 品目の支払いを、まとまりの支払いに揃える
+            db.execSQL(
+                "UPDATE `expenses` SET `receiptId` = (SELECT g.`receiptId` FROM `expense_groups` g WHERE g.`id` = `expenses`.`groupId`) " +
+                    "WHERE `groupId` IS NOT NULL AND EXISTS (SELECT 1 FROM `expense_groups` g WHERE g.`id` = `expenses`.`groupId`)",
+            )
+            db.execSQL(
+                "DELETE FROM `expenses` WHERE `groupId` IS NULL AND `deletedByUser` = 1 " +
+                    "AND (`receiptId` IS NULL OR `receiptId` NOT IN (SELECT `id` FROM `receipts`))",
+            )
+            val loose = db.count(
+                "SELECT COUNT(*) FROM `expenses` WHERE `groupId` IS NULL " +
+                    "AND (`receiptId` IS NULL OR `receiptId` NOT IN (SELECT `id` FROM `receipts`))",
+            )
+            if (loose != 0L) throw IllegalStateException("v16 への移行を中止しました: 支払いにもまとまりにも属さない支出が $loose 件あります")
+
+            // 3. 支出の無い支払いを消す(子の表を先に)
+            val orphanIds = "SELECT r.`id` FROM `receipts` r WHERE $V16_ORPHAN_PAYMENT_WHERE"
+            db.execSQL("CREATE TEMP TABLE `v16_orphan_payments` AS $orphanIds")
+            val ids = "SELECT `id` FROM `v16_orphan_payments`"
+            val shareGroups = "SELECT `id` FROM `share_groups` WHERE `receiptId` IN ($ids)"
+            db.execSQL("DELETE FROM `item_shares` WHERE `groupId` IN ($shareGroups)")
+            db.execSQL("DELETE FROM `share_group_items` WHERE `groupId` IN ($shareGroups)")
+            for (t in listOf("share_groups", "whole_shares", "payment_payers", "split_label_amounts", "split_participants", "split_sheets", "expenses", "receipt_items")) {
+                db.execSQL("DELETE FROM `$t` WHERE `receiptId` IN ($ids)")
+            }
+            db.execSQL("DELETE FROM `receipt_not_duplicates` WHERE `receiptIdLow` IN ($ids) OR `receiptIdHigh` IN ($ids)")
+            db.execSQL("DELETE FROM `receipts` WHERE `id` IN ($ids)")
+            db.execSQL("DROP TABLE `v16_orphan_payments`")
+
+            // 4. 表の作り直し(親の expense_groups → 子の expenses)
+            db.rebuildV16("expense_groups", GROUPS_V16_COLUMNS, ::groupsV16CreateSql, ::groupsV16IndexSqls)
+            db.rebuildV16("expenses", EXPENSES_V16_COLUMNS, ::expensesV16CreateSql, ::expensesV16IndexSqls)
+
+            val after = V16_COUNT_QUERIES.map { (name, sql) -> name to db.count(sql) }
+            if (before != after) {
+                throw IllegalStateException("v16 への移行を中止しました: 家計簿に入る支出の件数または金額の合計が変わりました $before -> $after")
+            }
+            val fkAfter = db.fkViolations(V16_FK_TABLES)
+            if (fkAfter > fkBefore) {
+                throw IllegalStateException("v16 への移行を中止しました: 外部キーの違反が増えました $fkBefore -> $fkAfter")
+            }
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15,
+        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
     )
 }

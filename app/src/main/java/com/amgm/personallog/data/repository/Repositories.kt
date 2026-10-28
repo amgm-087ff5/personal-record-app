@@ -110,6 +110,14 @@ class ReceiptRepository @Inject constructor(
     suspend fun getReceipt(id: Long): Receipt? = receiptDao.getById(id)
     suspend fun getItems(receiptId: Long): List<ReceiptItem> = receiptDao.getItems(receiptId)
     suspend fun allReceipts(): List<Receipt> = receiptDao.getAll()
+
+    /**
+     * 支出の無い下書きの支払いに、家計簿の行(自分の支出)を作る。v16 の移行で残した下書き(支出だけ消された・古い版で作られた)を、
+     * 確認待ちとして家計簿に出すため。合計も品目も無いものは何もしない(applyLedger)。
+     */
+    suspend fun repairDraftsWithoutExpense() {
+        for (id in receiptDao.draftIdsWithoutExpense()) syncLedger(id)
+    }
     suspend fun receiptsByImageHash(hash: String): List<Receipt> = receiptDao.getByImageHash(hash)
     suspend fun receiptsWithoutImageHash(): List<Receipt> = receiptDao.getWithoutImageHash()
     suspend fun setImageHashIfMissing(id: Long, hash: String) {
@@ -451,8 +459,19 @@ class ReceiptRepository @Inject constructor(
         }
     }
 
-    /** レシート削除。紐づく Expense は receiptId が NULL になって残る(家計簿は消さない)。 */
-    suspend fun delete(receipt: Receipt) = receiptDao.delete(receipt)
+    /**
+     * 支払いを削除する。支払いから作った自分の支出・品目、支払いの品目・割り勘・重複でない印も一緒に消える
+     * (支払い ⇒ 支出 の親子をまとめて消す。親の無い支出・子の無い支払いを残さない)。
+     * 支出の画面・家計簿の一覧・支払いの画面のどこから消しても、これを使う。消した支払いを返す(レシート画像の削除に使う)。
+     * 自分の負担を0円にしたいときは削除ではなく負担割りで行う(0円の支払いは家計簿に0円の行として残る)。
+     */
+    suspend fun deletePayment(receiptId: Long): Receipt? = db.withTransaction {
+        val r = receiptDao.getById(receiptId) ?: return@withTransaction null
+        // 外部キー(CASCADE)でも消えるが、外部キーの有効・無効に頼らず明示して消す
+        deleteExpensesOf(receiptId)
+        receiptDao.delete(r)
+        r
+    }
 
     companion object {
         const val MESSAGE_NO_PAYMENT = "支払いが見つかりません。"
@@ -519,7 +538,7 @@ class ExpenseRepository @Inject constructor(
     /**
      * 支出の品目を消す。レシート由来の品目(receiptItemId がある行)は、行を消さずに deletedByUser を立てる
      * (レシートの再確定で復活させない)。手入力の行は本当に消す。
-     * 支出の品目は1つ以上必要なので、消していない品目が最後の1つなら消さずに例外にする(支出ごと消すのは deleteGroup)。
+     * 支出の品目は1つ以上必要なので、消していない品目が最後の1つなら消さずに例外にする(支出ごと消すのは支払いの削除 deletePayment)。
      */
     suspend fun delete(expense: Expense): Unit = db.withTransaction {
         val groupId = expense.groupId
@@ -557,7 +576,7 @@ class ExpenseRepository @Inject constructor(
     /** 支払いグループの1つの欄を、紐づくレシートの値に戻す。日時を戻したら品目の日時も合わせる。 */
     suspend fun revertGroupField(groupId: Long, field: PaymentField): Boolean = db.withTransaction {
         val g = groupDao.getById(groupId) ?: return@withTransaction false
-        val receiptId = g.receiptId ?: return@withTransaction false
+        val receiptId = g.receiptId
         val receipt = db.receiptDao().getById(receiptId) ?: return@withTransaction false
         val items = db.receiptDao().getItems(receiptId)
         val share = splitRepository.shareOf(receiptId, receipt.totalAmount, items).share
@@ -579,17 +598,12 @@ class ExpenseRepository @Inject constructor(
     }
 
     /** 支払いグループを、品目ごと消す。 */
-    suspend fun deleteGroup(group: ExpenseGroup) = db.withTransaction {
-        dao.deleteByGroupId(group.id)
-        groupDao.delete(group)
-    }
-
     /** 品目の属する支出(まとまり)の id。品目が無い・まとまりに属さない(v13 以前の古い行)なら null。旧ルートの解決に使う。 */
     suspend fun groupIdOfExpense(expenseId: Long): Long? = dao.getById(expenseId)?.groupId
 
     suspend fun groupItems(groupId: Long): List<Expense> = dao.getByGroupId(groupId)
 
     companion object {
-        const val MESSAGE_LAST_ITEM = "支出の品目は1つ以上必要です。支出ごと消すときは「この支出を削除」を使ってください。"
+        const val MESSAGE_LAST_ITEM = "支出の品目は1つ以上必要です。支出ごと消すときは「この支出を削除」(元の支払いも消えます)を使ってください。"
     }
 }

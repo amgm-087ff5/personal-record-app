@@ -25,8 +25,8 @@ class MonthBoundaryTest {
     fun groupMovedToNextMonth_countsOnlyInTheGroupsMonth_evenIfItemDatesAreStale() {
         val items = listOf(child(1, "2026-10-31", 400, "食費"), child(2, "2026-10-31", 300, "日用品"))
         val single = Expense(id = 3, date = "2026-10-20", amount = 50, category = "その他", groupId = 8, createdAt = 1)
-        val singleGroup = ExpenseGroup(id = 8, date = "2026-10-20", amount = 50, category = "その他", createdAt = 1)
-        val movedGroup = ExpenseGroup(id = 7, date = "2026-11-01", amount = 1000, category = "食費", createdAt = 1)
+        val singleGroup = ExpenseGroup(receiptId = 1L, id = 8, date = "2026-10-20", amount = 50, category = "その他", createdAt = 1)
+        val movedGroup = ExpenseGroup(receiptId = 1L, id = 7, date = "2026-11-01", amount = 1000, category = "食費", createdAt = 1)
         // 品目の日付が古いまま(10月)でも、10月に残らない
         val t = monthTotals(items + single, listOf(movedGroup, singleGroup))
         assertEquals(50L, t["2026-10"])
@@ -44,7 +44,7 @@ class MonthBoundaryTest {
     @Test
     fun beforeAndAfterMove_bothMonthsAreCorrect() {
         val items = listOf(child(1, "2026-10-31", 400, "食費"))
-        val before = ExpenseGroup(id = 7, date = "2026-10-31", amount = 500, category = "食費", createdAt = 1)
+        val before = ExpenseGroup(receiptId = 1L, id = 7, date = "2026-10-31", amount = 500, category = "食費", createdAt = 1)
         assertEquals(500L, monthTotals(items, listOf(before))["2026-10"])
         assertEquals(0L, monthTotals(items, listOf(before))["2026-11"])
         val after = before.copy(date = "2026-11-02")
@@ -66,7 +66,7 @@ class MonthBoundaryTest {
     @Test
     fun bars_withNegativeDifference_haveDrawnTotalAtLeastTotal() {
         // 品目の合計が支払い金額より大きい(差額が負)グループ
-        val g = ExpenseGroup(id = 7, date = "2026-10-14", amount = 500, category = "日用品", createdAt = 1)
+        val g = ExpenseGroup(receiptId = 1L, id = 7, date = "2026-10-14", amount = 500, category = "日用品", createdAt = 1)
         val items = listOf(child(1, "2026-10-14", 400, "食費"), child(2, "2026-10-14", 300, "食費"))
         val entries = LedgerLogic.buildEntries(items, listOf(g))
         val bars = LedgerChart.bars(ChartLevel.YEAR, LocalDate.of(2026, 10, 14), entries)
@@ -79,7 +79,7 @@ class MonthBoundaryTest {
 
     @Test
     fun deletedItems_areLeftOutOfListAndSums_andBecomeDifference() {
-        val g = ExpenseGroup(id = 7, date = "2026-10-14", amount = 700, category = "日用品", createdAt = 1)
+        val g = ExpenseGroup(receiptId = 1L, id = 7, date = "2026-10-14", amount = 700, category = "日用品", createdAt = 1)
         val kept = child(1, "2026-10-14", 200, "食費")
         val gone = child(2, "2026-10-14", 500, "食費").copy(deletedByUser = true)
         val entry = LedgerLogic.buildEntries(listOf(kept, gone), listOf(g)).single() as com.amgm.personallog.ui.ledger.LedgerEntry.Group

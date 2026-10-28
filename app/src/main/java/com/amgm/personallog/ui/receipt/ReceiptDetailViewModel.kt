@@ -919,18 +919,13 @@ class ReceiptDetailViewModel @Inject constructor(
         }
     }
 
-    /** レシート削除。画像ファイルも消す。alsoExpenses=true なら家計簿の行も消す(false なら残る)。 */
-    fun delete(alsoExpenses: Boolean) {
+    /** 支払いを削除する。支払いから作った支出・品目とレシート画像も消す(親の無い支出を残さない)。 */
+    fun delete() {
         if (_state.value.busy) return
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             try {
-                val r = repository.getReceipt(receiptId)
-                if (r != null) {
-                    if (alsoExpenses) repository.deleteExpensesOf(receiptId)
-                    repository.delete(r)
-                    store.delete(r.imagePath)
-                }
+                repository.deletePayment(receiptId)?.let { store.delete(it.imagePath) }
                 _state.update { it.copy(busy = false, finished = true) }
             } catch (e: CancellationException) {
                 throw e

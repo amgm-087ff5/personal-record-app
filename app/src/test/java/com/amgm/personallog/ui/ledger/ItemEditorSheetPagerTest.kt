@@ -34,7 +34,7 @@ class ItemEditorSheetPagerTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private val group = ExpenseGroup(date = "2026-10-01", amount = 300, createdAt = 0L)
+    private val group = ExpenseGroup(receiptId = 1L, date = "2026-10-01", amount = 300, createdAt = 0L)
 
     private val items = listOf(
         Expense(id = 1L, date = "2026-10-01", amount = 200, category = "食費", name = "牛乳", createdAt = 0L, groupId = 1L),

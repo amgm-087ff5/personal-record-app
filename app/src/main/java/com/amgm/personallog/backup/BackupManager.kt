@@ -231,7 +231,8 @@ class BackupManager @Inject constructor(
         receiptDao.insertNotDuplicates(remapNotDuplicates(data.receiptNotDuplicates, receiptIds.associateWith { it }))
         val times = receiptTimes(data)
         data.expenseGroups.forEach { g ->
-            expenseGroupDao.insert(g.toEntity(linkedTime(g.receiptId, times)).copy(receiptId = g.receiptId?.takeIf { it in receiptIds }))
+            val rid = requireNotNull(g.receiptId?.takeIf { it in receiptIds }) { "支払いに属さない支出は取り込めません(id=${g.id})" }
+            expenseGroupDao.insert(g.toEntity(linkedTime(g.receiptId, times)).copy(receiptId = rid))
         }
         val groupIds = data.expenseGroups.map { it.id }.toSet()
         if (data.expenses.isNotEmpty()) {
@@ -347,7 +348,8 @@ class BackupManager @Inject constructor(
         val duplicateGroups = HashSet<Long>()
         val times = receiptTimes(data)
         for (g in data.expenseGroups) {
-            val entity = g.toEntity(linkedTime(g.receiptId, times)).copy(id = 0, receiptId = g.receiptId?.let { receiptIdMap[it] })
+            val rid = requireNotNull(g.receiptId?.let { receiptIdMap[it] }) { "支払いに属さない支出は取り込めません(id=${g.id})" }
+            val entity = g.toEntity(linkedTime(g.receiptId, times)).copy(id = 0, receiptId = rid)
             val existing = groupIndex.find(g.uid, entity)
             if (existing != null) {
                 groupIdMap[g.id] = existing

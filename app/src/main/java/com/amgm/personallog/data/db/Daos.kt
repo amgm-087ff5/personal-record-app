@@ -62,6 +62,16 @@ interface DiaryDao {
 
 @Dao
 interface ReceiptDao {
+    /**
+     * 支出(まとまり)の無い下書きの支払い(割り勘のシートが無いもの)の id。家計簿の行を作り直す対象。
+     * 支払い ⇒ 支出 の親子のうち「子の無い支払い」を残さないため(下書きは確認待ちとして家計簿に出す)。
+     */
+    @Query(
+        "SELECT id FROM receipts WHERE status = 'draft' " +
+            "AND id NOT IN (SELECT receiptId FROM expense_groups) AND id NOT IN (SELECT receiptId FROM split_sheets)",
+    )
+    suspend fun draftIdsWithoutExpense(): List<Long>
+
     @Query("SELECT * FROM receipts ORDER BY purchasedAt DESC, id DESC")
     fun observeAll(): Flow<List<Receipt>>
 

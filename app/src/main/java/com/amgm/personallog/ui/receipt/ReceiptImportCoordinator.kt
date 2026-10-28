@@ -146,6 +146,20 @@ class ReceiptImportCoordinator @Inject constructor(
 
     init {
         cleanupOrphanImages()
+        repairDraftsWithoutExpense()
+    }
+
+    /** 支出の無い下書きの支払いに家計簿の行を作る(子の無い支払いを残さない)。失敗しても取り込みには影響させない。 */
+    private fun repairDraftsWithoutExpense() {
+        scope.launch(Dispatchers.IO) {
+            try {
+                repository.repairDraftsWithoutExpense()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // 付随の処理。次の起動でやり直す
+            }
+        }
     }
 
     /**

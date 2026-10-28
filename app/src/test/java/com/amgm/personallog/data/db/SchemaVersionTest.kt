@@ -20,8 +20,8 @@ class SchemaVersionTest {
     }
 
     @Test
-    fun versionIs15_andMigrationsReachIt() {
-        assertEquals(15, AppDatabase.VERSION)
+    fun versionIs16_andMigrationsReachIt() {
+        assertEquals(16, AppDatabase.VERSION)
         assertEquals(AppDatabase.VERSION, Migrations.ALL.maxOf { it.endVersion })
     }
 }

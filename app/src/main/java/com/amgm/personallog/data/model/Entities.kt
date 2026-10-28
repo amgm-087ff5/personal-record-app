@@ -175,6 +175,8 @@ data class ReceiptItem(
  * 自分の支出(支払い1件に対する自分の負担)。amount は自分の負担額(確定値で、正)。
  * 品目は Expense.groupId で紐づき、必ず1行以上ある(品目の無い支払いは、品名が空の1品目を持つ)。
  * 品目が1つのとき、その品目の金額は amount と同じ。品目の合計と amount がずれる場合は表示で差額を示す。
+ * 支出は必ず支払い(receiptId)に属する(v16〜 NOT NULL)。支払いを消すと支出も消える(CASCADE)。
+ * 支出だけを消すことはしない(ReceiptRepository.deletePayment で支払いごと消す)。親の無い支出・子の無い支払いを作らない。
  */
 @Entity(
     tableName = "expense_groups",
@@ -183,7 +185,7 @@ data class ReceiptItem(
             entity = Receipt::class,
             parentColumns = ["id"],
             childColumns = ["receiptId"],
-            onDelete = ForeignKey.SET_NULL,
+            onDelete = ForeignKey.CASCADE,
         ),
     ],
     indices = [Index("receiptId"), Index("date")],
@@ -197,7 +199,8 @@ data class ExpenseGroup(
     val amount: Int,
     val category: String = Categories.UNCATEGORIZED,
     val memo: String = "",
-    val receiptId: Long? = null,
+    /** 親の支払い。必ず入る(v16〜)。 */
+    val receiptId: Long,
     val createdAt: Long,
     /** 端末をまたいで変わらない識別子(バックアップの復元時の照合キー)。 */
     @ColumnInfo(defaultValue = "''")
@@ -219,6 +222,7 @@ fun newUid(): String = UUID.randomUUID().toString()
 /**
  * 支出の品目(自分の支出 expense_groups の子)。amount は円で、支出は正の値。receiptId は支払い由来の場合のみ。
  * groupId は必ず入る(v14 で「単独の支出」= groupId なし をやめた)。null は v13 以前の古い行と、取り込み前の旧形式だけ。
+ * 支払いを消すと品目も消える(receiptId・groupId とも CASCADE。v16〜)。
  */
 @Entity(
     tableName = "expenses",
@@ -227,7 +231,7 @@ fun newUid(): String = UUID.randomUUID().toString()
             entity = Receipt::class,
             parentColumns = ["id"],
             childColumns = ["receiptId"],
-            onDelete = ForeignKey.SET_NULL,
+            onDelete = ForeignKey.CASCADE,
         ),
         ForeignKey(
             entity = ExpenseGroup::class,

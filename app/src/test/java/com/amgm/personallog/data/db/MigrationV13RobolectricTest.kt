@@ -79,6 +79,11 @@ class MigrationV13RobolectricTest {
             "INSERT INTO receipts (id, purchasedAt, storeName, totalAmount, imagePath, rawJson, status, createdAt) " +
                 "VALUES (1, '2026-10-09 18:32', '居酒屋A', 5000, '', '{}', 'confirmed', 1000)",
         )
+        // 確定済みの支払いには自分の支出がある(v16 で支出の無い確定済みの支払いは消えるため、実際のデータと同じ形にする)
+        h.writableDatabase.execSQL(
+            "INSERT INTO expense_groups (id, date, time, amount, category, memo, receiptId, createdAt, uid) " +
+                "VALUES (1, '2026-10-09', '18:32', 5000, '外食', '', 1, 1000, 'g-1')",
+        )
         h.close()
     }
 

@@ -35,7 +35,7 @@ object SingleExpenseConversion {
         amount = e.amount,
         category = e.category,
         memo = e.memo,
-        receiptId = e.receiptId,
+        receiptId = requireNotNull(e.receiptId) { "支払いに属さない単独の支出はまとまりにできません(先に手入力の支払いに変える)" },
         createdAt = e.createdAt,
         uid = groupUid(e.uid),
         amountEdited = e.amountEdited,

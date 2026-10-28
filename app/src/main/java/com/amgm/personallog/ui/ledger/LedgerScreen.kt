@@ -391,11 +391,11 @@ fun LedgerScreen(
     deletingGroup?.let { target ->
         ConfirmSheet(
             title = "支出を削除",
-            message = "「${target.memo.ifBlank { target.category }}」の支出と品目をすべて削除します。",
+            message = "「${target.memo.ifBlank { target.category }}」の支出を削除します。元の支払い(店名・日時・合計)とレシート画像も一緒に削除されます。",
             confirmText = "削除",
             onDismiss = { deletingGroup = null },
             onConfirm = {
-                viewModel.deleteGroup(target)
+                viewModel.deletePayment(target)
                 deletingGroup = null
             },
         )
