@@ -192,10 +192,20 @@ class ItemPagerLogicTest {
     }
 
     @Test
-    fun overscroll_addsOnlyPastThreshold() {
-        assertFalse(ItemPagerLogic.addOnRelease(0.29f, settledOnAddSlot = false))
-        assertTrue(ItemPagerLogic.addOnRelease(0.3f, settledOnAddSlot = false))
-        assertTrue(ItemPagerLogic.addOnRelease(0f, settledOnAddSlot = true))
+    fun pull_addsOnlyAtOrPastThreshold() {
+        assertFalse(ItemPagerLogic.addOnRelease(0.29f))
+        assertTrue(ItemPagerLogic.addOnRelease(0.3f))
+        assertTrue(ItemPagerLogic.addOnRelease(1f))
+        assertFalse(ItemPagerLogic.addOnRelease(0f))
+    }
+
+    @Test
+    fun pullFraction_isDistanceOverPageWidth_clampedToOne() {
+        assertEquals(0.3f, ItemPagerLogic.pullFraction(150f, 500), 0.0001f)
+        assertEquals(1f, ItemPagerLogic.pullFraction(900f, 500), 0.0001f)
+        // 戻した(負の)距離や、幅が分からないときは 0
+        assertEquals(0f, ItemPagerLogic.pullFraction(-5f, 500), 0.0001f)
+        assertEquals(0f, ItemPagerLogic.pullFraction(100f, 0), 0.0001f)
     }
 
     @Test
