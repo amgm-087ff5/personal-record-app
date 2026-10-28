@@ -1,5 +1,6 @@
 package com.amgm.personallog.ui.design
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -29,11 +31,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -43,16 +50,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
-import android.view.WindowManager
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -130,18 +132,57 @@ fun InkSheet(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val minimizable = !swipeToDismiss
-    Dialog(
-        onDismissRequest = { if (closable) onDismiss() },
-        properties = DialogProperties(
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false,
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-        ),
-    ) {
-        InkSheetBody(onDismiss, modifier, minimizable, title, closable, content)
+    val host = LocalSheetHost.current
+    if (host == null) {
+        // 重ね表示の置き場が無いとき(プレビュー・テストなど)は、その場に全面で描く
+        Box(Modifier.fillMaxSize()) {
+            InkSheetBody(onDismiss, modifier, minimizable, title, closable, content)
+        }
+        return
+    }
+    // 呼び出し側の最新の内容で中身を差し替える。呼び出しが画面から外れたら重ね表示から取り除く
+    val entry = remember { SheetEntry(nextSheetId()) }
+    SideEffect {
+        entry.content = { InkSheetBody(onDismiss, modifier, minimizable, title, closable, content) }
+    }
+    DisposableEffect(host) {
+        host.entries.add(entry)
+        onDispose { host.entries.remove(entry) }
     }
 }
+
+/** 重ねて出すシートの一覧。[SheetHost] が持つ。 */
+internal class SheetHostState {
+    val entries = mutableStateListOf<SheetEntry>()
+}
+
+/** 重ねて出す1枚のシート。中身は [InkSheet] 側の最新の内容で差し替える。 */
+internal class SheetEntry(val id: Long) {
+    var content: @Composable () -> Unit by mutableStateOf<@Composable () -> Unit>({})
+}
+
+/** 重ね表示の置き場。[SheetHost] の中でだけ値が入る。無いときは [InkSheet] がその場に描く。 */
+internal val LocalSheetHost = staticCompositionLocalOf<SheetHostState?> { null }
+
+/**
+ * 画面全体を包み、その最前面に [InkSheet] を重ねて描く。AppRoot で Scaffold の外側に置く。
+ * 後から出したシートほど上に重なる。別ウィンドウ(Dialog)を使わないので、高さ・キーボードが端末で変わらない。
+ */
+@Composable
+fun SheetHost(content: @Composable () -> Unit) {
+    val state = remember { SheetHostState() }
+    CompositionLocalProvider(LocalSheetHost provides state) {
+        Box(Modifier.fillMaxSize()) {
+            content()
+            state.entries.forEach { entry -> key(entry.id) { entry.content() } }
+        }
+    }
+}
+
+/** シートの番号。同じ番号を二度使わないよう増やし続ける(UI スレッドからだけ呼ぶ)。 */
+private var sheetSeq = 0L
+
+private fun nextSheetId(): Long = ++sheetSeq
 
 @Composable
 private fun InkSheetBody(
@@ -205,13 +246,8 @@ private fun InkSheetBody(
         },
     )
 
-    // ダイアログのウィンドウ自身の暗さは使わない(後ろの面はこの中で描く)。キーボードは中身の imePadding で避ける
-    val window = (LocalView.current.parent as? DialogWindowProvider)?.window
-    SideEffect {
-        window?.setDimAmount(0f)
-        @Suppress("DEPRECATION")
-        window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-    }
+    // 戻るキーは × と同じ。閉じられないシート(処理中など)では何もしない。ダイアログを使わないので、ここで受ける
+    BackHandler(enabled = true) { if (closable) close(returnTo = snap) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val statusTop = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
@@ -240,6 +276,8 @@ private fun InkSheetBody(
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                // キーボードの高さ分だけシート全体を持ち上げる(中身の imePadding は 0 になる)
+                .imePadding()
                 .heightIn(max = maxSheet)
                 .offset { IntOffset(0, if (offset.value == Float.MAX_VALUE) maxSheet.roundToPx() else offset.value.roundToInt()) }
                 .onSizeChanged { sheetHeight = it.height }
