@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.domain.TaxCalc
+import com.amgm.personallog.domain.UnknownAmounts
 import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptImageCodec
 import com.amgm.personallog.ui.design.AppTheme
@@ -53,6 +54,7 @@ import com.amgm.personallog.ui.design.InkSheet
 import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.LeaderRow
 import com.amgm.personallog.ui.design.PaperScreen
+import com.amgm.personallog.ui.design.Pill
 import com.amgm.personallog.ui.design.Pills
 import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.Stamp
@@ -89,8 +91,8 @@ private fun dashboardTotalStyle(): TextStyle = AppTheme.type.numeralXL.copy(
 )
 
 /**
- * レシートの確認・修正画面。
- * 合計のダッシュボード → 原本画像 → 紙面(店名・合計) → 品目の行 → 支払いまとめ → 操作。品目の編集は行をタップして開くシートで行う。
+ * 支払い(レシート)の確認・修正画面。
+ * 合計のダッシュボード → 原本画像 → 紙面(店名・合計) → 品目の行 → 支払いまとめ → 子の「自分の支出」の行 → 操作。品目の編集は行をタップして開くシートで行う。
  */
 @Composable
 fun ReceiptDetailScreen(
@@ -109,6 +111,9 @@ fun ReceiptDetailScreen(
     var adjustOpen by rememberSaveable { mutableStateOf(false) }
     var pendingRescanAdjust by rememberSaveable(stateSaver = ReceiptAdjustOrNullSaver) { mutableStateOf<ReceiptAdjust?>(null) }
     val groups = remember(s.items) { groupItemForms(s.items) }
+    // 金額不明の品目に表示する額(合計 − 分かっている品目の合計を、不明の品目で均等に分けた額)。品目ごとに引けるよう key で持つ
+    val unitYen = remember(s.items, s.total) { UnknownAmounts.paidYenPerItem(s.items.map { it.toItemModel() }, s.total.toIntOrNull()) }
+    val yenByKey = remember(s.items, unitYen) { s.items.indices.associate { s.items[it].key to unitYen[it] } }
 
     LaunchedEffect(s.finished) { if (s.finished) onBack() }
 
@@ -117,7 +122,13 @@ fun ReceiptDetailScreen(
             val hasImage = !s.loading && !s.notFound && s.imagePath.isNotBlank()
             val showDashboard = !s.loading && !s.notFound
             if (showDashboard) {
-                item(key = "dashboard") { TotalDashboard(s) }
+                item(key = "dashboard") {
+                    TotalDashboard(
+                        s,
+                        onMarkBlankUnknown = viewModel::markBlankItemsUnknown,
+                        onAddDifferenceUnknown = viewModel::addDifferenceAsUnknownItem,
+                    )
+                }
             }
             if (hasImage) {
                 item(key = "image") {
@@ -149,10 +160,6 @@ fun ReceiptDetailScreen(
                         TextAction("読み取り直す", onClick = { sheet = SHEET_RESCAN }, enabled = !s.busy)
                     }
                 }
-            }
-
-            s.paymentLink?.takeIf { s.confirmed }?.let { link ->
-                item(key = "payment-link") { PaymentLinkRow(link, onClick = { onOpenPayment(link) }) }
             }
 
             if (s.loading) {
@@ -305,6 +312,7 @@ fun ReceiptDetailScreen(
                 items(groups, key = { it.head.key }) { group ->
                     ItemGroupRows(
                         group = group,
+                        yenByKey = yenByKey,
                         onEditGroup = { editGroupKey = group.head.key },
                         onEditUnit = { editUnitKey = it },
                     )
@@ -349,6 +357,11 @@ fun ReceiptDetailScreen(
                             }
                         }
                     }
+                }
+
+                // 子: この支払いから作った自分の支出。支払いの最下部に、字下げして入れる
+                s.paymentLink?.takeIf { s.confirmed }?.let { link ->
+                    item(key = "payment-link") { PaymentLinkRow(link, onClick = { onOpenPayment(link) }) }
                 }
 
                 // 操作は最下部に離して置く
@@ -628,7 +641,11 @@ private fun HeadcountChoiceSheet(
  * 品目から計算した額は、合計の位置には出さない。
  */
 @Composable
-private fun TotalDashboard(s: DetailUiState) {
+private fun TotalDashboard(
+    s: DetailUiState,
+    onMarkBlankUnknown: () -> Unit,
+    onAddDifferenceUnknown: () -> Unit,
+) {
     val c = AppTheme.colors
     val total = s.total.toLongOrNull()
     val breakdown = s.taxBreakdown
@@ -662,6 +679,15 @@ private fun TotalDashboard(s: DetailUiState) {
                 color = c.danger,
             )
         }
+        // 不一致のときの直し方: 未入力を不明にする / 差額を不明の品目として足す(どちらも VM が出せると言ったときだけ)
+        if (diff != null) {
+            if (s.canMarkBlankAsUnknown) {
+                TextAction("未入力を全て不明にする", onClick = onMarkBlankUnknown)
+            }
+            s.differenceForUnknownItem?.let { d ->
+                TextAction("差額 ${formatYen(d)} を不明の品目として足す", onClick = onAddDifferenceUnknown)
+            }
+        }
         Column(modifier = Modifier.padding(top = Space.xs)) {
             val parts = buildList {
                 add("品目の計算合計 ${formatYen(s.itemsSum)}")
@@ -693,18 +719,26 @@ private fun SummaryColumn(label: String, value: String, modifier: Modifier = Mod
 @Composable
 private fun ItemGroupRows(
     group: ItemGroup,
+    /** 品目ごとに表示する税込額(金額不明の品目は合計から求めた額)。 */
+    yenByKey: Map<Long, Long>,
     onEditGroup: () -> Unit,
     onEditUnit: (Long) -> Unit,
 ) {
     val c = AppTheme.colors
     val head = group.head
     val count = group.units.size
-    val paid = TaxCalc.paidYen(group.units.map { it.toItemModel() })
+    // 金額不明の品目は、分かっている品目の計算に入らないので、求めた額を足す
+    val paid = if (head.unknownAmount) {
+        group.units.sumOf { yenByKey[it.key] ?: 0L }
+    } else {
+        TaxCalc.paidYen(group.units.map { it.toItemModel() })
+    }
     val note = buildString {
         append(if (head.priceIncludesTax) "税込" else "税抜")
         append(' ').append(head.taxRate).append('%')
         append(" ・ ").append(head.category)
-        if (count > 1) append(" ・ 1個 ").append(yenText(head.amount))
+        if (head.unknownAmount) append(" ・ 金額は合計から求める")
+        else if (count > 1) append(" ・ 1個 ").append(yenText(head.amount))
         else if (!head.priceIncludesTax) append(" ・ 税込 ").append(TaxCalc.paidYenText(head.toItemModel())).append('円')
         if (head.memo.isNotBlank() && count == 1) append(" ・ ").append(head.memo)
     }
@@ -726,12 +760,19 @@ private fun ItemGroupRows(
                 label = head.name.ifBlank { "(品名未入力)" } + if (count > 1) " ×$count" else "",
                 value = formatYen(paid),
             )
-            Text(note, style = AppTheme.type.caption, color = c.inkSoft)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (head.unknownAmount) {
+                    Stamp("不明")
+                    Box(modifier = Modifier.width(Space.xs))
+                }
+                Text(note, style = AppTheme.type.caption, color = c.inkSoft)
+            }
         }
         if (count > 1) {
             group.units.forEachIndexed { index, unit ->
+                val unitText = if (unit.unknownAmount) formatYen(yenByKey[unit.key] ?: 0L) else yenText(unit.amount)
                 Text(
-                    "${index + 1}個目  ${yenText(unit.amount)}" +
+                    "${index + 1}個目  $unitText" +
                         (if (unit.memo.isNotBlank()) "  ${unit.memo}" else ""),
                     style = AppTheme.type.caption,
                     color = c.inkSoft,
@@ -742,6 +783,35 @@ private fun ItemGroupRows(
                 )
             }
         }
+    }
+}
+
+/**
+ * 金額の入力欄と、その横の「不明」の切り替え(同じ行)。不明のときは、金額は 合計 − 分かっている品目の合計 から求めるので、その旨を添える。
+ */
+@Composable
+private fun AmountWithUnknown(
+    label: String,
+    amount: String,
+    unknown: Boolean,
+    onAmount: (String) -> Unit,
+    onUnknown: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(Space.s),
+    ) {
+        SheetField(label, amount, onAmount, modifier = Modifier.weight(1f), numeric = true)
+        Pill(text = "不明", selected = unknown, onClick = { onUnknown(!unknown) }, modifier = Modifier.padding(bottom = Space.m))
+    }
+    if (unknown) {
+        Text(
+            "不明のときは、金額は 合計 − 分かっている品目の合計 から求めます。",
+            style = AppTheme.type.caption,
+            color = AppTheme.colors.inkSoft,
+            modifier = Modifier.padding(bottom = Space.m),
+        )
     }
 }
 
@@ -759,11 +829,13 @@ private fun GroupEditSheet(
     InkSheet(onDismiss = onDismiss, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
         SheetTitle(if (count > 1) "品目(同じもの×$count)" else "品目")
         SheetField("品名", head.name, { viewModel.setGroupName(keys, it) })
-        SheetField(
-            if (count > 1) "金額(1個・円)" else "金額(円)",
-            head.amount,
-            { viewModel.setGroupAmount(keys, it) },
-            numeric = true,
+        AmountWithUnknown(
+            label = if (count > 1) "金額(1個・円)" else "金額(円)",
+            amount = head.amount,
+            unknown = head.unknownAmount,
+            onAmount = { viewModel.setGroupAmount(keys, it) },
+            // 同じ品目の行は、不明の印もまとめて切り替える
+            onUnknown = { v -> keys.forEach { viewModel.setUnitUnknown(it, v) } },
         )
         SheetChoice("税込・税抜") {
             Pills(
@@ -830,7 +902,13 @@ private fun UnitEditSheet(
 ) {
     InkSheet(onDismiss = onDismiss, modifier = Modifier.imePadding().verticalScroll(rememberScrollState())) {
         SheetTitle(if (number != null) "${unit.name.ifBlank { "品目" }} ${number}個目" else unit.name.ifBlank { "品目" })
-        SheetField("この1個の金額(円)", unit.amount, { viewModel.setUnitAmount(unit.key, it) }, numeric = true)
+        AmountWithUnknown(
+            label = "この1個の金額(円)",
+            amount = unit.amount,
+            unknown = unit.unknownAmount,
+            onAmount = { viewModel.setUnitAmount(unit.key, it) },
+            onUnknown = { viewModel.setUnitUnknown(unit.key, it) },
+        )
         SheetField("メモ", unit.memo, { viewModel.setUnitMemo(unit.key, it) })
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             TextAction(

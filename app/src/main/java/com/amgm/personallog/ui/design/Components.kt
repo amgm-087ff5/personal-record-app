@@ -145,6 +145,21 @@ fun Hairline(modifier: Modifier = Modifier, color: Color = AppTheme.colors.line,
     }
 }
 
+/**
+ * 親の行の下に入れ子になっている行(支払い ⇒ 自分の支出、支出 ⇒ 品目)。親の文字の左端に細い罫線を引き、内容を字下げする。
+ * 色は増やさず、罫線の色([color])だけを使う。行ごとに線を引くので、隣り合う入れ子の行はつながって1本に見える。
+ */
+fun Modifier.nestedLine(color: Color): Modifier = this
+    .drawBehind {
+        drawLine(
+            color = color,
+            start = Offset(Space.edge.toPx(), 0f),
+            end = Offset(Space.edge.toPx(), size.height),
+            strokeWidth = Space.hair.toPx(),
+        )
+    }
+    .padding(start = Space.m)
+
 /** 小さな見出し。節の頭やプロパティ名に使う。 */
 @Composable
 fun Label(text: String, modifier: Modifier = Modifier, color: Color = AppTheme.colors.inkFaint) {

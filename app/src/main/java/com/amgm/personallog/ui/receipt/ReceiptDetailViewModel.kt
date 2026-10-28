@@ -223,7 +223,7 @@ data class DetailUiState(
     val lostEditedCount: Int = 0,
     /** 警告の中身: 家計簿で消した品目のうち、消したまま残る件数。 */
     val keptDeletedCount: Int = 0,
-    /** このレシートに紐づく家計簿の支払い(グループか単独の支出)。無ければ null。 */
+    /** このレシートに紐づく家計簿の自分の支出(まとまり)。無ければ null。 */
     val paymentLink: PaymentLink? = null,
     /** 参加人数(整数。空は未入力)。保存で receipts.headcount に入り、割り勘の参加者もそれに合わせる。 */
     val headcount: String = "",
