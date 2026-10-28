@@ -41,7 +41,7 @@ class ItemEditorSheetPagerTest {
         Expense(id = 2L, date = "2026-10-01", amount = 100, category = "食費", name = "パン", createdAt = 0L, groupId = 1L),
     )
 
-    private fun setSheet() {
+    private fun setSheet(startItemId: Long = 2L) {
         composeRule.mainClock.autoAdvance = false
         composeRule.setContent {
             PersonalLogTheme {
@@ -49,7 +49,7 @@ class ItemEditorSheetPagerTest {
                     ItemEditorSheet(
                         group = group,
                         items = items,
-                        startItemId = 2L,
+                        startItemId = startItemId,
                         adding = false,
                         splitPeople = 1,
                         onlyOneItem = false,
@@ -135,6 +135,26 @@ class ItemEditorSheetPagerTest {
             swipe(
                 start = Offset(centerX + width * 0.05f, centerY),
                 end = Offset(centerX - width * 0.05f, centerY),
+                durationMillis = 300,
+            )
+        }
+        settle()
+        advance(3000)
+
+        composeRule.onNodeWithText("2 / 2").assertIsDisplayed()
+        composeRule.onAllNodesWithText("3 / 3").assertCountEquals(0)
+    }
+
+    @Test
+    fun normalSwipeFromFirstToLastItemAddsNothing() {
+        // 1件目から大きく左へ送って最後の品目へ移るだけ。追加の引きとは数えない(指を置いた時点で最後の品目ではない)
+        setSheet(startItemId = 1L)
+        composeRule.onNodeWithText("1 / 2").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("itemPager", useUnmergedTree = true).performTouchInput {
+            swipe(
+                start = Offset(centerX + width * 0.45f, centerY),
+                end = Offset(centerX - width * 0.45f, centerY),
                 durationMillis = 300,
             )
         }

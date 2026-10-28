@@ -436,6 +436,11 @@ internal fun ItemEditorSheet(
                     .pointerInput(Unit) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                            // 指を置いた時点で最後の品目に止まっているときだけ、追加の引きとして数える。
+                            // (前の品目から最後の品目へ送る普通のスワイプを、追加と取り違えない)
+                            val startedOnLast = pagerState.currentPage == drafts.lastIndex &&
+                                !pagerState.isScrollInProgress &&
+                                kotlin.math.abs(pagerState.currentPageOffsetFraction) < 0.01f
                             var dragX = 0f
                             while (true) {
                                 val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -443,12 +448,12 @@ internal fun ItemEditorSheet(
                                 if (!change.pressed) break
                                 dragX += change.positionChange().x
                                 // 最後の品目にいるときだけ、左へ引いた距離を数える(右へ戻すと減る)
-                                if (pagerState.currentPage == drafts.lastIndex) {
+                                if (startedOnLast) {
                                     pullPx = (-dragX).coerceAtLeast(0f)
                                 }
                             }
                             // 指を離した: 閾値を超えていれば、品目を1つ足して移る(追加は scope で行う)
-                            val add = pagerState.currentPage == drafts.lastIndex &&
+                            val add = startedOnLast &&
                                 ItemPagerLogic.addOnRelease(ItemPagerLogic.pullFraction(pullPx, pageWidthPx))
                             pullPx = 0f
                             if (add && !saving) addTick++
