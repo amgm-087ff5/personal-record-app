@@ -30,7 +30,7 @@ class LedgerCalcTest {
         val g = LedgerCalc.groupFromReceipt(receipt, items, now = 3)!!
         assertEquals(700, g.group.amount)
         assertEquals("日用品", g.group.category)
-        assertEquals("スーパー", g.group.memo)
+        assertEquals("", g.group.memo)  // 店名は支払い(storeName)に持ち、支出のメモには写さない(v15)
         assertEquals(9L, g.group.receiptId)
         assertEquals(listOf(200, 500), g.items.map { it.amount })
         // 品名は name に、メモには品目のメモだけを入れる(店名と品名を連結しない)
@@ -58,7 +58,7 @@ class LedgerCalcTest {
         val only = none.items.single()
         assertEquals("", only.name)
         assertEquals(700, only.amount)
-        assertEquals("店", only.memo)
+        assertEquals("", only.memo)  // 店名は支払い(storeName)に持ち、支出のメモには写さない(v15)
         assertEquals(none.group.category, only.category)
         assertTrue(only.receiptItemId == null)
     }
