@@ -99,10 +99,10 @@ fun PaymentDetailScreen(
                     TextAction("戻る", onClick = onBack, color = c.inkSoft)
                 }
             }
-            // 下書きの支払いの確認への入口(支払いの確定は支払いの画面で行う。ここは開くだけ)
+            // 下書きの支払いの確定への入口(支出の画面で確定する。支払いの画面は開かない)
             val draft = s.receipt?.takeIf { s.group != null && it.status == ReceiptStatus.DRAFT }
             if (draft != null) {
-                item(key = "draft") { DraftPaymentBanner(draft, onConfirmClick = { onOpenReceipt(draft.id) }) }
+                item(key = "draft") { DraftPaymentBanner(draft, busy = s.confirming, onConfirmClick = viewModel::confirmDraft) }
             }
             // 親: この支出の元の支払い(画面の最上部。タップで支払いを開く)
             val parent = s.receipt?.takeIf { s.group != null }
@@ -309,6 +309,16 @@ fun PaymentDetailScreen(
             },
         )
     }
+    // 下書きの確定の確認(重複・合計未入力・家計簿の作り直し)。判定は PaymentConfirmer
+    DraftConfirmSheets(
+        state = s,
+        onConfirmAnyway = viewModel::confirmAnyway,
+        onNotDuplicate = viewModel::confirmMarkingNotDuplicate,
+        onUseItemsSum = viewModel::confirmWithItemsSum,
+        onInputTotal = viewModel::confirmWithTotal,
+        onRebuildConfirm = viewModel::confirmRebuildAccepted,
+        onDismiss = viewModel::dismissConfirmSheets,
+    )
     val receipt = s.receipt
     if (editingStore && receipt != null) {
         StoreSheet(
@@ -320,20 +330,73 @@ fun PaymentDetailScreen(
 }
 
 /**
- * 下書きの支払いの確認を促す帯(支出の画面の最上部)。主ボタンで支払いの画面を開く。
- * 確定の処理(重複・合計未入力の確認など)は支払いの画面(ReceiptDetailViewModel)が持つ。ここでは持たない。
+ * 下書きの支払いの確定欄(支出の画面の最上部)。「下書き」の印・読み取り結果の案内・レシート画像(タップで下に広げる)・主ボタン「確定」。
+ * 確定の判定と保存は PaymentConfirmer が行い、ここは押すだけ。確定後は支払いが DB 経由で確定済みになり、この欄は消える。
  */
 @Composable
-internal fun DraftPaymentBanner(receipt: Receipt, onConfirmClick: () -> Unit) {
+internal fun DraftPaymentBanner(receipt: Receipt, onConfirmClick: () -> Unit, busy: Boolean = false) {
     val c = AppTheme.colors
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val hasImage = receipt.imagePath.isNotBlank()
     Column(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = Space.edge, vertical = Space.m),
     ) {
-        Text(PaymentMarks.draftBannerText(receipt), style = AppTheme.type.body, color = c.ink)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+            if (hasImage && !expanded) {
+                DraftReceiptImage(
+                    receipt.imagePath,
+                    expanded = false,
+                    modifier = Modifier.size(width = 64.dp, height = 84.dp).tappable { expanded = true },
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                Stamp("下書き")
+                Text(
+                    PaymentMarks.draftBannerText(receipt),
+                    style = AppTheme.type.body,
+                    color = c.ink,
+                    modifier = Modifier.padding(top = Space.xs),
+                )
+            }
+        }
+        if (hasImage && expanded) {
+            DraftReceiptImage(
+                receipt.imagePath,
+                expanded = true,
+                modifier = Modifier.fillMaxWidth().height(360.dp).padding(top = Space.s).tappable { expanded = false },
+            )
+        }
         Spacer(Modifier.height(Space.s))
-        InkButton("確認して確定する ›", onClick = onConfirmClick, modifier = Modifier.fillMaxWidth())
+        InkButton("確定", onClick = onConfirmClick, modifier = Modifier.fillMaxWidth(), enabled = !busy)
+    }
+}
+
+/** 下書きのレシート画像。縮小表示(thumb)と、タップで広げた表示(expanded)を同じ読み込みで出す。画像が無ければ「画像なし」。 */
+@Composable
+private fun DraftReceiptImage(imagePath: String, expanded: Boolean, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val maxPx = if (expanded) 1024 else 256
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, imagePath, maxPx) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                ReceiptImageCodec.decodeScaled(File(context.filesDir, imagePath), maxPx)?.asImageBitmap()
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+    val bmp = bitmap
+    if (bmp == null) {
+        Box(modifier.background(AppTheme.colors.paperRaised), contentAlignment = Alignment.Center) { Label("画像なし") }
+    } else {
+        Image(
+            bitmap = bmp,
+            contentDescription = "レシート画像",
+            contentScale = if (expanded) ContentScale.Fit else ContentScale.Crop,
+            modifier = modifier,
+        )
     }
 }
 
