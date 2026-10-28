@@ -216,6 +216,13 @@ object LedgerLogic {
         expenses.filter { it.date.startsWith(yearMonth) }
 
     /** "2026-10-05" -> "10月5日(月)" */
+    /**
+     * 家計簿の支出の行の見出し。支払い先(店名)が空でなければそれ、空ならカテゴリ。
+     * 支払いに紐づかない支出は店名を持たないので、カテゴリになる。
+     */
+    fun rowTitle(storeName: String?, category: String): String =
+        storeName?.takeIf { it.isNotBlank() } ?: category
+
     fun dayLabel(date: String): String = try {
         val d = LocalDate.parse(date)
         val dow = "月火水木金土日"[d.dayOfWeek.value - 1]

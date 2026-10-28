@@ -3,6 +3,7 @@ package com.amgm.personallog.ui.ledger
 import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.domain.PaymentField
 
 /**
@@ -15,6 +16,10 @@ import com.amgm.personallog.domain.PaymentField
 object PaymentMarks {
     /** 支払いがレシート(画像か読取原文がある)か。手入力の支払いは false。 */
     fun isScannedReceipt(r: Receipt?): Boolean = r != null && (r.imagePath.isNotEmpty() || r.rawJson.isNotEmpty())
+
+    /** 支出の品目の副行に出す税率の表示。例: 税込の8%は「8%」、税抜なら「8%」「税抜」。 */
+    fun taxLabels(item: ReceiptItem): List<String> =
+        listOfNotNull("${item.taxRate}%", "税抜".takeIf { !item.priceIncludesTax })
 
     fun ofGroup(g: ExpenseGroup, fromScannedReceipt: Boolean = true): Set<PaymentField> {
         if (g.receiptId == null || !fromScannedReceipt) return emptySet()

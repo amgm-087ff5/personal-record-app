@@ -54,6 +54,7 @@ import com.amgm.personallog.ui.design.InkSheet
 import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.LeaderRow
 import com.amgm.personallog.ui.design.PaperScreen
+import com.amgm.personallog.ui.design.RegisterSteps
 import com.amgm.personallog.ui.design.nestedLine
 import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.Stamp
@@ -66,8 +67,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * 自分の支出の詳細画面。最上部に親の支払い(「支払い」の行)を置き、その下に自分の支出(負担額・カテゴリ・メモ)と品目を入れ子で並べる。
- * 支払い由来なら、日時・金額・品目は支払いへ書き戻す。支払い先・レシート・割り勘は親の支払いの行から支払い詳細で見る。
+ * 自分の支出の詳細画面。最上部に親の支払い(「支払い」の行)を置き、その下に支払い先・日時・金額・カテゴリ・メモと品目を入れ子で並べる。
+ * 支払い由来なら、日時・金額・品目は支払いへ書き戻す。支払い先は支払いの店名で、ここから直せる(支払いへ書き戻す)。
+ * 登録の途中(register)なら、手順「② 自分の支出」を出し、「完了」で家計簿へ戻る。この画面から確定はしない(確定は支払いの画面)。
  */
 @Composable
 fun PaymentDetailScreen(
@@ -75,6 +77,10 @@ fun PaymentDetailScreen(
     onOpenReceipt: (Long) -> Unit,
     /** 割り勘シートを開く(支払いの id)。支払いに紐づく支出のときだけボタンを出す。 */
     onOpenSplit: (Long) -> Unit = {},
+    /** 登録の途中か(支払いの確定の後に開かれた)。手順の表示と「完了」を出す。 */
+    register: Boolean = false,
+    /** 登録の「完了」。家計簿へ戻る。 */
+    onDone: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: PaymentDetailViewModel = hiltViewModel(),
 ) {
@@ -98,6 +104,7 @@ fun PaymentDetailScreen(
                     TextAction("戻る", onClick = onBack, color = c.inkSoft)
                 }
             }
+            if (register) item(key = "steps") { RegisterSteps(current = 2) }
             // 親: この支出の元の支払い(画面の最上部。タップで支払いを開く)
             val parent = s.receipt?.takeIf { s.group != null }
             if (parent != null) {
@@ -116,6 +123,8 @@ fun PaymentDetailScreen(
             }
             val group = s.group
             val scanned = PaymentMarks.isScannedReceipt(s.receipt)
+            // 品目の税率は、対応する支払いの品目から引く(表示のみ。データは持たない)
+            val paymentItemById = s.paymentItems.associateBy { it.id }
             s.duplicateOf?.let { original ->
                 item(key = "duplicate") {
                     DuplicateNotice(original, onOpenPayment = { s.receipt?.id?.let(onOpenReceipt) })
@@ -125,7 +134,14 @@ fun PaymentDetailScreen(
                 // 子: 自分の支出。親の支払いの下に字下げして、左に罫線を引く(nestedLine)
                 item(key = "head") {
                     Column(Modifier.fillMaxWidth().nestedLine(c.line)) {
-                        GroupHeader(group, scanned, onEdit = { editingGroup = true }, onRevert = { viewModel.revertGroupField(group, it) })
+                        GroupHeader(
+                            group, scanned,
+                            // 支払い先は支払いの店名(支払いに紐づかない支出では出さない)
+                            store = s.receipt?.storeName,
+                            onEditStore = { editingStore = true },
+                            onEdit = { editingGroup = true },
+                            onRevert = { viewModel.revertGroupField(group, it) },
+                        )
                     }
                 }
                 if (s.splitPeople >= 2) {
@@ -142,7 +158,11 @@ fun PaymentDetailScreen(
                 }
                 items(s.items.size, key = { "item-" + s.items[it].id }) { i ->
                     Column(Modifier.fillMaxWidth().nestedLine(c.line)) {
-                        ItemRow(s.items[i], scanned, onClick = { editingItemId = s.items[i].id }, onRevert = { viewModel.revertItemField(s.items[i], it) })
+                        val taxLabels = s.items[i].receiptItemId?.let { paymentItemById[it] }?.let(PaymentMarks::taxLabels).orEmpty()
+                        ItemRow(
+                            s.items[i], scanned, taxLabels = taxLabels,
+                            onClick = { editingItemId = s.items[i].id }, onRevert = { viewModel.revertItemField(s.items[i], it) },
+                        )
                     }
                 }
                 item(key = "sum") {
@@ -237,6 +257,15 @@ fun PaymentDetailScreen(
             } else if (s.loading) {
                 item(key = "loading") {
                     Text("読み込み中…", style = AppTheme.type.body, color = c.inkSoft, modifier = Modifier.padding(Space.edge))
+                }
+            }
+            if (register) {
+                item(key = "register-done") {
+                    InkButton(
+                        "完了",
+                        onClick = onDone,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = Space.edge, vertical = Space.l),
+                    )
                 }
             }
         }
@@ -525,55 +554,81 @@ private fun fieldLabel(f: PaymentField): String = when (f) {
     PaymentField.TIME -> "日時"
 }
 
+/**
+ * 支出の見出し。1行目は支払い先(店名。タップで直す・支払いへ書き戻す)、その下に日時・金額・カテゴリ・メモ。
+ * [store] が null なら支払いに紐づかない支出なので、支払い先の行は出さない。
+ */
 @Composable
-private fun GroupHeader(group: ExpenseGroup, scanned: Boolean, onEdit: () -> Unit, onRevert: (PaymentField) -> Unit) {
+private fun GroupHeader(
+    group: ExpenseGroup,
+    scanned: Boolean,
+    store: String?,
+    onEditStore: () -> Unit,
+    onEdit: () -> Unit,
+    onRevert: (PaymentField) -> Unit,
+) {
     val c = AppTheme.colors
     val marks = PaymentMarks.ofGroup(group, scanned)
-    Column(
-        Modifier.fillMaxWidth().tappable(onEdit).padding(horizontal = Space.edge, vertical = Space.m),
-    ) {
-        Label("自分の支出")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                LedgerLogic.dayLabel(group.date) + if (group.time.isNotEmpty()) " ${group.time}" else "",
-                style = AppTheme.type.body,
-                color = c.inkSoft,
-            )
-            if (PaymentField.TIME in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.TIME) })
+    Column(Modifier.fillMaxWidth()) {
+        if (store != null) {
+            Column(
+                Modifier.fillMaxWidth().tappable(onEditStore).padding(horizontal = Space.edge, vertical = Space.m),
+            ) {
+                Label("支払い先")
+                Text(
+                    store.ifBlank { "(未入力)" },
+                    style = AppTheme.type.title,
+                    color = if (store.isBlank()) c.inkFaint else c.ink,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(LedgerLogic.formatYen(group.amount.toLong()), style = AppTheme.type.numeralXL, color = c.ink)
-            if (PaymentField.AMOUNT in marks) EditedMark(Modifier.padding(start = Space.s, bottom = Space.s), onRevert = { onRevert(PaymentField.AMOUNT) })
+        Column(
+            Modifier.fillMaxWidth().tappable(onEdit).padding(horizontal = Space.edge, vertical = Space.m),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    LedgerLogic.dayLabel(group.date) + if (group.time.isNotEmpty()) " ${group.time}" else "",
+                    style = AppTheme.type.body,
+                    color = c.inkSoft,
+                )
+                if (PaymentField.TIME in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.TIME) })
+            }
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(LedgerLogic.formatYen(group.amount.toLong()), style = AppTheme.type.numeralXL, color = c.ink)
+                if (PaymentField.AMOUNT in marks) EditedMark(Modifier.padding(start = Space.s, bottom = Space.s), onRevert = { onRevert(PaymentField.AMOUNT) })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("カテゴリ ${group.category}", style = AppTheme.type.caption, color = c.inkSoft)
+                if (PaymentField.CATEGORY in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.CATEGORY) })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    group.memo.ifBlank { "(メモなし)" },
+                    style = AppTheme.type.body,
+                    color = if (group.memo.isBlank()) c.inkFaint else c.ink,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (PaymentField.MEMO in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.MEMO) })
+            }
+            Text("タップで直す", style = AppTheme.type.caption, color = c.inkFaint)
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                group.memo.ifBlank { "(メモなし)" },
-                style = AppTheme.type.title,
-                color = if (group.memo.isBlank()) c.inkFaint else c.ink,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            if (PaymentField.MEMO in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.MEMO) })
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("カテゴリ ${group.category}", style = AppTheme.type.caption, color = c.inkSoft)
-            if (PaymentField.CATEGORY in marks) EditedMark(Modifier.padding(start = Space.s), onRevert = { onRevert(PaymentField.CATEGORY) })
-        }
-        Text("タップで直す", style = AppTheme.type.caption, color = c.inkFaint)
     }
     Hairline()
 }
 
 @Composable
-private fun ItemRow(item: Expense, scanned: Boolean, onClick: () -> Unit, onRevert: (PaymentField) -> Unit) {
+private fun ItemRow(item: Expense, scanned: Boolean, taxLabels: List<String>, onClick: () -> Unit, onRevert: (PaymentField) -> Unit) {
     val c = AppTheme.colors
     val marks = PaymentMarks.ofExpense(item, scanned)
     val sub = listOfNotNull(
         item.category,
         item.memo.ifBlank { null },
         item.time.ifEmpty { null }.takeIf { PaymentField.TIME in marks },
-    ).joinToString(" · ")
+    ).plus(taxLabels).joinToString(" · ")
     Column(Modifier.fillMaxWidth().tappable(onClick).padding(horizontal = Space.edge)) {
         Row(Modifier.fillMaxWidth().padding(vertical = Space.s + Space.xs), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {

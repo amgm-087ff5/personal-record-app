@@ -54,6 +54,7 @@ import com.amgm.personallog.ui.design.InkSheet
 import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.LeaderRow
 import com.amgm.personallog.ui.design.PaperScreen
+import com.amgm.personallog.ui.design.RegisterSteps
 import com.amgm.personallog.ui.design.Pill
 import com.amgm.personallog.ui.design.Pills
 import com.amgm.personallog.ui.design.Space
@@ -100,6 +101,10 @@ fun ReceiptDetailScreen(
     modifier: Modifier = Modifier,
     onOpenPayment: (PaymentLink) -> Unit = {},
     onOpenSplit: () -> Unit = {},
+    /** 登録の途中(家計簿の下書きから開いた)か。手順「① 支払い」を出し、確定の後は [onRegistered] へ進む。 */
+    register: Boolean = false,
+    /** 登録の途中で確定できたときの、この支払いの支出(無ければ null)。 */
+    onRegistered: (PaymentLink?) -> Unit = {},
     viewModel: ReceiptDetailViewModel = hiltViewModel(),
 ) {
     val s by viewModel.state.collectAsStateWithLifecycle()
@@ -115,18 +120,28 @@ fun ReceiptDetailScreen(
     val unitYen = remember(s.items, s.total) { UnknownAmounts.paidYenPerItem(s.items.map { it.toItemModel() }, s.total.toIntOrNull()) }
     val yenByKey = remember(s.items, unitYen) { s.items.indices.associate { s.items[it].key to unitYen[it] } }
 
-    LaunchedEffect(s.finished) { if (s.finished) onBack() }
+    // 確定(または削除)の後: 登録の途中なら次の手順へ、そうでなければ戻る
+    LaunchedEffect(s.finished) {
+        if (s.finished) {
+            if (register) onRegistered(s.finishedLink) else onBack()
+        }
+    }
 
     PaperScreen(modifier = modifier) {
         LazyColumn(modifier = Modifier.fillMaxSize().imePadding()) {
             val hasImage = !s.loading && !s.notFound && s.imagePath.isNotBlank()
             val showDashboard = !s.loading && !s.notFound
+            // 登録の手順は一番上。上の余白(ステータスバー)はここで取り、ダッシュボードは続けて置く
+            if (register && showDashboard) {
+                item(key = "steps") { RegisterSteps(current = 1, modifier = Modifier.statusBarsPadding()) }
+            }
             if (showDashboard) {
                 item(key = "dashboard") {
                     TotalDashboard(
                         s,
                         onMarkBlankUnknown = viewModel::markBlankItemsUnknown,
                         onAddDifferenceUnknown = viewModel::addDifferenceAsUnknownItem,
+                        statusInset = !register,
                     )
                 }
             }
@@ -645,6 +660,8 @@ private fun TotalDashboard(
     s: DetailUiState,
     onMarkBlankUnknown: () -> Unit,
     onAddDifferenceUnknown: () -> Unit,
+    /** 上にステータスバーの余白を取るか(登録の手順の行が上にあるときは取らない)。 */
+    statusInset: Boolean = true,
 ) {
     val c = AppTheme.colors
     val total = s.total.toLongOrNull()
@@ -654,7 +671,7 @@ private fun TotalDashboard(
         modifier = Modifier
             .fillMaxWidth()
             .background(c.paperRaised)
-            .statusBarsPadding()
+            .then(if (statusInset) Modifier.statusBarsPadding() else Modifier)
             .padding(horizontal = Space.edge)
             .padding(top = Space.s, bottom = Space.m),
     ) {

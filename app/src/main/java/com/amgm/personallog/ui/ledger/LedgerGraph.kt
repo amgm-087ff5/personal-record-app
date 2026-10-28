@@ -13,9 +13,11 @@ import com.amgm.personallog.ui.split.SplitRoutes
 object LedgerRoutes {
     const val ROOT = "ledger"
     const val HOME = "ledger/home"
-    const val PAYMENT = "ledger/payment/{kind}/{id}"
+    /** register は登録の途中(支払いの確定の後)かどうか。古い URL(register なし)は false として開く。 */
+    const val PAYMENT = "ledger/payment/{kind}/{id}?register={register}"
 
-    fun payment(kind: PaymentKind, id: Long) = "ledger/payment/${kind.key}/$id"
+    fun payment(kind: PaymentKind, id: Long, register: Boolean = false) =
+        "ledger/payment/${kind.key}/$id" + if (register) "?register=true" else ""
 
     /**
      * 割り勘で自分が外れた支払い(家計簿に支出の行が無い)の詳細。PAYMENT と同じ画面を、種類 "receipt" と支払いの id で開く。
@@ -32,6 +34,8 @@ fun NavGraphBuilder.ledgerGraph(navController: NavController) {
             LedgerScreen(
                 onOpenPayment = { kind, id -> navController.navigate(LedgerRoutes.payment(kind, id)) },
                 onOpenExcludedPayment = { receiptId -> navController.navigate(LedgerRoutes.excludedPayment(receiptId)) },
+                // 下書きの支払いは、登録の手順(支払い → 自分の支出)の1つ目から開く
+                onRegisterPayment = { receiptId -> navController.navigate(ReceiptRoutes.detail(receiptId, register = true)) },
                 onOpenReceipt = { receiptId -> navController.navigate(ReceiptRoutes.detail(receiptId)) },
                 onOpenReceiptList = { navController.navigate(ReceiptRoutes.home()) },
             )
@@ -41,9 +45,13 @@ fun NavGraphBuilder.ledgerGraph(navController: NavController) {
             arguments = listOf(
                 navArgument("kind") { type = NavType.StringType },
                 navArgument("id") { type = NavType.LongType },
+                navArgument("register") { type = NavType.BoolType; defaultValue = false },
             ),
-        ) {
+        ) { entry ->
             PaymentDetailScreen(
+                register = entry.arguments?.getBoolean("register") ?: false,
+                // 登録の「完了」: 登録の手順(支払い → 支出)を抜けて家計簿へ戻る
+                onDone = { navController.popBackStack(LedgerRoutes.HOME, inclusive = false) },
                 onBack = { navController.popBackStack() },
                 onOpenSplit = { receiptId -> navController.navigate(SplitRoutes.sheet(receiptId)) },
                 onOpenReceipt = { receiptId ->

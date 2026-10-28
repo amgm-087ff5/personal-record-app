@@ -86,7 +86,8 @@ object LedgerCalc {
             time = time,
             amount = amount.toInt(),
             category = groupCategory(items),
-            memo = receipt.storeName,
+            // 支払い先(店名)は支払いの storeName に持ち、支出の画面・一覧はそこから出す。メモは利用者のメモだけ(既定は空)
+            memo = "",
             receiptId = receipt.id,
             createdAt = now,
         )

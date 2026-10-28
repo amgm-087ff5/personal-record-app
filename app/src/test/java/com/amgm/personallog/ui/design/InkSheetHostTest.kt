@@ -155,4 +155,72 @@ class InkSheetHostTest {
         assertEquals(1, dismissCount)
         composeRule.onAllNodesWithText("テスト", useUnmergedTree = true).assertCountEquals(0)
     }
+
+    /** 押せない説明文と、押せる行を1つずつ置いたシート。[swipeToDismiss] で種類を切り替える。 */
+    private fun setSheetWithText(swipeToDismiss: Boolean, onDismiss: () -> Unit = {}, onRow: () -> Unit = {}) {
+        composeRule.mainClock.autoAdvance = false
+        composeRule.setContent {
+            density = LocalDensity.current
+            PersonalLogTheme {
+                SheetHost {
+                    Box(Modifier.fillMaxSize())
+                    if (sheetOpen.value) {
+                        InkSheet(
+                            onDismiss = {
+                                sheetOpen.value = false
+                                onDismiss()
+                            },
+                            title = "テスト",
+                            swipeToDismiss = swipeToDismiss,
+                        ) {
+                            Text("説明")
+                            Text("押せる行", modifier = Modifier.clickable { onRow() })
+                        }
+                    }
+                }
+            }
+        }
+        settle()
+    }
+
+    @Test
+    fun tapOnNonClickableTextDoesNotDismissSheet() {
+        var dismissCount = 0
+        setSheetWithText(swipeToDismiss = true, onDismiss = { dismissCount++ })
+
+        composeRule.onNodeWithText("説明", useUnmergedTree = true).performClick()
+        composeRule.mainClock.advanceTimeBy(500)
+        composeRule.waitForIdle()
+
+        assertEquals(0, dismissCount)
+        composeRule.onNodeWithText("テスト", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun tapOnNonClickableTextDoesNotMinimizeInputSheet() {
+        var dismissCount = 0
+        setSheetWithText(swipeToDismiss = false, onDismiss = { dismissCount++ })
+
+        composeRule.onNodeWithText("説明", useUnmergedTree = true).performClick()
+        composeRule.mainClock.advanceTimeBy(500)
+        composeRule.waitForIdle()
+
+        assertEquals(0, dismissCount)
+        composeRule.onAllNodesWithText("タップで開く", useUnmergedTree = true).assertCountEquals(0)
+        composeRule.onNodeWithText("テスト", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun clickableRowInsideSheetStillTriggersOnClick() {
+        var rowClicks = 0
+        var dismissCount = 0
+        setSheetWithText(swipeToDismiss = true, onDismiss = { dismissCount++ }, onRow = { rowClicks++ })
+
+        composeRule.onNodeWithText("押せる行", useUnmergedTree = true).performClick()
+        composeRule.mainClock.advanceTimeBy(500)
+        composeRule.waitForIdle()
+
+        assertEquals(1, rowClicks)
+        assertEquals(0, dismissCount)
+    }
 }

@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -57,6 +58,8 @@ fun LedgerScreen(
     onOpenPayment: (PaymentKind, Long) -> Unit = { _, _ -> },
     /** 割り勘で自分が外れた支払い(0円の行)の詳細を、支払い(レシート)の id で開く。 */
     onOpenExcludedPayment: (Long) -> Unit = {},
+    /** 下書きの支払いを、登録の手順(支払い → 自分の支出)で開く。支払いの id。 */
+    onRegisterPayment: (Long) -> Unit = {},
     /** 手入力で保存した支払いの詳細(レシートの詳細)を開く。取り込みの「開く ›」で支出が無いときも使う。 */
     onOpenReceipt: (Long) -> Unit = {},
     /** 支払い一覧(支払い画面)を開く。 */
@@ -65,6 +68,7 @@ fun LedgerScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val imports by viewModel.imports.collectAsStateWithLifecycle()
+    val importDrafts by viewModel.importDraftIds.collectAsStateWithLifecycle()
     val c = AppTheme.colors
     val scope = rememberCoroutineScope()
     // 家計簿の支出は、支払い(レシートの表)を保存したときに作られる。支出だけを単独で追加する入口は無い
@@ -95,10 +99,15 @@ fun LedgerScreen(
         }
     }
     // 取り込みの「開く ›」: その支払いの支出(まとまり)を開く。支出が無ければ支払いの詳細
+    // 下書きは登録の手順で開く(「確認する ›」)。確定済みは支出の画面(「開く ›」)
     val openImported: (Long) -> Unit = { receiptId ->
-        scope.launch {
-            val groupId = viewModel.paymentGroupIdOfReceipt(receiptId)
-            if (groupId != null) onOpenPayment(PaymentKind.GROUP, groupId) else onOpenReceipt(receiptId)
+        if (receiptId in importDrafts) {
+            onRegisterPayment(receiptId)
+        } else {
+            scope.launch {
+                val groupId = viewModel.paymentGroupIdOfReceipt(receiptId)
+                if (groupId != null) onOpenPayment(PaymentKind.GROUP, groupId) else onOpenReceipt(receiptId)
+            }
         }
     }
     // 「手動で登録」で開く手入力の支払いシート
@@ -141,6 +150,7 @@ fun LedgerScreen(
                             onDismissError = viewModel::dismissImportError,
                             onRetry = viewModel::retryImport,
                             onOpen = openImported,
+                            draftReceiptIds = importDrafts,
                             onClear = viewModel::clearImports,
                         )
                     }
@@ -256,11 +266,18 @@ fun LedgerScreen(
                         warnReceiptIds = state.warnReceiptIds,
                         imageReceiptIds = state.imageReceiptIds,
                         duplicateReceiptIds = state.duplicateReceiptIds,
+                        storeNames = state.storeNames,
                         onToggleGroup = { id -> expandedGroups[id] = expandedGroups[id] != true },
                         onOpen = { entry ->
-                            when (entry) {
-                                is LedgerEntry.Group -> onOpenPayment(PaymentKind.GROUP, entry.group.id)
-                                is LedgerEntry.Excluded -> onOpenExcludedPayment(entry.receipt.id)
+                            // 下書きの行は、登録の手順(支払いの画面から)で開く。確定済みの行は支出の画面
+                            val draftId = entry.receiptId?.takeIf { it in state.draftReceiptIds }
+                            if (draftId != null) {
+                                onRegisterPayment(draftId)
+                            } else {
+                                when (entry) {
+                                    is LedgerEntry.Group -> onOpenPayment(PaymentKind.GROUP, entry.group.id)
+                                    is LedgerEntry.Excluded -> onOpenExcludedPayment(entry.receipt.id)
+                                }
                             }
                         },
                         onDeleteGroup = { deletingGroup = it.group },
@@ -324,56 +341,19 @@ fun LedgerScreen(
 
     if (creatingPayment) {
         InkSheet(onDismiss = { creatingPayment = false }) {
-            Label("記録の方法")
-            Spacer(Modifier.height(Space.s))
-            Text(
-                "レシートを撮る",
-                style = AppTheme.type.body,
-                color = c.ink,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .tappable {
-                        creatingPayment = false
-                        startCamera()
-                    }
-                    .padding(vertical = Space.m),
-            )
-            Hairline()
-            Text(
-                "写真から選ぶ",
-                style = AppTheme.type.body,
-                color = c.ink,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .tappable {
-                        creatingPayment = false
-                        pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }
-                    .padding(vertical = Space.m),
-            )
-            Text(
-                "レシートを撮るか選ぶと、読み取った下書きを作ります。(写真は最大${RECEIPT_PICK_MAX}枚)",
-                style = AppTheme.type.caption,
-                color = c.inkSoft,
-            )
-            Spacer(Modifier.height(Space.m))
-            Hairline()
-            Text(
-                "手動で登録",
-                style = AppTheme.type.body,
-                color = c.ink,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .tappable {
-                        creatingPayment = false
-                        manualPaymentOpen = true
-                    }
-                    .padding(vertical = Space.m),
-            )
-            Text(
-                "日付や品目を自分で入力して作ります。",
-                style = AppTheme.type.caption,
-                color = c.inkSoft,
+            RecordMethodContent(
+                onCamera = {
+                    creatingPayment = false
+                    startCamera()
+                },
+                onPickPhotos = {
+                    creatingPayment = false
+                    pickImages.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                },
+                onManual = {
+                    creatingPayment = false
+                    manualPaymentOpen = true
+                },
             )
         }
     }
@@ -459,5 +439,38 @@ private fun MonthHeader(
             }
             TextAction("›", onClick = onNext, color = c.ink)
         }
+    }
+}
+
+/**
+ * 「＋ 記録」の3択シートの中身(記録の方法)。各項目は見出しと説明を1つの押せる行にし、説明をタップしても動く。
+ */
+@Composable
+internal fun ColumnScope.RecordMethodContent(
+    onCamera: () -> Unit,
+    onPickPhotos: () -> Unit,
+    onManual: () -> Unit,
+) {
+    Label("記録の方法")
+    Spacer(Modifier.height(Space.s))
+    RecordMethodRow("レシートを撮る", "カメラで撮って読み取ります。", onCamera)
+    Hairline()
+    RecordMethodRow("撮影済みの写真から選ぶ", "最大${RECEIPT_PICK_MAX}枚。読み取った下書きを作ります。", onPickPhotos)
+    Hairline()
+    RecordMethodRow("手動で登録", "日付や品目を自分で入力して作ります。", onManual)
+}
+
+/** 記録の方法の1行。見出しと説明の全体が押せる。 */
+@Composable
+private fun RecordMethodRow(title: String, caption: String, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .tappable(onClick)
+            .padding(vertical = Space.m),
+    ) {
+        Text(title, style = AppTheme.type.body, color = c.ink)
+        Text(caption, style = AppTheme.type.caption, color = c.inkSoft)
     }
 }

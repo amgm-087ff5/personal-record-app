@@ -169,7 +169,7 @@ object ConfirmPlanner {
         unknownAmount = want.unknownAmount,
     )
 
-    /** グループ: 金額(=合計)・日時・メモ(=店名)・カテゴリを、編集済みでない欄だけ更新する。 */
+    /** グループ: 金額(=合計)・日時・メモ・カテゴリを、編集済みでない欄だけ更新する(メモの既定は空。店名は支払いに持つ)。 */
     internal fun mergeGroup(have: ExpenseGroup, want: ExpenseGroup): ExpenseGroup = have.copy(
         amount = if (have.amountEdited) have.amount else want.amount,
         category = if (have.categoryEdited) have.category else want.category,

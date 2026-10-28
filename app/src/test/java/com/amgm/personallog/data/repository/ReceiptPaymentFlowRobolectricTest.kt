@@ -238,7 +238,7 @@ class ReceiptPaymentFlowRobolectricTest {
         assertTrue(runBlocking { expenses.revertGroupField(g.id, PaymentField.MEMO) })
         val g2 = runBlocking { db.expenseGroupDao().getByReceiptId(r.id) }.single()
         assertEquals(700, g2.amount)
-        assertEquals("店", g2.memo)
+        assertEquals("", g2.memo)  // 店名は支払い(storeName)に持ち、支出のメモには写さない(v15)
         assertFalse(g2.amountEdited || g2.memoEdited)
         assertNotNull(items)
     }
@@ -301,7 +301,7 @@ class ReceiptPaymentFlowRobolectricTest {
         val after = runBlocking { db.expenseGroupDao().getByReceiptId(id) }.single()
         assertEquals(300, after.amount)
         assertFalse(after.amountEdited)
-        assertEquals("店", after.memo)
+        assertEquals("", after.memo)  // 店名は支払い(storeName)に持ち、支出のメモには写さない(v15)
         assertFalse(after.memoEdited)
     }
 
@@ -313,7 +313,7 @@ class ReceiptPaymentFlowRobolectricTest {
         assertEquals(g.id, only.groupId)
         assertEquals("", only.name)
         assertEquals(1200, only.amount)
-        assertEquals("コンビニ", only.memo)
+        assertEquals("", only.memo)  // 店名は支払い(storeName)に持ち、支出のメモには写さない(v15)
         // 支出の金額を家計簿で直すと、1品目の金額も追従する
         runBlocking { expenses.updateGroup(PaymentEdit.editGroup(g, g.date, g.time, 1500, "外食", g.memo)) }
         val after = children(id).single()

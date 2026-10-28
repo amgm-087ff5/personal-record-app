@@ -34,7 +34,7 @@ class ConfirmPlannerTest {
     @Test
     fun firstConfirm_createsGroupAndLinkedItems_withNameAndItemMemoOnly() {
         val p = first()
-        assertEquals("スーパー", p.group!!.memo)
+        assertEquals("", p.group!!.memo)  // 店名は支払い(storeName)に持ち、支出のメモには写さない(v15)
         assertEquals(700, p.group!!.amount)
         assertEquals(listOf(11L, 12L), p.children.map { it.receiptItemId })
         assertEquals(listOf("牛乳", "洗剤"), p.children.map { it.name })
@@ -78,7 +78,7 @@ class ConfirmPlannerTest {
             listOf(milk, soap), listOf(g), children, now = 2,
         ) as ConfirmPlan.UpdateGroup
         assertEquals(720, plan.group.amount)
-        assertEquals("新しい店", plan.group.memo)
+        assertEquals("", plan.group.memo)  // 店名は支払い(storeName)に持ち、支出のメモには写さない(v15)
         assertEquals("2026-10-06", plan.group.date)
         assertEquals("09:00", plan.group.time)
         assertTrue(plan.updates.all { it.date == "2026-10-06" && it.time == "09:00" })
@@ -228,7 +228,7 @@ class ConfirmPlannerTest {
         val only = firstPlan.children.single()
         assertEquals("", only.name)
         assertEquals(1234, only.amount)
-        assertEquals("スーパー", only.memo)
+        assertEquals("", only.memo)  // 店名は支払い(storeName)に持ち、支出のメモには写さない(v15)
         assertNull(only.receiptItemId)
 
         // 再確定: 合計を変えると、支出と1品目の金額が追従する(行は同じ)

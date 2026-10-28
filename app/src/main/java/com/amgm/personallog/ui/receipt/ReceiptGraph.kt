@@ -14,10 +14,11 @@ object ReceiptRoutes {
     const val ROOT = "receipt"
     /** 支払い一覧。 */
     const val HOME = "receipt/home"
-    const val DETAIL = "receipt/detail/{id}"
+    /** register は登録の途中(家計簿の下書きから開いた)かどうか。古い URL(register なし)は false として開く。 */
+    const val DETAIL = "receipt/detail/{id}?register={register}"
 
     fun home() = HOME
-    fun detail(id: Long) = "receipt/detail/$id"
+    fun detail(id: Long, register: Boolean = false) = "receipt/detail/$id" + if (register) "?register=true" else ""
 }
 
 /** レシート機能のナビゲーショングラフ。AppNavHost から呼ばれるので、機能内の遷移はここで完結させる。 */
@@ -31,11 +32,26 @@ fun NavGraphBuilder.receiptGraph(navController: NavController) {
         }
         composable(
             route = ReceiptRoutes.DETAIL,
-            arguments = listOf(navArgument("id") { type = NavType.LongType }),
+            arguments = listOf(
+                navArgument("id") { type = NavType.LongType },
+                navArgument("register") { type = NavType.BoolType; defaultValue = false },
+            ),
         ) { entry ->
             val receiptId = entry.arguments?.getLong("id") ?: 0L
             ReceiptDetailScreen(
+                register = entry.arguments?.getBoolean("register") ?: false,
                 onBack = { navController.popBackStack() },
+                // 登録の途中で確定できたら、その支払いの支出の画面(手順②)へ進む。支払いの画面は戻る履歴から外す
+                onRegistered = { link ->
+                    if (link != null) {
+                        navController.navigate(LedgerRoutes.payment(link.kind, link.id, register = true)) {
+                            popUpTo(ReceiptRoutes.DETAIL) { inclusive = true }
+                        }
+                    } else {
+                        // 支出の行が無い(割り勘で自分が外れた)ときは、家計簿へ戻る
+                        navController.popBackStack(LedgerRoutes.HOME, inclusive = false)
+                    }
+                },
                 onOpenSplit = { navController.navigate(SplitRoutes.sheet(receiptId)) },
                 onOpenPayment = { link ->
                     // 支払いの詳細から来たなら、新しく積まずに戻る(行き来で履歴が伸びない)
