@@ -1,5 +1,6 @@
 package com.amgm.personallog.ui.ledger
 
+import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +19,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -28,12 +30,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.data.model.Expense
@@ -48,7 +56,6 @@ import com.amgm.personallog.ui.design.Pills
 import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.TextAction
 import kotlinx.coroutines.launch
-import kotlin.math.max
 
 // ------------------------------------------------------------ 純粋ロジック(JVM でテスト可能)
 
@@ -229,9 +236,12 @@ internal object ItemPagerLogic {
     /** 末尾の操作が「追加」か(「›」ではなく「＋」を出すか)。page は今のページ、count は品目のページ数(追加の仮想ページを除く)。 */
     fun trailingIsAdd(page: Int, count: Int): Boolean = page >= count - 1
 
-    /** 手を離したとき、品目を追加するか。仮想の追加ページに落ち着いたか、引いた距離が閾値を超えたとき。 */
-    fun addOnRelease(maxOverscroll: Float, settledOnAddSlot: Boolean): Boolean =
-        settledOnAddSlot || maxOverscroll >= ADD_THRESHOLD
+    /** 引いた距離(px)の、ページ幅に対する割合(0〜1)。ページ幅が分からないとき(0以下)は 0。 */
+    fun pullFraction(pullPx: Float, pageWidthPx: Int): Float =
+        if (pageWidthPx > 0) (pullPx / pageWidthPx).coerceIn(0f, 1f) else 0f
+
+    /** 手を離したとき、品目を追加するか。引いた割合が閾値以上のときだけ。 */
+    fun addOnRelease(pull: Float): Boolean = pull >= ADD_THRESHOLD
 
     /** カテゴリの選択肢。今の値が既定に無ければ末尾に足す(既存の値を消さないため)。 */
     fun categoryOptions(current: String?): List<String> {
@@ -253,9 +263,9 @@ private val PAGER_HEIGHT: Dp = 330.dp
  *
  * - ページ: 1ページ=1品目。1段目に「品名」と「金額」(同じ行)、2段目に「カテゴリ」、折りたたみの「詳細」にメモと削除。
  * - 最後の品目の「›」は「＋」になり、新しい空の品目ページを足して移る。
- * - 過度なスワイプ(最後のページより右へ引く): HorizontalPager の末尾に仮想の「追加」ページを1つ置く。
- *   引いている間は右端に「＋」を出し、ページ幅の [ItemPagerLogic.ADD_THRESHOLD] を超えて離すと品目を足す
- *   (仮想ページに落ち着いたときも足す)。ページ単位の判定なので、ピッチの速さには依らない。
+ * - 過度なスワイプ(最後の品目より右へ引く): 指で引いた距離を数え、引いている間は右端に「＋」を出す。
+ *   ページ幅の [ItemPagerLogic.ADD_THRESHOLD] を超えて指を離したときだけ、品目を1つ足して移る。
+ *   足すのは指の操作だけ(ボタン・アニメーションのスクロールでは足さない)。引きしろの伸び(オーバースクロール)は使わない。
  * - 保存: 変更のあるページだけ、順番に書き込む(失敗したら止めて理由を出す)。閉じるときに未保存があれば破棄を確認する。
  *
  * 画面の入力は remember で持つ(画面の回転・再生成では失われる。品目の内容は保存済みから作り直す)。
@@ -303,8 +313,7 @@ internal fun ItemEditorSheet(
         }
     }
     val initialPage = if (adding) drafts.lastIndex else drafts.indexOfFirst { it.id == startItemId }.coerceAtLeast(0)
-    // 仮想の追加ページ(末尾)を含めた数
-    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { drafts.size + 1 })
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { drafts.size })
     val scope = rememberCoroutineScope()
 
     var saving by remember { mutableStateOf(false) }
@@ -313,7 +322,10 @@ internal fun ItemEditorSheet(
     var confirmDiscard by remember { mutableStateOf(false) }
     var confirmDeleteId by remember { mutableStateOf<Long?>(null) }
     val detailOpen = remember { mutableStateMapOf<Long, Boolean>() }
-    var maxOverscroll by remember { mutableFloatStateOf(0f) }
+    // 最後の品目より右へ、指で引いた距離(px)。指を離すと 0 に戻す
+    var pullPx by remember { mutableFloatStateOf(0f) }
+    // 画面の幅(px)。ページの幅と同じ。引いた距離を割合にするのに使う
+    var pageWidthPx by remember { mutableIntStateOf(0) }
 
     val receiptLinked = group.receiptId != null
     val amountLock: String? = when {
@@ -332,20 +344,29 @@ internal fun ItemEditorSheet(
         pagerState.animateScrollToPage(drafts.lastIndex)
     }
 
-    // 過度なスワイプ: 最後の品目より右へ引いた最大の距離を、引いている間に覚える
-    LaunchedEffect(pagerState) {
-        snapshotFlow { if (pagerState.currentPage == drafts.size - 1) -pagerState.currentPageOffsetFraction else 0f }
-            .collect { o -> if (pagerState.isScrollInProgress) maxOverscroll = max(maxOverscroll, o) }
-    }
-    // 手を離したとき(スクロールが止まったとき)に、追加するか決める。追加は scope で行う(この effect は
-    // 追加のアニメーションで再起動されるため、ここでは直接 suspend 呼び出しをしない)
-    LaunchedEffect(pagerState.isScrollInProgress) {
-        if (pagerState.isScrollInProgress) {
-            maxOverscroll = 0f
-        } else {
-            val add = ItemPagerLogic.addOnRelease(maxOverscroll, settledOnAddSlot = pagerState.settledPage >= drafts.size)
-            maxOverscroll = 0f
+    // 過度なスワイプ: 指の操作で最後の品目より右へ引いた距離を数える。プログラムによるスクロール(ボタン・
+    // アニメーション)は数えないので、追加のあとに勝手に足されることはない。
+    val pullConnection = object : NestedScrollConnection {
+        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+            if (source == NestedScrollSource.Drag && pagerState.currentPage == drafts.lastIndex) {
+                // 左へ引くと available.x は負(最後のページより先へは動けず、余りとして届く)。右へ戻すと減らす
+                pullPx = (pullPx - available.x).coerceAtLeast(0f)
+            }
+            return Offset.Zero
+        }
+
+        override suspend fun onPreFling(available: Velocity): Velocity {
+            // 指を離した。閾値を超えていれば、品目を1つ足して移る(追加は scope で行う)
+            val add = pagerState.currentPage == drafts.lastIndex &&
+                ItemPagerLogic.addOnRelease(ItemPagerLogic.pullFraction(pullPx, pageWidthPx))
+            pullPx = 0f
             if (add && !saving) scope.launch { addAndGo() }
+            return Velocity.Zero
+        }
+
+        override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+            pullPx = 0f
+            return Velocity.Zero
         }
     }
 
@@ -415,18 +436,21 @@ internal fun ItemEditorSheet(
         Column(Modifier.fillMaxWidth().imePadding(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             val page = pagerState.currentPage
             val count = drafts.size
-            // 右端の引きしろ: 最後の品目より右へ引いているときの「＋」
-            val pull = if (page == count - 1) (-pagerState.currentPageOffsetFraction).coerceIn(0f, 1f) else 0f
+            // 右端の引きしろ: 最後の品目より右へ引いている割合(0〜1)。「＋」の表示に使う
+            val pull = if (page == count - 1) ItemPagerLogic.pullFraction(pullPx, pageWidthPx) else 0f
 
-            Box(Modifier.fillMaxWidth().height(PAGER_HEIGHT)) {
-                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { p ->
-                    val draft = drafts.getOrNull(p)
-                    if (draft == null) {
-                        // 仮想の追加ページ(右へ引いたときに見える)
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("右へ離すと品目を追加", style = AppTheme.type.caption, color = c.inkFaint)
-                        }
-                    } else {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(PAGER_HEIGHT)
+                    .onSizeChanged { pageWidthPx = it.width }
+                    .nestedScroll(pullConnection)
+                    .testTag("itemPager"),
+            ) {
+                // 引いた先のオーバースクロールの伸びは使わない(指の引いた量を連携で数えるため、消費させない)
+                CompositionLocalProvider(LocalOverscrollFactory provides null) {
+                    HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { p ->
+                        val draft = drafts.getOrNull(p) ?: return@HorizontalPager
                         val saved = draft.id?.let { latestExpense(it) }
                         val toggle = ItemPagerLogic.unknownToggle(
                             isNew = draft.id == null,
@@ -474,7 +498,7 @@ internal fun ItemEditorSheet(
                     enabled = page > 0,
                     color = c.inkSoft,
                 )
-                Text("${(page + 1).coerceAtMost(count)} / $count", style = AppTheme.type.caption, color = c.inkSoft)
+                Text("${(page + 1).coerceAtMost(count)} / $count", style = AppTheme.type.caption, color = c.inkSoft, modifier = Modifier.testTag("pageCounter"))
                 if (ItemPagerLogic.trailingIsAdd(page, count)) {
                     TextAction("＋ 追加", onClick = { scope.launch { addAndGo() } })
                 } else {
