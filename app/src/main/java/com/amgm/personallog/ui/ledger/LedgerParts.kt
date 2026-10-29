@@ -5,7 +5,6 @@ package com.amgm.personallog.ui.ledger
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,12 +13,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -32,7 +30,6 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -122,6 +120,13 @@ internal fun CategoryLegend(shares: List<CategoryShare>, modifier: Modifier = Mo
 
 // ------------------------------------------------------------ グラフ
 
+/** グラフの寸法。階層(半年/月・一月/週・一週/日・一日/時)を切り替えても高さが変わらないよう固定にする。 */
+private val CHART_PLOT_HEIGHT = 176.dp
+private val CHART_VALUE_LABEL_HEIGHT = 16.dp
+private val CHART_X_LABEL_HEIGHT = 28.dp
+private val CHART_TICK_LABEL_HEIGHT = 14.dp
+private val CHART_AXIS_WIDTH = 52.dp
+
 @Composable
 internal fun StackedChart(
     level: ChartLevel,
@@ -150,90 +155,126 @@ internal fun StackedChart(
             TextAction("›", onClick = onNext, color = c.ink)
         }
 
-        val max = bars.maxOfOrNull { it.drawnTotal }?.coerceAtLeast(1L) ?: 1L
+        val drawnMax = bars.maxOfOrNull { it.drawnTotal }?.coerceAtLeast(1L) ?: 1L
         if (bars.isNotEmpty()) {
             Spacer(Modifier.height(Space.s))
-            val listState = rememberLazyListState()
-            LaunchedEffect(level, label) { listState.scrollToItem(0) }
-            // 1本ずつ横スクロールし、1本単位でスナップして止まる。時間別(24本)は細く、金額は省く。
+            // 縦軸の上端と目盛り(上端の半分と上端)。棒はこの上端に対する割合で描く。
+            val axisMax = LedgerChart.axisMax(drawnMax)
+            val ticks = LedgerChart.axisTicks(axisMax)
+            // 時間別(24本)は細いので、棒の上の金額は省く。
             val dense = level == ChartLevel.DAY
-            val itemWidth = if (dense) 20.dp else 64.dp
             val tiny = AppTheme.type.label.copy(letterSpacing = 0.sp)
-            LazyRow(
-                state = listState,
-                flingBehavior = rememberSnapFlingBehavior(lazyListState = listState),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                itemsIndexed(bars) { i, bar ->
-                    Column(
-                        Modifier
-                            .width(itemWidth)
-                            .then(if (bar.drillable) Modifier.tappable { onBarTap(bar) } else Modifier),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        if (!dense) {
+            // 階層を切り替えてもグラフの高さが変わらないよう、各部分の高さは固定にする。
+            val barArea = CHART_PLOT_HEIGHT - CHART_VALUE_LABEL_HEIGHT
+            val tickColor = c.line
+            Row(Modifier.fillMaxWidth()) {
+                // 縦軸の金額ラベル(目盛りの高さに合わせる)
+                Box(Modifier.width(CHART_AXIS_WIDTH).height(CHART_PLOT_HEIGHT)) {
+                    ticks.forEach { t ->
+                        val y = CHART_PLOT_HEIGHT - barArea * (t.toFloat() / axisMax)
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(CHART_TICK_LABEL_HEIGHT)
+                                .offset(y = y - CHART_TICK_LABEL_HEIGHT / 2),
+                            contentAlignment = Alignment.CenterEnd,
+                        ) {
                             Text(
-                                LedgerLogic.compactYen(bar.total),
-                                style = tiny,
-                                color = c.inkSoft,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Clip,
-                            )
-                        }
-                        Canvas(Modifier.fillMaxWidth().height(160.dp)) {
-                            val barWidth = size.width * 0.6f
-                            val x = (size.width - barWidth) / 2f
-                            var bottom = size.height
-                            bar.segments.forEach { seg ->
-                                val h = size.height * (seg.amount.toFloat() / max)
-                                if (h > 0f) {
-                                    drawRect(
-                                        color = categoryColor(seg.category, series, faint),
-                                        topLeft = Offset(x, bottom - h),
-                                        size = Size(barWidth, h),
-                                    )
-                                    bottom -= h
-                                }
-                            }
-                            drawLine(
-                                color = baseline,
-                                start = Offset(0f, size.height),
-                                end = Offset(size.width, size.height),
-                                strokeWidth = 1f,
-                            )
-                        }
-                        // 「9/28〜10/4」は「〜」で2行に分ける。時間別は3時間おきだけ表示する。
-                        val twoLines = bar.label.contains("〜")
-                        val text = when {
-                            dense && i % 3 != 0 -> ""
-                            twoLines -> bar.label.replace("〜", "〜\n")
-                            else -> bar.label
-                        }
-                        Text(
-                            text,
-                            style = tiny,
-                            color = c.inkFaint,
-                            textAlign = TextAlign.Center,
-                            maxLines = if (twoLines) 2 else 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Clip,
-                        )
-                    }
-                }
-                if (dense) {
-                    // 時間別の終わりを示す 24: (タップ不可)
-                    item {
-                        Column(Modifier.width(itemWidth), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Spacer(Modifier.height(160.dp))
-                            Text(
-                                "24:",
+                                LedgerLogic.formatYen(t),
                                 style = tiny,
                                 color = c.inkFaint,
                                 maxLines = 1,
                                 softWrap = false,
-                                overflow = TextOverflow.Clip,
+                                modifier = Modifier.padding(end = Space.xs),
                             )
+                        }
+                    }
+                }
+                // 棒の領域: 横スクロールなし。棒は幅いっぱいに均等に並ぶ。
+                Box(Modifier.weight(1f)) {
+                    Canvas(Modifier.fillMaxWidth().height(CHART_PLOT_HEIGHT)) {
+                        val barAreaPx = barArea.toPx()
+                        val dash = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 6.dp.toPx()))
+                        ticks.forEach { t ->
+                            val y = size.height - barAreaPx * (t.toFloat() / axisMax)
+                            drawLine(
+                                color = tickColor,
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                strokeWidth = 1f,
+                                pathEffect = dash,
+                            )
+                        }
+                        drawLine(
+                            color = baseline,
+                            start = Offset(0f, size.height),
+                            end = Offset(size.width, size.height),
+                            strokeWidth = 1f,
+                        )
+                    }
+                    Row(Modifier.fillMaxWidth()) {
+                        bars.forEachIndexed { i, bar ->
+                            Column(
+                                Modifier
+                                    .weight(1f)
+                                    .then(if (bar.drillable) Modifier.tappable { onBarTap(bar) } else Modifier),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                // 棒+その上の金額。金額は棒のすぐ上に載せる。
+                                Column(
+                                    Modifier.fillMaxWidth().height(CHART_PLOT_HEIGHT),
+                                    verticalArrangement = Arrangement.Bottom,
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    if (!dense) {
+                                        Text(
+                                            LedgerLogic.formatYen(bar.total),
+                                            style = tiny,
+                                            color = c.inkSoft,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            modifier = Modifier
+                                                .height(CHART_VALUE_LABEL_HEIGHT)
+                                                .wrapContentWidth(unbounded = true),
+                                        )
+                                    }
+                                    val barHeight = if (bar.drawnTotal > 0L) barArea * (bar.drawnTotal.toFloat() / axisMax) else 0.dp
+                                    Canvas(Modifier.fillMaxWidth().height(barHeight)) {
+                                        val barWidth = size.width * 0.6f
+                                        val x = (size.width - barWidth) / 2f
+                                        var bottom = size.height
+                                        bar.segments.forEach { seg ->
+                                            if (seg.amount > 0L) {
+                                                val h = size.height * (seg.amount.toFloat() / bar.drawnTotal)
+                                                drawRect(
+                                                    color = categoryColor(seg.category, series, faint),
+                                                    topLeft = Offset(x, bottom - h),
+                                                    size = Size(barWidth, h),
+                                                )
+                                                bottom -= h
+                                            }
+                                        }
+                                    }
+                                }
+                                // 「9/28〜10/4」は「〜」、「10/12(月)」は「(」で2行に分ける。時間別は3時間おきだけ表示する。
+                                val text = when {
+                                    dense && i % 3 != 0 -> ""
+                                    bar.label.contains("〜") -> bar.label.replace("〜", "〜\n")
+                                    bar.label.contains("(") -> bar.label.replace("(", "\n(")
+                                    else -> bar.label
+                                }
+                                Box(Modifier.fillMaxWidth().height(CHART_X_LABEL_HEIGHT), contentAlignment = Alignment.TopCenter) {
+                                    Text(
+                                        text,
+                                        style = tiny,
+                                        color = c.inkFaint,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        softWrap = false,
+                                        modifier = Modifier.wrapContentWidth(unbounded = true),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -259,7 +300,7 @@ internal fun StackedChart(
     }
 }
 
-/** 年/月/週/日の文字タブ。選択中は ink + 朱の下線。 */
+/** 半年/月・一月/週・一週/日・一日/時 の文字タブ。選択中は ink + 朱の下線。 */
 @Composable
 private fun LevelTabs(level: ChartLevel, onLevel: (ChartLevel) -> Unit) {
     val c = AppTheme.colors

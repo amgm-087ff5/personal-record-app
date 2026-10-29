@@ -164,4 +164,27 @@ class LedgerChartTest {
     fun hourOf_invalidTime_isMinusOne() {
         assertEquals(-1, LedgerChart.hourOf(build(listOf(t(1, "2026-10-14", "--:--", 1, "食費"))).first()))
     }
+
+    @Test
+    fun levelLabels_areRangeSlashUnit() {
+        assertEquals(
+            listOf("半年/月", "一月/週", "一週/日", "一日/時"),
+            ChartLevel.values().map { it.label },
+        )
+    }
+
+    @Test
+    fun axisMax_isRoundAndAtLeastMax() {
+        assertEquals(2L, LedgerChart.axisMax(0))
+        assertEquals(12L, LedgerChart.axisMax(11))
+        assertEquals(12_000L, LedgerChart.axisMax(11_300))
+        assertEquals(100_000L, LedgerChart.axisMax(100_000))
+        assertEquals(120_000L, LedgerChart.axisMax(100_001))
+        assertEquals(800L, LedgerChart.axisMax(701))
+    }
+
+    @Test
+    fun axisTicks_areHalfAndFull() {
+        assertEquals(listOf(6_000L, 12_000L), LedgerChart.axisTicks(12_000))
+    }
 }

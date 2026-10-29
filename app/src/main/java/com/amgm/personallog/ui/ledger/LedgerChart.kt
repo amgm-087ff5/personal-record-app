@@ -11,10 +11,10 @@ import java.time.temporal.TemporalAdjusters
  * 週: その週の7日 / 日: その日の24時間(支払った時刻で振り分け)。
  */
 enum class ChartLevel(val label: String) {
-    YEAR("年"),
-    MONTH("月"),
-    WEEK("週"),
-    DAY("日"),
+    YEAR("半年/月"),
+    MONTH("一月/週"),
+    WEEK("一週/日"),
+    DAY("一日/時"),
     ;
 
     /** タップで移動する1段下の階層。DAY は下がない。 */
@@ -48,6 +48,22 @@ data class ChartBar(
 
 /** 積み上げ棒グラフ用の純粋ロジック(JVMでテスト可能)。 */
 object LedgerChart {
+    /**
+     * 縦軸の上端(キリのよい額)。棒の最大額以上で、1・1.2・1.6・2・2.4・3・4・5・6・8・10 ×10^n のうち最小のもの。
+     * 半分もキリのよい額になる。10以下は最大額以上の最小の偶数(最低2)。
+     */
+    fun axisMax(max: Long): Long {
+        if (max <= 10L) return maxOf(2L, max + max % 2L)
+        var pow = 1L
+        while (pow * 10L < max) pow *= 10L
+        return listOf(10L, 12L, 16L, 20L, 24L, 30L, 40L, 50L, 60L, 80L, 100L)
+            .map { it * pow / 10L }
+            .first { it >= max }
+    }
+
+    /** 縦軸の目盛り(水平点線を引く額): 上端の半分と上端の2つ。小さい順。 */
+    fun axisTicks(axisMax: Long): List<Long> = listOf(axisMax / 2, axisMax).filter { it > 0L }
+
     private const val WEEKDAY_CHARS = "月火水木金土日"
 
     /** 直近の月の数(年の階層で表示する月数)。終わりの月を含めて6か月。 */
