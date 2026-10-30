@@ -80,7 +80,7 @@ class MigrationV10RobolectricTest {
     private fun SupportSQLiteDatabase.long(sql: String): Long = query(sql).use { it.moveToFirst(); it.getLong(0) }
     private fun SupportSQLiteDatabase.str(sql: String): String = query(sql).use { it.moveToFirst(); it.getString(0) }
 
-    /** 移行前(v9)の DB を作り、データを入れて開いたままのヘルパーを返す。レシート2・品目3・グループ2・支出3。 */
+    /** 移行前(v9)の DB を作り、データを入れて開いたままのヘルパーを返す。支払い2・品目3・グループ2・支出3。 */
     private fun createV9(): SupportSQLiteOpenHelper {
         val h = helper(9, created = { db -> schema9().forEach { db.execSQL(it) } })
         val db = h.writableDatabase
@@ -121,7 +121,7 @@ class MigrationV10RobolectricTest {
         return h
     }
 
-    /** レシート1に、友人1人(品目ごと・全体・支払内訳)の割り勘を生の SQL で入れる(v10 の列で)。友人の人 id を返す。 */
+    /** 支払い1に、友人1人(品目ごと・全体・支払内訳)の割り勘を生の SQL で入れる(v10 の列で)。友人の人 id を返す。 */
     private fun seedSplit(db: SupportSQLiteDatabase): Long {
         db.execSQL("INSERT INTO persons (uid, name, shortName, isSelf, sortOrder, createdAt) VALUES ('friend-uid', '友人', '友', 0, 1, 2)")
         val friend = db.long("SELECT id FROM persons WHERE uid = 'friend-uid'")

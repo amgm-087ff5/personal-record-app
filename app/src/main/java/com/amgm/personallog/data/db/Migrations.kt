@@ -42,7 +42,7 @@ object Migrations {
     }
 
     /**
-     * v2 -> v3: 品目の税率・税込/税抜・負担割合と、レシートの立て替えフラグを追加する(実機で確認済み)。
+     * v2 -> v3: 品目の税率・税込/税抜・負担割合と、支払いの立て替えフラグを追加する(実機で確認済み)。
      */
     val MIGRATION_2_3: Migration = object : Migration(2, 3) {
         override fun migrate(db: SupportSQLiteDatabase) {
@@ -117,8 +117,8 @@ object Migrations {
     }
 
     /**
-     * v4 -> v5: 割り勘をレシート全体で持つ。receipts に ownAmount(円)を追加し、
-     * 品目ごとの自分の分(v4の receipt_items.ownAmount)からレシート全体の値を求めて入れる。
+     * v4 -> v5: 割り勘を支払い全体で持つ。receipts に ownAmount(円)を追加し、
+     * 品目ごとの自分の分(v4の receipt_items.ownAmount)から支払い全体の値を求めて入れる。
      * 品目の ownAmount 列は削除する(表を作り直す)。
      */
     val MIGRATION_4_5: Migration = object : Migration(4, 5) {
@@ -166,7 +166,7 @@ object Migrations {
     }
 
     /**
-     * v5 -> v6: 支払いグループ(expense_groups)を追加し、expenses に groupId を足す。
+     * v5 -> v6: 支出(expense_groups)を追加し、expenses に groupId を足す。
      * 既存の支出は groupId=NULL(単独の支出)のまま。expenses は外部キーを増やすため表を作り直す。
      */
     val MIGRATION_5_6: Migration = object : Migration(5, 6) {
@@ -210,8 +210,8 @@ object Migrations {
     }
 
     /**
-     * v6 -> v7: 支出と支払いグループに時刻 time("HH:mm")を足す。支出には timeEdited(日時を支出側で変えたか)も足す。
-     * 既存行の時刻は、レシート紐づきならレシートの時刻(レシートに時刻が無ければ空のまま。00:00 は入れない)、それ以外は作成時刻の現地時刻で埋める。
+     * v6 -> v7: 支出と支出(まとまり)に時刻 time("HH:mm")を足す。支出には timeEdited(日時を支出側で変えたか)も足す。
+     * 既存行の時刻は、支払い紐づきなら支払いの時刻(支払いに時刻が無ければ空のまま。00:00 は入れない)、それ以外は作成時刻の現地時刻で埋める。
      */
     val MIGRATION_6_7: Migration = object : Migration(6, 7) {
         override fun migrate(db: SupportSQLiteDatabase) {
@@ -812,7 +812,7 @@ object Migrations {
      *  - item_shares・whole_shares・payment_payers は作り直す: 旧表を _old に RENAME → 新しい表を CREATE → 旧データを写す
      *    (copyLegacySplitShares)→ _old を DROP → インデックス。
      * 安全策(8_9 と同じ): 最初に PRAGMA foreign_keys を読み、1 なら何も変えずに止める。
-     * 作り直す3表の外部キー違反の数を移行の前後で比べ、増えたら止める。件数(レシート・品目・割り勘の表)も前後で比べ、変わったら止める。
+     * 作り直す3表の外部キー違反の数を移行の前後で比べ、増えたら止める。件数(支払い・品目・割り勘の表)も前後で比べ、変わったら止める。
      */
     val MIGRATION_10_11: Migration = object : Migration(10, 11) {
         override fun migrate(db: SupportSQLiteDatabase) {

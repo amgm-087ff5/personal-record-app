@@ -33,7 +33,7 @@ class ReviewFixesPlanTest {
         val first = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), emptyList(), 1) as ConfirmPlan.Rebuild
         val g = first.group!!.copy(id = 5)
         val children = first.children.mapIndexed { i, e -> e.copy(id = 100L + i, groupId = 5) }
-        // 洗剤を0円にした(レシート側)。家計簿で洗剤の金額を直していれば残す
+        // 洗剤を0円にした(支払い側)。家計簿で洗剤の金額を直していれば残す
         val soapZero = soap.copy(amount = 0)
         val keepEdited = listOf(children[0], children[1].copy(amount = 480, amountEdited = true))
         val p1 = ConfirmPlanner.plan(receipt(), listOf(milk, soapZero), listOf(g), keepEdited, 2) as ConfirmPlan.UpdateGroup

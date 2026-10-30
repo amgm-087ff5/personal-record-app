@@ -82,8 +82,8 @@ class MigrationV11RobolectricTest {
 
     /**
      * v10 の DB を作り、割り当てを入れて閉じる。
-     * レシート1: 自分・A・B の割り勘(品目ごとの割当2まとまり、全体の割当、支払内訳は自分)。
-     * レシート2: B だけの全体の割当(金額 300)。
+     * 支払い1: 自分・A・B の割り勘(品目ごとの割当2まとまり、全体の割当、支払内訳は自分)。
+     * 支払い2: B だけの全体の割当(金額 300)。
      */
     private fun createV10() {
         val h = helper(10, created = { db -> schema10().forEach { db.execSQL(it) } })
@@ -135,7 +135,7 @@ class MigrationV11RobolectricTest {
         try {
             val db = room.openHelper.writableDatabase // 移行と Room の検証がここで走る。通らなければ例外
             assertEquals(AppDatabase.VERSION, db.version)
-            // レシート1: 人1(自分)・人2。レシート2: 人3。(receiptId, personId) ごとに1人
+            // 支払い1: 人1(自分)・人2。支払い2: 人3。(receiptId, personId) ごとに1人
             assertEquals(3L, db.long("SELECT COUNT(*) FROM split_participants"))
             assertEquals(2L, db.long("SELECT COUNT(*) FROM split_participants WHERE receiptId = 1"))
             assertEquals(0L, db.long("SELECT sortOrder FROM split_participants WHERE receiptId = 1 AND personId = 1"))

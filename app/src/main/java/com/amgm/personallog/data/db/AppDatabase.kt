@@ -30,7 +30,7 @@ import com.amgm.personallog.data.model.WholeShare
         Person::class, SplitSheet::class, ShareGroup::class, ShareGroupItem::class, ItemShare::class, WholeShare::class, PaymentPayer::class,
         // v11: 支払いごとの参加者・ラベルごとの金額。割当の参照先を参加者に変更
         SplitParticipant::class, SplitLabelAmount::class,
-        // v13: レシートの参加人数(receipts.headcount)
+        // v13: 支払いの参加人数(receipts.headcount)
         // v15: 支出のメモに写していた店名を消す(表の形は同じ。支払い先は支払いだけに持つ)
         // v16: 支出は必ず支払いに属し(receiptId NOT NULL)、支払いを消すと支出も消える(CASCADE)。支出の無い支払いを消す
         // v14: 品目の金額不明 receipt_items・expenses の unknownAmount。単独の支出をまとまり+1品目に変える

@@ -13,8 +13,8 @@ import java.math.BigDecimal
  *  - 品目ごとの税込価格は小数点以下を保持する。
  *  - 合計(支払総額・自分の払う分・貰う分)は小数点以下を切り捨てる。
  *  - 家計簿の行(円の整数)は累積して切り捨てた差分で作るので、行の合計は切り捨て後の合計と一致する。
- *  - 割り勘はレシート全体で登録する: 「全体で誰がいくら払ったか」。自分の払う分(円・税込)は
- *    レシートごとに1つの金額で持つ。品目の選択による割り勘は、その金額を埋めるための補助機能。
+ *  - 割り勘は支払い全体で登録する: 「全体で誰がいくら払ったか」。自分の払う分(円・税込)は
+ *    支払いごとに1つの金額で持つ。品目の選択による割り勘は、その金額を埋めるための補助機能。
  */
 object TaxCalc {
     const val UNITS_PER_YEN = 10_000L
@@ -61,7 +61,7 @@ object TaxCalc {
     }
 
     /**
-     * レシート全体の「自分の払う分」(円・税込)を、選ばれた品目の税込支払額の合計から求める(切り捨て)。
+     * 支払い全体の「自分の払う分」(円・税込)を、選ばれた品目の税込支払額の合計から求める(切り捨て)。
      * 割り勘の補助機能で使う。
      */
     fun ownYenOfPicked(items: List<ReceiptItem>, picked: List<Boolean>): Long =
@@ -112,7 +112,7 @@ data class TaxBreakdown(val lines: List<TaxRateLine>) {
     val taxYen: Long get() = TaxCalc.floorYen(lines.sumOf { it.taxUnits })
 }
 
-/** 旧形式(品目ごとの自分の分を持っていた版)から、レシート全体の自分の分を求めるための1行。 */
+/** 旧形式(品目ごとの自分の分を持っていた版)から、支払い全体の自分の分を求めるための1行。 */
 data class PricedLine(
     val amount: Int,
     val taxRate: Int,
@@ -121,7 +121,7 @@ data class PricedLine(
 )
 
 /**
- * 旧形式の品目の自分の分から、レシート全体の自分の分(円)を求める。
+ * 旧形式の品目の自分の分から、支払い全体の自分の分(円)を求める。
  * どの行にも自分の分が無ければ null(全額自分)。ある行は自分の分、無い行は税込価格の全額を足す。
  */
 fun legacyReceiptOwnYen(lines: List<PricedLine>): Int? {

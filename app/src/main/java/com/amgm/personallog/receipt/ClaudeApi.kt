@@ -23,7 +23,7 @@ class ReceiptApiException(message: String) : Exception(message)
 object ClaudeRequest {
     const val ENDPOINT = "https://api.anthropic.com/v1/messages"
     const val API_VERSION = "2023-06-01"
-    /** 入れ子形式は品目ごとに長くなるため、旧形式の 4096 から上げる(長いレシートで途中切れしないように)。 */
+    /** 入れ子形式は品目ごとに長くなるため、旧形式の 4096 から上げる(長い支払いで途中切れしないように)。 */
     const val MAX_TOKENS = 8192
 
     /** 家計簿のカテゴリ名(Categories.DEFAULTS から未分類を除いたもの)。アプリのカテゴリ名とずれないよう、ここから埋め込む。 */

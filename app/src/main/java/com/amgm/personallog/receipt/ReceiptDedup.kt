@@ -10,12 +10,12 @@ import java.util.Locale
 typealias NotDuplicateSet = Set<Pair<Long, Long>>
 
 /**
- * レシートの重複判定(純Kotlin、JVMテスト可能)。店名は表記揺れがあるので使わない。
+ * 支払いの重複判定(純Kotlin、JVMテスト可能)。店名は表記揺れがあるので使わない。
  *
  * 候補の条件:
  *  - 両方に時刻("yyyy-MM-dd HH:mm")があるとき: 差が [WINDOW_SECONDS] 秒(5分)以内(ちょうど5分を含む。日付またぎも計算する)で、合計が同じ。
  *  - どちらかに時刻が無いとき: 同じ日付で、合計が同じ。
- *  - 合計が null(下書きで未入力)のレシートは判定しない。
+ *  - 合計が null(下書きで未入力)の支払いは判定しない。
  * ユーザーが「重複ではない」と判断した組([ReceiptNotDuplicate])は候補から除く。
  */
 object ReceiptDedup {
@@ -77,7 +77,7 @@ object ReceiptDedup {
         return result
     }
 
-    /** 確定時の警告: target と重複の候補になる、確定済みの相手(target 自身は除く)。list には確定済みのレシートを渡す。 */
+    /** 確定時の警告: target と重複の候補になる、確定済みの相手(target 自身は除く)。list には確定済みの支払いを渡す。 */
     fun sameContent(target: Receipt, list: List<Receipt>, notDuplicates: NotDuplicateSet = emptySet()): List<Receipt> =
         list.filter { isDuplicate(target, it, notDuplicates) }
 

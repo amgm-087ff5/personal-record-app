@@ -5,7 +5,7 @@ import com.amgm.personallog.data.model.ExpenseGroup
 
 /**
  * 家計簿(支払い側)で直したとき、変わった欄の「編集済み」を立てる判定(純Kotlin)。
- * 編集済みの欄は、レシートを再確定しても上書きされない。一度立てたら、同じ値に戻しても下ろさない
+ * 編集済みの欄は、支払いを再確定しても上書きされない。一度立てたら、同じ値に戻しても下ろさない
  * (timeEdited の既存の扱いと同じ)。
  */
 object PaymentEdit {

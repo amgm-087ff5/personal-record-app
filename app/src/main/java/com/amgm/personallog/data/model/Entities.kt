@@ -38,7 +38,7 @@ data class DiaryPhoto(
     val sortOrder: Int = 0,
 )
 
-/** レシート。purchasedAt は "yyyy-MM-dd" または "yyyy-MM-dd HH:mm"。status は ReceiptStatus。 */
+/** 支払い。purchasedAt は "yyyy-MM-dd" または "yyyy-MM-dd HH:mm"。status は ReceiptStatus。 */
 @Entity(tableName = "receipts")
 data class Receipt(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -53,10 +53,10 @@ data class Receipt(
     val createdAt: Long,
     /** 原本画像(imagePath)のSHA-256(16進小文字)。重複検知用。 */
     val imageHash: String? = null,
-    /** 立て替え: 自分が払った(他の人の分を含む)レシートなら true。 */
+    /** 立て替え: 自分が払った(他の人の分を含む)支払いなら true。 */
     @ColumnInfo(defaultValue = "0")
     val isAdvance: Boolean = false,
-    /** 立て替えのとき、レシート全体のうち自分が払う金額(円・税込)。null は支払総額の全額。 */
+    /** 立て替えのとき、支払い全体のうち自分が払う金額(円・税込)。null は支払総額の全額。 */
     val ownAmount: Int? = null,
     /** 合計の出所。TotalSource の値。 */
     @ColumnInfo(defaultValue = "'unknown'")
@@ -73,7 +73,7 @@ data class Receipt(
     val cropRight: Float = 1f,
     @ColumnInfo(defaultValue = "1")
     val cropBottom: Float = 1f,
-    /** 参加人数(自分を含む)。レシートの席料・注文タブレット等から読めた人数。不明は null（割り勘の既定は1人）。 */
+    /** 参加人数(自分を含む)。支払いの席料・注文タブレット等から読めた人数。不明は null（割り勘の既定は1人）。 */
     val headcount: Int? = null,
 )
 
@@ -98,8 +98,8 @@ object TotalSource {
 }
 
 /**
- * 「重複ではない」と判断したレシートの組。小さい id を receiptIdLow に正規化して持つ。
- * どちらかのレシートを削除すると組も消える(外部キーの CASCADE)。
+ * 「重複ではない」と判断した支払いの組。小さい id を receiptIdLow に正規化して持つ。
+ * どちらかの支払いを削除すると組も消える(外部キーの CASCADE)。
  */
 @Entity(
     tableName = "receipt_not_duplicates",
@@ -133,7 +133,7 @@ data class ReceiptNotDuplicate(
 }
 
 /**
- * レシートの品目。1行 = 1個ぶん(数量は持たず、N個は N 行に分ける)。
+ * 支払いの品目。1行 = 1個ぶん(数量は持たず、N個は N 行に分ける)。
  * 同じ品名・金額などの行は表示時にまとめる(データにグループは持たない)。
  */
 @Entity(
@@ -193,7 +193,7 @@ data class ReceiptItem(
 data class ExpenseGroup(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val date: String,
-    /** 支払った時刻 "HH:mm"。レシートの日時に従う。 */
+    /** 支払った時刻 "HH:mm"。支払いの日時に従う。 */
     @ColumnInfo(defaultValue = "''")
     val time: String = "",
     val amount: Int,
@@ -205,7 +205,7 @@ data class ExpenseGroup(
     /** 端末をまたいで変わらない識別子(バックアップの復元時の照合キー)。 */
     @ColumnInfo(defaultValue = "''")
     val uid: String = newUid(),
-    /** 金額・カテゴリ・メモ・日時を支払い側で変えたか。false の間だけ、レシートの再確定に追従する。 */
+    /** 金額・カテゴリ・メモ・日時を支払い側で変えたか。false の間だけ、支払いの再確定に追従する。 */
     @ColumnInfo(defaultValue = "0")
     val amountEdited: Boolean = false,
     @ColumnInfo(defaultValue = "0")
@@ -261,16 +261,16 @@ data class Expense(
     val createdAt: Long,
     val groupId: Long? = null,
     /**
-     * 日時(date/time)を支出側で変更したか。false の間だけ、紐づくレシートの日時変更に追従する。
+     * 日時(date/time)を支出側で変更したか。false の間だけ、紐づく支払いの日時変更に追従する。
      */
     @ColumnInfo(defaultValue = "0")
     val timeEdited: Boolean = false,
-    /** 元になったレシートの品目。レシートの再確定で、同じ品目の行を探すのに使う。手入力・古い行は null。 */
+    /** 元になった支払いの品目。支払いの再確定で、同じ品目の行を探すのに使う。手入力・古い行は null。 */
     val receiptItemId: Long? = null,
     /** 品名。 */
     @ColumnInfo(defaultValue = "''")
     val name: String = "",
-    /** 金額・カテゴリ・品名・メモを支払い側で変えたか。false の間だけ、レシートの再確定に追従する。 */
+    /** 金額・カテゴリ・品名・メモを支払い側で変えたか。false の間だけ、支払いの再確定に追従する。 */
     @ColumnInfo(defaultValue = "0")
     val amountEdited: Boolean = false,
     @ColumnInfo(defaultValue = "0")

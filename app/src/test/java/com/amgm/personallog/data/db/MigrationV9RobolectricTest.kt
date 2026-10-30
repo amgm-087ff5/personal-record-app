@@ -147,7 +147,7 @@ class MigrationV9RobolectricTest {
         if (withOrphans) {
             // 移行と無関係な古い不整合
             db.execSQL("INSERT INTO diary_photos (entryId, filePath, takenAt, sortOrder) VALUES (999, 'x.jpg', NULL, 0)")
-            // expenses 自身の不整合も、移行前から1件ある(存在しないレシートを指す)
+            // expenses 自身の不整合も、移行前から1件ある(存在しない支払いを指す)
             db.execSQL("INSERT INTO expenses (id, date, time, amount, category, memo, receiptId, createdAt, groupId, timeEdited) VALUES (4, 'd', '', 1, 'c', 'orphan', 777, 4, NULL, 0)")
         }
     }

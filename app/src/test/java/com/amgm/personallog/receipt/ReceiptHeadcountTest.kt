@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReceiptHeadcountTest {
-    /** headcount の値だけを変えたレシートJSON。value は JSON の値部分をそのまま入れる。 */
+    /** headcount の値だけを変えた支払いJSON。value は JSON の値部分をそのまま入れる。 */
     private fun json(value: String?): String {
         val field = if (value == null) "" else ",\"headcount\":$value"
         return """{"date":"2026-10-09","time":"18:32","store":"居酒屋A","items":[],"total":5000$field,"note":null}"""

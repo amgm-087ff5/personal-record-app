@@ -18,7 +18,7 @@ enum class PaymentKind(val key: String) {
     }
 }
 
-/** レシートに紐づく家計簿の支出。amount は家計簿に入っている金額(自分の負担額)。 */
+/** 支払いに紐づく家計簿の支出。amount は家計簿に入っている金額(自分の負担額)。 */
 data class PaymentLink(val kind: PaymentKind, val id: Long, val amount: Long) {
     companion object {
         /** 支出(まとまり)があればそれ。無ければ null(自分の分が0円で家計簿に行が無いなど)。 */

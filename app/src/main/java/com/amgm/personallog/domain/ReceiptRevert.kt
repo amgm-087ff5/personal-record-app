@@ -5,17 +5,17 @@ import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 
-/** 支払いの詳細画面で「レシートと違う」の印を付ける欄(「レシートの値に戻す」の対象でもある)。 */
+/** 支払いの詳細画面で「支払いと違う」の印を付ける欄(「支払いの値に戻す」の対象でもある)。 */
 enum class PaymentField { AMOUNT, CATEGORY, NAME, MEMO, TIME }
 
 /**
- * 「レシートの値に戻す」(純Kotlin)。家計簿で直した欄を、紐づくレシートから LedgerCalc と同じ規則で求めた値に戻し、
- * その欄の xxxEdited を 0 にする。値を求められないとき(レシートに合計が無い、対応する品目が無いなど)は null。
+ * 「支払いの値に戻す」(純Kotlin)。家計簿で直した欄を、紐づく支払いから LedgerCalc と同じ規則で求めた値に戻し、
+ * その欄の xxxEdited を 0 にする。値を求められないとき(支払いに合計が無い、対応する品目が無いなど)は null。
  */
 object ReceiptRevert {
     /**
      * @param group この品目が属する支出(まとまり)。日時はまとまりに従うので、日時はまとまりの値に戻す。
-     * @param share 割り勘の自分の分(割り勘が無いときは null)。あればレシートの値の代わりに自分の分で求める。
+     * @param share 割り勘の自分の分(割り勘が無いときは null)。あれば支払いの値の代わりに自分の分で求める。
      */
     fun expense(
         have: Expense,
@@ -34,7 +34,7 @@ object ReceiptRevert {
             PaymentField.AMOUNT -> have.copy(amount = want.amount, amountEdited = false)
             PaymentField.CATEGORY -> have.copy(category = want.category, categoryEdited = false)
             PaymentField.MEMO -> have.copy(memo = want.memo, memoEdited = false)
-            // 品目の無い支払いの1品目には、レシートの品名が無い
+            // 品目の無い支払いの1品目には、支払いの品名が無い
             PaymentField.NAME -> if (itemId == null) null else have.copy(name = want.name, nameEdited = false)
             PaymentField.TIME ->
                 if (group != null) have.copy(date = group.date, time = group.time, timeEdited = false)

@@ -106,7 +106,7 @@ data class BackupReceipt(
     val createdAt: Long,
     /** v2で追加。古いバックアップには無いので既定値(false)になる。 */
     val isAdvance: Boolean = false,
-    /** v3で追加(レシート全体の自分の分・円)。無い古いバックアップは品目の値から求める。 */
+    /** v3で追加(支払い全体の自分の分・円)。無い古いバックアップは品目の値から求める。 */
     val ownAmount: Int? = null,
     /** v5 以降。合計の出所(TotalSource)。無い古いバックアップは unknown。 */
     val totalSource: String = TotalSource.UNKNOWN,
@@ -122,7 +122,7 @@ data class BackupReceipt(
     val headcount: Int? = null,
 ) {
     /**
-     * items はこのレシートの品目(旧形式の自分の分を集計するため)。
+     * items はこの支払いの品目(旧形式の自分の分を集計するため)。
      * legacyFormat: 形式4以前のバックアップ。合計と出所を TotalSourceInit で決める
      * (読み取り失敗の仮の0円を合計に戻さない。DB の v8 への移行と同じ判定)。
      */
@@ -169,8 +169,8 @@ data class BackupNotDuplicate(val receiptIdLow: Long, val receiptIdHigh: Long, v
 }
 
 /**
- * 「重複ではない」の組を、復元後のレシート id に付け替える。idMap はバックアップ内の id -> 復元後の id。
- * どちらかの対応が取れない組は捨てる。同じレシートどうしの組になったもの・重複した組も捨てる。
+ * 「重複ではない」の組を、復元後の支払い id に付け替える。idMap はバックアップ内の id -> 復元後の id。
+ * どちらかの対応が取れない組は捨てる。同じ支払いどうしの組になったもの・重複した組も捨てる。
  */
 fun remapNotDuplicates(pairs: List<BackupNotDuplicate>, idMap: Map<Long, Long>): List<ReceiptNotDuplicate> =
     pairs.mapNotNull { p ->
@@ -180,7 +180,7 @@ fun remapNotDuplicates(pairs: List<BackupNotDuplicate>, idMap: Map<Long, Long>):
     }.distinctBy { it.receiptIdLow to it.receiptIdHigh }
 
 /**
- * 復元(マージ)で、バックアップのレシートが既存のどのレシートに当たるかを探す(純Kotlin)。
+ * 復元(マージ)で、バックアップの支払いが既存のどの支払いに当たるかを探す(純Kotlin)。
  * 照合キーは、imageHash があれば imageHash、無ければ従来のキー(日時・店名・合計・画像パス。合計は null もありうる)。
  * 同じキーが複数あっても1対1で対応させる(同じ画像を「それでも追加」した2枚が1枚に潰れない)。
  */
@@ -218,7 +218,7 @@ class ReceiptMergeIndex(existing: List<Receipt>) {
     }
 
     /**
-     * 対応する未使用の既存レシートの id。無ければ null。見つけた id は使用済みにする。
+     * 対応する未使用の既存支払いの id。無ければ null。見つけた id は使用済みにする。
      * ハッシュがあれば、まずハッシュで探す。無ければ従来のキーでも探す
      * (既存側にハッシュが未記録の場合。既存側に別のハッシュがあるものは別の画像なので対応させない)。
      */
@@ -239,7 +239,7 @@ data class BackupReceiptItem(
     val category: String,
     val taxRate: Int = 10,
     val priceIncludesTax: Boolean = true,
-    // v2まで: 品目ごとの自分の分。v3以降は常に null(レシート全体の ownAmount を使う)。
+    // v2まで: 品目ごとの自分の分。v3以降は常に null(支払い全体の ownAmount を使う)。
     val ownAmount: Int? = null,
     // 旧形式(v3まで)の項目。読み込み時に1個ずつの行へ変換する。新形式では null のまま出力される。
     val quantity: Double? = null,
@@ -293,11 +293,11 @@ data class BackupExpense(
     val memo: String = "",
     val receiptId: Long? = null,
     val createdAt: Long,
-    /** v4 以降。支払いグループの品目なら、そのグループの id。 */
+    /** v4 以降。支出(まとまり)の品目なら、そのグループの id。 */
     val groupId: Long? = null,
     /** v7 以降。日時を支出側で変えたか。 */
     val timeEdited: Boolean = false,
-    /** v6 以降。元になったレシートの品目の id(バックアップ内の id)。復元時に復元後の id へ付け替える。 */
+    /** v6 以降。元になった支払いの品目の id(バックアップ内の id)。復元時に復元後の id へ付け替える。 */
     val receiptItemId: Long? = null,
     /** v6 以降。品名。 */
     val name: String = "",
@@ -313,7 +313,7 @@ data class BackupExpense(
     /** 形式10以降。金額が分からない品目。古い形式には無いので false。 */
     val unknownAmount: Boolean = false,
 ) {
-    /** linkedTime: 紐づくレシートの時刻(レシートがあれば)。time が空のときの初期値に使う。 */
+    /** linkedTime: 紐づく支払いの時刻(支払いがあれば)。time が空のときの初期値に使う。 */
     fun toEntity(linkedTime: String? = null) = Expense(
         id = id,
         date = date,
@@ -346,7 +346,7 @@ data class BackupExpense(
     }
 }
 
-/** 支払いグループ(v4 以降)。amount は支払い金額。 */
+/** 支出(まとまり、v4 以降)。amount は支出の金額。 */
 @Serializable
 data class BackupExpenseGroup(
     val id: Long,
@@ -393,7 +393,7 @@ data class BackupExpenseGroup(
 }
 
 /**
- * 復元(マージ)で既存のレシートに当たったとき、バックアップの品目 id -> 既存の品目 id の対応を作る(純Kotlin)。
+ * 復元(マージ)で既存の支払いに当たったとき、バックアップの品目 id -> 既存の品目 id の対応を作る(純Kotlin)。
  * 品名・金額・税率・税込区分が同じ品目を、順番に1対1で対応させる。これで支出の receiptItemId を付け替えられる。
  */
 fun matchExistingItems(backupItems: List<BackupReceiptItem>, existing: List<ReceiptItem>): Map<Long, Long> {
@@ -416,9 +416,9 @@ fun remapReceiptItemId(backupItemId: Long?, itemIdMap: Map<Long, Long>): Long? =
     backupItemId?.let { itemIdMap[it] }
 
 /**
- * 復元(マージ)で、バックアップの支払いグループが既存のどれに当たるかを探す(純Kotlin)。
- * uid があれば uid で照合する。uid が無い(形式5以前の)グループは従来のキー(日付・金額・カテゴリ・メモ・レシート)で照合する。
- * uid が一致しなくても、同じレシートに属するグループ(entity.receiptId がある)は従来のキーでも照合する
+ * 復元(マージ)で、バックアップの支出(まとまり)が既存のどれに当たるかを探す(純Kotlin)。
+ * uid があれば uid で照合する。uid が無い(形式5以前の)グループは従来のキー(日付・金額・カテゴリ・メモ・支払い)で照合する。
+ * uid が一致しなくても、同じ支払いに属するグループ(entity.receiptId がある)は従来のキーでも照合する
  * (別の端末で確定して uid が違うだけの同じ支払いを、二重に登録しない)。
  */
 class GroupMergeIndex(existing: List<ExpenseGroup>) {
@@ -427,7 +427,7 @@ class GroupMergeIndex(existing: List<ExpenseGroup>) {
     private val byUid = HashMap<String, Long>()
     private val byKey = HashMap<Key, Long>()
 
-    /** 既存のレシートに紐づく支払いグループ(レシート id -> グループ id)。レシート1枚につきグループは1つ。 */
+    /** 既存の支払いに紐づく支出(まとまり。支払い id -> グループ id)。支払い1枚につきグループは1つ。 */
     private val byReceipt = HashMap<Long, Long>()
 
     init {
@@ -446,17 +446,17 @@ class GroupMergeIndex(existing: List<ExpenseGroup>) {
 
     /**
      * backup が既存に当たれば既存の id。当たらなければ null。
-     * @param entity バックアップのグループを復元後のレシート id などに直した実体(uid は backupUid を入れておく)
+     * @param entity バックアップのグループを復元後の支払い id などに直した実体(uid は backupUid を入れておく)
      */
     fun find(backupUid: String, entity: ExpenseGroup): Long? {
         if (backupUid.isEmpty()) {
             byKey[keyOf(entity)]?.let { return it }
         } else {
             byUid[backupUid]?.let { return it }
-            // uid は違うが同じレシートの支払い: 従来のキーでも照合する
+            // uid は違うが同じ支払いの支出: 従来のキーでも照合する
             if (entity.receiptId != null) byKey[keyOf(entity)]?.let { return it }
         }
-        // 既存のレシートに支払いグループが既にあれば、バックアップのグループは追加しない(同じレシートにグループが二重になるのを防ぐ)
+        // 既存の支払いに支出(まとまり)が既にあれば、バックアップのグループは追加しない(同じ支払いにグループが二重になるのを防ぐ)
         return entity.receiptId?.let { byReceipt[it] }
     }
 
@@ -466,8 +466,8 @@ class GroupMergeIndex(existing: List<ExpenseGroup>) {
 
 /**
  * 復元(マージ)で、バックアップの支出が既存と重複しているかを判定する(純Kotlin)。
- * uid があれば uid で照合する。uid が無い(形式5以前の)支出は従来のキー(日付・金額・カテゴリ・メモ・レシート・グループ)の件数ベースで照合する。
- * uid が一致しなくても、同じレシートに属する支出(復元後の receiptId がある)は従来のキーの件数ベースでも照合する。
+ * uid があれば uid で照合する。uid が無い(形式5以前の)支出は従来のキー(日付・金額・カテゴリ・メモ・支払い・グループ)の件数ベースで照合する。
+ * uid が一致しなくても、同じ支払いに属する支出(復元後の receiptId がある)は従来のキーの件数ベースでも照合する。
  */
 class ExpenseMergeIndex(existing: List<Expense>) {
     private data class Key(
@@ -502,7 +502,7 @@ class ExpenseMergeIndex(existing: List<Expense>) {
                 consume(k)
                 return true
             }
-            // uid は初めて。ただし同じレシートの支払いなら、従来のキーの件数でも照合する
+            // uid は初めて。ただし同じ支払いの支出なら、従来のキーの件数でも照合する
             return mappedReceiptId != null && consume(k)
         }
         return consume(k)
@@ -528,7 +528,7 @@ data class ManualPaymentConversion(val data: BackupData, val manualReceiptIds: S
  * 支払いに属さない支出グループ・単独の支出を、手入力の支払いに変える(純Kotlin)。
  * 「支払いに属さない」は、receiptId が無い、または取り込み元に無いレシートを指すもの。
  * 変換内容は DB の MIGRATION_11_12 と同じ:
- *  - 対象ごとに手入力の支払いを1つ作る(画像なし・確定・合計のみ・storeName は空)。日時は日付(時刻があれば "yyyy-MM-dd HH:mm")、金額は支払い金額。
+ *  - 対象ごとに手入力の支払いを1つ作る(画像なし・確定・合計のみ・storeName は空)。日時は日付(時刻があれば "yyyy-MM-dd HH:mm")、金額は支出金額。
  *  - グループの中の支出は品目に写し、支出に receiptId と receiptItemId を張る。グループにも receiptId を張る。
  *  - 単独の支出は品目を作らず、receiptId だけ張る。
  *  - 金額・品名・カテゴリ・メモ・作成時刻は変えない。グループと単独の支出は、カテゴリとメモを編集済みにする(次の同期で既定値に戻らないように)。

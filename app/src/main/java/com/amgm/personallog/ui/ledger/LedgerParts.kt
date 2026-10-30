@@ -335,9 +335,9 @@ private fun LevelTabs(level: ChartLevel, onLevel: (ChartLevel) -> Unit) {
 internal fun DayBlock(
     day: DayGroup,
     expandedGroups: Map<Long, Boolean>,
-    /** 下書きのレシートの id(行に「下書き」を付ける)。 */
+    /** 下書きの支払いの id(行に「下書き」を付ける)。 */
     draftReceiptIds: Set<Long>,
-    /** 割り勘に警告があるレシートの id(行に「要確認」を付ける)。 */
+    /** 割り勘に警告がある支払いの id(行に「要確認」を付ける)。 */
     warnReceiptIds: Set<Long>,
     /** 画像のあるレシート(レシート由来の支払い)の id。行の「レシート由来」は、ここに含まれる支払いの行だけに付ける。 */
     imageReceiptIds: Set<Long>,
@@ -629,7 +629,7 @@ internal fun ExpenseEditorSheet(
     original: Expense?,
     initialDate: String,
     initialTime: String,
-    /** 紐づくレシートの日時 "yyyy-MM-dd HH:mm"。紐づかなければ null。 */
+    /** 紐づく支払いの日時 "yyyy-MM-dd HH:mm"。紐づかなければ null。 */
     linkedReceiptAt: String?,
     onDismiss: () -> Unit,
     onSave: (date: String, time: String, amount: Int, category: String, name: String, memo: String, done: (String?) -> Unit) -> Unit,
@@ -638,13 +638,13 @@ internal fun ExpenseEditorSheet(
     title: String? = null,
     /** 品名の欄を出すか(支払い=グループの編集では出さない)。 */
     showName: Boolean = true,
-    /** 日時の欄を出すか。支払いグループの品目の日時はグループに従うので、品目の編集では出さない。 */
+    /** 日時の欄を出すか。支出(まとまり)の品目の日時は支出に従うので、品目の編集では出さない。 */
     showDateTime: Boolean = true,
     /** 金額を読み取り専用にし、この注記を出す(割り勘が2人以上の支払い。金額は割り勘画面=全体支出で直す)。null なら直せる。 */
     lockedAmountNote: String? = null,
     /**
      * 紐づく支払いがレシート(画像・読取原文あり)か。手入力の支払いは false で、「レシート由来」の注記と
-     * 「レシートの日時と異なります」の確認を出さない(比べるレシートが無い。日時は支払いへ書き戻す)。
+     * 「支払いの日時と異なります」の確認を出さない(比べる支払いが無い。日時は支払いへ書き戻す)。
      */
     fromScannedReceipt: Boolean = true,
 ) {
@@ -696,7 +696,7 @@ internal fun ExpenseEditorSheet(
         ) {
             if (original?.receiptId != null && fromScannedReceipt) {
                 Text(
-                    "レシート由来です" + (linkedReceiptAt?.let { "(レシート日時 $it)" } ?: ""),
+                    "レシート由来です" + (linkedReceiptAt?.let { "(支払いの日時 $it)" } ?: ""),
                     style = AppTheme.type.caption,
                     color = c.accent,
                 )
@@ -793,7 +793,7 @@ internal fun ExpenseEditorSheet(
                     validation = v
                     saveError = null
                     if (v.isValid) {
-                        // 紐づくレシートと日時が違うまま日時を変えて保存しようとしたら、確認を挟む(レシートは変更しない)
+                        // 紐づく支払いと日時が違うまま日時を変えて保存しようとしたら、確認を挟む(支払いは変更しない)
                         val dateTimeChanged = original != null && (v.date != original.date || v.time != original.time)
                         val mismatch = fromScannedReceipt && linkedReceiptAt != null && "${v.date} ${v.time}" != linkedReceiptAt
                         if (dateTimeChanged && mismatch) pendingSave = v else doSave(v)
@@ -827,10 +827,10 @@ internal fun ExpenseEditorSheet(
 
     pendingSave?.let { v ->
         ConfirmSheet(
-            title = "レシートの日時と異なります",
-            message = "この支出はレシート(${linkedReceiptAt ?: ""})に紐づいています。" +
-                "入力した日時(${v.date} ${v.time})はレシートと異なります。" +
-                "レシートの日時は変更されません。このまま保存しますか？",
+            title = "支払いの日時と異なります",
+            message = "この支出は支払い(${linkedReceiptAt ?: ""})に紐づいています。" +
+                "入力した日時(${v.date} ${v.time})は支払いと異なります。" +
+                "支払いの日時は変更されません。このまま保存しますか？",
             confirmText = "このまま保存",
             dismissText = "戻る",
             danger = false,

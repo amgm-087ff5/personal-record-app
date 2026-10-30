@@ -56,7 +56,7 @@ class PaymentWriteBackRobolectricTest {
     private fun item(name: String, amount: Int, id: Long = 0) =
         ReceiptItem(id = id, receiptId = 0, name = name, amount = amount, category = "食費")
 
-    /** 牛乳200・洗剤500(合計700・手入力)を保存して確定し、(レシートの id, 品目)を返す。 */
+    /** 牛乳200・洗剤500(合計700・手入力)を保存して確定し、(支払いの id, 品目)を返す。 */
     private fun confirmedReceipt(): Pair<Long, List<ReceiptItem>> = runBlocking {
         val id = receipts.saveAndConfirm(receipt(), listOf(item("牛乳", 200), item("洗剤", 500)))
         id to receipts.getItems(id)

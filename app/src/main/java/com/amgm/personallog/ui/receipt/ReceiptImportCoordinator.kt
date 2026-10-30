@@ -164,7 +164,7 @@ class ReceiptImportCoordinator @Inject constructor(
 
     /**
      * 補正待ちの間にプロセスが終了すると、コピーした画像がどのレシートにも載らないまま残る。
-     * filesDir/receipts のうち、どのレシートからも参照されておらず、作られてから1時間以上経ち、
+     * filesDir/receipts のうち、どの支払いからも参照されておらず、作られてから1時間以上経ち、
      * 今取り込み中でもないファイルを消す。
      */
     private fun cleanupOrphanImages() {
@@ -363,7 +363,7 @@ class ReceiptImportCoordinator @Inject constructor(
         val note: String? = checkLock.withLock {
             val saved = findSavedByHash(hash)
             when {
-                saved != null -> "既存のレシート: ${ReceiptDedup.summary(saved)}"
+                saved != null -> "既存の支払い: ${ReceiptDedup.summary(saved)}"
                 claimedHashes.isClaimed(hash) -> "今回の選択に同じ画像があります"
                 else -> {
                     claimedHashes.claimIfAbsent(hash, key)
@@ -379,7 +379,7 @@ class ReceiptImportCoordinator @Inject constructor(
     }
 
     /**
-     * 保存済みレシートから同じハッシュのものを探す。
+     * 保存済み支払いから同じハッシュのものを探す。
      * ハッシュ未記録の既存レシートは、ここで画像から計算して埋める(checkLock の内側でのみ呼ぶ)。
      */
     private suspend fun findSavedByHash(hash: String): Receipt? {

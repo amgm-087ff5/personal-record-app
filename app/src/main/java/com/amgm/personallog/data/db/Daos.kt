@@ -219,7 +219,7 @@ interface ExpenseDao {
     @Update
     suspend fun update(expense: Expense)
 
-    /** レシートの日時が変わったとき、紐づく支出のうち日時を支出側で変えていないものだけ追従させる。 */
+    /** 支払いの日時が変わったとき、紐づく支出のうち日時を支出側で変えていないものだけ追従させる。 */
     @Query("UPDATE expenses SET date = :date, time = :time WHERE receiptId = :receiptId AND timeEdited = 0")
     suspend fun syncDateTimeFromReceipt(receiptId: Long, date: String, time: String)
 
@@ -247,8 +247,8 @@ interface ExpenseDao {
     fun observeLedgerRows(from: String, to: String): Flow<List<Expense>>
 
     /**
-     * 自分の支出(グループ)が1つでもあるレシートの id。期間に関係なく全件を見る
-     * (割り勘で自分の分が 0 円の支払いを見分けるため。支出が無いレシートだけが対象になる)。
+     * 自分の支出(グループ)が1つでもある支払いの id。期間に関係なく全件を見る
+     * (割り勘で自分の分が 0 円の支払いを見分けるため。支出が無い支払いだけが対象になる)。
      * 自分の分が0円の間に非表示で残す消した品目(groupId なし)は、支出ではないので数えない。
      */
     @Query("SELECT receiptId FROM expense_groups WHERE receiptId IS NOT NULL")
@@ -277,7 +277,7 @@ interface ExpenseGroupDao {
     @Query("SELECT * FROM expense_groups WHERE date BETWEEN :from AND :to ORDER BY date DESC, id DESC")
     fun observeBetween(from: String, to: String): Flow<List<ExpenseGroup>>
 
-    /** レシートの日時が変わったとき、紐づく支払いグループのうち日時を支払い側で変えていないものだけ追従させる。 */
+    /** 支払いの日時が変わったとき、紐づく支出(まとまり)のうち日時を支払い側で変えていないものだけ追従させる。 */
     @Query("UPDATE expense_groups SET date = :date, time = :time WHERE receiptId = :receiptId AND timeEdited = 0")
     suspend fun syncDateTimeFromReceipt(receiptId: Long, date: String, time: String)
 

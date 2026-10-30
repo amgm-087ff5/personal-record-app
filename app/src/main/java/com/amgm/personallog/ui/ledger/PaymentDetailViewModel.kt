@@ -70,7 +70,7 @@ data class PaymentUiState(
     val items: List<Expense> = emptyList(),
     /** 家計簿で消した支払い由来の品目(一覧・合計には入らない。「元に戻す」で品目に戻る)。 */
     val deletedItems: List<Expense> = emptyList(),
-    /** 紐づく支払い。サムネイル・支払い先・「レシートを開く」に使う。 */
+    /** 紐づく支払い。サムネイル・支払い先・「支払いを開く」に使う。 */
     val receipt: Receipt? = null,
     /** 紐づく支払いの品目(金額不明の判定に使う。計算の正は支払い)。 */
     val paymentItems: List<ReceiptItem> = emptyList(),
@@ -135,7 +135,7 @@ class PaymentDetailViewModel @Inject constructor(
     private val images: ReceiptImageStore,
 ) : ViewModel() {
     private val rawKind: String? = savedStateHandle.get<String>("kind")
-    /** 割り勘で自分が外れた支払い(家計簿に行が無い)の詳細か。id は支払い(レシート)の id。 */
+    /** 割り勘で自分が外れた支払い(家計簿に行が無い)の詳細か。id は支払いの id。 */
     private val excludedMode: Boolean = rawKind == LedgerRoutes.EXCLUDED_KIND
     private val kind: PaymentKind = PaymentKind.of(rawKind) ?: PaymentKind.GROUP
     private val id: Long = savedStateHandle.get<Long>("id") ?: 0L
