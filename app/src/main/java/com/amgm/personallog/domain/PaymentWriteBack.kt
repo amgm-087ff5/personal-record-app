@@ -22,7 +22,8 @@ sealed interface WriteBackTarget {
 
     /**
      * 支出の品目。receiptItemId があれば支払いの品目へ書き戻す。無ければ品目の無い支払いの1品目(支出だけに持つ)。
-     * onlyItem: 支出の品目がこれ1つだけか。1つだけなら金額は支出の金額と同じなので、品目の金額は直せない(支出の金額で直す)。
+     * onlyItem: 支出の品目がこれ1つだけか。1つだけなら金額は支出の金額と同じなので、品目の金額の変更は
+     * 支出(まとまり)の金額の変更と同じに扱う(支払いの合計・立て替えの自分の分と、支払いの品目1つの金額へ書き戻す)。
      */
     data class Item(val expense: Expense, val onlyItem: Boolean = false) : WriteBackTarget {
         override val receiptId: Long? get() = expense.receiptId
@@ -62,20 +63,26 @@ sealed interface WriteBackPlan {
  * 書き戻し先:
  *  - 日時 → 支払いの purchasedAt(品目・支出の日時は支払いに従う)
  *  - 品目の品名・カテゴリ・メモ → その品目(receipt_items)。金額 → その品目を税込にして金額を入れる
- *  - 支出のまとまりの金額 → 支払いの合計(手入力の支払いだけ。印字のある支払いは変えない)
+ *  - 支出のまとまりの金額 → 支払いの合計(totalAmount。totalSource は MANUAL。印字のある支払いも同じで、画像・読取原文はそのまま。
+ *    品目の合計との差は差額の表示(ExpenseItems.mismatch)に任せる)。立て替えの支払いは、合計ではなく自分の分(ownAmount)へ書く
+ *  - 品目が1つだけの支出の品目の金額 → 支出のまとまりの金額と同じ(支払いの合計・自分の分と、対応する支払いの品目1つの金額)
  *  - 支払い先 → 支払いの storeName(別の操作。withStoreName)
  * 支払いに対応する欄が無いもの(支出のまとまりのカテゴリ・メモ、品目の無い支払いの1品目の品名・カテゴリ・メモ)は、
  * 支出だけに持つ(編集済みで保護)。品目の無い支払いの1品目の金額は支出の金額に従うので、品目の側では直せない(支出の金額で直す)。
  *
  * 金額は、割り勘の参加者が1人のときだけ書き戻す(people が 2 以上なら拒否)。
+ *
+ * 規則の例外(設計判断待ち): 「支出を変えたら支払いにも反映される」の例外が、この外に残っている。実装はしていない。
+ *  - (d) 割り勘で参加者2人以上の金額変更は拒否する(MESSAGE_SPLIT_AMOUNT)。自分の分は割り勘の計算結果で、支払いの欄に対応が無い。
+ *  - (e) 支出の品目の削除・復元は支払いの品目へ反映しない(ExpenseRepository.delete / restore。deletedByUser を立てるだけ)。
+ *  - (f) 支出のまとまりのカテゴリ・メモは支払いに対応する欄が無く、支出だけが持つ(編集済みで保護)。
+ *  - (g) 割り勘で自分の分を変えると支出の金額だけが変わる(ReceiptRepository.saveSplit)。
  */
 object PaymentWriteBack {
     const val MESSAGE_SPLIT_AMOUNT = "負担割りがあるため、金額は負担割り画面で直してください。"
-    const val MESSAGE_PRINTED_TOTAL = "レシートに印字された合計は変えられません。"
     const val MESSAGE_ITEMS_AMOUNT = "品目のある支払いの金額は、品目の金額で直してください。"
-    const val MESSAGE_ADVANCE_AMOUNT = "立て替えの支払いの金額は、ここでは直せません。"
     const val MESSAGE_BLANK_ITEM_AMOUNT = "品目の無い支払いの品目の金額は、支出の金額で直してください。"
-    const val MESSAGE_ONLY_ITEM_AMOUNT = "品目が1つのときは、品目の金額は支出の金額と同じです。支出の金額で直してください。"
+    const val MESSAGE_ONLY_ITEM_ZERO = "品目が1つのときの金額は、1円以上にしてください。"
 
     /** 日時から支払いの purchasedAt を作る("yyyy-MM-dd HH:mm"。時刻が空なら日付だけ)。 */
     fun purchasedAtOf(date: String, time: String): String = if (time.isBlank()) date else "$date $time"
@@ -99,7 +106,7 @@ object PaymentWriteBack {
     ): WriteBackPlan = when (target) {
         is WriteBackTarget.Item -> when {
             target.expense.receiptItemId == null -> planBlankItem(target.expense, values, receipt)
-            target.onlyItem && values.amount != target.expense.amount -> WriteBackPlan.Reject(MESSAGE_ONLY_ITEM_AMOUNT)
+            target.onlyItem && values.amount != target.expense.amount -> planOnlyItem(target.expense, values, receipt, items, people)
             else -> planItem(target.expense, values, receipt, items, people)
         }
         is WriteBackTarget.Group -> planGroup(target.group, values, receipt, people)
@@ -121,6 +128,7 @@ object PaymentWriteBack {
         val categoryChanged = v.category != e.category
         val memoChanged = memo != e.memo
         val amountChanged = v.amount != e.amount
+        // 規則の例外(設計判断待ち): 割り勘で参加者2人以上の金額変更は書き戻さない。自分の分は割り勘の計算結果で、品目の金額とは別
         if (amountChanged && people >= 2) return WriteBackPlan.Reject(MESSAGE_SPLIT_AMOUNT)
 
         var newItem = item
@@ -162,6 +170,52 @@ object PaymentWriteBack {
     }
 
     /**
+     * 品目が1つだけの支出の品目(receiptItemId あり)の金額変更。品目の金額は支出の金額と同じなので、支出(まとまり)の金額の変更と同じに扱う:
+     *  - 立て替え: 支払いの自分の分(ownAmount)。合計と品目は変えない(支出の金額は自分の分で、品目は支出の金額に追従する)。
+     *  - それ以外: 支払いの合計(MANUAL)と、対応する支払いの品目の金額(税込・金額不明でなくす)。
+     * 品名・カテゴリ・メモの変更は planItem と同じ。割り勘で参加者2人以上のときは書き戻さない(planGroup と同じ)。
+     */
+    private fun planOnlyItem(
+        e: Expense,
+        v: PaymentValues,
+        receipt: Receipt,
+        items: List<ReceiptItem>,
+        people: Int,
+    ): WriteBackPlan {
+        if (people >= 2) return WriteBackPlan.Reject(MESSAGE_SPLIT_AMOUNT)
+        // 0円の品目は支出の品目として作られない(金額は1円以上)
+        if (v.amount <= 0) return WriteBackPlan.Reject(MESSAGE_ONLY_ITEM_ZERO)
+        // 品名・カテゴリ・メモは金額を変えない planItem で求め、金額だけをここで足す
+        val base = planItem(e, v.copy(amount = e.amount), receipt, items, people)
+        if (base !is WriteBackPlan.Apply) return base
+        val original = items.firstOrNull { it.id == e.receiptItemId } ?: return WriteBackPlan.Reject("レシートの品目が見つかりません。")
+        val current = base.changedItems.firstOrNull() ?: original
+        val newItem = if (receipt.isAdvance) {
+            current
+        } else {
+            current.copy(amount = v.amount, priceIncludesTax = true, unknownAmount = false)
+        }
+        return WriteBackPlan.Apply(
+            receipt = withPaidAmount(base.receipt, v.amount),
+            changedItems = if (newItem != original) listOf(newItem) else emptyList(),
+            expense = base.expense?.copy(amount = v.amount, amountEdited = false, unknownAmount = false),
+            group = null,
+            expectedAmount = v.amount,
+        )
+    }
+
+    /**
+     * 支出の金額(自分の負担)を支払いへ入れる。立て替えは自分の分(ownAmount。合計は変えない)、それ以外は合計(MANUAL。
+     * 印字のあるレシートも同じで、画像・読取原文は変えない)。
+     */
+    private fun withPaidAmount(receipt: Receipt, amount: Int): Receipt =
+        if (receipt.isAdvance) {
+            receipt.copy(ownAmount = amount)
+        } else {
+            receipt.copy(totalAmount = amount, totalSource = TotalSource.MANUAL)
+        }
+
+    /**
      * 品目の無い支払いの1品目(receiptItemId なし)。品名・カテゴリ・メモは支出の品目だけに持つ(編集済みを立てる)。
      * 金額は支出の金額に従うので、ここでは直せない。日時は支出(まとまり)に従うので、書き戻さない。
      */
@@ -185,18 +239,14 @@ object PaymentWriteBack {
     ): WriteBackPlan {
         val dateChanged = v.date != g.date || v.time != g.time
         val amountChanged = v.amount != g.amount
-        if (amountChanged) {
-            if (people >= 2) return WriteBackPlan.Reject(MESSAGE_SPLIT_AMOUNT)
-            // 立て替えの支出の金額は自分の分(ownAmount)で、支払いの合計ではない
-            if (receipt.isAdvance) return WriteBackPlan.Reject(MESSAGE_ADVANCE_AMOUNT)
-            if (isPrinted(receipt)) return WriteBackPlan.Reject(MESSAGE_PRINTED_TOTAL)
-        }
+        // 規則の例外(設計判断待ち): 割り勘で参加者2人以上の金額変更は書き戻さない。自分の分は割り勘の計算結果で、支払いの合計ではない
+        if (amountChanged && people >= 2) return WriteBackPlan.Reject(MESSAGE_SPLIT_AMOUNT)
 
         var newReceipt = receipt
         if (dateChanged) newReceipt = newReceipt.copy(purchasedAt = purchasedAtOf(v.date, v.time))
-        if (amountChanged) newReceipt = newReceipt.copy(totalAmount = v.amount, totalSource = TotalSource.MANUAL)
+        if (amountChanged) newReceipt = withPaidAmount(newReceipt, v.amount)
 
-        // カテゴリ・メモは支出のまとまりだけに持つ(PaymentEdit と同じ規則)
+        // 規則の例外(設計判断待ち): カテゴリ・メモは支払いに対応する欄が無く、支出のまとまりだけに持つ(PaymentEdit と同じ規則)
         val group = PaymentEdit.editGroup(g, v.date, v.time, v.amount, v.category, v.memo).copy(
             amountEdited = if (amountChanged) false else g.amountEdited,
             timeEdited = if (dateChanged) false else g.timeEdited,

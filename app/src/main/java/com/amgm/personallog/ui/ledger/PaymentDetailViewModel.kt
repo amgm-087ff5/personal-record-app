@@ -95,7 +95,7 @@ data class PaymentUiState(
 
     /**
      * 品目が1つだけか(消した品目も含めた行の数。ExpenseItems.normalize と同じ数え方)。
-     * 1つだけなら品目の金額は支出の金額と同じ(品目の側では直せない)。
+     * 1つだけなら品目の金額は支出の金額と同じ(品目の金額を直すと、支出の金額を直すのと同じに支払いへ書き戻す。品目の無い支払いの1品目は直せない)。
      */
     val onlyOneItem: Boolean get() = items.size + deletedItems.size == 1
 
@@ -382,7 +382,7 @@ class PaymentDetailViewModel @Inject constructor(
                 repository.update(PaymentEdit.editExpense(original, d, t, amount, category, name, memo))
                 null
             } else {
-                // 品目が1つだけなら、その金額は支出の金額と同じ(品目の側では直せない)
+                // 品目が1つだけなら、その金額は支出の金額と同じ(金額を直すと、支出の金額と同じに支払いの合計・品目へ書き戻す)
                 val onlyItem = _state.value.onlyOneItem
                 receipts.writeBackFromLedger(
                     WriteBackTarget.Item(original, onlyItem = onlyItem),

@@ -42,7 +42,6 @@ import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentField
-import com.amgm.personallog.domain.PaymentWriteBack
 import com.amgm.personallog.domain.split.IndividualExpense
 import com.amgm.personallog.receipt.ReceiptImageCodec
 import com.amgm.personallog.ui.design.AppTheme
@@ -192,8 +191,8 @@ fun PaymentDetailScreen(
                                 color = c.danger,
                                 modifier = Modifier.padding(top = Space.xs),
                             )
-                            // 印字のあるレシートや割り勘の金額は、ここから合計に入れられない
-                            val canTakeSum = s.receipt?.let { !PaymentWriteBack.isPrinted(it) && s.splitPeople < 2 } ?: true
+                            // 割り勘が2人以上の金額は、ここから合計に入れられない(規則の例外・設計判断待ち)。印字のあるレシートは合計を手入力(MANUAL)にして直す
+                            val canTakeSum = s.splitPeople < 2
                             if (s.itemSum > 0 && canTakeSum) {
                                 TextAction(
                                     "${LedgerLogic.formatYen(s.itemSum)} を合計に入れる",
