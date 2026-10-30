@@ -16,34 +16,30 @@
   --entity:#3D63B8; --entity-t:#EBF0FA;
   --activity:#2F8199; --activity-t:#E6F2F5;
   --note:#327F77; --note-t:#E6F2EF;
-  --type:#34416B; --type-t:#EDF0F6;
+  --type:#34416B; --type-t:#E3E7F0;
   --expense:#34529E; --expense-t:#ECF0F9;
   --unknown:#9A6420; --unknown-t:#F8F1E6;
-  /* グラデーション: 同系色で「分かる」程度 */
   --g-entity:linear-gradient(135deg,#5E8BE6 0%,#3B5EBF 100%);
   --g-activity:linear-gradient(135deg,#46AFC6 0%,#2B7C98 100%);
   --g-note:linear-gradient(135deg,#4FAE9D 0%,#2D7A6F 100%);
   --g-expense:linear-gradient(135deg,#5B7BD8 0%,#344FA0 100%);
-  /* 影: カードの影 + 柔らかい影 */
   --sh-card:0 4px 14px -4px rgba(26,38,72,.08),0 1px 2px rgba(26,38,72,.05);
   --sh-soft:0 22px 44px -18px rgba(40,72,150,.28),0 6px 16px -8px rgba(40,72,150,.10);
-  /* 余白の刻み */
+  --ds-soft:drop-shadow(0 16px 18px rgba(40,72,150,.18)) drop-shadow(0 3px 6px rgba(40,72,150,.08));
   --s1:4px; --s2:8px; --s3:10px; --s4:14px; --s5:16px; --s6:20px;
   --r-s:6px; --r-m:12px; --r-l:16px; --r-xl:18px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
-body{font-family:var(--font);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
-  background:#DCE3EE;}
+body{font-family:var(--font);color:var(--text);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;background:#DCE3EE}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 a{color:inherit;text-decoration:none}
+svg.i{width:1em;height:1em;flex:none;vertical-align:-.12em}
 
 /* ===== Phone frame ===== */
 .device{position:relative;width:100%;max-width:390px;height:100dvh;margin:0 auto;overflow:hidden;
-  background:
-    radial-gradient(120% 60% at 12% -12%,rgba(255,247,230,.95) 0%,rgba(255,247,230,0) 55%),
-    radial-gradient(90% 50% at 100% 0%,rgba(205,222,255,.75) 0%,rgba(205,222,255,0) 60%),
-    var(--canvas);}
+  background:radial-gradient(120% 60% at 12% -12%,rgba(255,247,230,.95) 0%,rgba(255,247,230,0) 55%),
+    radial-gradient(90% 50% at 100% 0%,rgba(205,222,255,.75) 0%,rgba(205,222,255,0) 60%),var(--canvas)}
 @media (min-width:500px){
   body{display:flex;align-items:center;justify-content:center;padding:24px 0}
   .device{height:min(844px,calc(100dvh - 48px));border-radius:40px;box-shadow:var(--sh-soft),0 0 0 10px #F7F9FC,0 0 0 11px #CDD5E2}
@@ -55,13 +51,10 @@ a{color:inherit;text-decoration:none}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes push{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}
 
-/* ===== Text ===== */
 .h1{font-size:22px;font-weight:700;letter-spacing:.01em}
 .cap{font-size:11px;color:var(--muted)}
 .sub{font-size:12px;color:var(--text2)}
-.num{font-feature-settings:"tnum";font-variant-numeric:tabular-nums}
-
-/* ===== Layout atoms ===== */
+.num{font-variant-numeric:tabular-nums}
 .row{display:flex;align-items:center;gap:var(--s2);min-width:0}
 .grow{flex:1;min-width:0}
 .ellipsis{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -73,7 +66,11 @@ a{color:inherit;text-decoration:none}
 .sec-h .cnt{font-size:11px;color:var(--muted)}
 .sec-h .act{margin-left:auto;font-size:12px;font-weight:600;color:var(--entity)}
 
-/* ===== 3 levels: soft-raised / raised / flat / ground ===== */
+/* 画面タイトル: クラスの形アイコン + 名前 */
+.ptitle{display:flex;align-items:center;gap:10px}
+.ptitle .mk{display:grid;place-items:center;width:34px;height:34px;color:#fff;font-size:18px;flex:none}
+
+/* ===== 面の3段 ===== */
 .flat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);overflow:hidden}
 .raised{background:var(--surface);border-radius:var(--r-l);box-shadow:var(--sh-card);overflow:hidden}
 .lrow{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s4);min-height:44px;border-bottom:1px solid var(--border)}
@@ -81,70 +78,116 @@ a{color:inherit;text-decoration:none}
 a.lrow:active,button.lrow:active{background:#F6F8FB}
 .ground-ref{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) var(--s3);border:1px dashed color-mix(in srgb,var(--c,var(--activity)) 50%,transparent);border-radius:var(--r-m);font-size:13px}
 
-/* hero = 主役オブジェクト。グラデーション + 光 + 柔らかい影 */
-.hero{position:relative;overflow:hidden;color:#fff;border-radius:var(--r-xl);padding:var(--s5);display:flex;flex-direction:column;align-items:flex-start;gap:var(--s1);
-  box-shadow:var(--sh-soft),inset 0 1px 0 rgba(255,255,255,.35)}
+/* ===================================================================
+   形の言語(クラスごとに輪郭そのものを変える)
+   エンティティ = フォルダのタブ / アクティビティ = 時間軸のカプセル
+   支払い = カプセル+レシートのギザギザ / 自分の支出 = 半券付きチケット
+   ノート = 角を折った紙 / 種類 = 値札
+   =================================================================== */
+.obj{position:relative;filter:var(--ds-soft)}
+.hero{position:relative;overflow:hidden;color:#fff;padding:var(--s5);display:flex;flex-direction:column;align-items:flex-start;gap:var(--s1)}
 .hero::before{content:"";position:absolute;inset:-40% -10% auto auto;width:80%;height:180%;pointer-events:none;
   background:linear-gradient(115deg,rgba(255,255,255,0) 35%,rgba(255,255,255,.16) 48%,rgba(255,255,255,0) 62%)}
 .hero::after{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;
   background:radial-gradient(70% 60% at 0% 0%,rgba(255,255,255,.18),rgba(255,255,255,0) 70%)}
 .hero>*{position:relative;z-index:1}
-.hero.entity{background:var(--g-entity)} .hero.activity{background:var(--g-activity)}
-.hero.note{background:var(--g-note)} .hero.expense{background:var(--g-expense)}
 .hero .big{font-size:28px;font-weight:700;line-height:1.25}
 .hero .title{font-size:20px;font-weight:700;line-height:1.3}
 .hero .meta{font-size:11px;opacity:.9}
+.lbl{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;letter-spacing:.04em}
 
-/* ===== Chips / badges / refs ===== */
-.stack>.badge,.hero>.badge{align-self:flex-start}
-.badge{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 8px 0 6px;border-radius:999px;font-size:10px;font-weight:600;white-space:nowrap}
-.badge.entity{background:var(--entity-t);color:var(--entity)} .badge.activity{background:var(--activity-t);color:var(--activity)}
-.badge.note{background:var(--note-t);color:var(--note)} .badge.expense{background:var(--expense-t);color:var(--expense)}
-.badge.on-dark{background:rgba(255,255,255,.18);color:#fff}
-.type{display:inline-flex;align-items:center;height:20px;padding:0 7px;border:1px solid var(--type);border-radius:var(--r-s);background:var(--type-t);color:var(--type);font-size:11px;font-weight:500;white-space:nowrap}
-.type.ghost{background:none;border-color:rgba(255,255,255,.45);color:#fff}
-.type.dashed{border-style:dashed}
-.ref{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px 0 3px;border-radius:999px;background:var(--entity-t);color:var(--entity);font-size:13px;font-weight:600;white-space:nowrap;max-width:100%}
-.ref i{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;background:var(--entity);color:#fff;font-style:normal;font-size:10px;font-weight:700;flex:none}
-.ref.unreg{background:none;border:1px dashed var(--muted);color:var(--text2);padding-left:10px}
-.aref{display:inline-flex;align-items:center;gap:3px;height:22px;padding:0 8px 0 6px;border-radius:999px;background:var(--activity-t);color:var(--activity);font-size:12px;font-weight:600}
-.av{display:grid;place-items:center;flex:none;border-radius:10px;background:var(--entity-t);color:var(--entity);font-weight:700}
+/* --- エンティティ: フォルダのタブ --- */
+.obj-e .tab{position:relative;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 16px 0 14px;border-radius:14px 14px 0 0;background:#5986E4;color:#fff;font-size:12px;font-weight:700;letter-spacing:.04em}
+.obj-e .tab::after{content:"";position:absolute;right:-14px;bottom:0;width:14px;height:14px;background:radial-gradient(circle at 100% 0,transparent 13.5px,#5986E4 14px)}
+.obj-e .hero{background:var(--g-entity);border-radius:0 var(--r-xl) var(--r-xl) var(--r-xl)}
+
+/* --- アクティビティ: 時間軸に掛かったカプセル --- */
+.obj-a{padding-left:22px}
+.obj-a::before{content:"";position:absolute;left:7px;top:-14px;bottom:-14px;width:2px;border-radius:2px;background:linear-gradient(transparent,color-mix(in srgb,var(--activity) 45%,transparent) 20%,color-mix(in srgb,var(--activity) 45%,transparent) 80%,transparent)}
+.obj-a::after{content:"";position:absolute;left:0;top:26px;width:16px;height:16px;border-radius:50%;background:#fff;border:4px solid var(--activity);box-sizing:border-box}
+.obj-a .hero{background:var(--g-activity);border-radius:32px;padding:18px 20px}
+.obj-a .lbl{height:24px;padding:0 10px 0 8px;border-radius:999px;background:rgba(255,255,255,.2)}
+/* 支払い: 下端がレシートのギザギザ */
+.obj-a.receipt .hero{border-radius:32px 32px 0 0;padding-bottom:26px;
+  -webkit-mask:linear-gradient(#000 0 0) top/100% calc(100% - 9px) no-repeat,conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) bottom/18px 9px repeat-x;
+          mask:linear-gradient(#000 0 0) top/100% calc(100% - 9px) no-repeat,conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) bottom/18px 9px repeat-x}
+
+/* --- 自分の支出: 半券付きチケット --- */
+.obj-x .hero{--stub:66px;flex-direction:row;align-items:stretch;gap:0;padding:0;border-radius:14px;background:var(--g-expense);
+  -webkit-mask:radial-gradient(circle 10px at var(--stub) 0,#0000 97%,#000) top/100% 51% no-repeat,radial-gradient(circle 10px at var(--stub) 100%,#0000 97%,#000) bottom/100% 51% no-repeat;
+          mask:radial-gradient(circle 10px at var(--stub) 0,#0000 97%,#000) top/100% 51% no-repeat,radial-gradient(circle 10px at var(--stub) 100%,#0000 97%,#000) bottom/100% 51% no-repeat}
+.obj-x .stub{width:var(--stub);flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:10px;font-weight:700;line-height:1.3;text-align:center;padding:14px 0}
+.obj-x .stub svg{font-size:20px}
+.obj-x .body{flex:1;padding:16px 18px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;border-left:2px dashed rgba(255,255,255,.45)}
+
+/* --- ノート: 角を折った紙 --- */
+.obj-n .hero{background:var(--g-note);border-radius:var(--r-xl);
+  -webkit-mask:linear-gradient(225deg,#0000 21px,#000 21.5px);mask:linear-gradient(225deg,#0000 21px,#000 21.5px)}
+.obj-n .ear{position:absolute;top:0;right:0;width:30px;height:30px;border-radius:0 0 0 8px;z-index:2;
+  background:linear-gradient(225deg,transparent 50%,#BFE3DB 50%);filter:drop-shadow(-2px 3px 3px rgba(20,60,55,.25))}
+.obj-n .lbl{padding-top:2px}
+
+/* ===== 小さい形(ラベル・チップ・参照) ===== */
+/* アクティビティ: 丸いピル */
+.b-act{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 9px 0 7px;border-radius:999px;background:var(--activity-t);color:var(--activity);font-size:10.5px;font-weight:600;white-space:nowrap}
+/* 自分の支出: 両脇が欠けたチケット */
+.b-exp{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 9px;border-radius:3px;background:var(--expense);color:#fff;font-size:10.5px;font-weight:600;white-space:nowrap;
+  -webkit-mask:radial-gradient(circle 4px at 0 50%,#0000 97%,#000) left/51% 100% no-repeat,radial-gradient(circle 4px at 100% 50%,#0000 97%,#000) right/51% 100% no-repeat;
+          mask:radial-gradient(circle 4px at 0 50%,#0000 97%,#000) left/51% 100% no-repeat,radial-gradient(circle 4px at 100% 50%,#0000 97%,#000) right/51% 100% no-repeat}
+/* ノート: 角を落とした紙片 */
+.b-note{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 10px 0 7px;border-radius:3px;background:var(--note-t);color:var(--note);font-size:10.5px;font-weight:600;white-space:nowrap;
+  -webkit-mask:linear-gradient(225deg,#0000 6px,#000 6.5px);mask:linear-gradient(225deg,#0000 6px,#000 6.5px)}
+/* 種類: 値札 */
+.type{position:relative;display:inline-flex;align-items:center;height:20px;padding:0 8px 0 15px;background:var(--type-t);color:var(--type);font-size:11px;font-weight:600;white-space:nowrap;border-radius:0 4px 4px 0;
+  clip-path:polygon(8px 0,100% 0,100% 100%,8px 100%,0 50%)}
+.type::before{content:"";position:absolute;left:7px;top:50%;width:4px;height:4px;margin-top:-2px;border-radius:50%;background:currentColor;opacity:.6}
+.type.ghost{background:rgba(255,255,255,.22);color:#fff}
+.type.add{background:none;color:#fff;clip-path:none;border:1px dashed rgba(255,255,255,.55);border-radius:4px;padding-left:8px}
+.type.add::before{display:none}
+/* エンティティ参照: 角の立った長方形 + 四角アバター */
+.ref{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px 0 3px;border-radius:7px;background:var(--entity-t);color:var(--entity);font-size:13px;font-weight:600;white-space:nowrap;max-width:100%;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--entity) 18%,transparent)}
+.ref i{display:grid;place-items:center;width:20px;height:20px;border-radius:5px;background:var(--entity);color:#fff;font-style:normal;font-size:10px;font-weight:700;flex:none}
+.ref.unreg{background:none;box-shadow:none;border:1px dashed var(--muted);color:var(--text2);padding-left:10px}
+/* アクティビティ参照: ピル */
+.aref{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 10px 0 7px;border-radius:999px;background:var(--activity-t);color:var(--activity);font-size:12px;font-weight:600}
+.av{display:grid;place-items:center;flex:none;border-radius:9px;background:var(--entity-t);color:var(--entity);font-weight:700}
+/* 一覧の先頭マーク */
+.mk-a{width:10px;height:10px;border-radius:50%;border:3px solid var(--activity);background:#fff;flex:none}
+.mk-x{color:var(--expense);font-size:18px;display:grid;flex:none}
+.mk-n{color:var(--note);font-size:18px;display:grid;flex:none}
+
 .seg{display:flex;padding:3px;background:#E7ECF4;border-radius:10px}
-.seg a{flex:1;text-align:center;height:30px;line-height:30px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text2)}
+.seg a{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;height:30px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text2)}
 .seg a.on{background:var(--surface);color:var(--text);box-shadow:var(--sh-card)}
 .pill{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 12px;border-radius:999px;border:1px solid var(--border);font-size:12px;font-weight:500;color:var(--text2);white-space:nowrap}
 .pill.on{background:var(--activity);border-color:var(--activity);color:#fff;font-weight:600}
 .chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 calc(var(--s5)*-1);padding:0 var(--s5)}
 .chips::-webkit-scrollbar{display:none}
 
-/* ===== Timeline (1行) ===== */
-.day{display:flex;flex-direction:column}
-.day-h{display:flex;align-items:center;gap:var(--s2);padding:var(--s3) var(--s4);}
-.day-h .d{font-size:18px;font-weight:700;color:var(--activity);width:28px;text-align:center}
-.day-h .w{font-size:11px;color:var(--activity);font-weight:600}
-.kid{display:flex;align-items:center;gap:var(--s2);padding:0 var(--s4) 0 var(--s4);min-height:40px;border-top:1px solid var(--border)}
-.kid .t{width:38px;flex:none;font-size:11px;font-weight:600;color:var(--activity)}
+/* ===== Timeline: 日=カプセル、出来事=軸上の丸 ===== */
+.day{border-radius:26px}
+.day-h{display:flex;align-items:center;gap:var(--s2);padding:12px var(--s4) 10px 12px}
+.day-h .dd{display:flex;flex-direction:column;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:var(--g-activity);color:#fff;flex:none;line-height:1.05;box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
+.day-h .dd b{font-size:16px} .day-h .dd span{font-size:9px;font-weight:600}
+.rail{position:relative;margin:0 0 6px 32px;border-left:2px solid color-mix(in srgb,var(--activity) 28%,transparent)}
+.kid{position:relative;display:flex;align-items:center;gap:var(--s2);padding:0 var(--s4) 0 var(--s4);min-height:40px}
+.kid::before{content:"";position:absolute;left:-6px;top:50%;width:10px;height:10px;margin-top:-5px;border-radius:50%;background:#fff;border:2.5px solid var(--activity);box-sizing:border-box}
+.kid .t{width:36px;flex:none;font-size:11px;font-weight:600;color:var(--activity)}
 .kid .ti{font-size:13px;font-weight:500}
 .kid .amt{font-size:13px;font-weight:700}
-.kid .mine{font-size:11px;color:var(--expense);font-weight:600}
-.line{border-left:2px solid color-mix(in srgb,var(--activity) 28%,transparent);margin-left:var(--s4)}
-.line .kid{padding-left:var(--s3)}
 
-/* ===== Suggest bar ===== */
 .suggest{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) var(--s2) var(--s2) var(--s3);border-radius:var(--r-m);background:var(--entity-t);font-size:12px;color:var(--entity)}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;height:30px;padding:0 12px;border-radius:9px;background:var(--entity);color:#fff;font-size:12px;font-weight:600;white-space:nowrap}
-.btn.light{background:var(--surface);color:var(--entity);box-shadow:var(--sh-card)}
 .disclose{font-size:12px;font-weight:600;color:var(--entity);padding:var(--s3) var(--s4);text-align:left;width:100%}
 
 /* ===== Bottom nav ===== */
 .nav{position:absolute;left:var(--s5);right:var(--s5);bottom:calc(14px + env(safe-area-inset-bottom));height:62px;display:flex;align-items:center;justify-content:space-around;
   background:rgba(255,255,255,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.9);border-radius:22px;box-shadow:var(--sh-soft);z-index:5}
-.nav a{display:flex;flex-direction:column;align-items:center;gap:1px;width:66px;white-space:nowrap;letter-spacing:-.02em;font-size:9.5px;font-weight:600;color:var(--muted)}
-.nav a .ic{font-size:16px;line-height:20px}
+.nav a{display:flex;flex-direction:column;align-items:center;gap:2px;width:66px;white-space:nowrap;letter-spacing:-.02em;font-size:9.5px;font-weight:600;color:var(--muted)}
+.nav a svg{font-size:19px}
 .nav a.on{color:var(--c)}
-.nav .plus{width:46px;height:46px;border-radius:15px;background:var(--g-entity);color:#fff;font-size:24px;font-weight:400;display:grid;place-items:center;box-shadow:var(--sh-soft),inset 0 1px 0 rgba(255,255,255,.35)}
+.nav .plus{width:46px;height:46px;border-radius:15px;background:var(--g-entity);color:#fff;font-size:24px;display:grid;place-items:center;box-shadow:var(--sh-soft),inset 0 1px 0 rgba(255,255,255,.35)}
 
-/* ===== Sheet / toast ===== */
 .scrim{position:absolute;inset:0;background:rgba(20,30,55,.28);opacity:0;pointer-events:none;transition:opacity .2s;z-index:8}
 .sheet{position:absolute;left:0;right:0;bottom:0;max-height:78%;overflow:auto;background:var(--surface);border-radius:22px 22px 0 0;padding:var(--s3) var(--s5) calc(var(--s6) + env(safe-area-inset-bottom));
   transform:translateY(105%);transition:transform .24s cubic-bezier(.2,.7,.2,1);z-index:9;box-shadow:0 -10px 40px -10px rgba(20,30,60,.25)}
@@ -158,6 +201,7 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 .photo:nth-child(3){background:linear-gradient(160deg,#E9EEF5,#B9C6DB)}
 .empty{padding:var(--s4);font-size:12px;color:var(--muted);text-align:center}
 .tree a{padding-left:calc(var(--s4) + var(--lv,0) * 18px)}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center;font-size:12px;color:var(--text2)}
 </style>
 </head>
 <body>
@@ -170,6 +214,15 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
   <div class="toast" id="toast"></div>
 </div>
 <script>
+/* ======================= 形アイコン(SVGパス。Androidのベクターに移せる) ======================= */
+const sv=(d,fill)=>`<svg class="i" viewBox="0 0 24 24" fill="${fill?'currentColor':'none'}" stroke="${fill?'none':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const IC={
+  entity:sv('<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4.2l2 2.5h6.8A2.5 2.5 0 0 1 21 9v9.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5Z"/>',1),
+  activity:sv('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+  expense:sv('<path d="M4 5h16a1 1 0 0 1 1 1v3a3 3 0 0 0 0 6v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a3 3 0 0 0 0-6V6a1 1 0 0 1 1-1Z"/><path d="M9 6v12" stroke-dasharray="1.5 2.5"/>'),
+  note:sv('<path d="M6 3h8.5L20 8.5V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v6h6"/>'),
+  type:sv('<path d="M3 12 10 4.5h9.5A1.5 1.5 0 0 1 21 6v12a1.5 1.5 0 0 1-1.5 1.5H10Z"/><circle cx="11" cy="12" r="1.4" fill="currentColor"/>'),
+};
 /* ======================= データ(架空) ======================= */
 const TYPES={
   person:{n:'人物'}, colleague:{n:'同僚',p:'person'}, split:{n:'割り勘メンバー',p:'person'},
@@ -227,29 +280,45 @@ const typeAnc=t=>{const r=[];while(t){r.unshift(t);t=TYPES[t].p}return r};
 const isUnder=(t,root)=>typeAnc(t).includes(root);
 const ref=id=>{const e=E[id];return `<a class="ref" href="#/e/${id}"><i>${e.i}</i>${e.n}</a>`};
 const roleRef=r=>r[1]?ref(r[1]):`<span class="ref unreg">${r[2]}</span>`;
-const aref=id=>`<a class="aref" href="#/a/${id}">◷ ${A[id].title}</a>`;
-const types=(ts,cls='')=>ts.map(t=>`<a class="type ${cls}" href="#/entities/${t}"># ${TYPES[t].n}</a>`).join('');
+const aref=id=>`<a class="aref" href="#/a/${id}">${IC.activity}${A[id].title}</a>`;
+const bAct=t=>`<span class="b-act">${t}</span>`;
+const bExp=t=>`<span class="b-exp">${IC.expense}${t}</span>`;
+const bNote=t=>`<span class="b-note">${IC.note}${t}</span>`;
+const tag=(t,cls='')=>`<a class="type ${cls}" href="#/entities/${t}">${TYPES[t].n}</a>`;
 const sec=(t,c='',act='')=>`<div class="sec-h"><b>${t}</b><span class="cnt">${c}</span>${act?`<span class="act">${act}</span>`:''}</div>`;
 const topbar=(label,color,right='•••')=>`<div class="topbar"><a class="back" style="--c:var(--${color})" href="javascript:goBack()">‹ ${label}</a><span class="grow"></span><span class="cap">${right}</span></div>`;
 const actsOf=id=>Object.entries(A).filter(([k,a])=>a.roles&&a.roles.some(r=>r[1]===id)).map(([k,a])=>[k,a,a.roles.find(r=>r[1]===id)[0]]);
-const relsOf=id=>{const out=[];for(const[k,e]of Object.entries(E))(e.rels||[]).forEach(r=>{if(k===id)out.push([r[0],r[1],r[2],r[3]]);else if(r[1]===id)out.push([r[3]?r[0]:({'勤務先':'従業員'}[r[0]]||r[0]+'(逆)'),k,r[2],r[3]])});return out};
+const relsOf=id=>{const out=[];for(const[k,e]of Object.entries(E))(e.rels||[]).forEach(r=>{if(k===id)out.push([r[0],r[1],r[2],r[3]]);else if(r[1]===id)out.push([r[3]?r[0]:({'勤務先':'従業員'}[r[0]]||r[0]),k,r[2],r[3]])});return out};
 const dayOf=a=>A[a.parent];
 const md=d=>{const[y,m,dd]=d.split('-');return `${+m}/${+dd}`};
-const back=[];
+/* 画面タイトルの形マーク: クラスと同じ輪郭 */
+const MK={
+  activity:`<span class="mk" style="border-radius:50%;background:var(--g-activity)">${IC.activity}</span>`,
+  entity:`<span class="mk" style="border-radius:3px 10px 10px 10px;background:var(--g-entity)">${IC.entity}</span>`,
+  note:`<span class="mk" style="border-radius:8px;background:var(--g-note);-webkit-mask:linear-gradient(225deg,#0000 7px,#000 7.5px);mask:linear-gradient(225deg,#0000 7px,#000 7.5px)">${IC.note}</span>`,
+  type:`<span class="mk" style="background:var(--type);clip-path:polygon(11px 0,100% 0,100% 100%,11px 100%,0 50%);border-radius:0 8px 8px 0;padding-left:6px">${IC.type}</span>`,
+};
+const ptitle=(k,t,right='')=>`<div class="ptitle">${MK[k]}<span class="h1 grow">${t}</span>${right}</div>`;
+
+/* ======================= hero builders ======================= */
+const heroE=(inner)=>`<div class="obj obj-e"><div class="tab">${IC.entity}エンティティ</div><div class="hero">${inner}</div></div>`;
+const heroA=(type,inner,receipt)=>`<div class="obj obj-a ${receipt?'receipt':''}"><div class="hero"><div class="row" style="gap:6px"><span class="lbl">${IC.activity}アクティビティ</span><span class="type ghost">${type}</span></div>${inner}</div></div>`;
+const heroX=(inner)=>`<div class="obj obj-x"><div class="hero"><div class="stub">${IC.expense}<span>自分の<br>支出</span></div><div class="body">${inner}</div></div></div>`;
+const heroN=(inner)=>`<div class="obj obj-n"><i class="ear"></i><div class="hero"><span class="lbl">${IC.note}ノート</span>${inner}</div></div>`;
 
 /* ======================= views ======================= */
 function vActivities(){
   return `<div class="view">
-  <div class="row"><span class="h1 grow">アクティビティ</span></div>
-  <div class="seg"><a class="on" href="#/activities">タイムライン</a><a href="#/ledger">家計簿</a></div>
+  ${ptitle('activity','アクティビティ')}
+  <div class="seg"><a class="on" href="#/activities">タイムライン</a><a href="#/ledger">${IC.expense}家計簿</a></div>
   <div class="chips"><span class="pill on">すべて</span><span class="pill">日記</span><span class="pill">支払い</span><span class="pill">会話</span><span class="pill">移動</span></div>
   ${DAYS.map(d=>{const a=A[d];return `<div class="day raised">
-    <a class="day-h" href="#/a/${d}"><span class="d num">${a.dd}</span><span class="w">${a.dw}</span>
-      <span class="badge activity">◷ 日記</span><span class="sub grow ellipsis">${a.body||'—'}</span>${a.photos?`<span class="cap">▣${a.photos}</span>`:''}</a>
-    ${a.kids.map(k=>{const c=A[k];const x=c.x&&X[c.x];return `<a class="kid" href="#/a/${k}">
-      <span class="t num">${c.time}</span><span class="badge activity">${c.type}</span>
-      <span class="ti grow ellipsis">${c.title}<span class="cap"> · ${c.roles[0][1]?E[c.roles[0][1]].n:c.roles[0][2]}</span></span>
-      ${c.amt?`<span class="row" style="gap:6px"><span class="mine num">自 ${yen(x.amt)}</span><span class="amt num">${yen(c.amt)}</span></span>`:''}</a>`}).join('')}
+    <a class="day-h" href="#/a/${d}"><span class="dd num"><b>${a.dd}</b><span>${a.dw}</span></span>
+      ${bAct('日記')}<span class="sub grow ellipsis">${a.body||'—'}</span>${a.photos?`<span class="cap">写真${a.photos}</span>`:''}</a>
+    <div class="rail">${a.kids.map(k=>{const c=A[k];const x=c.x&&X[c.x];return `<a class="kid" href="#/a/${k}">
+      <span class="t num">${c.time}</span>${c.amt?'':bAct(c.type)}
+      <span class="ti grow ellipsis">${c.amt?(c.roles[0][1]?E[c.roles[0][1]].n:c.roles[0][2]):c.title+`<span class="cap"> · ${E[c.roles[0][1]].n}</span>`}</span>
+      ${c.amt?`<span class="row" style="gap:6px">${bExp(yen(x.amt))}<span class="amt num">${yen(c.amt)}</span></span>`:''}</a>`}).join('')}</div>
   </div>`}).join('')}
   </div>`;
 }
@@ -257,13 +326,12 @@ function vLedger(){
   const xs=Object.entries(X); const tot=xs.reduce((s,[k,x])=>s+x.amt,0);
   const byCat={};xs.forEach(([k,x])=>byCat[x.cat]=(byCat[x.cat]||0)+x.amt);
   return `<div class="view">
-  <div class="row"><span class="h1 grow">アクティビティ</span></div>
-  <div class="seg"><a href="#/activities">タイムライン</a><a class="on" href="#/ledger">家計簿</a></div>
-  <div class="hero expense"><span class="badge on-dark">¥ 自分の支出 · 2026年10月</span><span class="big num">${yen(tot)}</span>
-    <span class="meta">${Object.entries(byCat).map(([c,v])=>`${c} ${yen(v)}`).join(' · ')}</span></div>
+  ${ptitle('activity','アクティビティ')}
+  <div class="seg"><a href="#/activities">タイムライン</a><a class="on" href="#/ledger">${IC.expense}家計簿</a></div>
+  ${heroX(`<span class="meta">2026年10月の合計</span><span class="big num">${yen(tot)}</span><span class="meta">${Object.entries(byCat).map(([c,v])=>`${c} ${yen(v)}`).join(' · ')}</span>`)}
   <div class="stack">${sec('自分の支出',xs.length+'件')}
   <div class="flat">${xs.map(([k,x])=>{const p=A[x.pay];const shop=p.roles[0][1]?E[p.roles[0][1]].n:p.roles[0][2];return `<a class="lrow" href="#/x/${k}">
-    <span class="cap num" style="width:34px">${md(dayOf(p).date)}</span><span class="grow ellipsis" style="font-size:13px">${shop}<span class="cap"> · ${x.cat}</span></span><span class="num" style="font-weight:600">${yen(x.amt)}</span></a>`}).join('')}</div></div>
+    <span class="mk-x">${IC.expense}</span><span class="cap num" style="width:34px">${md(dayOf(p).date)}</span><span class="grow ellipsis" style="font-size:13px">${shop}<span class="cap"> · ${x.cat}</span></span><span class="num" style="font-weight:600">${yen(x.amt)}</span></a>`}).join('')}</div></div>
   </div>`;
 }
 let entityFilter='shop';
@@ -271,34 +339,34 @@ function vEntities(f){
   if(f!==undefined)entityFilter=f||'';
   const list=Object.entries(E).filter(([k,e])=>k!=='me'&&(!entityFilter||e.t.some(t=>isUnder(t,entityFilter))));
   const path=entityFilter?typeAnc(entityFilter):[];
-  const kids=Object.entries(TYPES).filter(([k,t])=>t.p===entityFilter&&(entityFilter));
+  const kids=Object.entries(TYPES).filter(([k,t])=>entityFilter&&t.p===entityFilter);
   return `<div class="view">
-  <div class="row"><span class="h1 grow">エンティティ</span><span class="cap">${list.length}件</span></div>
+  ${ptitle('entity','エンティティ',`<span class="cap">${list.length}件</span>`)}
   <div class="flat" style="padding:var(--s3) var(--s4);display:flex;flex-direction:column;gap:var(--s2)">
     <div class="row" style="flex-wrap:wrap;gap:6px"><span class="cap">種類</span>
-      ${path.length?path.map((t,i)=>`${i?'<span class="cap">›</span>':''}<a class="type" href="#/entities/${t}"># ${TYPES[t].n}</a>`).join(''):'<span class="sub">すべて</span>'}
+      ${path.length?path.map((t,i)=>`${i?'<span class="cap">›</span>':''}${tag(t)}`).join(''):'<span class="sub">すべて</span>'}
       <span class="grow"></span>${entityFilter?`<a class="cap" href="#/entities/">解除 ✕</a>`:''}<a class="cap" href="#/types" style="color:var(--entity);font-weight:600">変更</a></div>
     ${kids.length?`<div class="cap">配下も含めて表示: ${kids.map(([k,t])=>t.n).join('・')}</div>`:''}
   </div>
   <div class="raised">${list.map(([k,e])=>{const n=actsOf(k).length;return `<a class="lrow" href="#/e/${k}">
     <span class="av" style="width:34px;height:34px;font-size:14px">${e.i}</span>
-    <span class="grow" style="display:flex;flex-direction:column;gap:2px;min-width:0"><b style="font-size:14px" class="ellipsis">${e.n}</b>
-      <span class="row" style="gap:4px">${e.t.map(t=>`<span class="cap"># ${TYPES[t].n}</span>`).join('')}</span></span>
-    ${n?`<span class="cap" style="color:var(--activity)">◷ ${n}</span>`:''}</a>`}).join('')||'<div class="empty">該当なし</div>'}</div>
+    <span class="grow" style="display:flex;flex-direction:column;gap:3px;min-width:0"><b style="font-size:14px" class="ellipsis">${e.n}</b>
+      <span class="row" style="gap:4px">${e.t.map(t=>`<span class="type" style="height:17px;font-size:10px">${TYPES[t].n}</span>`).join('')}</span></span>
+    ${n?`<span class="row cap" style="gap:4px;color:var(--activity)"><span class="mk-a" style="width:8px;height:8px;border-width:2px"></span>${n}</span>`:''}</a>`}).join('')||'<div class="empty">該当なし</div>'}</div>
   </div>`;
 }
 function vTypes(){
   const cnt=t=>Object.values(E).filter(e=>e.t.some(x=>isUnder(x,t))).length;
   const rows=[];const walk=(p,lv)=>Object.entries(TYPES).filter(([k,t])=>(t.p||null)===p).forEach(([k,t])=>{rows.push([k,t,lv]);walk(k,lv+1)});walk(null,0);
   return `<div class="view">
-  <div class="row"><span class="h1 grow">種類</span><span class="cap">エンティティに付けるラベル</span></div>
-  <div class="flat tree">${rows.map(([k,t,lv])=>`<a class="lrow" style="--lv:${lv}" href="#/entities/${k}"><span class="type"># ${t.n}</span><span class="grow"></span><span class="cap num">${cnt(k)}</span><span class="cap">›</span></a>`).join('')}</div>
+  ${ptitle('type','種類',`<span class="cap">エンティティのラベル</span>`)}
+  <div class="flat tree">${rows.map(([k,t,lv])=>`<a class="lrow" style="--lv:${lv}" href="#/entities/${k}"><span class="type">${t.n}</span><span class="grow"></span><span class="cap num">${cnt(k)}</span><span class="cap">›</span></a>`).join('')}</div>
   </div>`;
 }
 function vNotes(){
   return `<div class="view">
-  <div class="row"><span class="h1 grow">ノート</span><span class="cap">エンティティに1枚ずつ</span></div>
-  <div class="raised">${Object.entries(NOTES).map(([k,n])=>`<a class="lrow" href="#/n/${k}"><span class="badge note">✎</span>
+  ${ptitle('note','ノート',`<span class="cap">エンティティに1枚</span>`)}
+  <div class="raised">${Object.entries(NOTES).map(([k,n])=>`<a class="lrow" href="#/n/${k}"><span class="mk-n">${IC.note}</span>
     <span class="grow" style="display:flex;flex-direction:column;min-width:0"><b style="font-size:14px">${E[k].n}のノート</b><span class="cap ellipsis">${n.body[0][1]}</span></span><span class="cap">${n.upd.split(' ')[0]}</span></a>`).join('')}</div>
   </div>`;
 }
@@ -310,62 +378,55 @@ function vEntity(id){
       ${f.hist?`<div id="h${i}" hidden style="width:100%;padding-left:66px">${f.hist.map(h=>`<div class="cap">${h[0]} · ${h[1]}${h[2]?' · 変化: '+h[2]:''}</div>`).join('')}</div>`:''}</div>`;
   return `<div class="view push">
   ${topbar('エンティティ','entity')}
-  <div class="hero entity">
-    <div class="row" style="gap:12px"><span class="av" style="width:52px;height:52px;font-size:22px;border-radius:14px;background:rgba(255,255,255,.18);color:#fff">${e.i}</span>
-      <div class="stack" style="gap:2px"><span class="badge on-dark">▣ エンティティ</span><span class="title">${e.n}</span></div></div>
-    <div class="row" style="flex-wrap:wrap;gap:6px;padding-top:6px">${types(e.t,'ghost')}<button class="type ghost dashed" onclick="toast('種類を追加(モック)')">＋ 種類</button></div>
-  </div>
+  ${heroE(`<div class="row" style="gap:12px"><span class="av" style="width:52px;height:52px;font-size:22px;border-radius:12px;background:rgba(255,255,255,.18);color:#fff">${e.i}</span>
+      <span class="title">${e.n}</span></div>
+    <div class="row" style="flex-wrap:wrap;gap:6px;padding-top:8px">${e.t.map(t=>tag(t,'ghost')).join('')}<button class="type add" onclick="toast('種類を追加(モック)')">＋ 種類</button></div>`)}
   <div class="stack">${sec('事実',e.facts.length,'＋ 追加')}
     <div class="flat">${main.map(fact).join('')}
       ${rare.length?`<div id="rare" hidden>${rare.map((f,i)=>fact(f,i+50)).join('')}</div><button class="disclose" onclick="tog('rare',this,'詳細 ${rare.length}件')" style="border-top:1px solid var(--border)">詳細 ${rare.length}件 ▾</button>`:''}
       <div class="lrow" style="border-top:1px solid var(--border)"><button style="color:var(--entity);font-size:12px;font-weight:600" onclick="toast('新しい版を追加(モック)')">＋ 情報が変化した</button><span class="grow"></span><span class="cap">訂正は値を直接編集</span></div>
     </div></div>
   ${rels.length?`<div class="stack">${sec('関係',rels.length,'＋ 追加')}<div class="flat">${rels.map(r=>`<div class="lrow">
-      <span class="type" style="background:none;border-color:color-mix(in srgb,var(--entity) 45%,transparent);color:var(--entity)">${r[0]}</span><span class="cap">${r[3]?'⟷':'→'}</span>${ref(r[1])}<span class="grow"></span><span class="cap">${r[2]}</span></div>`).join('')}</div></div>`:''}
+      <span class="cap" style="width:44px;color:var(--entity);font-weight:600">${r[0]}</span><span class="cap">${r[3]?'⟷':'→'}</span>${ref(r[1])}<span class="grow"></span><span class="cap">${r[2]}</span></div>`).join('')}</div></div>`:''}
   <div class="stack">${sec('ノート',NOTES[id]?'1':'0',NOTES[id]?'開く ›':'')}
-    ${NOTES[id]?`<a class="flat" href="#/n/${id}" style="display:block;padding:var(--s3) var(--s4);border-left:3px solid var(--note)"><div class="row"><span class="badge note">✎ ノート</span><span class="cap">更新 ${NOTES[id].upd} · 版${NOTES[id].ver}</span></div>
+    ${NOTES[id]?`<a class="flat" href="#/n/${id}" style="display:block;padding:var(--s3) var(--s4)"><div class="row">${bNote('ノート')}<span class="cap">更新 ${NOTES[id].upd} · 版${NOTES[id].ver}</span></div>
       <div style="font-size:13px;margin-top:4px" class="ellipsis">${NOTES[id].body[0][1]}</div></a>`
-      :`<button class="flat" style="padding:var(--s3) var(--s4);text-align:left;color:var(--note);font-size:13px;font-weight:600" onclick="toast('ノートを作成(モック)')">✎ ノートを書く</button>`}</div>
+      :`<button class="flat" style="padding:var(--s3) var(--s4);text-align:left;color:var(--note);font-size:13px;font-weight:600;display:flex;gap:6px;align-items:center" onclick="toast('ノートを作成(モック)')">${IC.note}ノートを書く</button>`}</div>
   <div class="stack">${sec('登場するアクティビティ',acts.length)}
-    <div class="flat">${acts.map(([k,a,role])=>`<a class="lrow" href="#/a/${k}"><span class="cap num" style="width:34px;color:var(--activity);font-weight:600">${md(dayOf(a).date)}</span><span class="badge activity">${a.type}</span><span class="grow ellipsis" style="font-size:13px">${a.title}</span><span class="cap">${role}</span></a>`).join('')||'<div class="empty">まだありません</div>'}</div></div>
+    <div class="flat">${acts.map(([k,a,role])=>`<a class="lrow" href="#/a/${k}"><span class="mk-a"></span><span class="cap num" style="width:32px;color:var(--activity);font-weight:600">${md(dayOf(a).date)}</span>${bAct(a.type)}<span class="grow ellipsis" style="font-size:13px">${a.title}</span><span class="cap">${role}</span></a>`).join('')||'<div class="empty">まだありません</div>'}</div></div>
   </div>`;
 }
 function vActivity(id){
   const a=A[id];
   if(a.type==='日記')return `<div class="view push">
     ${topbar('アクティビティ','activity')}
-    <div class="hero activity"><span class="badge on-dark">◷ アクティビティ · # 日記</span><span class="title">${+a.date.slice(5,7)}月${a.dd}日(${a.dw})</span><span class="meta">${a.kids.length}件の出来事</span></div>
+    ${heroA('日記',`<span class="title">${+a.date.slice(5,7)}月${a.dd}日(${a.dw})</span><span class="meta">${a.kids.length}件の出来事</span>`)}
     <div class="flat" style="padding:var(--s4)"><div style="font-size:14px">${a.body||'<span class="cap">本文なし</span>'}</div>
       ${a.photos?`<div class="row" style="margin-top:var(--s3)"><span class="photo"></span><span class="photo"></span><span class="photo"></span>${a.photos>3?`<span class="cap">＋${a.photos-3}</span>`:''}</div>`:''}</div>
     <div class="stack">${sec('この日の出来事(子)',a.kids.length,'＋ 追加')}
-      <div class="flat">${a.kids.map(k=>{const c=A[k];return `<a class="lrow" href="#/a/${k}"><span class="cap num" style="width:34px;color:var(--activity);font-weight:600">${c.time}</span><span class="badge activity">${c.type}</span><span class="grow ellipsis" style="font-size:13px">${c.title}</span>${c.amt?`<span class="num" style="font-weight:600;font-size:13px">${yen(c.amt)}</span>`:''}</a>`}).join('')}</div></div>
+      <div class="flat">${a.kids.map(k=>{const c=A[k];return `<a class="lrow" href="#/a/${k}"><span class="mk-a"></span><span class="cap num" style="width:32px;color:var(--activity);font-weight:600">${c.time}</span>${bAct(c.type)}<span class="grow ellipsis" style="font-size:13px">${c.title}</span>${c.amt?`<span class="num" style="font-weight:600;font-size:13px">${yen(c.amt)}</span>`:''}</a>`}).join('')}</div></div>
   </div>`;
-  const p=dayOf(a);const x=a.x&&X[a.x];
-  const unreg=a.roles.find(r=>!r[1]);
+  const p=dayOf(a);const x=a.x&&X[a.x];const unreg=a.roles.find(r=>!r[1]);
   return `<div class="view push">
   <div class="stack" style="gap:var(--s3)">
     ${topbar('アクティビティ','activity')}
-    <a class="ground-ref" href="#/a/${a.parent}"><span class="cap">親</span><span class="badge activity">◷ 日記</span><span class="grow">${+p.date.slice(5,7)}月${p.dd}日(${p.dw})</span><span class="cap">›</span></a>
-    <div class="hero activity"><div class="row" style="gap:6px"><span class="badge on-dark">◷ アクティビティ</span><span class="type ghost"># ${a.type}</span></div>
-      <span style="font-size:16px;font-weight:600">${a.title}</span>
-      ${a.amt?`<span class="big num">${yen(a.amt)}</span>`:''}
-      <span class="meta">${p.date} ${a.time}${a.pay?' · '+a.pay:''}</span></div>
+    <a class="ground-ref" href="#/a/${a.parent}"><span class="cap">親</span>${bAct('日記')}<span class="grow">${+p.date.slice(5,7)}月${p.dd}日(${p.dw})</span><span class="cap">›</span></a>
   </div>
+  ${heroA(a.type,`<span style="font-size:16px;font-weight:600">${a.title}</span>${a.amt?`<span class="big num">${yen(a.amt)}</span>`:''}<span class="meta">${p.date} ${a.time}${a.pay?' · '+a.pay:''}</span>`,a.type==='支払い')}
   <div class="stack">${sec('役割',a.roles.length,'＋ 追加')}
-    <div class="flat">${a.roles.map(r=>`<div class="lrow"><span class="cap" style="width:44px">${r[0]}</span>${roleRef(r)}<span class="grow"></span>${r[1]?`<span class="cap"># ${TYPES[E[r[1]].t[0]].n}</span>`:''}</div>`).join('')}</div>
+    <div class="flat">${a.roles.map(r=>`<div class="lrow"><span class="cap" style="width:44px">${r[0]}</span>${roleRef(r)}<span class="grow"></span>${r[1]?`<span class="type" style="height:17px;font-size:10px">${TYPES[E[r[1]].t[0]].n}</span>`:''}</div>`).join('')}</div>
     ${unreg?`<div class="suggest"><span class="grow ellipsis">「${unreg[2]}」は未登録</span><button class="btn" onclick="registerShop('${id}')">＋ 店として登録</button></div>`:''}
   </div>
   ${a.body?`<div class="stack">${sec('内容')}<div class="flat" style="padding:var(--s4);font-size:14px">${a.body}</div></div>`:''}
   ${a.items?`<div class="stack">${sec('品目',a.items.length,'＋ 追加')}
-    <div class="flat">${a.items.map((it,i)=>`<div class="lrow"><span class="grow ellipsis" style="font-size:13px;font-weight:500">${it[0]}</span>
+    <div class="flat">${a.items.map(it=>`<div class="lrow"><span class="grow ellipsis" style="font-size:13px;font-weight:500">${it[0]}</span>
       ${it[2]!=='自分'?`<span class="cap">${it[2]}</span>`:''}<span class="cap tax" hidden>${it[3]}%</span><span class="num" style="font-weight:600;font-size:13px;width:64px;text-align:right">${yen(it[1])}</span></div>`).join('')}
       <div class="lrow" style="background:var(--activity-t)"><span class="grow" style="font-size:12px;color:var(--activity);font-weight:600">合計(印字と一致)</span><span class="num" style="font-weight:700;color:var(--activity)">${yen(a.amt)}</span></div>
       <button class="disclose" onclick="document.querySelectorAll('.tax').forEach(t=>t.hidden=!t.hidden);this.textContent=this.textContent.includes('▾')?'税率を隠す ▴':'税率・負担の詳細 ▾'" style="border-top:1px solid var(--border)">税率・負担の詳細 ▾</button></div></div>`:''}
   ${x?`<div class="stack">${sec('この支払いから生まれた支出(子)','1')}
-    <div class="row" style="align-items:flex-start;padding-left:4px"><span style="color:var(--expense);font-weight:700">└</span>
-      <a class="raised grow" href="#/x/${a.x}" style="padding:var(--s3) var(--s4);display:flex;flex-direction:column;gap:2px">
-        <div class="row"><span class="badge expense">¥ 自分の支出</span><span class="grow"></span><span class="cap">›</span></div>
-        <div class="row" style="align-items:baseline"><span class="num" style="font-size:20px;font-weight:700;color:var(--expense)">${yen(x.amt)}</span><span class="cap">${x.cat} · 品目${x.items.length}</span></div></a></div>
+    <div class="row" style="align-items:flex-start;padding-left:4px;gap:6px"><span style="color:var(--expense);font-weight:700;padding-top:14px">└</span>
+      <a class="grow" href="#/x/${a.x}" style="filter:drop-shadow(0 4px 8px rgba(26,38,72,.12))"><div class="obj-x"><div class="hero" style="--stub:48px"><div class="stub" style="padding:0">${IC.expense}</div>
+        <div class="body" style="padding:10px 14px;flex-direction:row;align-items:center;gap:8px"><span class="meta" style="font-weight:700">自分の支出</span><span class="num" style="font-size:20px;font-weight:700">${yen(x.amt)}</span><span class="meta grow">${x.cat} · 品目${x.items.length}</span><span>›</span></div></div></div></a></div>
     ${a.adv?`<div class="row" style="padding-left:24px;gap:var(--s2)"><span class="cap">立替</span>${ref(a.adv[0])}<span class="num" style="font-size:12px;font-weight:600;color:var(--unknown)">${yen(a.adv[1])} · ${a.adv[2]}</span></div>`:''}</div>`:''}
   </div>`;
 }
@@ -374,17 +435,16 @@ function vExpense(id){
   return `<div class="view push">
   <div class="stack" style="gap:var(--s3)">
     ${topbar('戻る','expense')}
-    <a class="ground-ref" href="#/a/${x.pay}"><span class="cap">親</span><span class="badge activity">◷ 支払い</span><span class="grow ellipsis">${p.title} · ${shop}</span><span class="cap num">${yen(p.amt)} ›</span></a>
+    <a class="ground-ref" href="#/a/${x.pay}"><span class="cap">親</span>${bAct('支払い')}<span class="grow ellipsis">${p.title} · ${shop}</span><span class="cap num">${yen(p.amt)} ›</span></a>
     <div class="row" style="align-items:flex-start;gap:var(--s2);padding-left:4px"><span style="color:var(--expense);font-weight:700;padding-top:4px">└</span>
-      <div class="hero expense grow"><span class="badge on-dark">¥ 自分の支出</span><span class="meta">自分の負担</span><span class="big num">${yen(x.amt)}</span>
-      <div class="row" style="gap:6px;padding-top:4px"><span class="type ghost">${x.cat}</span><span class="meta">${dayOf(p).date}</span></div></div></div>
+      <div class="grow">${heroX(`<span class="meta">自分の負担</span><span class="big num">${yen(x.amt)}</span><div class="row" style="gap:6px;padding-top:4px"><span class="type ghost">${x.cat}</span><span class="meta">${dayOf(p).date}</span></div>`)}</div></div>
   </div>
   <div class="stack">${sec('この支出')}
     <div class="flat"><div class="lrow"><span class="cap" style="width:56px">カテゴリ</span><span class="grow">${x.cat}</span><span class="cap">品目の金額比</span></div>
       <div class="lrow"><span class="cap" style="width:56px">メモ</span><span class="grow">${x.memo||'<span class="cap">なし</span>'}</span></div>
       <div class="lrow"><span class="cap" style="width:56px">日時</span><span class="grow num">${dayOf(p).date} ${p.time}</span><span class="cap">支払いと同じ</span></div></div></div>
   <div class="stack">${sec('支出の品目',x.items.length,'＋ 追加')}
-    <div class="flat">${x.items.map(it=>`<div class="lrow"><span class="grow ellipsis" style="font-size:13px;font-weight:500">${it[0]}</span>${it[1]!=='全額'?`<span class="cap">${it[1]}</span>`:''}${it[3]?'<span class="badge" style="background:var(--unknown-t);color:var(--unknown)">不明</span>':''}<span class="num" style="font-weight:600;font-size:13px;width:64px;text-align:right">${yen(it[2])}</span></div>`).join('')}
+    <div class="flat">${x.items.map(it=>`<div class="lrow"><span class="grow ellipsis" style="font-size:13px;font-weight:500">${it[0]}</span>${it[1]!=='全額'?`<span class="cap">${it[1]}</span>`:''}${it[3]?'<span class="b-act" style="background:var(--unknown-t);color:var(--unknown)">不明</span>':''}<span class="num" style="font-weight:600;font-size:13px;width:64px;text-align:right">${yen(it[2])}</span></div>`).join('')}
       <div class="lrow" style="background:var(--expense-t)"><span class="grow" style="font-size:12px;color:var(--expense);font-weight:600">品目の合計 = 自分の負担</span><span class="num" style="font-weight:700;color:var(--expense)">${yen(x.amt)}</span></div></div></div>
   </div>`;
 }
@@ -395,17 +455,17 @@ function vNote(id){
   <div class="stack" style="gap:var(--s3)">
     ${topbar('戻る','note','版'+n.ver+' ⟲')}
     <div class="ground-ref" style="--c:var(--entity)"><span class="cap">持ち主</span>${ref(id)}<span class="grow"></span><span class="cap">1対1</span></div>
-    <div class="hero note"><span class="badge on-dark">✎ ノート</span><span class="title">${E[id].n}のノート</span><span class="meta">主観・最新 · 更新 ${n.upd}</span></div>
   </div>
+  ${heroN(`<span class="title">${E[id].n}のノート</span><span class="meta">主観・最新 · 更新 ${n.upd}</span>`)}
   <div class="flat" style="padding:var(--s4);display:flex;flex-direction:column;gap:var(--s3)">
     ${n.body.map(b=>`<div><div style="font-weight:700;font-size:14px;margin-bottom:2px">${b[0]}</div><div style="font-size:13px;line-height:2">${rich(b[1])}</div></div>`).join('')}</div>
   <div class="stack">${sec('サブページ',n.subs.length,'＋ 追加')}
-    <div class="flat">${n.subs.map(s=>`<div class="lrow"><span style="color:var(--note)">▤</span><span class="grow" style="font-size:13px">${s[0]}</span><span class="cap">${s[1]}</span></div>`).join('')||'<div class="empty">なし</div>'}</div></div>
+    <div class="flat">${n.subs.map(s=>`<div class="lrow"><span class="mk-n" style="font-size:16px">${IC.note}</span><span class="grow" style="font-size:13px">${s[0]}</span><span class="cap">${s[1]}</span></div>`).join('')||'<div class="empty">なし</div>'}</div></div>
   </div>`;
 }
 
 /* ======================= router ======================= */
-const TABS=[['activities','アクティビティ','◷','activity'],['entities','エンティティ','▣','entity'],['plus'],['notes','ノート','✎','note'],['types','種類','#','type']];
+const TABS=[['activities','アクティビティ','activity','activity'],['entities','エンティティ','entity','entity'],['plus'],['notes','ノート','note','note'],['types','種類','type','type']];
 function render(){
   const h=location.hash.slice(2)||'activities';const [r,id]=h.split('/');
   let html,tab;
@@ -421,7 +481,7 @@ function render(){
     default:html=vActivities();tab='activities';
   }
   $('#app').innerHTML=html;$('#scroll').scrollTop=0;
-  $('#nav').innerHTML=TABS.map(t=>t[0]==='plus'?`<button class="plus" onclick="openCreate()">＋</button>`:`<a href="#/${t[0]}" class="${t[0]===tab?'on':''}" style="--c:var(--${t[3]})"><span class="ic">${t[2]}</span>${t[1]}</a>`).join('');
+  $('#nav').innerHTML=TABS.map(t=>t[0]==='plus'?`<button class="plus" onclick="openCreate()">＋</button>`:`<a href="#/${t[0]}" class="${t[0]===tab?'on':''}" style="--c:var(--${t[3]})">${IC[t[2]]}${t[1]}</a>`).join('');
 }
 function goBack(){history.length>1?history.back():location.hash='#/activities'}
 window.addEventListener('hashchange',render);
@@ -431,17 +491,22 @@ function sheet(html){$('#sheet').innerHTML='<div class="grab"></div>'+html;$('#d
 function closeSheet(){$('#dev').classList.remove('open')}
 function openCreate(){sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s3)">新しく記録する</div>
   <div class="flat">
-   <button class="lrow" style="width:100%" onclick="closeSheet();toast('支払いの入力(モック)')"><span class="badge activity">◷</span><span class="grow" style="text-align:left"><b>支払い</b><div class="cap">レシートを撮る・金額を入れる</div></span></button>
-   <button class="lrow" style="width:100%" onclick="closeSheet();toast('出来事の入力(モック)')"><span class="badge activity">◷</span><span class="grow" style="text-align:left"><b>出来事・日記</b><div class="cap">今日の日記の子として追加</div></span></button>
-   <button class="lrow" style="width:100%" onclick="closeSheet();toast('エンティティの作成(モック)')"><span class="badge entity">▣</span><span class="grow" style="text-align:left"><b>エンティティ</b><div class="cap">人・場所・物。ノートはここから</div></span></button>
+   <button class="lrow" style="width:100%" onclick="closeSheet();toast('支払いの入力(モック)')">${MK.activity}<span class="grow" style="text-align:left"><b>支払い</b><div class="cap">レシートを撮る・金額を入れる</div></span></button>
+   <button class="lrow" style="width:100%" onclick="closeSheet();toast('出来事の入力(モック)')">${MK.activity}<span class="grow" style="text-align:left"><b>出来事・日記</b><div class="cap">今日の日記の子として追加</div></span></button>
+   <button class="lrow" style="width:100%" onclick="closeSheet();toast('エンティティの作成(モック)')">${MK.entity}<span class="grow" style="text-align:left"><b>エンティティ</b><div class="cap">人・場所・物。ノートはここから</div></span></button>
   </div>`)}
 function openAbout(){sheet(`<div class="h1" style="font-size:17px">UIモック v2 について</div>
   <div class="sub" style="margin:6px 0 var(--s4)">UIと遷移の確認だけのための簡易モック。データは架空、保存はしません。</div>
-  <div class="flat" style="padding:var(--s3) var(--s4);font-size:12px;line-height:1.8;color:var(--text2)">
+  <div class="flat" style="padding:var(--s4)"><div class="legend">
+    ${MK.entity}<span><b>エンティティ</b> = フォルダのタブ(事実を綴じる)</span>
+    ${MK.activity}<span><b>アクティビティ</b> = 時間軸に掛かった丸いカプセル。支払いは下端がレシート</span>
+    <span class="mk" style="width:34px;height:34px;display:grid;place-items:center;color:var(--expense);font-size:28px">${IC.expense}</span><span><b>自分の支出</b> = 半券付きのチケット</span>
+    ${MK.note}<span><b>ノート</b> = 角を折った紙</span>
+    ${MK.type}<span><b>種類</b> = 値札(タグ)</span>
+  </div></div>
+  <div class="flat" style="padding:var(--s3) var(--s4);font-size:12px;line-height:1.8;color:var(--text2);margin-top:var(--s3)">
    ・土台: エンティティ/ノート/アクティビティの構想(2026-10-25・<b>未合意</b>)<br>
    ・支払い ⇒ 自分の支出の親子(2026-10-28 決定)<br>
-   ・浮く=主役/子オブジェクト/一覧、平ら=プロパティ、地=親への参照<br>
-   ・影: カードの影 + 柔らかい影(主役・下部タブ・＋)<br>
    ・試せる操作: 各行タップで遷移 / 事実の「版 ⟲」/ 「詳細」の開閉 / 品目の「税率・負担の詳細」/ 10/28の支払いで未登録店の「＋ 店として登録」/ 種類タブから絞り込み
   </div>`)}
 function registerShop(aid){const a=A[aid];const r=a.roles.find(r=>!r[1]);const id='bakery';
