@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
@@ -54,12 +55,12 @@ class ScrollTopItemTest {
     }
 }
 
-/** 先頭の項目を1つにまとめた版。中身は読み込み後に入る。 */
+/** 先頭の項目を1つにまとめた版。中身は読み込み後に入る。読み込み前も最小1dpを持つ(高さ0だと先頭から外れる)。 */
 @Composable
 private fun TopItemList(loaded: Boolean, state: LazyListState) {
     LazyColumn(state = state, modifier = Modifier.fillMaxWidth().height(300.dp)) {
         item(key = "top") {
-            Column(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxWidth().heightIn(min = 1.dp)) {
                 if (loaded) Box(modifier = Modifier.fillMaxWidth().height(200.dp))
             }
         }

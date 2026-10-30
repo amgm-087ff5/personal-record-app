@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -135,8 +136,9 @@ fun ReceiptDetailScreen(
             val showDashboard = !s.loading && !s.notFound
             // 先頭は常にこの1項目(読み込み前は空、読み込み後に中身が入る)。
             // 条件付きの項目を「戻る」行より前に別々に置くと、LazyColumn が見ていた先頭の位置がずれ、途中から表示されてしまうため、ここに集める。
+            // 高さ0の項目は LazyColumn が「先頭に見えている項目」から外すため、最小1dpを持たせて先頭に居続けさせる。
             item(key = "top") {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(min = 1.dp)) {
                     // 登録の手順は一番上。上の余白(ステータスバー)はここで取り、ダッシュボードは続けて置く
                     if (register && showDashboard) {
                         RegisterSteps(current = 1, modifier = Modifier.statusBarsPadding())
