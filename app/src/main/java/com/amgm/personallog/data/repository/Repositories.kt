@@ -359,7 +359,8 @@ class ReceiptRepository @Inject constructor(
 
     /**
      * 支出の画面で直した欄を、支払い・品目へ書き戻し、家計簿を作り直す(1つのトランザクション)。
-     * 許されない変更(割り勘の金額、印字のある合計など)は何も書かず、理由を返す。成功なら null。
+     * 許されない変更(割り勘で参加者2人以上の金額など)は何も書かず、理由を返す。成功なら null。
+     * 支出の金額は、立て替えなら支払いの自分の分(ownAmount)、それ以外は支払いの合計(印字のあるレシートも MANUAL にして)へ書き戻す。
      * 書き戻したあと、金額が家計簿に入っていなければ例外にして、すべて戻す。
      */
     suspend fun writeBackFromLedger(
@@ -370,7 +371,8 @@ class ReceiptRepository @Inject constructor(
         val receiptId = target.receiptId ?: return@withTransaction "この支出は支払いに紐づいていないため、書き戻せません。"
         val receipt = receiptDao.getById(receiptId) ?: return@withTransaction "支払いが見つかりません。"
         val items = receiptDao.getItems(receiptId)
-        val people = splitRepository.load(receiptId).participants.size
+        // 割り勘シートが無ければ1人(画面の splitPeople と同じ数え方。load はシートを作ってしまうし、旧い立て替えを2人と数える)
+        val people = participantCount(receiptId)
         when (val plan = PaymentWriteBack.plan(target, values, receipt, items, people)) {
             is WriteBackPlan.Reject -> plan.message
             is WriteBackPlan.Apply -> {
@@ -378,6 +380,11 @@ class ReceiptRepository @Inject constructor(
                 plan.changedItems.forEach { receiptDao.updateItem(it) }
                 plan.expense?.let { expenseDao.update(it) }
                 plan.group?.let { expenseGroupDao.update(it) }
+                // 品目が1つだけの品目の金額は支出(まとまり)の金額として書き戻すので、まとまりの金額の編集済みも下ろす
+                if (target is WriteBackTarget.Item && target.onlyItem && plan.expectedAmount != null) {
+                    expenseGroupDao.getByReceiptId(receiptId).filter { it.amountEdited }
+                        .forEach { expenseGroupDao.update(it.copy(amountEdited = false)) }
+                }
                 applyLedger(receiptId, now = now)
                 plan.expectedAmount?.let { want ->
                     val got = when (target) {
@@ -406,6 +413,10 @@ class ReceiptRepository @Inject constructor(
     /**
      * 割り勘シートを保存し、家計簿を合わせる(1つのトランザクション)。保存後のシートを返す。
      * 旧い立て替え(isAdvance・ownAmount)は割り勘シートに置き換わるので消す。
+     *
+     * 規則の例外(設計判断待ち・(g)): 割り勘で自分の分を変えると、支出の金額だけが変わる(支払いの合計は変えない)。
+     * 自分の分は割り勘の計算結果で支払いに対応する欄が無く、支払いの金額は変えない規則(明示しない限り)と整合する。
+     * 参加者2人以上のときの支出の金額の直接編集を割り勘画面へ誘導するかは、利用者の判断を待つ。
      */
     suspend fun saveSplit(
         data: SplitSheetData,
@@ -539,6 +550,9 @@ class ExpenseRepository @Inject constructor(
      * 支出の品目を消す。レシート由来の品目(receiptItemId がある行)は、行を消さずに deletedByUser を立てる
      * (レシートの再確定で復活させない)。手入力の行は本当に消す。
      * 支出の品目は1つ以上必要なので、消していない品目が最後の1つなら消さずに例外にする(支出ごと消すのは支払いの削除 deletePayment)。
+     *
+     * 規則の例外(設計判断待ち・(e)): 品目の削除は支払いの品目(receipt_items)へ反映しない。支出だけが deletedByUser で持つ
+     * (支払いは店での会計の事実なので、品目は残す)。支払いの品目を消す・支払いの合計を直すかは、利用者の判断を待つ。
      */
     suspend fun delete(expense: Expense): Unit = db.withTransaction {
         val groupId = expense.groupId
@@ -553,7 +567,7 @@ class ExpenseRepository @Inject constructor(
         }
     }
 
-    /** 家計簿で消した品目を元に戻す。 */
+    /** 家計簿で消した品目を元に戻す。規則の例外(設計判断待ち・(e)): 削除と同じく、支払いの品目へは反映しない(支出の deletedByUser を下ろすだけ)。 */
     suspend fun restore(expense: Expense) = dao.setDeletedByUser(expense.id, false)
 
     /**

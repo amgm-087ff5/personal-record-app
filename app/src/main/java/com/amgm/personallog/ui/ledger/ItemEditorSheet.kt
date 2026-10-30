@@ -333,7 +333,6 @@ internal fun ItemEditorSheet(
     val receiptLinked = true // 支出は必ず支払いに属する(v16〜)
     val amountLock: String? = when {
         splitPeople >= 2 -> "割り勘が2人以上のため、金額は支払いの画面で直します"
-        onlyOneItem -> "品目が1つのときは、支出の金額と同じです"
         else -> null
     }
 
@@ -473,7 +472,10 @@ internal fun ItemEditorSheet(
                     ItemPage(
                         draft = draft,
                         categories = ItemPagerLogic.categoryOptions(draft.category),
-                        amountLock = amountLock,
+                        // 品目が1つだけでも、支払いの品目に対応する品目の金額は直せる(支出の金額の変更と同じに支払いへ書き戻す)。
+                        // 品目の無い支払いの1品目(receiptItemId なし)だけは、金額が支出の金額に従うので直せない
+                        amountLock = amountLock
+                            ?: if (onlyOneItem && saved != null && saved.receiptItemId == null) "品目の無い支払いの品目の金額は、支出の金額と同じです" else null,
                         computedAmount = saved?.amount?.toString(),
                         unknownToggle = toggle,
                         detailOpen = detailOpen[draft.key] == true,
