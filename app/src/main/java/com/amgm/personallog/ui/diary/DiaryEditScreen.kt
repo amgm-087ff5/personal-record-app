@@ -10,6 +10,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,8 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -178,11 +177,13 @@ fun DiaryEditScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
                         )
                     }
                 }
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
+                // 写真は読み込み後に後から入る。LazyRow だと、読み込み前からある「追加」の項目が先頭のまま残り、
+                // 後から入った写真が左にはみ出すため、横スクロールの Row にまとめる(写真の数は少ない)
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(Space.s),
                 ) {
-                    itemsIndexed(state.photos, key = { _, photo -> photo.id }) { index, photo ->
+                    state.photos.forEachIndexed { index, photo ->
                         PhotoThumb(
                             relativePath = photo.filePath,
                             reqPx = 360,
@@ -194,14 +195,12 @@ fun DiaryEditScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
                                 ),
                         )
                     }
-                    item(key = "add-tile") {
-                        AddPhotoTile(
-                            enabled = !importing && !state.loading,
-                            onClick = {
-                                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                            },
-                        )
-                    }
+                    AddPhotoTile(
+                        enabled = !importing && !state.loading,
+                        onClick = {
+                            picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        },
+                    )
                 }
                 if (state.photos.isNotEmpty()) {
                     Label("タップで拡大、長押しで削除", modifier = Modifier.padding(top = Space.s))
