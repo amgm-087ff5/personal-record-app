@@ -155,7 +155,7 @@ const val NO_SELF_PARTICIPANT_ID: Long = Long.MIN_VALUE
 /** 保存時の人数の確認に使う。from は今の人数(headcount。null は 1)、to は割り勘の参加人数(自分を含む合計)。 */
 data class HeadcountChange(val from: Int, val to: Int)
 
-/** 割り勘の参加人数と、レシートの人数(headcount。null は 1)を比べる。同じなら null(確認は出さない)。 */
+/** 割り勘の参加人数と、支払いの人数(headcount。null は 1)を比べる。同じなら null(確認は出さない)。 */
 fun headcountChangeOf(headcount: Int?, participantCount: Int): HeadcountChange? {
     val from = headcount ?: 1
     return if (from == participantCount) null else HeadcountChange(from = from, to = participantCount)
@@ -223,7 +223,7 @@ class SplitRepository @Inject constructor(
         }
     }
 
-    /** レシートの参加人数(headcount)を変える。null は「不明」。割り勘の保存とは別に呼ぶ。 */
+    /** 支払いの参加人数(headcount)を変える。null は「不明」。割り勘の保存とは別に呼ぶ。 */
     suspend fun setHeadcount(receiptId: Long, headcount: Int?) {
         receiptDao.setHeadcount(receiptId, headcount)
     }

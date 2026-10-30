@@ -35,7 +35,7 @@ import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.TextAction
 
 /**
- * 手入力の支払いの入力。合計・日時・店名・品目を入れて、支払い(レシートの表の下書き)と品目を保存する。
+ * 手入力の支払いの入力。合計・日時・店名・品目を入れて、支払い(receipts の表の下書き)と品目を保存する。
  * 家計簿の支出は、保存のなかで支払いから作られる。品目の金額の合計を合計欄の下に出し、1タップで合計に入れられる。
  * onSave には作った支払いと品目を渡す。done には保存の結果(エラーメッセージ、成功なら null)を渡す。
  */

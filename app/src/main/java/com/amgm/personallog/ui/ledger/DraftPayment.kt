@@ -39,7 +39,7 @@ object DraftPayment {
     fun sumText(items: List<DraftItem>): String? = itemsSum(items).takeIf { it > 0 }?.toString()
 
     /**
-     * 入力を検証し、手入力の支払い(レシートの表)と品目を作る。保存は ReceiptRepository の save(下書き)か saveAndConfirm(確定)に任せる。
+     * 入力を検証し、手入力の支払い(receipts の表)と品目を作る。保存は ReceiptRepository の save(下書き)か saveAndConfirm(確定)に任せる。
      * 家計簿の支出は、その保存のなかで支払いから作られる(支出を単独では作らない)。
      * 確定の判定: 合計か品目があれば確定(CONFIRMED)、どちらも無ければ下書き(DRAFT)。
      *  - 合計は入力された値(1円以上の整数)。合計が空で品目があるときは、品目の合計(TaxCalc.paidYen)を入れる。

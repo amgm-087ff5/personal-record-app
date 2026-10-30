@@ -51,7 +51,7 @@ class PaymentConfirmerRobolectricTest {
         ReceiptItem(receiptId = 0, name = "洗剤", amount = 500, category = "食費"),
     )
 
-    /** 下書きを保存して、(レシート, 品目)を返す。 */
+    /** 下書きを保存して、(支払い, 品目)を返す。 */
     private fun draft(total: Int? = 700): Pair<Receipt, List<ReceiptItem>> = runBlocking {
         val id = receipts.save(receipt(total), items())
         receipts.getReceipt(id)!! to receipts.getItems(id)

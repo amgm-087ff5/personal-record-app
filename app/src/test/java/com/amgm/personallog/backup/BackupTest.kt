@@ -51,10 +51,10 @@ class BackupTest {
 
     @Test
     fun receiptWithoutTime_keepsExpenseTimeEmpty_onRestore() {
-        // レシートに時刻が無い支出は、復元しても 00:00 や作成時刻で補完しない
+        // 支払いに時刻が無い支出は、復元しても 00:00 や作成時刻で補完しない
         val e = BackupExpense(4, "2026-01-01", "", 10, "食費", "", 7, 99)
         assertEquals("", e.toEntity(linkedTime = "").time)
-        // 古いバックアップ(時刻なし・レシート紐づきなし)は作成時刻から補う
+        // 古いバックアップ(時刻なし・支払い紐づきなし)は作成時刻から補う
         val legacy = BackupExpense(5, "2026-01-01", "", 10, "食費", "", null, 0)
         assertTrue(legacy.toEntity().time.matches(Regex("""\d{2}:\d{2}""")))
     }
@@ -227,7 +227,7 @@ class BackupTest {
         val idx = ReceiptMergeIndex(listOf(entity(1, hash = "h1"), entity(2, hash = "h2")))
         // 日時や画像パスが違っても、ハッシュが同じなら同じレシート
         assertEquals(2L, idx.take(entity(90, at = "2030-01-01 00:00", total = 1, path = "other.jpg", hash = "h2")))
-        // 日時・合計・パスが同じでも、ハッシュが違えば別のレシート
+        // 日時・合計・パスが同じでも、ハッシュが違えば別の支払い
         assertNull(idx.take(entity(91, path = "receipts/1.jpg", hash = "zzz")))
     }
 

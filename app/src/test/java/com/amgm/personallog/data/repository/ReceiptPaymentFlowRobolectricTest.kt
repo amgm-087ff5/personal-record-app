@@ -31,7 +31,7 @@ import org.robolectric.annotation.Config
 /**
  * 保存→確定の結合を、実際の Room DB(Robolectric の SQLite)で確かめる:
  * 品目の id が保たれる / 家計簿で直した欄が残る / 消した品目が復活しない / 読み取り直しで id が引き継がれる /
- * 保存と確定が1つのトランザクション / 月をまたぐ移動 / レシートの値に戻す。
+ * 保存と確定が1つのトランザクション / 月をまたぐ移動 / 支払いの値に戻す。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
@@ -61,7 +61,7 @@ class ReceiptPaymentFlowRobolectricTest {
     private fun item(name: String, amount: Int, id: Long = 0) =
         ReceiptItem(id = id, receiptId = 0, name = name, amount = amount, category = "食費")
 
-    /** 牛乳200・洗剤500のレシートを保存して確定し、(レシート, 品目)を返す。 */
+    /** 牛乳200・洗剤500の支払いを保存して確定し、(支払い, 品目)を返す。 */
     private fun confirmedReceipt(): Pair<Receipt, List<ReceiptItem>> = runBlocking {
         val id = receipts.saveAndConfirm(receipt(), listOf(item("牛乳", 200), item("洗剤", 500)))
         receipts.getReceipt(id)!! to receipts.getItems(id)
@@ -213,7 +213,7 @@ class ReceiptPaymentFlowRobolectricTest {
         assertTrue(children(r.id).all { it.date == "2026-11-02" && it.time == "09:00" })
         assertEquals(50L, total("2026-10-01", "2026-10-31"))
         assertEquals(700L, total("2026-11-01", "2026-11-30"))
-        // レシートを再保存・再確定しても、日時を直したグループと品目はそろったまま
+        // 支払いを再保存・再確定しても、日時を直したグループと品目はそろったまま
         runBlocking { receipts.saveAndConfirm(receipts.getReceipt(r.id)!!.copy(purchasedAt = "2026-10-30 18:00"), receipts.getItems(r.id)) }
         assertTrue(children(r.id).all { it.date == "2026-11-02" })
         assertEquals(700L, total("2026-11-01", "2026-11-30"))

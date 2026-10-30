@@ -27,16 +27,16 @@ sealed interface LedgerEntry {
     val category: String
     val createdAt: Long
 
-    /** この行のもとになったレシートの id(手入力なら null)。下書き・割り勘の警告の表示に使う。 */
+    /** この行のもとになった支払いの id(手入力なら null)。下書き・割り勘の警告の表示に使う。 */
     val receiptId: Long?
 
     /**
      * この行をカテゴリ別に数えるときの内訳(合計は amount と一致する)。
-     * 支出は品目ごとのカテゴリで数え、差額(支払い金額 − 品目の合計)は支出のカテゴリに入れる。
+     * 支出は品目ごとのカテゴリで数え、差額(支出金額 − 品目の合計)は支出のカテゴリに入れる。
      */
     val categoryParts: List<CategoryTotal>
 
-    /** items は品目(支出)。amount は支払い金額(正)。 */
+    /** items は品目(支出)。amount は支出金額(正)。 */
     data class Group(val group: ExpenseGroup, val items: List<Expense>) : LedgerEntry {
         override val date: String get() = group.date
         override val time: String get() = group.time
@@ -57,7 +57,7 @@ sealed interface LedgerEntry {
         /** 品目の合計。 */
         val itemSum: Long get() = items.sumOf { it.amount.toLong() }
 
-        /** 支払い金額 - 品目の合計。0 なら一致。 */
+        /** 支出金額 - 品目の合計。0 なら一致。 */
         val difference: Long get() = amount - itemSum
     }
 
@@ -101,7 +101,7 @@ data class ExpenseValidation(
     val isValid: Boolean get() = dateError == null && timeError == null && amountError == null && categoryError == null
 }
 
-/** 内訳(カテゴリ別)の注釈。品目ごとの金額は、レシート全体の端数を割り振った値であることを示す。 */
+/** 内訳(カテゴリ別)の注釈。品目ごとの金額は、支払い全体の端数を割り振った値であることを示す。 */
 const val ALLOCATION_NOTE =
     "品目ごとの金額は、レシート全体の端数を品目に割り振った値です。品目単位では1円ほどずれることがありますが、合計は一致します。"
 

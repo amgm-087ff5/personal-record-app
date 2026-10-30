@@ -51,11 +51,11 @@ object LedgerCalc {
         items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED
 
     /**
-     * 支払い(レシート・手入力)から、自分の支出(まとまり1つ + 品目1行以上)を作る。
+     * 支払い(読み取り・手入力)から、自分の支出(まとまり1つ + 品目1行以上)を作る。
      *
      * 支出の金額(自分の負担):
      *  - share(割り勘の自分の分)があるとき: share.total。立て替えの指定は無視する(割り勘が立て替えに置き換わる)。
-     *  - 立て替え: レシート全体の自分の分(receipt.ownAmount)。未入力なら支払総額。
+     *  - 立て替え: 支払い全体の自分の分(receipt.ownAmount)。未入力なら支払総額。
      *  - それ以外: 支払いの合計(receipt.totalAmount)。合計が未入力(下書き)なら品目の合計。
      * 品目:
      *  - share があるとき: 品目ごとの自分の分(share.perItem)。全体で割る割り勘も、SplitLedger が品目の金額の比で配った値になる。

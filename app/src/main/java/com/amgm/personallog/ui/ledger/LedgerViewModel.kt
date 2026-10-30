@@ -61,13 +61,13 @@ data class LedgerUiState(
     val chartBars: List<ChartBar> = emptyList(),
     /** グラフ表示期間全体のカテゴリ別内訳(円と割合)。 */
     val chartLegend: List<CategoryShare> = emptyList(),
-    /** この月の行のうち、下書きのレシートに紐づく件数(合計に入っている下書き)。 */
+    /** この月の行のうち、下書きの支払いに紐づく件数(合計に入っている下書き)。 */
     val draftCount: Int = 0,
     /** この月の行のうち、割り勘に警告がある支払いの件数。 */
     val warnCount: Int = 0,
-    /** 下書きのレシートの id(行の「下書き」の印に使う)。 */
+    /** 下書きの支払いの id(行の「下書き」の印に使う)。 */
     val draftReceiptIds: Set<Long> = emptySet(),
-    /** 割り勘に警告があるレシートの id(行の「要確認」の印に使う)。 */
+    /** 割り勘に警告がある支払いの id(行の「要確認」の印に使う)。 */
     val warnReceiptIds: Set<Long> = emptySet(),
     /** 画像のあるレシート(レシート由来の支払い)の id。行の「レシート由来」の印に使う。手入力の支払い(画像なし)は含まない。 */
     val imageReceiptIds: Set<Long> = emptySet(),
@@ -181,7 +181,7 @@ class LedgerViewModel @Inject constructor(
                 combine(
                     repository.observeLedgerRows(from, to),
                     repository.observeGroupsBetween(from, to),
-                    // レシートと重複の除外、未読の id をまとめる(combine の本数の上限を超えないため入れ子にする)
+                    // 支払いと重複の除外、未読の id をまとめる(combine の本数の上限を超えないため入れ子にする)
                     combine(
                         combine(receipts.observeReceipts(), receipts.observeNotDuplicates()) { list, notDup -> list to notDup },
                         readStore.unreadIds,
@@ -262,7 +262,7 @@ class LedgerViewModel @Inject constructor(
             chartLabel = LedgerChart.containerLabel(l, f),
             chartBars = LedgerChart.bars(l, f, entries),
             chartLegend = LedgerChart.legend(entries, l, f),
-            // 下書き・要確認は支払い(レシート)単位のフラグ。支出の行数ではなく、今月の行に出てくる支払いの数で数える
+            // 下書き・要確認は支払い単位のフラグ。支出の行数ではなく、今月の行に出てくる支払いの数で数える
             draftCount = current.mapNotNull { it.receiptId }.distinct().count { it in draftIds },
             warnCount = current.mapNotNull { it.receiptId }.distinct().count { it in warnIds },
             draftReceiptIds = draftIds,
@@ -295,11 +295,11 @@ class LedgerViewModel @Inject constructor(
     }
     fun dismissError() { _uiState.update { it.copy(error = null) } }
 
-    /** 支出が紐づくレシートの日時 "yyyy-MM-dd HH:mm"。紐づかなければ null。 */
+    /** 支出が紐づく支払いの日時 "yyyy-MM-dd HH:mm"。紐づかなければ null。 */
     suspend fun linkedReceiptDateTime(expense: Expense): String? = repository.linkedReceiptDateTime(expense)
 
     /**
-     * 手入力の支払いを保存する(レシートの表と品目)。家計簿の支出は、この保存のなかで支払いから作られる。
+     * 手入力の支払いを保存する(支払いの表と品目)。家計簿の支出は、この保存のなかで支払いから作られる。
      * onDone には保存した支払いの id と、エラーメッセージ(成功なら null)を渡す。
      */
     fun addManualPayment(

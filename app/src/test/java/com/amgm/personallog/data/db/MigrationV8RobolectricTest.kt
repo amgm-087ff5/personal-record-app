@@ -95,7 +95,7 @@ class MigrationV8RobolectricTest {
         )
     }
 
-    /** 5件のレシート・品目・支出・グループが入った v7 を作って閉じる。 */
+    /** 5件の支払い・品目・支出・グループが入った v7 を作って閉じる。 */
     private fun createV7(withOrphans: Boolean = false, withReceipts: Boolean = true) {
         val h = helper(7, onCreate = { db -> schema7().forEach { db.execSQL(it) } })
         val db = h.writableDatabase

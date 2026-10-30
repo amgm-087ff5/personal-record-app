@@ -84,7 +84,7 @@ fun NavGraphBuilder.ledgerGraph(navController: NavController) {
                 onOpenSplit = { receiptId -> navController.navigate(SplitRoutes.sheet(receiptId)) },
                 onOpenMerge = { ids -> navController.navigate(LedgerRoutes.merge(ids)) },
                 onOpenReceipt = { receiptId ->
-                    // レシートの詳細から来たなら、新しく積まずに戻る(行き来で履歴が伸びない)
+                    // 支払いの詳細から来たなら、新しく積まずに戻る(行き来で履歴が伸びない)
                     val prev = navController.previousBackStackEntry
                     if (prev?.destination?.route == ReceiptRoutes.DETAIL && prev.arguments?.getLong("id") == receiptId) {
                         navController.popBackStack()

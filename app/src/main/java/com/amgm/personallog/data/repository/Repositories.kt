@@ -139,7 +139,7 @@ class ReceiptRepository @Inject constructor(
     fun observeNotDuplicates(): Flow<List<ReceiptNotDuplicate>> = receiptDao.observeNotDuplicates()
 
     /**
-     * レシートと品目を保存(id=0なら新規)。品目は差分で保存する: id がある行は更新、無い行は追加、画面から消えた行は削除。
+     * 支払いと品目を保存(id=0なら新規)。品目は差分で保存する: id がある行は更新、無い行は追加、画面から消えた行は削除。
      * こうして品目の id を保ち、家計簿の行(receiptItemId)との対応を切らない。receiptId を返す。
      * sharedFlags は共通費の提案(items と同じ並び。件数が合わなければ無視する)。新しいまとまりの共通費の印になる。
      * 提案は品目の id が決まった後・まとまりを作る前に渡す。後から当てても、もうまとまりに入った品目は動かないため。
@@ -165,11 +165,11 @@ class ReceiptRepository @Inject constructor(
         } else {
             emptyMap<Long, Boolean>()
         }
-        // レシートの日時は家計簿側の初期値。支出側で日時を変えていない行だけ追従させる。
+        // 支払いの日時は家計簿側の初期値。支出側で日時を変えていない行だけ追従させる。
         val (date, time) = LedgerCalc.splitPurchasedAt(receipt.purchasedAt)
         expenseDao.syncDateTimeFromReceipt(id, date, time)
         expenseGroupDao.syncDateTimeFromReceipt(id, date, time)
-        // 品目の日時はグループに従う(グループの日時を支払い側で変えていても揃える)
+        // 品目の日時は支出に従う(グループの日時を支払い側で変えていても揃える)
         expenseDao.syncChildrenOfReceiptGroups(id)
         // 下書きも家計簿に入れる。品目のまとまりを揃えてから、割り勘を含めた家計簿の行を作る
         splitRepository.ensureGroups(id, hints)
@@ -178,7 +178,7 @@ class ReceiptRepository @Inject constructor(
     }
 
     /**
-     * レシートを確定し、家計簿を更新する。再確定では品目ごとに差分で更新し、家計簿で直した欄(編集済み)は残す。
+     * 支払いを確定し、家計簿を更新する。再確定では品目ごとに差分で更新し、家計簿で直した欄(編集済み)は残す。
      * v9 以前に確定した古い行は、作り直す(ConfirmPlanner)。
      * perItem は互換のための引数で使わない(v14〜 支出は必ず品目つき)。
      */
@@ -240,7 +240,7 @@ class ReceiptRepository @Inject constructor(
     suspend fun confirmWouldRebuild(receipt: Receipt, items: List<ReceiptItem>, perItem: Boolean = true): Boolean =
         confirmImpact(receipt, items, perItem).rebuild
 
-    /** このレシートに紐づく自分の支出(まとまり)。無ければ null。 */
+    /** この支払いに紐づく自分の支出(まとまり)。無ければ null。 */
     fun observePaymentLink(receiptId: Long): Flow<PaymentLink?> =
         expenseGroupDao.observeByReceiptId(receiptId).map { groups -> PaymentLink.resolve(groups) }
 
@@ -500,7 +500,7 @@ class ExpenseRepository @Inject constructor(
         return dao.observeBetween(from, to)
     }
 
-    /** そのレシートから作られた支出(まとまり)。自分の支出が無い(割り勘で外れた)なら空。 */
+    /** その支払いから作られた支出(まとまり)。自分の支出が無い(割り勘で外れた)なら空。 */
     suspend fun groupsOfReceipt(receiptId: Long): List<ExpenseGroup> = groupDao.getByReceiptId(receiptId)
     fun observeGroup(id: Long): Flow<ExpenseGroup?> = groupDao.observeById(id)
     fun observeGroupItems(groupId: Long): Flow<List<Expense>> = dao.observeByGroupId(groupId)
@@ -525,7 +525,7 @@ class ExpenseRepository @Inject constructor(
     }
     suspend fun updateAll(expenses: List<Expense>) = dao.updateAll(expenses)
 
-    /** レシート画像のサムネイル・「レシートを開く」用。 */
+    /** レシート画像のサムネイル・「支払いを開く」用。 */
     suspend fun receipt(id: Long): Receipt? = db.receiptDao().getById(id)
 
     /** 品目を更新する。品目の属する支出の規則(1品目なら金額は支出と同じ・不明の品目の金額)に合わせ直す。 */
@@ -537,7 +537,7 @@ class ExpenseRepository @Inject constructor(
 
     /**
      * 支出の品目を消す。レシート由来の品目(receiptItemId がある行)は、行を消さずに deletedByUser を立てる
-     * (レシートの再確定で復活させない)。手入力の行は本当に消す。
+     * (支払いの再確定で復活させない)。手入力の行は本当に消す。
      * 支出の品目は1つ以上必要なので、消していない品目が最後の1つなら消さずに例外にする(支出ごと消すのは支払いの削除 deletePayment)。
      */
     suspend fun delete(expense: Expense): Unit = db.withTransaction {
@@ -557,7 +557,7 @@ class ExpenseRepository @Inject constructor(
     suspend fun restore(expense: Expense) = dao.setDeletedByUser(expense.id, false)
 
     /**
-     * 品目の1つの欄を、紐づくレシートの値に戻す(その欄の編集済みを下ろす)。
+     * 品目の1つの欄を、紐づく支払いの値に戻す(その欄の編集済みを下ろす)。
      * 値を求められなければ false(何も変えない)。
      */
     suspend fun revertExpenseField(expenseId: Long, field: PaymentField): Boolean = db.withTransaction {
@@ -566,14 +566,14 @@ class ExpenseRepository @Inject constructor(
         val receipt = db.receiptDao().getById(receiptId) ?: return@withTransaction false
         val items = db.receiptDao().getItems(receiptId)
         val group = e.groupId?.let { groupDao.getById(it) }
-        // 割り勘があれば、レシートの値の代わりに自分の分へ戻す
+        // 割り勘があれば、支払いの値の代わりに自分の分へ戻す
         val share = splitRepository.shareOf(receiptId, receipt.totalAmount, items).share
         val reverted = ReceiptRevert.expense(e, field, receipt, items, group, share) ?: return@withTransaction false
         dao.update(reverted)
         true
     }
 
-    /** 支払いグループの1つの欄を、紐づくレシートの値に戻す。日時を戻したら品目の日時も合わせる。 */
+    /** 支出(まとまり)の1つの欄を、紐づく支払いの値に戻す。日時を戻したら品目の日時も合わせる。 */
     suspend fun revertGroupField(groupId: Long, field: PaymentField): Boolean = db.withTransaction {
         val g = groupDao.getById(groupId) ?: return@withTransaction false
         val receiptId = g.receiptId
@@ -586,10 +586,10 @@ class ExpenseRepository @Inject constructor(
     }
     suspend fun get(id: Long): Expense? = dao.getById(id)
 
-    /** 支出が紐づくレシートの日時 "yyyy-MM-dd HH:mm"(レシートに時刻が無ければ "yyyy-MM-dd")。紐づかなければ null。 */
+    /** 支出が紐づく支払いの日時 "yyyy-MM-dd HH:mm"(支払いに時刻が無ければ "yyyy-MM-dd")。紐づかなければ null。 */
     suspend fun linkedReceiptDateTime(expense: Expense): String? = receiptDateTime(expense.receiptId)
 
-    /** レシートの日時 "yyyy-MM-dd HH:mm"(時刻が無ければ "yyyy-MM-dd")。receiptId が null や無いレシートなら null。 */
+    /** 支払いの日時 "yyyy-MM-dd HH:mm"(時刻が無ければ "yyyy-MM-dd")。receiptId が null や無い支払いなら null。 */
     suspend fun receiptDateTime(receiptId: Long?): String? {
         if (receiptId == null) return null
         val r = db.receiptDao().getById(receiptId) ?: return null
@@ -597,7 +597,7 @@ class ExpenseRepository @Inject constructor(
         return if (time.isEmpty()) date else "$date $time"
     }
 
-    /** 支払いグループを、品目ごと消す。 */
+    /** 支出(まとまり)を、品目ごと消す。 */
     /** 品目の属する支出(まとまり)の id。品目が無い・まとまりに属さない(v13 以前の古い行)なら null。旧ルートの解決に使う。 */
     suspend fun groupIdOfExpense(expenseId: Long): Long? = dao.getById(expenseId)?.groupId
 

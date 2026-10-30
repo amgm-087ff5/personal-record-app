@@ -21,7 +21,7 @@ object ReceiptRoutes {
     fun detail(id: Long, register: Boolean = false) = "receipt/detail/$id" + if (register) "?register=true" else ""
 }
 
-/** レシート機能のナビゲーショングラフ。AppNavHost から呼ばれるので、機能内の遷移はここで完結させる。 */
+/** 支払い機能のナビゲーショングラフ。AppNavHost から呼ばれるので、機能内の遷移はここで完結させる。 */
 fun NavGraphBuilder.receiptGraph(navController: NavController) {
     navigation(route = ReceiptRoutes.ROOT, startDestination = ReceiptRoutes.HOME) {
         composable(route = ReceiptRoutes.HOME) {

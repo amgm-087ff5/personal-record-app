@@ -92,7 +92,7 @@ private fun dashboardTotalStyle(): TextStyle = AppTheme.type.numeralXL.copy(
 )
 
 /**
- * 支払い(レシート)の確認・修正画面。
+ * 支払いの確認・修正画面。
  * 合計のダッシュボード → 原本画像 → 紙面(店名・合計) → 品目の行 → 支払いまとめ → 子の「自分の支出」の行 → 操作。品目の編集は行をタップして開くシートで行う。
  */
 @Composable

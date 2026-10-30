@@ -16,7 +16,7 @@ data class PaymentValues(
     val memo: String,
 )
 
-/** 書き戻しの対象。receiptId は紐づく支払い(レシート)の id。 */
+/** 書き戻しの対象。receiptId は紐づく支払いの id。 */
 sealed interface WriteBackTarget {
     val receiptId: Long?
 
@@ -57,7 +57,7 @@ sealed interface WriteBackPlan {
 }
 
 /**
- * 家計簿(支出)の画面で直した欄を、支払い(レシート)と品目へ書き戻す判定(純Kotlin・DBに触れない)。
+ * 家計簿(支出)の画面で直した欄を、支払いと品目へ書き戻す判定(純Kotlin・DBに触れない)。
  *
  * 書き戻し先:
  *  - 日時 → 支払いの purchasedAt(品目・支出の日時は支払いに従う)
@@ -113,7 +113,7 @@ object PaymentWriteBack {
         people: Int,
     ): WriteBackPlan {
         val itemId = e.receiptItemId ?: return WriteBackPlan.Reject("この支出は品目に紐づいていません。")
-        val item = items.firstOrNull { it.id == itemId } ?: return WriteBackPlan.Reject("レシートの品目が見つかりません。")
+        val item = items.firstOrNull { it.id == itemId } ?: return WriteBackPlan.Reject("支払いの品目が見つかりません。")
         // 品目の日時は支払い(グループ)に従う。ここでは日時を書き戻さない
         val name = v.name.trim()
         val memo = v.memo.trim()

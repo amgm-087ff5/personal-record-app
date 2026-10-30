@@ -227,7 +227,7 @@ class BackupManager @Inject constructor(
             newIds.firstOrNull()?.let { itemIdMap[bi.id] = it }
         }
         val receiptIds = data.receipts.map { it.id }.toSet()
-        // 「重複ではない」の組。replace は id をそのまま使うので、レシートが無い組だけ捨てる
+        // 「重複ではない」の組。replace は id をそのまま使うので、支払いが無い組だけ捨てる
         receiptDao.insertNotDuplicates(remapNotDuplicates(data.receiptNotDuplicates, receiptIds.associateWith { it }))
         val times = receiptTimes(data)
         data.expenseGroups.forEach { g ->
@@ -267,7 +267,7 @@ class BackupManager @Inject constructor(
     private fun isLegacyReceipt(data: BackupData, receiptId: Long, manualReceiptIds: Set<Long>): Boolean =
         data.formatVersion < 5 && receiptId !in manualReceiptIds
 
-    /** バックアップ内のレシート id -> レシートの時刻 "HH:mm"(時刻が無ければ 00:00)。古いバックアップの支出の初期値に使う。 */
+    /** バックアップ内の支払い id -> 支払いの時刻 "HH:mm"(時刻が無ければ 00:00)。古いバックアップの支出の初期値に使う。 */
     private fun receiptTimes(data: BackupData): Map<Long, String> =
         data.receipts.associate { it.id to LedgerCalc.splitPurchasedAt(it.purchasedAt).second }
 
@@ -310,7 +310,7 @@ class BackupManager @Inject constructor(
         val receiptIndex = ReceiptMergeIndex(receiptDao.observeAll().first())
         val receiptIdMap = HashMap<Long, Long>()
         val itemsByReceipt = data.receiptItems.groupBy { it.receiptId }
-        // バックアップ内の品目 id -> 復元後の品目 id。新しく入れたレシートの品目だけ対応が取れる(既存のレシートに当たったものは null になる)
+        // バックアップ内の品目 id -> 復元後の品目 id。新しく入れた支払いの品目だけ対応が取れる(既存の支払いに当たったものは null になる)
         val itemIdMap = HashMap<Long, Long>()
         // 今回新しく入れた支払い・品目だけの対応(割り勘の表は、これに当たる分だけ入れる)
         val newReceiptIdMap = HashMap<Long, Long>()
@@ -320,7 +320,7 @@ class BackupManager @Inject constructor(
             val existing = receiptIndex.take(entity)
             if (existing != null) {
                 receiptIdMap[r.id] = existing
-                // 既存のレシートの品目と照合して、支出の receiptItemId を付け替えられるようにする
+                // 既存の支払いの品目と照合して、支出の receiptItemId を付け替えられるようにする
                 itemIdMap.putAll(matchExistingItems(itemsByReceipt[r.id].orEmpty(), receiptDao.getItems(existing)))
                 skipped++
             } else {
@@ -338,10 +338,10 @@ class BackupManager @Inject constructor(
             }
         }
 
-        // 「重複ではない」の組: 復元後のレシート id に付け替える。対応が取れない組は捨てる
+        // 「重複ではない」の組: 復元後の支払い id に付け替える。対応が取れない組は捨てる
         receiptDao.insertNotDuplicates(remapNotDuplicates(data.receiptNotDuplicates, receiptIdMap))
 
-        // 支払いグループ(uid があれば uid で、無い古い形式は日付・金額・カテゴリ・メモ・レシートで重複判定)。
+        // 支出(まとまり、uid があれば uid で、無い古い形式は日付・金額・カテゴリ・メモ・支払いで重複判定)。
         // 既存と重複したグループの品目は飛ばす
         val groupIndex = GroupMergeIndex(expenseGroupDao.observeAll().first())
         val groupIdMap = HashMap<Long, Long>()
