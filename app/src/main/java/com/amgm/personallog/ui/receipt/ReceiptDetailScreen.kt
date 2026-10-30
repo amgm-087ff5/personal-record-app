@@ -455,7 +455,9 @@ fun ReceiptDetailScreen(
 
     // 品目(まとまり)の編集シート
     if (editGroupKey != 0L) {
-        val group = groups.firstOrNull { editGroupKey in it.keys }
+        // 開いた時点の対象を覚える。編集中に他の品目と同じ内容になって統合されても、変更は開いた品目にしか及ばない。
+        val openedKeys = remember(editGroupKey) { groups.firstOrNull { editGroupKey in it.keys }?.keys.orEmpty() }
+        val group = groupItemFormsWithin(s.items, openedKeys, editGroupKey)
         if (group == null) {
             LaunchedEffect(Unit) { editGroupKey = 0L }
         } else {

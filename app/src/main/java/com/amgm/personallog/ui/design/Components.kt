@@ -24,7 +24,12 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,10 +42,13 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlin.math.max
 
 /*
@@ -279,9 +287,80 @@ fun TextAction(
     }
 }
 
+/** BareField が外へ出した文字列を覚えておく数。これを超えた古いものから忘れる(メモリを膨らませない)。 */
+private const val BARE_FIELD_PENDING_MAX = 8
+
+/** 入力が止まってから、外から来る値を正として表示を合わせ直すまでの待ち(外が値を変えなかった=拒否した場合のため)。 */
+private const val BARE_FIELD_RECONCILE_MS = 250L
+
+/**
+ * BareField の内部状態。IME の変換中・選択範囲を保つため TextFieldValue を持つ。
+ *
+ * 外(ViewModel の StateFlow など)は値を非同期に戻すことがある。1文字ごとに戻ってくる古い値で
+ * 変換中の文字を上書きするとカーソルが飛ぶので、「自分が外へ出した文字列」は pending に覚え、
+ * 外から同じ値が戻ってきたときは無視する。pending に無い値(整形・プログラムからの変更)は受け入れる。
+ */
+internal class BareFieldState(initial: String) {
+    var field by mutableStateOf(TextFieldValue(initial, TextRange(initial.length)))
+        private set
+
+    /** 入力のたびに増える。入力が止まったことの検出に使う。 */
+    var edits by mutableStateOf(0)
+        private set
+
+    private val pending = ArrayDeque<String>()
+    private var lastExternal = initial
+
+    /** 外から来た value を取り込む。入力による変更なら表示は変えない。 */
+    fun syncFrom(value: String) {
+        if (value == lastExternal) return
+        lastExternal = value
+        if (value == field.text) {
+            pending.clear()
+            return
+        }
+        if (pending.contains(value)) return
+        accept(value)
+    }
+
+    /** 入力が止まった後、外の値と表示が食い違っていれば外を正とする(外が整形・拒否した場合)。 */
+    fun reconcile(value: String) {
+        lastExternal = value
+        if (value != field.text) accept(value)
+        pending.clear()
+    }
+
+    /** 画面の入力。文字が変わったときだけ true(外へ出す)。選択範囲だけの変化は外へ出さない。 */
+    fun edit(next: TextFieldValue): Boolean {
+        val changed = next.text != field.text
+        field = next
+        if (changed) {
+            pending.addLast(next.text)
+            while (pending.size > BARE_FIELD_PENDING_MAX) pending.removeFirst()
+            edits += 1
+        }
+        return changed
+    }
+
+    private fun accept(value: String) {
+        val old = field
+        // 文字が増える変更は末尾へ。減る(整形で削られた)場合は元の選択範囲を文字数の範囲に収める。
+        val selection = if (value.length > old.text.length) {
+            TextRange(value.length)
+        } else {
+            TextRange(old.selection.start.coerceIn(0, value.length), old.selection.end.coerceIn(0, value.length))
+        }
+        field = TextFieldValue(value, selection)
+        pending.clear()
+    }
+}
+
 /**
  * 枠なしの入力。箱を作らず、文字がそのまま壁に書かれたように見せる。
  * underline=true のときだけ下に細い罫線を引く(設定のAPIキーなど、欄として明示したい所のみ)。
+ *
+ * 呼び出し側は String のまま使える。内部では TextFieldValue を持ち、IME の変換中や選択範囲を保つ。
+ * 値を StateFlow など非同期に戻す画面でも、戻ってきた古い値で入力中の文字を上書きしない(BareFieldState)。
  */
 @Composable
 fun BareField(
@@ -299,10 +378,21 @@ fun BareField(
     readOnly: Boolean = false,
     visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
+    val state = remember { BareFieldState(value) }
+    state.syncFrom(value)
+    val latestValue by rememberUpdatedState(value)
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
+    // 入力が止まったら、外の値を正として合わせ直す(外が値を変えずに拒否した場合に、表示だけ残らないように)。
+    LaunchedEffect(state.edits) {
+        if (state.edits > 0) {
+            delay(BARE_FIELD_RECONCILE_MS)
+            state.reconcile(latestValue)
+        }
+    }
     Column(modifier = modifier) {
         BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
+            value = state.field,
+            onValueChange = { next -> if (state.edit(next)) latestOnValueChange(next.text) },
             textStyle = textStyle.copy(color = color),
             singleLine = singleLine,
             minLines = minLines,
@@ -314,7 +404,7 @@ fun BareField(
             modifier = Modifier.fillMaxWidth(),
             decorationBox = { inner ->
                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = if (underline) Space.s else 0.dp)) {
-                    if (value.isEmpty() && placeholder.isNotEmpty()) {
+                    if (state.field.text.isEmpty() && placeholder.isNotEmpty()) {
                         Text(placeholder, style = textStyle, color = AppTheme.colors.inkFaint)
                     }
                     inner()
