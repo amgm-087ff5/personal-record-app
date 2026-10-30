@@ -8,6 +8,7 @@ import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.data.model.SplitParticipant
+import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.domain.PaymentValues
 import com.amgm.personallog.domain.PaymentWriteBack
 import com.amgm.personallog.domain.WriteBackTarget
@@ -55,7 +56,7 @@ class PaymentWriteBackRobolectricTest {
     private fun item(name: String, amount: Int, id: Long = 0) =
         ReceiptItem(id = id, receiptId = 0, name = name, amount = amount, category = "食費")
 
-    /** 牛乳200・洗剤500(合計700・手入力)を保存して確定し、(レシートの id, 品目)を返す。 */
+    /** 牛乳200・洗剤500(合計700・手入力)を保存して確定し、(支払いの id, 品目)を返す。 */
     private fun confirmedReceipt(): Pair<Long, List<ReceiptItem>> = runBlocking {
         val id = receipts.saveAndConfirm(receipt(), listOf(item("牛乳", 200), item("洗剤", 500)))
         id to receipts.getItems(id)
@@ -190,5 +191,123 @@ class PaymentWriteBackRobolectricTest {
         // 何も書かれていない
         assertEquals(200, itemsOf(id).first { it.id == milk.receiptItemId }.amount)
         assertEquals(200, children(id)[0].amount)
+    }
+
+    @Test
+    fun advanceGroupAmountWritesOwnAmountAndFollowsInTheLedger() {
+        // 立て替え: 支出の金額は自分の分(ownAmount)。直すと支払いの自分の分へ入り、合計は変わらない
+        val id = runBlocking {
+            receipts.saveAndConfirm(receipt().copy(isAdvance = true, ownAmount = 300), listOf(item("牛乳", 200), item("洗剤", 500)))
+        }
+        val g = groups(id).single()
+        assertEquals(300, g.amount)
+        assertNull(writeBack(WriteBackTarget.Group(g), PaymentValues(g.date, g.time, 400, g.category, "", g.memo)))
+        assertEquals(400, receiptOf(id).ownAmount)
+        assertEquals(700, receiptOf(id).totalAmount)
+        assertEquals(400, groups(id).single().amount)
+        assertEquals(400, children(id).sumOf { it.amount })
+        sync(id) // 往復しても変わらない
+        assertEquals(400, groups(id).single().amount)
+        assertFalse(groups(id).single().amountEdited)
+    }
+
+    @Test
+    fun printedGroupAmountWritesManualTotalAndKeepsImage() {
+        val id = runBlocking {
+            receipts.saveAndConfirm(
+                receipt(total = 700).copy(imagePath = "receipts/r1.jpg", rawJson = "{\"raw\":1}", totalSource = TotalSource.PRINTED),
+                listOf(item("牛乳", 200), item("洗剤", 500)),
+            )
+        }
+        val g = groups(id).single()
+        assertNull(writeBack(WriteBackTarget.Group(g), PaymentValues(g.date, g.time, 650, g.category, "", g.memo)))
+        val r = receiptOf(id)
+        assertEquals(650, r.totalAmount)
+        assertEquals(TotalSource.MANUAL, r.totalSource)
+        assertEquals("receipts/r1.jpg", r.imagePath)
+        assertEquals("{\"raw\":1}", r.rawJson)
+        assertEquals(700, itemsOf(id).sumOf { it.amount }) // 品目は変えない(差額は表示に任せる)
+        sync(id)
+        assertEquals(650, groups(id).single().amount)
+    }
+
+    @Test
+    fun onlyItemAmountWritesTotalAndTheItemAndFollowsInTheLedger() {
+        val id = runBlocking { receipts.saveAndConfirm(receipt(total = 200), listOf(item("牛乳", 200))) }
+        val milk = children(id).single()
+        assertNull(writeBack(WriteBackTarget.Item(milk, onlyItem = true), PaymentValues(milk.date, milk.time, 250, milk.category, milk.name, milk.memo)))
+        assertEquals(250, receiptOf(id).totalAmount)
+        assertEquals(TotalSource.MANUAL, receiptOf(id).totalSource)
+        assertEquals(250, itemsOf(id).single().amount)
+        assertEquals(250, groups(id).single().amount)
+        assertEquals(250, children(id).single().amount)
+        sync(id)
+        assertEquals(250, groups(id).single().amount)
+        assertEquals(250, children(id).single().amount)
+    }
+
+    @Test
+    fun onlyItemAmountOfPrintedReceiptWritesManualTotal() {
+        val id = runBlocking {
+            receipts.saveAndConfirm(receipt(total = 200).copy(imagePath = "receipts/r2.jpg"), listOf(item("牛乳", 200)))
+        }
+        val milk = children(id).single()
+        assertNull(writeBack(WriteBackTarget.Item(milk, onlyItem = true), PaymentValues(milk.date, milk.time, 180, milk.category, milk.name, milk.memo)))
+        assertEquals(180, receiptOf(id).totalAmount)
+        assertEquals(TotalSource.MANUAL, receiptOf(id).totalSource)
+        assertEquals("receipts/r2.jpg", receiptOf(id).imagePath)
+        assertEquals(180, itemsOf(id).single().amount)
+        assertEquals(180, groups(id).single().amount)
+    }
+
+    @Test
+    fun onlyItemAmountOfAdvanceWritesOwnAmount() {
+        val id = runBlocking {
+            receipts.saveAndConfirm(receipt(total = 700).copy(isAdvance = true, ownAmount = 200), listOf(item("牛乳", 700)))
+        }
+        val milk = children(id).single()
+        assertEquals(200, milk.amount)
+        assertNull(writeBack(WriteBackTarget.Item(milk, onlyItem = true), PaymentValues(milk.date, milk.time, 260, milk.category, milk.name, milk.memo)))
+        assertEquals(260, receiptOf(id).ownAmount)
+        assertEquals(700, receiptOf(id).totalAmount)
+        assertEquals(700, itemsOf(id).single().amount)
+        assertEquals(260, groups(id).single().amount)
+        assertEquals(260, children(id).single().amount)
+    }
+
+    @Test
+    fun onlyItemAmountWithEditedGroupAmountStillFollows() {
+        // まとまりの金額が編集済みでも、品目の金額の書き戻しで支出の金額が追従する
+        val id = runBlocking { receipts.saveAndConfirm(receipt(total = 200), listOf(item("牛乳", 200))) }
+        runBlocking { db.expenseGroupDao().update(groups(id).single().copy(amountEdited = true)) }
+        val milk = children(id).single()
+        assertNull(writeBack(WriteBackTarget.Item(milk, onlyItem = true), PaymentValues(milk.date, milk.time, 250, milk.category, milk.name, milk.memo)))
+        assertEquals(250, groups(id).single().amount)
+        assertFalse(groups(id).single().amountEdited)
+    }
+
+    @Test
+    fun groupAmountWithoutSplitSheetIsNotBlockedByAdvanceLegacyDefault() {
+        // 旧い立て替え(割り勘シートなし)を、割り勘2人と数えて拒否しない(画面の splitPeople と同じ 1 人)
+        val id = runBlocking { receipts.saveAndConfirm(receipt().copy(isAdvance = true, ownAmount = 300), listOf(item("牛乳", 200), item("洗剤", 500))) }
+        assertEquals(1, runBlocking { receipts.participantCount(id) })
+        val g = groups(id).single()
+        assertNull(writeBack(WriteBackTarget.Group(g), PaymentValues(g.date, g.time, 350, g.category, "", g.memo)))
+        assertEquals(350, receiptOf(id).ownAmount)
+    }
+
+    @Test
+    fun groupAmountIsRejectedWhenSplitHasTwoPeople() {
+        val (id, _) = confirmedReceipt()
+        runBlocking {
+            splits.load(id)
+            db.splitDao().insertParticipant(SplitParticipant(receiptId = id, personId = null, label = "友人", sortOrder = 9))
+        }
+        val g = groups(id).single()
+        assertEquals(
+            PaymentWriteBack.MESSAGE_SPLIT_AMOUNT,
+            writeBack(WriteBackTarget.Group(g), PaymentValues(g.date, g.time, g.amount + 100, g.category, "", g.memo)),
+        )
+        assertEquals(700, receiptOf(id).totalAmount)
     }
 }

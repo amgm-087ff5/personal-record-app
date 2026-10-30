@@ -76,7 +76,7 @@ class TaxCalcTest {
 
     @Test
     fun legacyOwnShares_sumToReceiptOwn() {
-        // 旧形式: 品目ごとの自分の分(円・税込)を足して、レシート全体の値にする。
+        // 旧形式: 品目ごとの自分の分(円・税込)を足して、支払い全体の値にする。
         val lines = listOf(
             PricedLine(amount = 120, taxRate = 8, priceIncludesTax = false),           // 全額自分 129.6
             PricedLine(amount = 123, taxRate = 8, priceIncludesTax = false, ownAmount = 100),
@@ -94,7 +94,7 @@ class TaxCalcTest {
             item(120, taxRate = 8, included = false),
             item(500, included = true),
         )
-        // 立て替え: レシート全体の自分の分(200円)。129.6:500 の比(税込の円 129:500)で 41 + 159
+        // 立て替え: 支払い全体の自分の分(200円)。129.6:500 の比(税込の円 129:500)で 41 + 159
         val advance = receipt(advance = true, own = 200)
         val a = LedgerCalc.groupFromReceipt(advance, items, now = 1)!!
         assertEquals(200, a.group.amount)

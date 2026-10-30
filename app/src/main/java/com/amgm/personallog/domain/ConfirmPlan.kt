@@ -6,7 +6,7 @@ import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.data.model.ReceiptItem
 
 /**
- * レシートの確定(再確定)で、家計簿の行をどう変えるかの計画。DBに触れない純Kotlinで作り、Repository が実行する。
+ * 支払いの確定(再確定)で、家計簿の行をどう変えるかの計画。DBに触れない純Kotlinで作り、Repository が実行する。
  * 自分の支出は必ずまとまり(expense_groups)1つと品目1行以上(v14〜。単独の支出は無い)。
  */
 sealed interface ConfirmPlan {
@@ -36,9 +36,9 @@ sealed interface ConfirmPlan {
 
 object ConfirmPlanner {
     /**
-     * @param items レシートの品目(DBの id を持つ)
-     * @param existingGroups このレシートに紐づく既存の支払いグループ
-     * @param existingExpenses このレシートに紐づく既存の支出(receiptId が一致するもの。手入力で足した品目は含まない)
+     * @param items 支払いの品目(DBの id を持つ)
+     * @param existingGroups この支払いに紐づく既存の支出(まとまり)
+     * @param existingExpenses この支払いに紐づく既存の支出(receiptId が一致するもの。手入力で足した品目は含まない)
      * @param share 割り勘の自分の分。null なら従来どおり(全額が自分の分)
      */
     fun plan(
@@ -73,14 +73,14 @@ object ConfirmPlanner {
         }
 
         val updatedGroup = mergeGroup(group, fresh.group)
-        // 品目の日時はグループに従う(グループの日時を支払い側で直していても、品目はそれに合わせる)
+        // 品目の日時は支出に従う(グループの日時を支払い側で直していても、品目はそれに合わせる)
         fun Expense.followGroup() = copy(date = updatedGroup.date, time = updatedGroup.time)
         val wantedByItem = fresh.items.filter { it.receiptItemId != null }.associateBy { it.receiptItemId }
         val existingByItem = existingExpenses.filter { it.receiptItemId != null }.groupBy { it.receiptItemId }
-        // 結果の行(レシートの品目の順)。id が 0 の行は追加、それ以外は更新
+        // 結果の行(支払いの品目の順)。id が 0 の行は追加、それ以外は更新
         val result = ArrayList<Expense>()
         val deleteIds = ArrayList<Long>()
-        // レシートの品目の順に処理する(挿入の順を安定させる)
+        // 支払いの品目の順に処理する(挿入の順を安定させる)
         for (item in items) {
             val want = wantedByItem[item.id]
             val have = existingByItem[item.id].orEmpty()
@@ -97,7 +97,7 @@ object ConfirmPlanner {
                 deleteIds += have.drop(1).map { it.id }
             }
         }
-        // レシートから消えた品目の支出
+        // 支払いから消えた品目の支出
         for ((itemId, have) in existingByItem) if (itemId !in itemIds) deleteIds += have.map { it.id }
         // 品名が空の1品目(receiptItemId なし): 品目の無い支払い、または品目を全部消した・0円しか無い支出の品目。
         // 他に消していない品目が無ければ使う(あれば更新、無ければ作る)。他に品目ができたら消す
@@ -158,7 +158,7 @@ object ConfirmPlanner {
         }
     }
 
-    /** 品目の支出: 編集済みでない欄だけレシート(want)の値にする。金額不明の印はレシートに従う。 */
+    /** 品目の支出: 編集済みでない欄だけ支払い(want)の値にする。金額不明の印は支払いに従う。 */
     internal fun mergeItem(have: Expense, want: Expense): Expense = have.copy(
         amount = if (have.amountEdited) have.amount else want.amount,
         category = if (have.categoryEdited) have.category else want.category,
@@ -179,7 +179,7 @@ object ConfirmPlanner {
     )
 }
 
-/** レシートの品目の保存を差分にするための計画。id が保たれる。 */
+/** 支払いの品目の保存を差分にするための計画。id が保たれる。 */
 data class ItemSavePlan(
     val inserts: List<ReceiptItem>,
     val updates: List<ReceiptItem>,
@@ -209,7 +209,7 @@ object ItemSaver {
     /**
      * plan を保存したあとの品目 id を、incoming(画面の並び)と同じ順に返す。plan と同じ規則で、更新の行は id をそのまま使う。
      * 新規の行は plan.inserts の順に、保存後に増えた id を小さい順に当てる(Room は挿入を順に採番するため)。
-     * savedIds は保存後にDBにある、このレシートの品目の id 全部。
+     * savedIds は保存後にDBにある、この支払いの品目の id 全部。
      */
     fun savedIdsInOrder(incoming: List<ReceiptItem>, plan: ItemSavePlan, savedIds: List<Long>): List<Long> {
         val updateIds = plan.updates.mapTo(HashSet()) { it.id }

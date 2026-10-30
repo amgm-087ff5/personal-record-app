@@ -7,11 +7,11 @@ import com.amgm.personallog.data.model.ReceiptItem
 import com.amgm.personallog.domain.PaymentField
 
 /**
- * 編集済みの欄のうち、レシート由来の行についてだけ「レシートと違う」の印を付ける(純Kotlin)。
+ * 編集済みの欄のうち、レシート由来の行についてだけ「支払いと違う」の印を付ける(純Kotlin)。
  *
  * 支払いは手入力でも receipts 表の1行なので、支出には receiptId が入る。receiptId の有無だけでは
  * レシート(画像・読取原文のある支払い)かどうかは分からないため、[fromScannedReceipt] で区別する。
- * 手入力の支払いには比べる相手(レシート)が無いので、印は付けない。
+ * 手入力の支払いには比べる相手が無いので、印は付けない。
  */
 object PaymentMarks {
     /** 支払いがレシート(画像か読取原文がある)か。手入力の支払いは false。 */

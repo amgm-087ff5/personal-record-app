@@ -7,7 +7,7 @@ import com.amgm.personallog.data.model.TotalSource
 data class TotalSourceDecision(val totalAmount: Int?, val totalSource: String)
 
 /**
- * DB v8 への移行で、既存のレシートの totalSource(と、空欄に戻す合計)を rawJson から決める(純Kotlin)。
+ * DB v8 への移行で、既存の支払いの totalSource(と、空欄に戻す合計)を rawJson から決める(純Kotlin)。
  *
  * rawJson に LLM が読んだ合計(total)があれば、それと保存値を比べる。
  * 以前は合計が読めないと品目の合計で自動補完していたので、total が無い確定済みは「品目から」とみなす。

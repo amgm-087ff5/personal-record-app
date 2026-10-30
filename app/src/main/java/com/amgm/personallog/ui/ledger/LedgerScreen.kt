@@ -56,7 +56,7 @@ import java.time.YearMonth
 fun LedgerScreen(
     modifier: Modifier = Modifier,
     onOpenPayment: (PaymentKind, Long) -> Unit = { _, _ -> },
-    /** 割り勘で自分が外れた支払い(0円の行)の詳細を、支払い(レシート)の id で開く。 */
+    /** 割り勘で自分が外れた支払い(0円の行)の詳細を、支払いの id で開く。 */
     onOpenExcludedPayment: (Long) -> Unit = {},
     /** 下書きの支払いを、登録の手順(支払い → 自分の支出)で開く。支払いの id。 */
     onRegisterPayment: (Long) -> Unit = {},
@@ -73,7 +73,7 @@ fun LedgerScreen(
     val importDrafts by viewModel.importDraftIds.collectAsStateWithLifecycle()
     val c = AppTheme.colors
     val scope = rememberCoroutineScope()
-    // 家計簿の支出は、支払い(レシートの表)を保存したときに作られる。支出だけを単独で追加する入口は無い
+    // 家計簿の支出は、支払い(receipts の表)を保存したときに作られる。支出だけを単独で追加する入口は無い
     // 「＋ 記録」で開く3択シート(レシートを撮る / 写真から選ぶ / 手動で登録)
     var creatingPayment by remember { mutableStateOf(false) }
     // 撮影中の保存先(画面回転・プロセス再生成後も結果を受け取れるよう保存する)
@@ -382,7 +382,7 @@ fun LedgerScreen(
             onSave = { receipt, items, headcount, done ->
                 viewModel.addManualPayment(receipt, items, headcount) { id, err ->
                     done(err)
-                    // 保存できたら、その支払いの詳細を開く(レシート一覧の手入力と同じ遷移)
+                    // 保存できたら、その支払いの詳細を開く(支払い一覧の手入力と同じ遷移)
                     if (id != null) onOpenReceipt(id)
                 }
             },

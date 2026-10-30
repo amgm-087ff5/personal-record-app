@@ -8,7 +8,7 @@ import com.amgm.personallog.receipt.ReceiptMapper
 
 /**
  * 手入力の支払い(レシート画像なし)を作る純ロジック。
- * レシートと同じ表(Receipt)に、imagePath が空の下書きとして作る。保存は既存の ReceiptRepository.save に任せる。
+ * 支払いと同じ表(Receipt)に、imagePath が空の下書きとして作る。保存は既存の ReceiptRepository.save に任せる。
  */
 object ManualReceipt {
 

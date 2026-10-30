@@ -187,14 +187,22 @@ class PaymentWriteBackTest {
     }
 
     @Test
-    fun groupAmountChangeOnPrintedReceiptIsRejected() {
-        val plan = PaymentWriteBack.plan(
-            WriteBackTarget.Group(group()),
-            values(amount = 800, category = "食費", memo = "店"),
-            receipt(total = 700, imagePath = "receipt.jpg"), items, people = 1,
+    fun groupAmountChangeOnPrintedReceiptWritesManualTotalAndKeepsImage() {
+        // 規則: 支出を変えたら支払いにも反映する。印字のあるレシートも合計を MANUAL にして直し、画像・読取原文は残す
+        val printed = receipt(total = 700, imagePath = "receipt.jpg").copy(rawJson = "{\"total\":700}", totalSource = TotalSource.PRINTED)
+        val p = apply(
+            PaymentWriteBack.plan(
+                WriteBackTarget.Group(group()),
+                values(amount = 800, category = "食費", memo = "店"),
+                printed, items, people = 1,
+            ),
         )
-        assertTrue(plan is WriteBackPlan.Reject)
-        assertEquals(PaymentWriteBack.MESSAGE_PRINTED_TOTAL, (plan as WriteBackPlan.Reject).message)
+        assertEquals(800, p.receipt.totalAmount)
+        assertEquals(TotalSource.MANUAL, p.receipt.totalSource)
+        assertEquals("receipt.jpg", p.receipt.imagePath)
+        assertEquals("{\"total\":700}", p.receipt.rawJson)
+        assertTrue(p.changedItems.isEmpty()) // 品目は変えない(差は差額の表示に任せる)
+        assertEquals(800, p.expectedAmount)
     }
 
     @Test
@@ -251,14 +259,117 @@ class PaymentWriteBackTest {
     }
 
     @Test
-    fun onlyItem_amountChangeIsRejected() {
-        // 品目が1つなら、品目の金額は支出の金額と同じ(支出の金額で直す)
-        val plan = PaymentWriteBack.plan(
-            WriteBackTarget.Item(milkExpense(), onlyItem = true),
-            values(amount = 250),
-            receipt(), items, people = 1,
+    fun onlyItem_amountChangeWritesTotalAndTheItemAsManual() {
+        // 品目が1つなら、品目の金額は支出の金額と同じ。支出の金額の変更と同じに、支払いの合計と品目1つへ書き戻す
+        val taxExcluded = listOf(milkItem.copy(priceIncludesTax = false, amount = 700))
+        val p = apply(
+            PaymentWriteBack.plan(
+                WriteBackTarget.Item(milkExpense(amount = 700), onlyItem = true),
+                values(amount = 250),
+                receipt(total = 700), taxExcluded, people = 1,
+            ),
         )
-        assertEquals(PaymentWriteBack.MESSAGE_ONLY_ITEM_AMOUNT, (plan as WriteBackPlan.Reject).message)
+        assertEquals(250, p.receipt.totalAmount)
+        assertEquals(TotalSource.MANUAL, p.receipt.totalSource)
+        val changed = p.changedItems.single()
+        assertEquals(250, changed.amount)
+        assertTrue(changed.priceIncludesTax)
+        assertFalse(changed.unknownAmount)
+        assertEquals(250, p.expense!!.amount)
+        assertFalse(p.expense!!.amountEdited)
+        assertEquals(250, p.expectedAmount)
+    }
+
+    @Test
+    fun onlyItem_amountChangeOnPrintedReceiptWritesManualTotalAndKeepsImage() {
+        val printed = receipt(total = 200, imagePath = "receipt.jpg").copy(rawJson = "{\"x\":1}", totalSource = TotalSource.PRINTED)
+        val p = apply(
+            PaymentWriteBack.plan(
+                WriteBackTarget.Item(milkExpense(), onlyItem = true),
+                values(amount = 250),
+                printed, listOf(milkItem), people = 1,
+            ),
+        )
+        assertEquals(250, p.receipt.totalAmount)
+        assertEquals(TotalSource.MANUAL, p.receipt.totalSource)
+        assertEquals("receipt.jpg", p.receipt.imagePath)
+        assertEquals("{\"x\":1}", p.receipt.rawJson)
+        assertEquals(250, p.changedItems.single().amount)
+    }
+
+    @Test
+    fun onlyItem_unknownItemBecomesKnownWithTheNewAmount() {
+        val unknown = milkItem.copy(amount = 0, unknownAmount = true)
+        val e = milkExpense(amount = 700).copy(unknownAmount = true)
+        val p = apply(
+            PaymentWriteBack.plan(
+                WriteBackTarget.Item(e, onlyItem = true), values(amount = 300), receipt(total = 700), listOf(unknown), people = 1,
+            ),
+        )
+        assertEquals(300, p.receipt.totalAmount)
+        assertFalse(p.changedItems.single().unknownAmount)
+        assertEquals(300, p.changedItems.single().amount)
+        assertFalse(p.expense!!.unknownAmount)
+    }
+
+    @Test
+    fun onlyItem_amountChangeAlsoWritesNameCategoryAndMemo() {
+        val p = apply(
+            PaymentWriteBack.plan(
+                WriteBackTarget.Item(milkExpense(), onlyItem = true),
+                values(amount = 250, name = "牛乳(特売)", category = "外食", memo = "メモ"),
+                receipt(total = 200), listOf(milkItem), people = 1,
+            ),
+        )
+        val changed = p.changedItems.single()
+        assertEquals("牛乳(特売)", changed.name)
+        assertEquals("外食", changed.category)
+        assertEquals("メモ", changed.memo)
+        assertEquals(250, changed.amount)
+    }
+
+    @Test
+    fun onlyItem_amountChangeOfAdvanceWritesOwnAmountOnly() {
+        // 立て替え: 支出の金額は自分の分。合計も品目の金額も変えない
+        val adv = receipt(total = 700).copy(isAdvance = true, ownAmount = 200)
+        val p = apply(
+            PaymentWriteBack.plan(
+                WriteBackTarget.Item(milkExpense(), onlyItem = true), values(amount = 250), adv, listOf(milkItem), people = 1,
+            ),
+        )
+        assertEquals(250, p.receipt.ownAmount)
+        assertEquals(700, p.receipt.totalAmount)
+        assertTrue(p.changedItems.isEmpty())
+        assertEquals(250, p.expectedAmount)
+    }
+
+    @Test
+    fun onlyItem_amountChangeIsRejectedWhenSplitHasTwoOrMorePeople() {
+        val plan = PaymentWriteBack.plan(
+            WriteBackTarget.Item(milkExpense(), onlyItem = true), values(amount = 250), receipt(total = 200), listOf(milkItem), people = 2,
+        )
+        assertEquals(PaymentWriteBack.MESSAGE_SPLIT_AMOUNT, (plan as WriteBackPlan.Reject).message)
+    }
+
+    @Test
+    fun onlyItem_amountChangeToZeroIsRejected() {
+        val plan = PaymentWriteBack.plan(
+            WriteBackTarget.Item(milkExpense(), onlyItem = true), values(amount = 0), receipt(total = 200), listOf(milkItem), people = 1,
+        )
+        assertEquals(PaymentWriteBack.MESSAGE_ONLY_ITEM_ZERO, (plan as WriteBackPlan.Reject).message)
+    }
+
+    @Test
+    fun onlyItem_withoutAmountChangeTouchesNeitherTotalNorAmount() {
+        val r = receipt(total = 200)
+        val p = apply(
+            PaymentWriteBack.plan(
+                WriteBackTarget.Item(milkExpense(), onlyItem = true), values(amount = 200, name = "牛乳2"), r, listOf(milkItem), people = 1,
+            ),
+        )
+        assertEquals(r, p.receipt)
+        assertNull(p.expectedAmount)
+        assertEquals("牛乳2", p.changedItems.single().name)
     }
 
     @Test
@@ -277,13 +388,46 @@ class PaymentWriteBackTest {
     }
 
     @Test
-    fun groupAmountChangeOfAdvanceIsRejected() {
-        val plan = PaymentWriteBack.plan(
-            WriteBackTarget.Group(group()),
-            values(amount = 800, category = "食費", memo = "店"),
-            receipt().copy(isAdvance = true, ownAmount = 300), items, people = 1,
+    fun groupAmountChangeOfAdvanceWritesOwnAmountAndKeepsTotal() {
+        // 立て替えの支出の金額は自分の分(ownAmount)。支払いの合計は変えない
+        val p = apply(
+            PaymentWriteBack.plan(
+                WriteBackTarget.Group(group(amount = 300)),
+                values(amount = 400, category = "食費", memo = "店"),
+                receipt().copy(isAdvance = true, ownAmount = 300), items, people = 1,
+            ),
         )
-        assertEquals(PaymentWriteBack.MESSAGE_ADVANCE_AMOUNT, (plan as WriteBackPlan.Reject).message)
+        assertEquals(400, p.receipt.ownAmount)
+        assertEquals(700, p.receipt.totalAmount)
+        assertEquals(TotalSource.UNKNOWN, p.receipt.totalSource)
+        assertTrue(p.receipt.isAdvance)
+        assertFalse(p.group!!.amountEdited)
+        assertEquals(400, p.expectedAmount)
+    }
+
+    @Test
+    fun groupAmountChangeOfAdvanceWithoutOwnAmountSetsIt() {
+        // 自分の分が未入力(全額)の立て替えも、直した金額を自分の分に入れる
+        val p = apply(
+            PaymentWriteBack.plan(
+                WriteBackTarget.Group(group(amount = 700)),
+                values(amount = 400, category = "食費", memo = "店"),
+                receipt().copy(isAdvance = true, ownAmount = null), items, people = 1,
+            ),
+        )
+        assertEquals(400, p.receipt.ownAmount)
+        assertEquals(700, p.receipt.totalAmount)
+    }
+
+    @Test
+    fun groupAmountChangeOfAdvanceIsRejectedWhenSplitHasTwoOrMorePeople() {
+        // 規則の例外(設計判断待ち・(d)): 割り勘で2人以上なら立て替えでも書き戻さない
+        val plan = PaymentWriteBack.plan(
+            WriteBackTarget.Group(group(amount = 300)),
+            values(amount = 400, category = "食費", memo = "店"),
+            receipt().copy(isAdvance = true, ownAmount = 300), items, people = 2,
+        )
+        assertEquals(PaymentWriteBack.MESSAGE_SPLIT_AMOUNT, (plan as WriteBackPlan.Reject).message)
     }
 
     @Test

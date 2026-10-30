@@ -65,7 +65,7 @@ class MonthBoundaryTest {
 
     @Test
     fun bars_withNegativeDifference_haveDrawnTotalAtLeastTotal() {
-        // 品目の合計が支払い金額より大きい(差額が負)グループ
+        // 品目の合計が支出金額より大きい(差額が負)グループ
         val g = ExpenseGroup(receiptId = 1L, id = 7, date = "2026-10-14", amount = 500, category = "日用品", createdAt = 1)
         val items = listOf(child(1, "2026-10-14", 400, "食費"), child(2, "2026-10-14", 300, "食費"))
         val entries = LedgerLogic.buildEntries(items, listOf(g))
@@ -85,7 +85,7 @@ class MonthBoundaryTest {
         val entry = LedgerLogic.buildEntries(listOf(kept, gone), listOf(g)).single() as com.amgm.personallog.ui.ledger.LedgerEntry.Group
         assertEquals(listOf(1L), entry.items.map { it.id })
         assertEquals(500L, entry.difference)
-        // 消した品目の金額は、差額としてグループのカテゴリ(日用品)に入る。合計は支払い金額のまま
+        // 消した品目の金額は、差額としてグループのカテゴリ(日用品)に入る。合計は支出金額のまま
         assertEquals(
             mapOf("食費" to 200L, "日用品" to 500L),
             entry.categoryParts.associate { it.category to it.total },

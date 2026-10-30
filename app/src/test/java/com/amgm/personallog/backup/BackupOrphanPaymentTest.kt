@@ -20,7 +20,7 @@ class BackupOrphanPaymentTest {
         return value!!
     }
 
-    /** 旧形式の支払いグループ(品目は子の支出 2 件)と、単独の支出 1 件。どれも支払いに属さない。 */
+    /** 旧形式の支出(まとまり。品目は子の支出 2 件)と、単独の支出 1 件。どれも支払いに属さない。 */
     private fun oldFormatData(): BackupData = BackupData(
         formatVersion = 4,
         dbVersion = 11,

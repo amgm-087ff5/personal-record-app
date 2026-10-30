@@ -52,7 +52,7 @@ class SplitRepositoryRobolectricTest {
 
     private fun item(name: String, amount: Int) = ReceiptItem(receiptId = 0, name = name, amount = amount, category = "食費")
 
-    /** レシートと品目を入れて、レシートの id を返す。 */
+    /** 支払いと品目を入れて、支払いの id を返す。 */
     private fun receiptWith(items: List<ReceiptItem>, isAdvance: Boolean = false, ownAmount: Int? = null): Long = runBlocking {
         val id = db.receiptDao().insert(
             Receipt(

@@ -138,7 +138,7 @@ class SplitSheetViewModel @Inject constructor(
     private var items: List<ReceiptItem> = emptyList()
     private var total: Int? = null
     private var members: List<Person> = emptyList()
-    /** レシートの参加人数(headcount。null は不明)。保存時の確認に使う。 */
+    /** 支払いの参加人数(headcount。null は不明)。保存時の確認に使う。 */
     private var headcount: Int? = null
 
     /** まとまりに割当の行が無いときの割り方の見本(画面で選んだ方式を覚えておく)。 */

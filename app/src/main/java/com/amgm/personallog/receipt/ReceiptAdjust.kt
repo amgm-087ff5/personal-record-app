@@ -161,6 +161,6 @@ object ReceiptGeometry {
         exifNormal && adjust.isNone && fileBytes <= thresholdBytes
 }
 
-/** レシートに保存してある補正値。 */
+/** 支払いに保存してある補正値。 */
 fun Receipt.adjust(): ReceiptAdjust =
     ReceiptAdjust(rotationDegrees, cropLeft, cropTop, cropRight, cropBottom).sanitized()

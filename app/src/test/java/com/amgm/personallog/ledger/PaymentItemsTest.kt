@@ -36,12 +36,12 @@ class PaymentItemsTest {
         val g = LedgerEntry.Group(group(700), listOf(item(1, 200, "食費"), item(2, 500, "日用品")))
         val totals = LedgerLogic.totalsByCategory(listOf(g))
         assertEquals(listOf(CategoryTotal("日用品", 500), CategoryTotal("食費", 200)), totals)
-        assertEquals(700L, totals.sumOf { it.total }) // 合計は支払い金額と一致
+        assertEquals(700L, totals.sumOf { it.total }) // 合計は支出金額と一致
     }
 
     @Test
     fun difference_goesToTheGroupCategory_andTotalsStillMatch() {
-        // 支払い金額 1000、品目の合計 900 -> 差額 100 は日用品(グループのカテゴリ)
+        // 支出金額 1000、品目の合計 900 -> 差額 100 は日用品(グループのカテゴリ)
         val g = LedgerEntry.Group(group(1000, "日用品"), listOf(item(1, 400, "食費"), item(2, 500, "日用品")))
         assertEquals(100L, g.difference)
         val m = LedgerLogic.totalsByCategory(listOf(g)).associate { it.category to it.total }
@@ -99,7 +99,7 @@ class PaymentItemsTest {
 
     @Test
     fun negativeCategory_isHiddenFromShares_butNotFromTotals() {
-        // 品目の合計が支払い金額を大きく超え、グループのカテゴリが負になる
+        // 品目の合計が支出金額を大きく超え、グループのカテゴリが負になる
         val g = LedgerEntry.Group(group(300, "日用品"), listOf(item(1, 500, "食費"), item(2, 100, "日用品")))
         val totals = LedgerLogic.totalsByCategory(listOf(g))
         assertEquals(300L, totals.sumOf { it.total })
@@ -129,7 +129,7 @@ class PaymentItemsTest {
             now = 9,
         )
         assertTrue(r.errors.toString(), r.isValid)
-        // 支払い(レシートの表)は手入力。合計が入っているので確定。店名は memo から
+        // 支払い(receipts の表)は手入力。合計が入っているので確定。店名は memo から
         val receipt = r.receipt!!
         assertEquals(700, receipt.totalAmount)
         assertEquals("2026-10-03 10:15", receipt.purchasedAt)
@@ -194,18 +194,18 @@ class PaymentItemsTest {
         assertNull(DraftPayment.sumText(listOf(DraftItem(), DraftItem())))
     }
 
-    // ------------------------------------------------------------ 「レシートと違う」の印、レシートへのリンク
+    // ------------------------------------------------------------ 「支払いと違う」の印、支払いへのリンク
 
     @Test
     fun marks_onlyForReceiptLinkedRows() {
         val g = group(700).copy(receiptId = 1, amountEdited = true, timeEdited = true)
         assertEquals(setOf(PaymentField.AMOUNT, PaymentField.TIME), PaymentMarks.ofGroup(g))
-        // 手入力の支払いは、直してもレシートと比べるものがない
+        // 手入力の支払いは、直しても支払いと比べるものがない
         assertTrue(PaymentMarks.ofGroup(g, fromScannedReceipt = false).isEmpty())
         val e = item(1, 200, "食費").copy(receiptId = 1, receiptItemId = 11, nameEdited = true, memoEdited = true, categoryEdited = true)
         assertEquals(setOf(PaymentField.NAME, PaymentField.MEMO, PaymentField.CATEGORY), PaymentMarks.ofExpense(e))
         assertTrue(PaymentMarks.ofExpense(e.copy(receiptId = null, receiptItemId = null)).isEmpty())
-        // 手で足した品目(グループ内・レシートの品目と対応しない)は印なし
+        // 手で足した品目(グループ内・支払いの品目と対応しない)は印なし
         assertTrue(PaymentMarks.ofExpense(item(2, 100, "食費").copy(amountEdited = true)).isEmpty())
     }
 

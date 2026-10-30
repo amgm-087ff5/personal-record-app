@@ -119,12 +119,12 @@ class BackupFormat6Test {
 
     @Test
     fun groupMerge_differentUidButSameReceipt_fallsBackToLegacyKey() {
-        // 別の端末で確定して uid が違うだけの、同じレシートの支払いは二重に登録しない
+        // 別の端末で確定して uid が違うだけの、同じ支払いの支出は二重に登録しない
         val idx = GroupMergeIndex(listOf(group.copy(id = 100, uid = "device-b")))
         assertEquals(100L, idx.find("g-uid-1", group.copy(id = 0)))
-        // 従来のキーが違っても、そのレシートに支払いグループが既にあれば追加しない(同じレシートにグループが二重になるのを防ぐ)
+        // 従来のキーが違っても、その支払いに支出(まとまり)が既にあれば追加しない(同じ支払いにグループが二重になるのを防ぐ)
         assertEquals(100L, idx.find("g-uid-1", group.copy(id = 0, amount = 1, memo = "直した")))
-        // 別のレシートのグループなら別の支払い
+        // 別の支払いのグループなら別の支払い
         assertNull(idx.find("g-uid-1", group.copy(id = 0, amount = 1, receiptId = 6)))
     }
 
@@ -151,7 +151,7 @@ class BackupFormat6Test {
         assertTrue(idx.isDuplicate(backupExpense("a-1"), 50, 60))
         assertTrue(idx.isDuplicate(backupExpense("a-2"), 50, 60))
         assertFalse(idx.isDuplicate(backupExpense("a-3"), 50, 60)) // 3件目は件数が足りず新規
-        // レシートに属さない(復元後の receiptId が無い)行は、uid が違えば別の行
+        // 支払いに属さない(復元後の receiptId が無い)行は、uid が違えば別の行
         val manual = ExpenseMergeIndex(listOf(ex.copy(receiptId = null, groupId = null)))
         assertFalse(manual.isDuplicate(backupExpense("z"), null, null))
     }

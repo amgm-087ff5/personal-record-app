@@ -49,7 +49,7 @@ class ConfirmPlannerTest {
         // 家計簿で: 牛乳の金額とメモ、グループのメモ(店名)を直した
         val editedMilk = children[0].copy(amount = 250, amountEdited = true, memo = "自分で", memoEdited = true)
         val editedGroup = g.copy(memo = "行きつけ", memoEdited = true)
-        // レシートの方は: 牛乳の品名・カテゴリを直し、洗剤の金額を変え、合計も変えた
+        // 支払いの方は: 牛乳の品名・カテゴリを直し、洗剤の金額を変え、合計も変えた
         val items = listOf(milk.copy(name = "牛乳(特売)", category = "外食"), soap.copy(amount = 480))
         val plan = ConfirmPlanner.plan(
             receipt(total = 700), items, listOf(editedGroup), listOf(editedMilk, children[1]), now = 2,
@@ -107,7 +107,7 @@ class ConfirmPlannerTest {
         val plan = ConfirmPlanner.plan(
             receipt(at = "2026-10-06 09:00"), listOf(milk, soap), listOf(g), listOf(moved, children[1]), now = 2,
         ) as ConfirmPlan.UpdateGroup
-        // 品目の日時はグループに従う(月・日の振り分けはグループの日付。品目だけ別の日にしない)
+        // 品目の日時は支出に従う(月・日の振り分けはグループの日付。品目だけ別の日にしない)
         assertEquals("2026-10-06", plan.updates.single { it.receiptItemId == 11L }.date)
         assertEquals("2026-10-06", plan.updates.single { it.receiptItemId == 12L }.date)
     }

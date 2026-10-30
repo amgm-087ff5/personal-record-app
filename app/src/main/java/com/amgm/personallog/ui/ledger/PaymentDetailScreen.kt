@@ -42,7 +42,6 @@ import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.Receipt
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentField
-import com.amgm.personallog.domain.PaymentWriteBack
 import com.amgm.personallog.domain.split.IndividualExpense
 import com.amgm.personallog.receipt.ReceiptImageCodec
 import com.amgm.personallog.ui.design.AppTheme
@@ -192,8 +191,8 @@ fun PaymentDetailScreen(
                                 color = c.danger,
                                 modifier = Modifier.padding(top = Space.xs),
                             )
-                            // 印字のあるレシートや割り勘の金額は、ここから合計に入れられない
-                            val canTakeSum = s.receipt?.let { !PaymentWriteBack.isPrinted(it) && s.splitPeople < 2 } ?: true
+                            // 割り勘が2人以上の金額は、ここから合計に入れられない(規則の例外・設計判断待ち)。印字のあるレシートは合計を手入力(MANUAL)にして直す
+                            val canTakeSum = s.splitPeople < 2
                             if (s.itemSum > 0 && canTakeSum) {
                                 TextAction(
                                     "${LedgerLogic.formatYen(s.itemSum)} を合計に入れる",
@@ -564,9 +563,9 @@ private fun StoreSheet(current: String, onDismiss: () -> Unit, onSave: (String, 
     }
 }
 
-/** 「レシートと違う」の小さな印。onRevert があれば、その欄を「支払いの値に戻す」操作を添える。 */
+/** 「支払いと違う」の小さな印。onRevert があれば、その欄を「支払いの値に戻す」操作を添える。 */
 @Composable
-private fun EditedMark(modifier: Modifier = Modifier, text: String = "レシートと違う", onRevert: (() -> Unit)? = null) {
+private fun EditedMark(modifier: Modifier = Modifier, text: String = "支払いと違う", onRevert: (() -> Unit)? = null) {
     if (onRevert == null) {
         Stamp(text, tone = StampTone.Accent, modifier = modifier)
     } else {
@@ -671,9 +670,9 @@ private fun ItemRow(item: Expense, scanned: Boolean, taxLabels: List<String>, on
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                // 日時はグループに従うので、品目の行には出さない(グループの欄で戻す)
+                // 日時は支出に従うので、品目の行には出さない(グループの欄で戻す)
                 marks.filter { it != PaymentField.TIME }.forEach { f ->
-                    EditedMark(Modifier.padding(top = Space.xs), text = "${fieldLabel(f)}がレシートと違う", onRevert = { onRevert(f) })
+                    EditedMark(Modifier.padding(top = Space.xs), text = "${fieldLabel(f)}が支払いと違う", onRevert = { onRevert(f) })
                 }
             }
             Spacer(Modifier.width(Space.s))
@@ -707,7 +706,7 @@ private fun DeletedItemRow(item: Expense, onRestore: () -> Unit) {
     }
 }
 
-/** レシート由来のとき: サムネイルと「レシートを開く」。 */
+/** レシート由来のとき: サムネイルと「支払いを開く」。 */
 @Composable
 private fun ReceiptBlock(imagePath: String?, receiptId: Long?, onOpenReceipt: (Long) -> Unit) {
     if (receiptId == null) return
@@ -722,8 +721,8 @@ private fun ReceiptBlock(imagePath: String?, receiptId: Long?, onOpenReceipt: (L
     ) {
         ReceiptThumb(imagePath)
         Column(Modifier.weight(1f)) {
-            Label("レシート")
-            Text("レシートを開く  ›", style = AppTheme.type.title, color = c.accent)
+            Label("支払い")
+            Text("支払いを開く  ›", style = AppTheme.type.title, color = c.accent)
         }
     }
     Hairline()

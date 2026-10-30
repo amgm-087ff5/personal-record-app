@@ -81,6 +81,13 @@ private fun ItemForm.groupKey() = GroupKey(name.trim(), amount.trim(), taxRate.t
 internal fun groupItemForms(items: List<ItemForm>): List<ItemGroup> =
     items.groupBy { it.groupKey() }.values.map { units -> ItemGroup(units.first(), units) }
 
+/**
+ * 編集シートを開いた時点の対象(openedKeys)の中だけでグループ化し、key を含むまとまりを返す。
+ * 編集中に他の品目と同じ内容になって全体のグループが統合されても、対象は開いた品目のまま保たれる。
+ */
+internal fun groupItemFormsWithin(items: List<ItemForm>, openedKeys: Set<Long>, key: Long): ItemGroup? =
+    groupItemForms(items.filter { it.key in openedKeys }).firstOrNull { key in it.keys }
+
 /** 入力中の1個ぶんを計算用のモデルにする。立て替えでなければ自分の分は無視する(全額自分)。 */
 internal fun ItemForm.toItemModel(receiptId: Long = 0L): ReceiptItem = ReceiptItem(
     id = id,
@@ -203,7 +210,7 @@ data class DetailUiState(
     val items: List<ItemForm> = emptyList(),
     /** 立て替え(自分が払った。他の人の分を含む)かどうか。 */
     val isAdvance: Boolean = false,
-    /** 立て替えのとき、レシート全体のうち自分が払う金額(円・税込)。空は支払総額の全額。 */
+    /** 立て替えのとき、支払い全体のうち自分が払う金額(円・税込)。空は支払総額の全額。 */
     val ownAmount: String = "",
     val busy: Boolean = false,
     val scanning: Boolean = false,
@@ -214,11 +221,11 @@ data class DetailUiState(
     val finishedLink: PaymentLink? = null,
     /** 原本画像のハッシュ。保存時に引き継ぐ(フォームからは変えない)。 */
     val imageHash: String? = null,
-    /** 重複の可能性がある先行のレシート(「重複ではない」の組は除く)。警告カードに相手ごとに出す。 */
+    /** 重複の可能性がある先行の支払い(「重複ではない」の組は除く)。警告カードに相手ごとに出す。 */
     val possibleDuplicates: List<DuplicateRef> = emptyList(),
     /** 重複の組(支払いの id。マージ先が先頭)。組に2件以上あるときだけ空でない。警告カードの「マージする」に使う。 */
     val mergeIds: List<Long> = emptyList(),
-    /** 確定時に重複の候補の確定済みレシートが見つかった場合、その相手(確認ダイアログ用)。空なら出さない。 */
+    /** 確定時に重複の候補の確定済み支払いが見つかった場合、その相手(確認ダイアログ用)。空なら出さない。 */
     val duplicateWarning: List<DuplicateRef> = emptyList(),
     /** 確定しようとしたが合計が未入力のとき true(「合計が未入力です」の確認用)。 */
     val missingTotalPrompt: Boolean = false,
@@ -232,7 +239,7 @@ data class DetailUiState(
     val lostEditedCount: Int = 0,
     /** 警告の中身: 家計簿で消した品目のうち、消したまま残る件数。 */
     val keptDeletedCount: Int = 0,
-    /** このレシートに紐づく家計簿の自分の支出(まとまり)。無ければ null。 */
+    /** この支払いに紐づく家計簿の自分の支出(まとまり)。無ければ null。 */
     val paymentLink: PaymentLink? = null,
     /** 参加人数(整数。空は未入力)。保存で receipts.headcount に入り、割り勘の参加者もそれに合わせる。 */
     val headcount: String = "",
@@ -548,7 +555,7 @@ class ReceiptDetailViewModel @Inject constructor(
 
     /**
      * 割り勘の補助: 品目(グループ)を「自分の分に含める」を切り替える。
-     * 含めた品目の税込価格の合計を、レシート全体の「自分の払う分」に入れる。
+     * 含めた品目の税込価格の合計を、支払い全体の「自分の払う分」に入れる。
      */
     fun togglePicked(keys: Set<Long>) = _state.update { s ->
         val allPicked = s.items.filter { it.key in keys }.all { it.picked }
@@ -674,7 +681,7 @@ class ReceiptDetailViewModel @Inject constructor(
         }
         val items = s.items.map { it.toItemModel(receiptId) }
         val base = loadedReceipt ?: run {
-            _state.update { it.copy(error = "レシートを読み込めていないため保存できません。") }
+            _state.update { it.copy(error = "支払いを読み込めていないため保存できません。") }
             return null
         }
         // 合計は補完しない。空なら null のまま(下書きは保存できる。確定は startConfirm で止める)
@@ -700,7 +707,7 @@ class ReceiptDetailViewModel @Inject constructor(
         return receipt to items
     }
 
-    /** 下書きとして保存(確定済みレシートでは使わない)。 */
+    /** 下書きとして保存(確定済み支払いでは使わない)。 */
     fun saveDraft() {
         if (_state.value.busy) return
         syncHeadcountThen { doSaveDraft() }
@@ -724,9 +731,9 @@ class ReceiptDetailViewModel @Inject constructor(
     }
 
     /**
-     * 確定: レシート・品目を保存し、家計簿(Expense)を作り直す。
+     * 確定: 支払い・品目を保存し、家計簿(Expense)を作り直す。
      * 合計が空なら確認(missingTotalPrompt)を出して止める。
-     * 重複の候補(時刻5分以内+同じ合計。「重複ではない」の組は除く)の確定済みレシートが既にあれば、確認を出して止める(既定はキャンセル)。
+     * 重複の候補(時刻5分以内+同じ合計。「重複ではない」の組は除く)の確定済み支払いが既にあれば、確認を出して止める(既定はキャンセル)。
      */
     fun confirm() = startConfirm(checkDuplicate = true)
 

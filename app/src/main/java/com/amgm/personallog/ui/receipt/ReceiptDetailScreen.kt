@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -92,7 +93,7 @@ private fun dashboardTotalStyle(): TextStyle = AppTheme.type.numeralXL.copy(
 )
 
 /**
- * 支払い(レシート)の確認・修正画面。
+ * 支払いの確認・修正画面。
  * 合計のダッシュボード → 原本画像 → 紙面(店名・合計) → 品目の行 → 支払いまとめ → 子の「自分の支出」の行 → 操作。品目の編集は行をタップして開くシートで行う。
  */
 @Composable
@@ -133,41 +134,40 @@ fun ReceiptDetailScreen(
         LazyColumn(modifier = Modifier.fillMaxSize().imePadding()) {
             val hasImage = !s.loading && !s.notFound && s.imagePath.isNotBlank()
             val showDashboard = !s.loading && !s.notFound
-            // 登録の手順は一番上。上の余白(ステータスバー)はここで取り、ダッシュボードは続けて置く
-            if (register && showDashboard) {
-                item(key = "steps") { RegisterSteps(current = 1, modifier = Modifier.statusBarsPadding()) }
-            }
-            if (showDashboard) {
-                item(key = "dashboard") {
-                    TotalDashboard(
-                        s,
-                        onMarkBlankUnknown = viewModel::markBlankItemsUnknown,
-                        onAddDifferenceUnknown = viewModel::addDifferenceAsUnknownItem,
-                        statusInset = !register,
-                    )
+            // 先頭は常にこの1項目(読み込み前は空、読み込み後に中身が入る)。
+            // 条件付きの項目を「戻る」行より前に別々に置くと、LazyColumn が見ていた先頭の位置がずれ、途中から表示されてしまうため、ここに集める。
+            // 高さ0の項目は LazyColumn が「先頭に見えている項目」から外すため、最小1dpを持たせて先頭に居続けさせる。
+            item(key = "top") {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(min = 1.dp)) {
+                    // 登録の手順は一番上。上の余白(ステータスバー)はここで取り、ダッシュボードは続けて置く
+                    if (register && showDashboard) {
+                        RegisterSteps(current = 1, modifier = Modifier.statusBarsPadding())
+                    }
+                    if (showDashboard) {
+                        TotalDashboard(
+                            s,
+                            onMarkBlankUnknown = viewModel::markBlankItemsUnknown,
+                            onAddDifferenceUnknown = viewModel::addDifferenceAsUnknownItem,
+                            statusInset = !register,
+                        )
+                    }
+                    if (hasImage) {
+                        ReceiptImage(imagePath = s.imagePath, adjust = s.adjust, onClick = { viewerOpen = true })
+                        TextAction(
+                            "向き・範囲を調整",
+                            onClick = { adjustOpen = true },
+                            enabled = !s.busy,
+                            modifier = Modifier.padding(horizontal = Space.s),
+                        )
+                    }
                 }
             }
-            if (hasImage) {
-                item(key = "image") {
-                    ReceiptImage(imagePath = s.imagePath, adjust = s.adjust, onClick = { viewerOpen = true })
-                }
-            }
-            if (hasImage) {
-                item(key = "adjustLink") {
-                    TextAction(
-                        "向き・範囲を調整",
-                        onClick = { adjustOpen = true },
-                        enabled = !s.busy,
-                        modifier = Modifier.padding(horizontal = Space.s),
-                    )
-                }
-            }
-            // 戻る・読み取り直すは画像の下の細い行
+            // 戻る・読み取り直すは画像の下の細い行。上の余白(ステータスバー)は top が取らない(読み込み中・見つからない)ときだけここで取る
             item(key = "nav") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (hasImage || showDashboard) Modifier else Modifier.statusBarsPadding())
+                        .then(if (showDashboard) Modifier else Modifier.statusBarsPadding())
                         .padding(horizontal = Space.s),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -455,7 +455,9 @@ fun ReceiptDetailScreen(
 
     // 品目(まとまり)の編集シート
     if (editGroupKey != 0L) {
-        val group = groups.firstOrNull { editGroupKey in it.keys }
+        // 開いた時点の対象を覚える。編集中に他の品目と同じ内容になって統合されても、変更は開いた品目にしか及ばない。
+        val openedKeys = remember(editGroupKey) { groups.firstOrNull { editGroupKey in it.keys }?.keys.orEmpty() }
+        val group = groupItemFormsWithin(s.items, openedKeys, editGroupKey)
         if (group == null) {
             LaunchedEffect(Unit) { editGroupKey = 0L }
         } else {
