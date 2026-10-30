@@ -104,13 +104,15 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 /* --- アクティビティ: 時間軸に掛かったカプセル --- */
 .obj-a{padding-left:22px}
 .obj-a::before{content:"";position:absolute;left:7px;top:-14px;bottom:-14px;width:2px;border-radius:2px;background:linear-gradient(transparent,color-mix(in srgb,var(--activity) 45%,transparent) 20%,color-mix(in srgb,var(--activity) 45%,transparent) 80%,transparent)}
-.obj-a::after{content:"";position:absolute;left:0;top:26px;width:16px;height:16px;border-radius:50%;background:#fff;border:4px solid var(--activity);box-sizing:border-box}
+.obj-a::after{content:"";position:absolute;left:0;top:26px;width:16px;height:16px;border-radius:5px;background:#fff;border:4px solid var(--activity);box-sizing:border-box}
 .obj-a .hero{background:var(--g-activity);border-radius:32px;padding:18px 20px}
 .obj-a .lbl{height:24px;padding:0 10px 0 8px;border-radius:999px;background:rgba(255,255,255,.2)}
-/* 支払い: 下端がレシートのギザギザ */
-.obj-a.receipt .hero{border-radius:32px 32px 0 0;padding-bottom:26px;
-  -webkit-mask:linear-gradient(#000 0 0) top/100% calc(100% - 9px) no-repeat,conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) bottom/18px 9px repeat-x;
-          mask:linear-gradient(#000 0 0) top/100% calc(100% - 9px) no-repeat,conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) bottom/18px 9px repeat-x}
+/* 日記: 日めくりカレンダーの1枚(綴じ穴の帯・大きな日付・罫線) */
+.obj-d .hero{border-radius:18px;padding-top:36px;
+  background:repeating-linear-gradient(180deg,transparent 0 27px,rgba(255,255,255,.09) 27px 28px),var(--g-activity)}
+.obj-d .bind{position:absolute;left:0;right:0;top:0;height:24px;z-index:2;display:flex;justify-content:space-around;align-items:center;padding:0 36px;background:rgba(8,40,56,.2)}
+.obj-d .bind i{width:18px;height:8px;border-radius:4px;background:rgba(255,255,255,.75);box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
+.obj-d .dnum{font-size:46px;font-weight:700;line-height:1;letter-spacing:-.02em}
 
 /* --- 自分の支出: 半券付きチケット --- */
 .obj-x .hero{--stub:66px;flex-direction:row;align-items:stretch;gap:0;padding:0;border-radius:14px;background:var(--g-expense);
@@ -152,7 +154,7 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 .aref{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 10px 0 7px;border-radius:999px;background:var(--activity-t);color:var(--activity);font-size:12px;font-weight:600}
 .av{display:grid;place-items:center;flex:none;border-radius:9px;background:var(--entity-t);color:var(--entity);font-weight:700}
 /* 一覧の先頭マーク */
-.mk-a{width:10px;height:10px;border-radius:50%;border:3px solid var(--activity);background:#fff;flex:none}
+.mk-a{width:10px;height:10px;border-radius:3px;border:3px solid var(--activity);background:#fff;flex:none}
 .mk-x{color:var(--expense);font-size:18px;display:grid;flex:none}
 .mk-n{color:var(--note);font-size:18px;display:grid;flex:none}
 
@@ -167,11 +169,12 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 /* ===== Timeline: 日=カプセル、出来事=軸上の丸 ===== */
 .day{border-radius:26px}
 .day-h{display:flex;align-items:center;gap:var(--s2);padding:12px var(--s4) 10px 12px}
-.day-h .dd{display:flex;flex-direction:column;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:var(--g-activity);color:#fff;flex:none;line-height:1.05;box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
-.day-h .dd b{font-size:16px} .day-h .dd span{font-size:9px;font-weight:600}
+.day-h .dd{display:flex;flex-direction:column;width:40px;height:44px;border-radius:9px;overflow:hidden;background:#fff;flex:none;box-shadow:inset 0 0 0 1.5px var(--activity),0 2px 6px -2px rgba(47,129,153,.35)}
+.day-h .dd span{height:14px;display:grid;place-items:center;background:var(--g-activity);color:#fff;font-size:9px;font-weight:700}
+.day-h .dd b{flex:1;display:grid;place-items:center;color:var(--activity);font-size:17px;line-height:1}
 .rail{position:relative;margin:0 0 6px 32px;border-left:2px solid color-mix(in srgb,var(--activity) 28%,transparent)}
 .kid{position:relative;display:flex;align-items:center;gap:var(--s2);padding:0 var(--s4) 0 var(--s4);min-height:40px}
-.kid::before{content:"";position:absolute;left:-6px;top:50%;width:10px;height:10px;margin-top:-5px;border-radius:50%;background:#fff;border:2.5px solid var(--activity);box-sizing:border-box}
+.kid::before{content:"";position:absolute;left:-6px;top:50%;width:10px;height:10px;margin-top:-5px;border-radius:3px;background:#fff;border:2.5px solid var(--activity);box-sizing:border-box}
 .kid .t{width:36px;flex:none;font-size:11px;font-weight:600;color:var(--activity)}
 .kid .ti{font-size:13px;font-weight:500}
 .kid .amt{font-size:13px;font-weight:700}
@@ -200,7 +203,46 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 .photo:nth-child(2){background:linear-gradient(160deg,#D7E6F7,#9FB8DF)}
 .photo:nth-child(3){background:linear-gradient(160deg,#E9EEF5,#B9C6DB)}
 .empty{padding:var(--s4);font-size:12px;color:var(--muted);text-align:center}
-.tree a{padding-left:calc(var(--s4) + var(--lv,0) * 18px)}
+.tree{padding:6px 10px 6px 6px}
+.trow{display:flex;align-items:center;gap:6px;min-height:38px;padding-right:4px}
+.ttog{width:22px;height:22px;display:grid;place-items:center;color:var(--muted);font-size:10px;flex:none;border-radius:6px}
+.ttog:active{background:#EEF1F6}
+.tkids{margin-left:10px;padding-left:12px;border-left:2px solid color-mix(in srgb,var(--type) 22%,transparent)}
+/* 一覧: エンティティ=フォルダ型カード */
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;filter:drop-shadow(0 4px 8px rgba(26,38,72,.09))}
+.fcard{position:relative;display:block;padding-top:18px;min-width:0}
+.ftab{position:absolute;top:0;left:0;height:19px;min-width:40px;padding:0 10px;border-radius:9px 9px 0 0;background:var(--entity);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center}
+.ftab::after{content:"";position:absolute;right:-9px;bottom:0;width:9px;height:9px;background:radial-gradient(circle at 100% 0,transparent 8.5px,var(--entity) 9px)}
+.fbody{position:relative;background:#fff;border-radius:0 12px 12px 12px;border-top:3px solid var(--entity);padding:9px 12px 10px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.fbody b{font-size:14px;padding-right:22px}
+.fcount{position:absolute;right:10px;top:9px;display:flex;align-items:center;gap:3px;font-size:10px;font-weight:600;color:var(--activity)}
+.type.tiny{height:16px;font-size:10px;padding:0 6px 0 12px}
+.type.tiny::before{left:5px}
+/* 一覧: 自分の支出=切り離したチケット */
+.tlist{display:flex;flex-direction:column;gap:8px;filter:drop-shadow(0 3px 6px rgba(26,38,72,.09))}
+.tkt{--st:58px;display:flex;align-items:center;gap:10px;height:50px;padding-right:14px;background:#fff;border-radius:10px;font-size:13px;
+  -webkit-mask:radial-gradient(circle 6px at var(--st) 0,#0000 97%,#000) top/100% 51% no-repeat,radial-gradient(circle 6px at var(--st) 100%,#0000 97%,#000) bottom/100% 51% no-repeat;
+          mask:radial-gradient(circle 6px at var(--st) 0,#0000 97%,#000) top/100% 51% no-repeat,radial-gradient(circle 6px at var(--st) 100%,#0000 97%,#000) bottom/100% 51% no-repeat}
+.tstub{width:var(--st);flex:none;align-self:stretch;display:grid;place-items:center;background:var(--expense-t);color:var(--expense);font-size:12px;font-weight:700;border-right:1.5px dashed color-mix(in srgb,var(--expense) 40%,transparent)}
+.tamt{font-weight:700;color:var(--expense)}
+/* 一覧: ノート=角を折った紙 */
+.plist{display:flex;flex-direction:column;gap:10px;filter:drop-shadow(0 4px 8px rgba(26,38,72,.09))}
+.paper{position:relative;display:flex;flex-direction:column;gap:2px;padding:12px 44px 12px 16px;border-radius:4px 0 10px 10px;
+  background:linear-gradient(225deg,transparent 0 13px,#fff 13px)}
+.paper::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:2px;background:var(--note)}
+.paper::after{content:"";position:absolute;top:0;right:0;width:18.4px;height:18.4px;border-radius:0 0 0 4px;background:linear-gradient(225deg,transparent 50%,#CFE6E0 50%)}
+.paper b{font-size:14px}
+.pdate{position:absolute;right:14px;bottom:12px}
+/* 品目 */
+.iname{font-size:13px;font-weight:500}
+.iamt{width:68px;text-align:right;font-weight:600;font-size:13px;flex:none}
+.tax{width:30px;text-align:right;flex:none}
+.items .burden{display:none}
+.items.sb .burden{display:inline}
+.grp{width:100%;text-align:left}
+.cntx{display:inline-grid;place-items:center;min-width:22px;height:18px;padding:0 5px;margin-left:4px;border-radius:5px;background:var(--activity-t);color:var(--activity);font-size:11px;font-weight:700;vertical-align:1px}
+.chev{width:12px;text-align:center;flex:none}
+.grp-kids .lrow{min-height:34px;padding-left:28px;background:#FAFBFD}
 .legend{display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center;font-size:12px;color:var(--text2)}
 </style>
 </head>
@@ -256,20 +298,21 @@ const A={
   d1029:{type:'日記',date:'2026-10-29',dd:'29',dw:'木',body:'雨。在宅で仕事。',kids:['p2']},
   d1028:{type:'日記',date:'2026-10-28',dd:'28',dw:'水',body:'朝パンを買って出社。',kids:['p3']},
   d1027:{type:'日記',date:'2026-10-27',dd:'27',dw:'火',body:'',kids:['p4']},
-  p1:{type:'支払い',parent:'d1030',time:'12:10',title:'昼食',pay:'現金',amt:3780,roles:[['支払先','aoba'],['支払者','me'],['同席','hanako']],
-      items:[['醤油らーめん',1100,'自分',10],['塩らーめん',1200,'花子',10],['餃子',680,'半分',10],['生ビール',800,'半分',10]],x:'x1',adv:['hanako',1940,'未精算']},
+  p1:{type:'支払い',parent:'d1030',time:'12:10',title:'昼食',pay:'現金',amt:4580,roles:[['支払先','aoba'],['支払者','me'],['同席','hanako']],
+      items:[{n:'醤油らーめん',price:1100,b:'自分',tax:10},{n:'塩らーめん',price:1200,b:'花子',tax:10},{n:'餃子',price:680,b:'半分',tax:10},
+             {n:'生ビール',price:800,b:'自分',tax:10,memo:'1杯目'},{n:'生ビール',price:800,b:'花子',tax:10,memo:'花子さんの分'}],x:'x1',adv:['hanako',2340,'未精算']},
   c1:{type:'会話',parent:'d1030',time:'15:00',title:'転職の相談',roles:[['参加','hanako'],['場所','minato']],body:'A社を辞めるか迷っているとのこと。年内に決めたいらしい。'},
   m1:{type:'移動',parent:'d1030',time:'19:30',title:'帰宅',roles:[['出発','minato'],['到着','home']]},
-  p2:{type:'支払い',parent:'d1029',time:'18:40',title:'買い物',pay:'カード ••1234',amt:2416,roles:[['支払先','super'],['支払者','me']],
-      items:[['牛乳',238,'自分',8],['卵',268,'自分',8],['鶏もも肉',612,'自分',8],['キッチンペーパー',398,'自分',10],['その他',900,'自分',8]],x:'x2'},
-  p3:{type:'支払い',parent:'d1028',time:'08:20',title:'朝のパン',pay:'現金',amt:620,roles:[['支払先',null,'ベーカリー木漏れ日'],['支払者','me']],items:[['クロワッサン',280,'自分',8],['カレーパン',340,'自分',8]],x:'x3'},
-  p4:{type:'支払い',parent:'d1027',time:'20:05',title:'日用品',pay:'カード ••1234',amt:1280,roles:[['支払先','drug'],['支払者','me']],items:[['洗剤',680,'自分',10],['歯ブラシ',600,'自分',10]],x:'x4'},
+  p2:{type:'支払い',parent:'d1029',time:'18:40',title:'買い物',pay:'カード ••1234',amt:2684,roles:[['支払先','super'],['支払者','me']],
+      items:[{n:'牛乳',price:238,b:'自分',tax:8},{n:'卵',price:268,b:'自分',tax:8,memo:'特売'},{n:'卵',price:268,b:'自分',tax:8},{n:'鶏もも肉',price:612,b:'自分',tax:8},{n:'キッチンペーパー',price:398,b:'自分',tax:10},{n:'その他',price:900,b:'自分',tax:8}],x:'x2'},
+  p3:{type:'支払い',parent:'d1028',time:'08:20',title:'朝のパン',pay:'現金',amt:620,roles:[['支払先',null,'ベーカリー木漏れ日'],['支払者','me']],items:[{n:'クロワッサン',price:280,b:'自分',tax:8},{n:'カレーパン',price:340,b:'自分',tax:8}],x:'x3'},
+  p4:{type:'支払い',parent:'d1027',time:'20:05',title:'日用品',pay:'カード ••1234',amt:1280,roles:[['支払先','drug'],['支払者','me']],items:[{n:'洗剤',price:680,b:'自分',tax:10},{n:'歯ブラシ',price:600,b:'自分',tax:10}],x:'x4'},
 };
 const X={
-  x1:{pay:'p1',amt:1840,cat:'外食',memo:'花子さんとランチ',items:[['醤油らーめん','全額',1100],['餃子','1/2',340],['生ビール','1/2',400]]},
-  x2:{pay:'p2',amt:2416,cat:'食費',memo:'',items:[['牛乳','全額',238],['卵','全額',268],['鶏もも肉','全額',612],['キッチンペーパー','全額',398],['その他','全額',900,1]]},
-  x3:{pay:'p3',amt:620,cat:'食費',memo:'',items:[['クロワッサン','全額',280],['カレーパン','全額',340]]},
-  x4:{pay:'p4',amt:1280,cat:'日用品',memo:'',items:[['洗剤','全額',680],['歯ブラシ','全額',600]]},
+  x1:{pay:'p1',amt:2240,cat:'外食',memo:'花子さんとランチ',items:[{n:'醤油らーめん',price:1100,b:'全額'},{n:'餃子',price:340,b:'1/2'},{n:'生ビール',price:800,b:'全額',memo:'1杯目'}]},
+  x2:{pay:'p2',amt:2684,cat:'食費',memo:'',items:[{n:'牛乳',price:238,b:'全額'},{n:'卵',price:268,b:'全額',memo:'特売'},{n:'卵',price:268,b:'全額'},{n:'鶏もも肉',price:612,b:'全額'},{n:'キッチンペーパー',price:398,b:'全額'},{n:'その他',price:900,b:'全額',unk:1}]},
+  x3:{pay:'p3',amt:620,cat:'食費',memo:'',items:[{n:'クロワッサン',price:280,b:'全額'},{n:'カレーパン',price:340,b:'全額'}]},
+  x4:{pay:'p4',amt:1280,cat:'日用品',memo:'',items:[{n:'洗剤',price:680,b:'全額'},{n:'歯ブラシ',price:600,b:'全額'}]},
 };
 const DAYS=['d1030','d1029','d1028','d1027'];
 
@@ -293,7 +336,7 @@ const dayOf=a=>A[a.parent];
 const md=d=>{const[y,m,dd]=d.split('-');return `${+m}/${+dd}`};
 /* 画面タイトルの形マーク: クラスと同じ輪郭 */
 const MK={
-  activity:`<span class="mk" style="border-radius:50%;background:var(--g-activity)">${IC.activity}</span>`,
+  activity:`<span class="mk" style="border-radius:10px;background:var(--g-activity)">${IC.activity}</span>`,
   entity:`<span class="mk" style="border-radius:3px 10px 10px 10px;background:var(--g-entity)">${IC.entity}</span>`,
   note:`<span class="mk" style="border-radius:8px;background:var(--g-note);-webkit-mask:linear-gradient(225deg,#0000 7px,#000 7.5px);mask:linear-gradient(225deg,#0000 7px,#000 7.5px)">${IC.note}</span>`,
   type:`<span class="mk" style="background:var(--type);clip-path:polygon(11px 0,100% 0,100% 100%,11px 100%,0 50%);border-radius:0 8px 8px 0;padding-left:6px">${IC.type}</span>`,
@@ -302,9 +345,28 @@ const ptitle=(k,t,right='')=>`<div class="ptitle">${MK[k]}<span class="h1 grow">
 
 /* ======================= hero builders ======================= */
 const heroE=(inner)=>`<div class="obj obj-e"><div class="tab">${IC.entity}エンティティ</div><div class="hero">${inner}</div></div>`;
-const heroA=(type,inner,receipt)=>`<div class="obj obj-a ${receipt?'receipt':''}"><div class="hero"><div class="row" style="gap:6px"><span class="lbl">${IC.activity}アクティビティ</span><span class="type ghost">${type}</span></div>${inner}</div></div>`;
+const heroD=a=>`<div class="obj obj-a obj-d"><div class="hero"><div class="bind"><i></i><i></i><i></i><i></i></div>
+  <div class="row" style="gap:14px;align-items:flex-end"><span class="dnum num">${a.dd}</span><div class="stack" style="gap:2px"><span class="lbl">${IC.activity}アクティビティ · 日記</span><span class="title">${+a.date.slice(0,4)}年${+a.date.slice(5,7)}月 ${a.dw}曜日</span></div></div>
+  <span class="meta" style="padding-top:6px">${a.kids.length}件の出来事${a.photos?' · 写真'+a.photos:''}</span></div></div>`;
+const heroA=(type,inner)=>`<div class="obj obj-a"><div class="hero"><div class="row" style="gap:6px"><span class="lbl">${IC.activity}アクティビティ</span><span class="type ghost">${type}</span></div>${inner}</div></div>`;
 const heroX=(inner)=>`<div class="obj obj-x"><div class="hero"><div class="stub">${IC.expense}<span>自分の<br>支出</span></div><div class="body">${inner}</div></div></div>`;
 const heroN=(inner)=>`<div class="obj obj-n"><i class="ear"></i><div class="hero"><span class="lbl">${IC.note}ノート</span>${inner}</div></div>`;
+
+/* 品目: 表示時だけ「同じ名前+同じ値段」でまとめる(データは1行=1個のまま) */
+let gid=0;
+function itemRows(items,tax){
+  const g=[],m={};
+  items.forEach(it=>{const k=it.n+'|'+it.price;if(!m[k]){m[k]={n:it.n,price:it.price,list:[]};g.push(m[k])}m[k].list.push(it)});
+  const unk=x=>x.unk?'<span class="b-act" style="background:var(--unknown-t);color:var(--unknown)">不明</span>':'';
+  return g.map(gr=>{const n=gr.list.length,it=gr.list[0];
+    if(n===1)return `<div class="lrow"><span class="grow ellipsis iname">${gr.n}${it.memo?`<span class="cap"> · ${it.memo}</span>`:''}</span>${unk(it)}<span class="cap burden">${it.b}</span>${tax?`<span class="cap tax">${it.tax}%</span>`:''}<span class="iamt num">${yen(gr.price)}</span><span class="chev"></span></div>`;
+    const id='g'+(gid++);
+    return `<button class="lrow grp" onclick="togGrp('${id}',this)"><span class="grow ellipsis iname">${gr.n}<span class="cntx">×${n}</span><span class="cap"> @${yen(gr.price)}</span></span>${tax?`<span class="cap tax">${it.tax}%</span>`:''}<span class="iamt num">${yen(gr.price*n)}</span><span class="cap chev">▸</span></button>
+    <div class="grp-kids" id="${id}" hidden>${gr.list.map((x,i)=>`<div class="lrow"><span class="grow ellipsis cap" style="color:var(--text2)">${i+1}個目${x.memo?' · '+x.memo:' · メモなし'}</span>${unk(x)}<span class="cap burden">${x.b}</span>${tax?'<span class="tax"></span>':''}<span class="iamt num" style="font-weight:500;color:var(--text2)">${yen(x.price)}</span><span class="chev"></span></div>`).join('')}</div>`}).join('');
+}
+function togGrp(id,btn){const el=document.getElementById(id);el.hidden=!el.hidden;btn.querySelector('.chev').textContent=el.hidden?'▸':'▾'}
+function togBurden(btn){const c=btn.closest('.items');c.classList.toggle('sb');btn.textContent=c.classList.contains('sb')?'負担を隠す ▴':'負担を表示 ▾'}
+function togTree(btn){const k=btn.closest('.tnode').querySelector(':scope>.tkids');k.hidden=!k.hidden;btn.textContent=k.hidden?'▸':'▾'}
 
 /* ======================= views ======================= */
 function vActivities(){
@@ -313,7 +375,7 @@ function vActivities(){
   <div class="seg"><a class="on" href="#/activities">タイムライン</a><a href="#/ledger">${IC.expense}家計簿</a></div>
   <div class="chips"><span class="pill on">すべて</span><span class="pill">日記</span><span class="pill">支払い</span><span class="pill">会話</span><span class="pill">移動</span></div>
   ${DAYS.map(d=>{const a=A[d];return `<div class="day raised">
-    <a class="day-h" href="#/a/${d}"><span class="dd num"><b>${a.dd}</b><span>${a.dw}</span></span>
+    <a class="day-h" href="#/a/${d}"><span class="dd num"><span>${a.dw}</span><b>${a.dd}</b></span>
       ${bAct('日記')}<span class="sub grow ellipsis">${a.body||'—'}</span>${a.photos?`<span class="cap">写真${a.photos}</span>`:''}</a>
     <div class="rail">${a.kids.map(k=>{const c=A[k];const x=c.x&&X[c.x];return `<a class="kid" href="#/a/${k}">
       <span class="t num">${c.time}</span>${c.amt?'':bAct(c.type)}
@@ -330,8 +392,8 @@ function vLedger(){
   <div class="seg"><a href="#/activities">タイムライン</a><a class="on" href="#/ledger">${IC.expense}家計簿</a></div>
   ${heroX(`<span class="meta">2026年10月の合計</span><span class="big num">${yen(tot)}</span><span class="meta">${Object.entries(byCat).map(([c,v])=>`${c} ${yen(v)}`).join(' · ')}</span>`)}
   <div class="stack">${sec('自分の支出',xs.length+'件')}
-  <div class="flat">${xs.map(([k,x])=>{const p=A[x.pay];const shop=p.roles[0][1]?E[p.roles[0][1]].n:p.roles[0][2];return `<a class="lrow" href="#/x/${k}">
-    <span class="mk-x">${IC.expense}</span><span class="cap num" style="width:34px">${md(dayOf(p).date)}</span><span class="grow ellipsis" style="font-size:13px">${shop}<span class="cap"> · ${x.cat}</span></span><span class="num" style="font-weight:600">${yen(x.amt)}</span></a>`}).join('')}</div></div>
+  <div class="tlist">${xs.map(([k,x])=>{const p=A[x.pay];const shop=p.roles[0][1]?E[p.roles[0][1]].n:p.roles[0][2];return `<a class="tkt" href="#/x/${k}">
+    <span class="tstub num">${md(dayOf(p).date)}</span><span class="grow ellipsis">${shop}<span class="cap"> · ${x.cat}</span></span><span class="num tamt">${yen(x.amt)}</span></a>`}).join('')}</div></div>
   </div>`;
 }
 let entityFilter='shop';
@@ -348,26 +410,27 @@ function vEntities(f){
       <span class="grow"></span>${entityFilter?`<a class="cap" href="#/entities/">解除 ✕</a>`:''}<a class="cap" href="#/types" style="color:var(--entity);font-weight:600">変更</a></div>
     ${kids.length?`<div class="cap">配下も含めて表示: ${kids.map(([k,t])=>t.n).join('・')}</div>`:''}
   </div>
-  <div class="raised">${list.map(([k,e])=>{const n=actsOf(k).length;return `<a class="lrow" href="#/e/${k}">
-    <span class="av" style="width:34px;height:34px;font-size:14px">${e.i}</span>
-    <span class="grow" style="display:flex;flex-direction:column;gap:3px;min-width:0"><b style="font-size:14px" class="ellipsis">${e.n}</b>
-      <span class="row" style="gap:4px">${e.t.map(t=>`<span class="type" style="height:17px;font-size:10px">${TYPES[t].n}</span>`).join('')}</span></span>
-    ${n?`<span class="row cap" style="gap:4px;color:var(--activity)"><span class="mk-a" style="width:8px;height:8px;border-width:2px"></span>${n}</span>`:''}</a>`}).join('')||'<div class="empty">該当なし</div>'}</div>
+  ${list.length?`<div class="fgrid">${list.map(([k,e])=>{const n=actsOf(k).length;return `<a class="fcard" href="#/e/${k}"><span class="ftab">${e.i}</span>
+    <div class="fbody"><b class="ellipsis">${e.n}</b><div class="row" style="gap:4px;overflow:hidden">${e.t.map(t=>`<span class="type tiny">${TYPES[t].n}</span>`).join('')}</div>
+    ${n?`<span class="fcount"><span class="mk-a" style="width:8px;height:8px;border-width:2px"></span>${n}</span>`:''}</div></a>`}).join('')}</div>`:'<div class="empty">該当なし</div>'}
   </div>`;
 }
 function vTypes(){
   const cnt=t=>Object.values(E).filter(e=>e.t.some(x=>isUnder(x,t))).length;
-  const rows=[];const walk=(p,lv)=>Object.entries(TYPES).filter(([k,t])=>(t.p||null)===p).forEach(([k,t])=>{rows.push([k,t,lv]);walk(k,lv+1)});walk(null,0);
+  const node=(k,lv)=>{const t=TYPES[k];const kids=Object.keys(TYPES).filter(c=>TYPES[c].p===k);const open=lv<2;
+    return `<div class="tnode"><div class="trow">${kids.length?`<button class="ttog" onclick="togTree(this)">${open?'▾':'▸'}</button>`:'<span class="ttog"></span>'}
+      <a class="type" href="#/entities/${k}">${t.n}</a><span class="grow"></span><a class="cap num" href="#/entities/${k}">${cnt(k)} ›</a></div>
+      ${kids.length?`<div class="tkids" ${open?'':'hidden'}>${kids.map(c=>node(c,lv+1)).join('')}</div>`:''}</div>`};
+  const roots=Object.keys(TYPES).filter(k=>!TYPES[k].p);
   return `<div class="view">
   ${ptitle('type','種類',`<span class="cap">エンティティのラベル</span>`)}
-  <div class="flat tree">${rows.map(([k,t,lv])=>`<a class="lrow" style="--lv:${lv}" href="#/entities/${k}"><span class="type">${t.n}</span><span class="grow"></span><span class="cap num">${cnt(k)}</span><span class="cap">›</span></a>`).join('')}</div>
+  <div class="flat tree">${roots.map(k=>node(k,0)).join('')}</div>
   </div>`;
 }
 function vNotes(){
   return `<div class="view">
   ${ptitle('note','ノート',`<span class="cap">エンティティに1枚</span>`)}
-  <div class="raised">${Object.entries(NOTES).map(([k,n])=>`<a class="lrow" href="#/n/${k}"><span class="mk-n">${IC.note}</span>
-    <span class="grow" style="display:flex;flex-direction:column;min-width:0"><b style="font-size:14px">${E[k].n}のノート</b><span class="cap ellipsis">${n.body[0][1]}</span></span><span class="cap">${n.upd.split(' ')[0]}</span></a>`).join('')}</div>
+  <div class="plist">${Object.entries(NOTES).map(([k,n])=>`<a class="paper" href="#/n/${k}"><b class="ellipsis">${E[k].n}のノート</b><span class="cap ellipsis">${n.body[0][1]}</span><span class="cap pdate">${n.upd.split(' ')[0]}</span></a>`).join('')}</div>
   </div>`;
 }
 function vEntity(id){
@@ -400,7 +463,7 @@ function vActivity(id){
   const a=A[id];
   if(a.type==='日記')return `<div class="view push">
     ${topbar('アクティビティ','activity')}
-    ${heroA('日記',`<span class="title">${+a.date.slice(5,7)}月${a.dd}日(${a.dw})</span><span class="meta">${a.kids.length}件の出来事</span>`)}
+    ${heroD(a)}
     <div class="flat" style="padding:var(--s4)"><div style="font-size:14px">${a.body||'<span class="cap">本文なし</span>'}</div>
       ${a.photos?`<div class="row" style="margin-top:var(--s3)"><span class="photo"></span><span class="photo"></span><span class="photo"></span>${a.photos>3?`<span class="cap">＋${a.photos-3}</span>`:''}</div>`:''}</div>
     <div class="stack">${sec('この日の出来事(子)',a.kids.length,'＋ 追加')}
@@ -412,17 +475,16 @@ function vActivity(id){
     ${topbar('アクティビティ','activity')}
     <a class="ground-ref" href="#/a/${a.parent}"><span class="cap">親</span>${bAct('日記')}<span class="grow">${+p.date.slice(5,7)}月${p.dd}日(${p.dw})</span><span class="cap">›</span></a>
   </div>
-  ${heroA(a.type,`<span style="font-size:16px;font-weight:600">${a.title}</span>${a.amt?`<span class="big num">${yen(a.amt)}</span>`:''}<span class="meta">${p.date} ${a.time}${a.pay?' · '+a.pay:''}</span>`,a.type==='支払い')}
+  ${heroA(a.type,`<span style="font-size:16px;font-weight:600">${a.title}</span>${a.amt?`<span class="big num">${yen(a.amt)}</span>`:''}<span class="meta">${p.date} ${a.time}${a.pay?' · '+a.pay:''}</span>`)}
   <div class="stack">${sec('役割',a.roles.length,'＋ 追加')}
     <div class="flat">${a.roles.map(r=>`<div class="lrow"><span class="cap" style="width:44px">${r[0]}</span>${roleRef(r)}<span class="grow"></span>${r[1]?`<span class="type" style="height:17px;font-size:10px">${TYPES[E[r[1]].t[0]].n}</span>`:''}</div>`).join('')}</div>
     ${unreg?`<div class="suggest"><span class="grow ellipsis">「${unreg[2]}」は未登録</span><button class="btn" onclick="registerShop('${id}')">＋ 店として登録</button></div>`:''}
   </div>
   ${a.body?`<div class="stack">${sec('内容')}<div class="flat" style="padding:var(--s4);font-size:14px">${a.body}</div></div>`:''}
   ${a.items?`<div class="stack">${sec('品目',a.items.length,'＋ 追加')}
-    <div class="flat">${a.items.map(it=>`<div class="lrow"><span class="grow ellipsis" style="font-size:13px;font-weight:500">${it[0]}</span>
-      ${it[2]!=='自分'?`<span class="cap">${it[2]}</span>`:''}<span class="cap tax" hidden>${it[3]}%</span><span class="num" style="font-weight:600;font-size:13px;width:64px;text-align:right">${yen(it[1])}</span></div>`).join('')}
-      <div class="lrow" style="background:var(--activity-t)"><span class="grow" style="font-size:12px;color:var(--activity);font-weight:600">合計(印字と一致)</span><span class="num" style="font-weight:700;color:var(--activity)">${yen(a.amt)}</span></div>
-      <button class="disclose" onclick="document.querySelectorAll('.tax').forEach(t=>t.hidden=!t.hidden);this.textContent=this.textContent.includes('▾')?'税率を隠す ▴':'税率・負担の詳細 ▾'" style="border-top:1px solid var(--border)">税率・負担の詳細 ▾</button></div></div>`:''}
+    <div class="flat items">${itemRows(a.items,true)}
+      <div class="lrow" style="background:var(--activity-t)"><span class="grow" style="font-size:12px;color:var(--activity);font-weight:600">合計(印字と一致)</span><span class="num" style="font-weight:700;color:var(--activity)">${yen(a.amt)}</span><span class="chev"></span></div>
+      <button class="disclose" onclick="togBurden(this)" style="border-top:1px solid var(--border)">負担を表示 ▾</button></div></div>`:''}
   ${x?`<div class="stack">${sec('この支払いから生まれた支出(子)','1')}
     <div class="row" style="align-items:flex-start;padding-left:4px;gap:6px"><span style="color:var(--expense);font-weight:700;padding-top:14px">└</span>
       <a class="grow" href="#/x/${a.x}" style="filter:drop-shadow(0 4px 8px rgba(26,38,72,.12))"><div class="obj-x"><div class="hero" style="--stub:48px"><div class="stub" style="padding:0">${IC.expense}</div>
@@ -444,8 +506,8 @@ function vExpense(id){
       <div class="lrow"><span class="cap" style="width:56px">メモ</span><span class="grow">${x.memo||'<span class="cap">なし</span>'}</span></div>
       <div class="lrow"><span class="cap" style="width:56px">日時</span><span class="grow num">${dayOf(p).date} ${p.time}</span><span class="cap">支払いと同じ</span></div></div></div>
   <div class="stack">${sec('支出の品目',x.items.length,'＋ 追加')}
-    <div class="flat">${x.items.map(it=>`<div class="lrow"><span class="grow ellipsis" style="font-size:13px;font-weight:500">${it[0]}</span>${it[1]!=='全額'?`<span class="cap">${it[1]}</span>`:''}${it[3]?'<span class="b-act" style="background:var(--unknown-t);color:var(--unknown)">不明</span>':''}<span class="num" style="font-weight:600;font-size:13px;width:64px;text-align:right">${yen(it[2])}</span></div>`).join('')}
-      <div class="lrow" style="background:var(--expense-t)"><span class="grow" style="font-size:12px;color:var(--expense);font-weight:600">品目の合計 = 自分の負担</span><span class="num" style="font-weight:700;color:var(--expense)">${yen(x.amt)}</span></div></div></div>
+    <div class="flat items sb">${itemRows(x.items,false)}
+      <div class="lrow" style="background:var(--expense-t)"><span class="grow" style="font-size:12px;color:var(--expense);font-weight:600">品目の合計 = 自分の負担</span><span class="num" style="font-weight:700;color:var(--expense)">${yen(x.amt)}</span><span class="chev"></span></div></div></div>
   </div>`;
 }
 function vNote(id){
@@ -499,7 +561,7 @@ function openAbout(){sheet(`<div class="h1" style="font-size:17px">UIモック v
   <div class="sub" style="margin:6px 0 var(--s4)">UIと遷移の確認だけのための簡易モック。データは架空、保存はしません。</div>
   <div class="flat" style="padding:var(--s4)"><div class="legend">
     ${MK.entity}<span><b>エンティティ</b> = フォルダのタブ(事実を綴じる)</span>
-    ${MK.activity}<span><b>アクティビティ</b> = 時間軸に掛かった丸いカプセル。支払いは下端がレシート</span>
+    ${MK.activity}<span><b>アクティビティ</b> = 時間軸に掛かったカプセル(印は丸角正方形)。<b>日記</b>は日めくりカレンダーの1枚</span>
     <span class="mk" style="width:34px;height:34px;display:grid;place-items:center;color:var(--expense);font-size:28px">${IC.expense}</span><span><b>自分の支出</b> = 半券付きのチケット</span>
     ${MK.note}<span><b>ノート</b> = 角を折った紙</span>
     ${MK.type}<span><b>種類</b> = 値札(タグ)</span>
@@ -507,7 +569,7 @@ function openAbout(){sheet(`<div class="h1" style="font-size:17px">UIモック v
   <div class="flat" style="padding:var(--s3) var(--s4);font-size:12px;line-height:1.8;color:var(--text2);margin-top:var(--s3)">
    ・土台: エンティティ/ノート/アクティビティの構想(2026-10-25・<b>未合意</b>)<br>
    ・支払い ⇒ 自分の支出の親子(2026-10-28 決定)<br>
-   ・試せる操作: 各行タップで遷移 / 事実の「版 ⟲」/ 「詳細」の開閉 / 品目の「税率・負担の詳細」/ 10/28の支払いで未登録店の「＋ 店として登録」/ 種類タブから絞り込み
+   ・試せる操作: 各行タップで遷移 / 事実の「版 ⟲」/ 「詳細」の開閉 / 品目「×2」の行で中身を開く(10/30の生ビール・10/29の卵)/ 「負担を表示」/ 10/28の支払いで未登録店の「＋ 店として登録」/ 種類タブの ▾ で折りたたみ
   </div>`)}
 function registerShop(aid){const a=A[aid];const r=a.roles.find(r=>!r[1]);const id='bakery';
   E[id]={n:r[2],i:r[2][0],t:['bakery'],facts:[]};r[1]=id;render();toast('「'+r[2]+'」をエンティティに登録しました')}
