@@ -8,7 +8,7 @@ import androidx.room.PrimaryKey
 
 /*
  * 割り勘と「支払い/支出」の再定義で足した表(DB v10 で追加、v11 で参加者・ラベル金額を追加し、割当の参照先を参加者に変更)。
- * 用語: 「支払い」= 店への支払いの事実。物理テーブルは当面 receipts(Receipt)のまま。品目は receipt_items(ReceiptItem)。
+ * 用語: 「支払い」= 店への支払いの事実(payments。Payment)。品目は payment_items(PaymentItem)。支出(expenses。Expense)= 支払いに対する自分の負担、その品目は expense_items(ExpenseItem)。v17 で旧名(receipts・receipt_items・expense_groups・expenses)から改名した。
  * 方針: 入力(割り方)だけを保存し、各人の金額は domain/split の計算で毎回求める。
  * 計画: Notion「支払い・支出の再定義」 https://app.notion.com/p/3fd0e054862281bda7bdfd24fa39e0fc
  */
@@ -34,18 +34,18 @@ data class Person(
 )
 
 /**
- * 割り勘シート。支払い(receipts)に0か1。行が無ければ「自分だけ」。
+ * 割り勘シート。支払い(payments)に0か1。行が無ければ「自分だけ」。
  * wholeKind は全体方式の入力の種類(ShareKind.AMOUNT=金額 / RATIO=割合)。
  * warnings は直近の計算で出た警告の種類(例 "W1,W3"。空なら無し)。家計簿の一覧のバッジに使う。
  */
 @Entity(
     tableName = "split_sheets",
     foreignKeys = [
-        ForeignKey(entity = Receipt::class, parentColumns = ["id"], childColumns = ["receiptId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = Payment::class, parentColumns = ["id"], childColumns = ["paymentId"], onDelete = ForeignKey.CASCADE),
     ],
 )
 data class SplitSheet(
-    @PrimaryKey val receiptId: Long,
+    @PrimaryKey val paymentId: Long,
     /** SplitMode の値。 */
     @ColumnInfo(defaultValue = "'self'")
     val mode: String = SplitMode.SELF,
@@ -64,14 +64,14 @@ data class SplitSheet(
 @Entity(
     tableName = "split_participants",
     foreignKeys = [
-        ForeignKey(entity = Receipt::class, parentColumns = ["id"], childColumns = ["receiptId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = Payment::class, parentColumns = ["id"], childColumns = ["paymentId"], onDelete = ForeignKey.CASCADE),
         ForeignKey(entity = Person::class, parentColumns = ["id"], childColumns = ["personId"]),
     ],
-    indices = [Index("receiptId"), Index("personId")],
+    indices = [Index("paymentId"), Index("personId")],
 )
 data class SplitParticipant(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val receiptId: Long,
+    val paymentId: Long,
     val personId: Long? = null,
     @ColumnInfo(defaultValue = "''")
     val memo: String = "",
@@ -90,13 +90,13 @@ data class SplitParticipant(
  */
 @Entity(
     tableName = "split_label_amounts",
-    primaryKeys = ["receiptId", "label"],
+    primaryKeys = ["paymentId", "label"],
     foreignKeys = [
-        ForeignKey(entity = Receipt::class, parentColumns = ["id"], childColumns = ["receiptId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = Payment::class, parentColumns = ["id"], childColumns = ["paymentId"], onDelete = ForeignKey.CASCADE),
     ],
 )
 data class SplitLabelAmount(
-    val receiptId: Long,
+    val paymentId: Long,
     val label: String,
     val amount: Int,
 )
@@ -109,13 +109,13 @@ data class SplitLabelAmount(
 @Entity(
     tableName = "share_groups",
     foreignKeys = [
-        ForeignKey(entity = Receipt::class, parentColumns = ["id"], childColumns = ["receiptId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = Payment::class, parentColumns = ["id"], childColumns = ["paymentId"], onDelete = ForeignKey.CASCADE),
     ],
-    indices = [Index("receiptId")],
+    indices = [Index("paymentId")],
 )
 data class ShareGroup(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val receiptId: Long,
+    val paymentId: Long,
     val pieceCount: Int? = null,
     @ColumnInfo(defaultValue = "0")
     val isShared: Boolean = false,
@@ -123,19 +123,19 @@ data class ShareGroup(
     val sortOrder: Int = 0,
 )
 
-/** まとまりに含まれる品目。1つの品目は高々1つのまとまりに入る(receiptItemId が一意)。 */
+/** まとまりに含まれる品目。1つの品目は高々1つのまとまりに入る(paymentItemId が一意)。 */
 @Entity(
     tableName = "share_group_items",
-    primaryKeys = ["groupId", "receiptItemId"],
+    primaryKeys = ["groupId", "paymentItemId"],
     foreignKeys = [
         ForeignKey(entity = ShareGroup::class, parentColumns = ["id"], childColumns = ["groupId"], onDelete = ForeignKey.CASCADE),
-        ForeignKey(entity = ReceiptItem::class, parentColumns = ["id"], childColumns = ["receiptItemId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = PaymentItem::class, parentColumns = ["id"], childColumns = ["paymentItemId"], onDelete = ForeignKey.CASCADE),
     ],
-    indices = [Index(value = ["receiptItemId"], unique = true)],
+    indices = [Index(value = ["paymentItemId"], unique = true)],
 )
 data class ShareGroupItem(
     val groupId: Long,
-    val receiptItemId: Long,
+    val paymentItemId: Long,
 )
 
 /**
@@ -165,15 +165,15 @@ data class ItemShare(
  */
 @Entity(
     tableName = "whole_shares",
-    primaryKeys = ["receiptId", "participantId"],
+    primaryKeys = ["paymentId", "participantId"],
     foreignKeys = [
-        ForeignKey(entity = Receipt::class, parentColumns = ["id"], childColumns = ["receiptId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = Payment::class, parentColumns = ["id"], childColumns = ["paymentId"], onDelete = ForeignKey.CASCADE),
         ForeignKey(entity = SplitParticipant::class, parentColumns = ["id"], childColumns = ["participantId"], onDelete = ForeignKey.CASCADE),
     ],
     indices = [Index("participantId")],
 )
 data class WholeShare(
-    val receiptId: Long,
+    val paymentId: Long,
     val participantId: Long,
     val kind: String,
     val weight: Int? = null,
@@ -184,14 +184,14 @@ data class WholeShare(
 @Entity(
     tableName = "payment_payers",
     foreignKeys = [
-        ForeignKey(entity = Receipt::class, parentColumns = ["id"], childColumns = ["receiptId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = Payment::class, parentColumns = ["id"], childColumns = ["paymentId"], onDelete = ForeignKey.CASCADE),
         ForeignKey(entity = SplitParticipant::class, parentColumns = ["id"], childColumns = ["participantId"], onDelete = ForeignKey.CASCADE),
     ],
-    indices = [Index("receiptId"), Index("participantId")],
+    indices = [Index("paymentId"), Index("participantId")],
 )
 data class PaymentPayer(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val receiptId: Long,
+    val paymentId: Long,
     val participantId: Long,
     /** 支払い手段(現金・カード・QRなど。自由入力。空は不明)。 */
     @ColumnInfo(defaultValue = "''")

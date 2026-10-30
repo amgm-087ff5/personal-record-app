@@ -7,11 +7,11 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.amgm.personallog.data.db.AppDatabase
 import com.amgm.personallog.data.db.DiaryDao
+import com.amgm.personallog.data.db.ExpenseItemDao
 import com.amgm.personallog.data.db.ExpenseDao
-import com.amgm.personallog.data.db.ExpenseGroupDao
 import com.amgm.personallog.data.db.Migrations
 import com.amgm.personallog.data.db.PreMigrationBackup
-import com.amgm.personallog.data.db.ReceiptDao
+import com.amgm.personallog.data.db.PaymentDao
 import com.amgm.personallog.data.db.SplitDao
 import dagger.Module
 import dagger.Provides
@@ -37,9 +37,9 @@ object AppModule {
     }
 
     @Provides fun provideDiaryDao(db: AppDatabase): DiaryDao = db.diaryDao()
-    @Provides fun provideReceiptDao(db: AppDatabase): ReceiptDao = db.receiptDao()
+    @Provides fun providePaymentDao(db: AppDatabase): PaymentDao = db.paymentDao()
+    @Provides fun provideExpenseItemDao(db: AppDatabase): ExpenseItemDao = db.expenseItemDao()
     @Provides fun provideExpenseDao(db: AppDatabase): ExpenseDao = db.expenseDao()
-    @Provides fun provideExpenseGroupDao(db: AppDatabase): ExpenseGroupDao = db.expenseGroupDao()
     @Provides fun provideSplitDao(db: AppDatabase): SplitDao = db.splitDao()
 
     @Provides

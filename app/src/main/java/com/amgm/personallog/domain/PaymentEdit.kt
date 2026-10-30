@@ -1,7 +1,7 @@
 package com.amgm.personallog.domain
 
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
 
 /**
  * 家計簿(支払い側)で直したとき、変わった欄の「編集済み」を立てる判定(純Kotlin)。
@@ -9,15 +9,15 @@ import com.amgm.personallog.data.model.ExpenseGroup
  * (timeEdited の既存の扱いと同じ)。
  */
 object PaymentEdit {
-    fun editExpense(
-        original: Expense,
+    fun editExpenseItem(
+        original: ExpenseItem,
         date: String,
         time: String,
         amount: Int,
         category: String,
         name: String,
         memo: String,
-    ): Expense {
+    ): ExpenseItem {
         val n = name.trim()
         val m = memo.trim()
         return original.copy(
@@ -36,13 +36,13 @@ object PaymentEdit {
     }
 
     fun editGroup(
-        original: ExpenseGroup,
+        original: Expense,
         date: String,
         time: String,
         amount: Int,
         category: String,
         memo: String,
-    ): ExpenseGroup {
+    ): Expense {
         val m = memo.trim()
         return original.copy(
             date = date,

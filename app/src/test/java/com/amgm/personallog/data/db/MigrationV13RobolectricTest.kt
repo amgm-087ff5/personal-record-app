@@ -110,19 +110,19 @@ class MigrationV13RobolectricTest {
             // v13 -> v14 も Migrations.ALL で続けて走る
             assertEquals(AppDatabase.VERSION, db.version)
             // 列が増えている(既存の列は残る)
-            assertTrue(db.columnNames("receipts").contains("headcount"))
-            assertTrue(db.columnNames("receipts").contains("rawJson"))
+            assertTrue(db.columnNames("payments").contains("headcount"))
+            assertTrue(db.columnNames("payments").contains("rawJson"))
             // 既存の支払いは残り、人数は不明(null)
-            assertEquals(1L, db.long("SELECT COUNT(*) FROM receipts"))
-            assertEquals(5000L, db.long("SELECT totalAmount FROM receipts WHERE id = 1"))
-            assertNull(room.receiptDao().getById(1L)?.headcount)
+            assertEquals(1L, db.long("SELECT COUNT(*) FROM payments"))
+            assertEquals(5000L, db.long("SELECT totalAmount FROM payments WHERE id = 1"))
+            assertNull(room.paymentDao().getById(1L)?.headcount)
 
             // DAO で人数を入れて、読み直せる。null に戻せる
-            assertEquals(1, room.receiptDao().setHeadcount(1L, 3))
-            assertEquals(3, room.receiptDao().getById(1L)?.headcount)
-            assertEquals(5000, room.receiptDao().getById(1L)?.totalAmount)
-            room.receiptDao().setHeadcount(1L, null)
-            assertNull(room.receiptDao().getById(1L)?.headcount)
+            assertEquals(1, room.paymentDao().setHeadcount(1L, 3))
+            assertEquals(3, room.paymentDao().getById(1L)?.headcount)
+            assertEquals(5000, room.paymentDao().getById(1L)?.totalAmount)
+            room.paymentDao().setHeadcount(1L, null)
+            assertNull(room.paymentDao().getById(1L)?.headcount)
         } finally {
             room.close()
         }

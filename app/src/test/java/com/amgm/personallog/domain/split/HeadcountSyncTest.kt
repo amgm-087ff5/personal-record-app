@@ -46,13 +46,13 @@ class HeadcountSyncTest {
         isSelf: Boolean = false,
         name: Boolean = false,
         allocation: Boolean = false,
-        expense: Boolean = false,
+        expenseItem: Boolean = false,
     ) = ParticipantFacts(
         id = id,
         isSelf = isSelf,
         hasName = name,
         hasAllocation = allocation,
-        hasExpense = expense,
+        hasExpense = expenseItem,
         sortOrder = order,
     )
 
@@ -108,7 +108,7 @@ class HeadcountSyncTest {
 
     @Test
     fun 支出がある行は自動で消さない() {
-        val list = listOf(fact(1, 0, isSelf = true, name = true), fact(-2, 1, expense = true))
+        val list = listOf(fact(1, 0, isSelf = true, name = true), fact(-2, 1, expenseItem = true))
         val plan = removalPlan(list, 1)
         assertEquals(emptyList<Long>(), plan.autoRemoveIds)
         assertEquals(listOf(-2L, 1L), plan.needsChoice)

@@ -7,7 +7,7 @@ import com.amgm.personallog.domain.split.SplitWarning
 
 /**
  * 割り勘の結果から求めた「自分の分」。家計簿の行は、この金額で作る(割り勘がある支払いだけ使う)。
- * - perItem: 品目の id(receiptItemId) → 自分が払う円。0円の品目は含まない。
+ * - perItem: 品目の id(paymentItemId) → 自分が払う円。0円の品目は含まない。
  * - total: 自分の合計。perItem の合計と一致する。
  */
 data class SelfShare(val perItem: Map<Long, Long>, val total: Long) {

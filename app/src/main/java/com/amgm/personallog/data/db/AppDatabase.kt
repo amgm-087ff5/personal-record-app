@@ -4,11 +4,11 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.amgm.personallog.data.model.DiaryEntry
 import com.amgm.personallog.data.model.DiaryPhoto
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
-import com.amgm.personallog.data.model.ReceiptNotDuplicate
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
+import com.amgm.personallog.data.model.PaymentNotDuplicate
 import com.amgm.personallog.data.model.ItemShare
 import com.amgm.personallog.data.model.PaymentPayer
 import com.amgm.personallog.data.model.Person
@@ -25,30 +25,31 @@ import com.amgm.personallog.data.model.WholeShare
  */
 @Database(
     entities = [
-        DiaryEntry::class, DiaryPhoto::class, Receipt::class, ReceiptItem::class, Expense::class, ExpenseGroup::class, ReceiptNotDuplicate::class,
+        DiaryEntry::class, DiaryPhoto::class, Payment::class, PaymentItem::class, ExpenseItem::class, Expense::class, PaymentNotDuplicate::class,
         // v10: 割り勘の表。人・割り勘シート・品目のまとまり・割当・支払内訳。注意: この注釈の中には丸括弧を書かない。SchemaVersionTest の正規表現が版を見つけられなくなる
         Person::class, SplitSheet::class, ShareGroup::class, ShareGroupItem::class, ItemShare::class, WholeShare::class, PaymentPayer::class,
         // v11: 支払いごとの参加者・ラベルごとの金額。割当の参照先を参加者に変更
         SplitParticipant::class, SplitLabelAmount::class,
-        // v13: 支払いの参加人数(receipts.headcount)
+        // v13: 支払いの参加人数(payments.headcount)
         // v15: 支出のメモに写していた店名を消す(表の形は同じ。支払い先は支払いだけに持つ)
-        // v16: 支出は必ず支払いに属し(receiptId NOT NULL)、支払いを消すと支出も消える(CASCADE)。支出の無い支払いを消す
-        // v14: 品目の金額不明 receipt_items・expenses の unknownAmount。単独の支出をまとまり+1品目に変える
+        // v16: 支出は必ず支払いに属し(paymentId NOT NULL)、支払いを消すと支出も消える(CASCADE)。支出の無い支払いを消す
+        // v17: 用語の整理。receipts→payments、receipt_items→payment_items、expenses→expense_items、expense_groups→expenses、列 receiptId→paymentId・receiptItemId→paymentItemId
+        // v14: 品目の金額不明 payment_items・expense_items の unknownAmount。単独の支出をまとまり+1品目に変える
     ],
-    version = 16, // AppDatabase.VERSION と同じにする(テストで確認)
+    version = 17, // AppDatabase.VERSION と同じにする(テストで確認)
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun diaryDao(): DiaryDao
-    abstract fun receiptDao(): ReceiptDao
+    abstract fun paymentDao(): PaymentDao
+    abstract fun expenseItemDao(): ExpenseItemDao
     abstract fun expenseDao(): ExpenseDao
-    abstract fun expenseGroupDao(): ExpenseGroupDao
     abstract fun splitDao(): SplitDao
 
     companion object {
         const val NAME = "personal_log.db"
 
         /** Room の版。@Database の version と PreMigrationBackup が共有する。 */
-        const val VERSION = 16
+        const val VERSION = 17
     }
 }

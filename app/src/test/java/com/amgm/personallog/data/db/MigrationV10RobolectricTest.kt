@@ -214,7 +214,7 @@ class MigrationV10RobolectricTest {
     }
 
     @Test
-    fun deletingReceipt_cascadesToSplitTables_butKeepsPersons() {
+    fun deletingPayment_cascadesToSplitTables_butKeepsPersons() {
         val h = migratedToV10()
         try {
             val db = h.writableDatabase

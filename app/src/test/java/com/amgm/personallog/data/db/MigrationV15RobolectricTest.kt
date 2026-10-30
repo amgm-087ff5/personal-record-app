@@ -5,9 +5,9 @@ import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
-import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.repository.PaymentRepository
 import com.amgm.personallog.data.repository.SplitRepository
-import com.amgm.personallog.domain.SingleExpenseConversion
+import com.amgm.personallog.domain.SingleExpenseItemConversion
 import com.amgm.personallog.ui.ledger.LedgerEntry
 import com.amgm.personallog.ui.ledger.LedgerLogic
 import kotlinx.coroutines.flow.first
@@ -125,13 +125,13 @@ class MigrationV15RobolectricTest {
         val room = openRoom()
         try {
             val db = room.openHelper.writableDatabase
-            assertEquals("", db.str("SELECT memo FROM expense_groups WHERE id = 1"))
-            assertEquals("食堂", db.str("SELECT memo FROM expense_groups WHERE id = 2"))
-            assertEquals("友達と", db.str("SELECT memo FROM expense_groups WHERE id = 3"))
-            assertEquals("", db.str("SELECT memo FROM expenses WHERE id = 10"))
-            assertEquals("スーパー", db.str("SELECT memo FROM expenses WHERE id = 11"))
+            assertEquals("", db.str("SELECT memo FROM expenses WHERE id = 1"))
+            assertEquals("食堂", db.str("SELECT memo FROM expenses WHERE id = 2"))
+            assertEquals("友達と", db.str("SELECT memo FROM expenses WHERE id = 3"))
+            assertEquals("", db.str("SELECT memo FROM expense_items WHERE id = 10"))
+            assertEquals("スーパー", db.str("SELECT memo FROM expense_items WHERE id = 11"))
             // 支払いの店名は変えない
-            assertEquals("スーパー", db.str("SELECT storeName FROM receipts WHERE id = 1"))
+            assertEquals("スーパー", db.str("SELECT storeName FROM payments WHERE id = 1"))
         } finally {
             room.close()
         }

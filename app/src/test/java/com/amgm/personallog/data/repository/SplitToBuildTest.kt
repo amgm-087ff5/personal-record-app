@@ -2,7 +2,7 @@ package com.amgm.personallog.data.repository
 
 import com.amgm.personallog.data.model.ItemShare
 import com.amgm.personallog.data.model.Person
-import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.PaymentItem
 import com.amgm.personallog.data.model.ShareGroup
 import com.amgm.personallog.data.model.ShareKind
 import com.amgm.personallog.data.model.SplitLabelAmount
@@ -18,29 +18,29 @@ import org.junit.Test
 /** SplitSheetData → SplitBuild(計算の入力)の変換を、DB なしで確かめる。 */
 class SplitToBuildTest {
     private fun item(id: Long, name: String, amount: Int) =
-        ReceiptItem(id = id, receiptId = 1, name = name, amount = amount, category = "食費")
+        PaymentItem(id = id, paymentId = 1, name = name, amount = amount, category = "食費")
 
     @Test
     fun toBuild_mapsGroupsParticipantsSharesAndLabels() {
         val items = listOf(item(1, "A", 300), item(2, "B", 200), item(3, "C", 100))
         val data = SplitSheetData(
-            receiptId = 1,
+            paymentId = 1,
             mode = SplitMode.ITEM,
             wholeKind = ShareKind.AMOUNT,
             participants = listOf(
-                SplitParticipant(id = 10, receiptId = 1, personId = 100, isPayer = true, sortOrder = 0),
-                SplitParticipant(id = 11, receiptId = 1, personId = null, label = "新人", sortOrder = 1),
+                SplitParticipant(id = 10, paymentId = 1, personId = 100, isPayer = true, sortOrder = 0),
+                SplitParticipant(id = 11, paymentId = 1, personId = null, label = "新人", sortOrder = 1),
             ),
             groups = listOf(
-                GroupWithItems(ShareGroup(id = 1, receiptId = 1, pieceCount = 2, sortOrder = 0), listOf(1L, 2L)),
-                GroupWithItems(ShareGroup(id = 2, receiptId = 1, isShared = true, sortOrder = 1), listOf(3L)),
+                GroupWithItems(ShareGroup(id = 1, paymentId = 1, pieceCount = 2, sortOrder = 0), listOf(1L, 2L)),
+                GroupWithItems(ShareGroup(id = 2, paymentId = 1, isShared = true, sortOrder = 1), listOf(3L)),
             ),
             itemShares = listOf(
                 ItemShare(groupId = 1, participantId = 10, kind = ShareKind.RATIO, weight = 1),
                 ItemShare(groupId = 1, participantId = 11, kind = ShareKind.RATIO, weight = null),
             ),
-            wholeShares = listOf(WholeShare(receiptId = 1, participantId = 11, kind = ShareKind.AMOUNT, amount = null)),
-            labelAmounts = listOf(SplitLabelAmount(receiptId = 1, label = "新人", amount = 3000)),
+            wholeShares = listOf(WholeShare(paymentId = 1, participantId = 11, kind = ShareKind.AMOUNT, amount = null)),
+            labelAmounts = listOf(SplitLabelAmount(paymentId = 1, label = "新人", amount = 3000)),
             persons = mapOf(10L to Person(id = 100, name = "自分", shortName = "自", isSelf = true, createdAt = 0)),
         )
 
@@ -71,10 +71,10 @@ class SplitToBuildTest {
     @Test
     fun toBuild_selfIsTheParticipantWhosePersonIsSelf_andMinusOneWhenNone() {
         val data = SplitSheetData(
-            receiptId = 1,
+            paymentId = 1,
             mode = SplitMode.WHOLE,
             wholeKind = ShareKind.AMOUNT,
-            participants = listOf(SplitParticipant(id = 0, receiptId = 1, personId = 5, sortOrder = 0)),
+            participants = listOf(SplitParticipant(id = 0, paymentId = 1, personId = 5, sortOrder = 0)),
             groups = emptyList(),
             itemShares = emptyList(),
             wholeShares = emptyList(),

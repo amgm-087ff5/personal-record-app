@@ -1,9 +1,9 @@
 package com.amgm.personallog.ui.ledger
 
 import com.amgm.personallog.data.model.Categories
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
-import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
+import com.amgm.personallog.data.model.PaymentStatus
 import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.receipt.ReceiptMapper
@@ -19,15 +19,15 @@ data class DraftItem(
     val isBlank: Boolean get() = name.isBlank() && amount.isBlank() && memo.isBlank()
 }
 
-/** 手入力の品目つき支払いの検証結果。エラーが無ければ receipt と items が入る。 */
+/** 手入力の品目つき支払いの検証結果。エラーが無ければ payment と items が入る。 */
 data class DraftPaymentResult(
     val errors: List<String>,
-    val receipt: Receipt? = null,
-    val items: List<ReceiptItem> = emptyList(),
-    /** 参加人数(任意)。空欄は null。保存時に receipts.headcount に入れる。 */
+    val payment: Payment? = null,
+    val items: List<PaymentItem> = emptyList(),
+    /** 参加人数(任意)。空欄は null。保存時に payments.headcount に入れる。 */
     val headcount: Int? = null,
 ) {
-    val isValid: Boolean get() = errors.isEmpty() && receipt != null
+    val isValid: Boolean get() = errors.isEmpty() && payment != null
 }
 
 object DraftPayment {
@@ -39,13 +39,13 @@ object DraftPayment {
     fun sumText(items: List<DraftItem>): String? = itemsSum(items).takeIf { it > 0 }?.toString()
 
     /**
-     * 入力を検証し、手入力の支払い(receipts の表)と品目を作る。保存は ReceiptRepository の save(下書き)か saveAndConfirm(確定)に任せる。
+     * 入力を検証し、手入力の支払い(payments の表)と品目を作る。保存は PaymentRepository の save(下書き)か saveAndConfirm(確定)に任せる。
      * 家計簿の支出は、その保存のなかで支払いから作られる(支出を単独では作らない)。
      * 確定の判定: 合計か品目があれば確定(CONFIRMED)、どちらも無ければ下書き(DRAFT)。
      *  - 合計は入力された値(1円以上の整数)。合計が空で品目があるときは、品目の合計(TaxCalc.paidYen)を入れる。
-     *  - 確定の検証(ReceiptRepository.confirm)は合計を必須にしているので、確定には必ず合計が入る。
+     *  - 確定の検証(PaymentRepository.confirm)は合計を必須にしているので、確定には必ず合計が入る。
      * 日付と時刻は必須。品目は空欄の行を捨て、金額は1円以上の整数。店名(memo)は任意。
-     * 手入力なので imagePath と rawJson は空、totalSource は MANUAL(ManualReceipt と同じ作り方)。
+     * 手入力なので imagePath と rawJson は空、totalSource は MANUAL(ManualPayment と同じ作り方)。
      */
     fun build(
         dateText: String,
@@ -88,8 +88,8 @@ object DraftPayment {
         }
         if (errors.isNotEmpty()) return DraftPaymentResult(errors)
         val items = rows.mapIndexed { i, r ->
-            ReceiptItem(
-                receiptId = 0,
+            PaymentItem(
+                paymentId = 0,
                 name = r.name.trim(),
                 amount = amounts[i],
                 category = r.category,
@@ -100,16 +100,16 @@ object DraftPayment {
         if (itemsYen > Int.MAX_VALUE) return DraftPaymentResult(listOf("品目の合計が大きすぎます"))
         // 合計: 入力があればそれ。空で品目があれば品目の合計。どちらも無ければ未入力(下書き)
         val total: Int? = typedTotal ?: if (items.isEmpty()) null else itemsYen.toInt()
-        val receipt = Receipt(
+        val payment = Payment(
             purchasedAt = ReceiptMapper.purchasedAt(dateTime.date!!, dateTime.time!!),
             storeName = memo.trim(),
             totalAmount = total,
             imagePath = "",
             rawJson = "",
-            status = if (total != null) ReceiptStatus.CONFIRMED else ReceiptStatus.DRAFT,
+            status = if (total != null) PaymentStatus.CONFIRMED else PaymentStatus.DRAFT,
             createdAt = now,
             totalSource = TotalSource.MANUAL,
         )
-        return DraftPaymentResult(emptyList(), receipt, items, headcount = headcount.value)
+        return DraftPaymentResult(emptyList(), payment, items, headcount = headcount.value)
     }
 }

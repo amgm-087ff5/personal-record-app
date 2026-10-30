@@ -1,9 +1,9 @@
 package com.amgm.personallog.ledger
 
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentStatus
 import com.amgm.personallog.ui.ledger.LedgerEntry
 import com.amgm.personallog.ui.ledger.LedgerLogic
 import org.junit.Assert.assertEquals
@@ -12,40 +12,40 @@ import org.junit.Test
 
 /** 割り勘で自分が外れた支払い(0円の行)の抽出と、集計が自分の分だけを数えること。 */
 class LedgerExcludedTest {
-    private fun receipt(id: Long, purchasedAt: String, total: Int?) = Receipt(
+    private fun payment(id: Long, purchasedAt: String, total: Int?) = Payment(
         id = id,
         purchasedAt = purchasedAt,
         storeName = "店$id",
         totalAmount = total,
         imagePath = "",
         rawJson = "",
-        status = ReceiptStatus.CONFIRMED,
+        status = PaymentStatus.CONFIRMED,
         createdAt = id,
     )
 
     @Test
-    fun excludedReceipts_onlySplitReceiptsWithoutRows_inRange_withTotal() {
-        val receipts = listOf(
-            receipt(1, "2026-10-05 12:00", 1000), // 割り勘あり・行なし・合計あり → 対象
-            receipt(2, "2026-10-06 12:00", 500), // 行あり → 対象外
-            receipt(3, "2026-10-07 12:00", 800), // 割り勘なし → 対象外
-            receipt(4, "2026-10-08 12:00", null), // 合計なし(下書き) → 対象外
-            receipt(5, "2026-09-30 12:00", 300), // 範囲外 → 対象外
+    fun excludedPayments_onlySplitPaymentsWithoutRows_inRange_withTotal() {
+        val payments = listOf(
+            payment(1, "2026-10-05 12:00", 1000), // 割り勘あり・行なし・合計あり → 対象
+            payment(2, "2026-10-06 12:00", 500), // 行あり → 対象外
+            payment(3, "2026-10-07 12:00", 800), // 割り勘なし → 対象外
+            payment(4, "2026-10-08 12:00", null), // 合計なし(下書き) → 対象外
+            payment(5, "2026-09-30 12:00", 300), // 範囲外 → 対象外
         )
-        val out = LedgerLogic.excludedReceipts(
-            receipts = receipts,
-            splitReceiptIds = setOf(1L, 2L, 4L, 5L),
-            rowReceiptIds = setOf(2L),
+        val out = LedgerLogic.excludedPayments(
+            payments = payments,
+            splitPaymentIds = setOf(1L, 2L, 4L, 5L),
+            rowPaymentIds = setOf(2L),
             from = "2026-10-01",
             to = "2026-10-31",
         )
-        assertEquals(listOf(1L), out.map { it.receipt.id })
+        assertEquals(listOf(1L), out.map { it.payment.id })
     }
 
     @Test
-    fun excludedEntry_isZeroYen_hasNoCategoryParts_andUsesReceiptDateTime() {
-        val e = LedgerLogic.excludedReceipts(
-            listOf(receipt(1, "2026-10-05 12:30", 1000)),
+    fun excludedEntry_isZeroYen_hasNoCategoryParts_andUsesPaymentDateTime() {
+        val e = LedgerLogic.excludedPayments(
+            listOf(payment(1, "2026-10-05 12:30", 1000)),
             setOf(1L),
             emptySet(),
             "2026-10-01",
@@ -55,18 +55,18 @@ class LedgerExcludedTest {
         assertTrue(e.categoryParts.isEmpty())
         assertEquals("2026-10-05", e.date)
         assertEquals("12:30", e.time)
-        assertEquals(1L, e.receiptId)
+        assertEquals(1L, e.paymentId)
     }
 
     @Test
     fun totals_countOnlySelfShare_excludedRowAddsNothing() {
         // 品目の無い支払いの支出(品名が空の1品目)
-        val singleGroup = ExpenseGroup(receiptId = 1L, id = 9, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1)
-        val single = Expense(id = 1, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1, groupId = 9)
-        val group = ExpenseGroup(id = 10, date = "2026-10-04", amount = 900, category = "外食", createdAt = 2, receiptId = 20)
-        val groupItem = Expense(id = 2, date = "2026-10-04", amount = 900, category = "外食", createdAt = 2, groupId = 10)
-        val excluded = LedgerLogic.excludedReceipts(
-            listOf(receipt(30, "2026-10-05 12:00", 3000)),
+        val singleGroup = Expense(paymentId = 1L, id = 9, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1)
+        val single = ExpenseItem(id = 1, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1, groupId = 9)
+        val group = Expense(id = 10, date = "2026-10-04", amount = 900, category = "外食", createdAt = 2, paymentId = 20)
+        val groupItem = ExpenseItem(id = 2, date = "2026-10-04", amount = 900, category = "外食", createdAt = 2, groupId = 10)
+        val excluded = LedgerLogic.excludedPayments(
+            listOf(payment(30, "2026-10-05 12:00", 3000)),
             setOf(30L),
             emptySet(),
             "2026-10-01",
@@ -90,10 +90,10 @@ class LedgerExcludedTest {
 
     @Test
     fun entries_excludedRowIsSortedByDateLikeOthers() {
-        val singleGroup = ExpenseGroup(receiptId = 1L, id = 9, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1)
-        val single = Expense(id = 1, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1, groupId = 9)
-        val excluded = LedgerLogic.excludedReceipts(
-            listOf(receipt(30, "2026-10-05 12:00", 3000)),
+        val singleGroup = Expense(paymentId = 1L, id = 9, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1)
+        val single = ExpenseItem(id = 1, date = "2026-10-03", amount = 400, category = "食費", createdAt = 1, groupId = 9)
+        val excluded = LedgerLogic.excludedPayments(
+            listOf(payment(30, "2026-10-05 12:00", 3000)),
             setOf(30L),
             emptySet(),
             "2026-10-01",

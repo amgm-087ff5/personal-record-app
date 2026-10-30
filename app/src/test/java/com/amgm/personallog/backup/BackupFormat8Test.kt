@@ -19,7 +19,7 @@ class BackupFormat8Test {
     private val self = BackupPerson(id = 1, uid = "p-self", name = "自分", shortName = "私", isSelf = true, sortOrder = 0, createdAt = 10)
     private val friend = BackupPerson(id = 2, uid = "p-friend", name = "髙橋", shortName = "髙", isSelf = false, sortOrder = 1, createdAt = 11)
 
-    private val receiptIdMap = mapOf(5L to 50L, 6L to 60L)
+    private val paymentIdMap = mapOf(5L to 50L, 6L to 60L)
     private val itemIdMap = mapOf(11L to 111L, 12L to 112L)
     private val personIdMap = mapOf(1L to 100L, 2L to 200L)
     private val groupIdMap = mapOf(3L to 300L)
@@ -35,20 +35,20 @@ class BackupFormat8Test {
         exportedAt = 1,
         persons = listOf(self, friend),
         splitSheets = listOf(BackupSplitSheet(5, SplitMode.ITEM, ShareKind.RATIO, "W1")),
-        shareGroups = listOf(BackupShareGroup(id = 3, receiptId = 5, pieceCount = 2, isShared = true, sortOrder = 0)),
-        shareGroupItems = listOf(BackupShareGroupItem(groupId = 3, receiptItemId = 11)),
+        shareGroups = listOf(BackupShareGroup(id = 3, paymentId = 5, pieceCount = 2, isShared = true, sortOrder = 0)),
+        shareGroupItems = listOf(BackupShareGroupItem(groupId = 3, paymentItemId = 11)),
         participants = listOf(
-            BackupParticipant(id = 21, receiptId = 5, personId = 1, isPayer = true, sortOrder = 0),
-            BackupParticipant(id = 22, receiptId = 5, personId = 2, memo = "一言", label = "新人", sortOrder = 1),
-            BackupParticipant(id = 23, receiptId = 5, personId = null, sortOrder = 2),
+            BackupParticipant(id = 21, paymentId = 5, personId = 1, isPayer = true, sortOrder = 0),
+            BackupParticipant(id = 22, paymentId = 5, personId = 2, memo = "一言", label = "新人", sortOrder = 1),
+            BackupParticipant(id = 23, paymentId = 5, personId = null, sortOrder = 2),
         ),
-        labelAmounts = listOf(BackupLabelAmount(receiptId = 5, label = "新人", amount = 3000)),
+        labelAmounts = listOf(BackupLabelAmount(paymentId = 5, label = "新人", amount = 3000)),
         itemShares = listOf(
             BackupItemShare(groupId = 3, participantId = 21, kind = ShareKind.RATIO, weight = 2),
             BackupItemShare(groupId = 3, participantId = 22, kind = ShareKind.RATIO, weight = 1),
         ),
-        wholeShares = listOf(BackupWholeShare(receiptId = 5, participantId = 22, kind = ShareKind.AMOUNT, amount = 300)),
-        paymentPayers = listOf(BackupPaymentPayer(id = 7, receiptId = 5, participantId = 21, method = "カード", amount = 980)),
+        wholeShares = listOf(BackupWholeShare(paymentId = 5, participantId = 22, kind = ShareKind.AMOUNT, amount = 300)),
+        paymentPayers = listOf(BackupPaymentPayer(id = 7, paymentId = 5, participantId = 21, method = "カード", amount = 980)),
     )
 
     @Test
@@ -72,7 +72,7 @@ class BackupFormat8Test {
 
     @Test
     fun format8_entityConversions_areLossless() {
-        val p = SplitParticipant(id = 22, receiptId = 5, personId = 2, memo = "一言", label = "新人", isPayer = false, sortOrder = 1)
+        val p = SplitParticipant(id = 22, paymentId = 5, personId = 2, memo = "一言", label = "新人", isPayer = false, sortOrder = 1)
         assertEquals(p, BackupParticipant.from(p).toEntity())
         val la = SplitLabelAmount(5, "", 500)
         assertEquals(la, BackupLabelAmount.from(la).toEntity())
@@ -80,7 +80,7 @@ class BackupFormat8Test {
         assertEquals(sheet, BackupSplitSheet.from(sheet).toEntity())
         val ia = ItemShare(3, 21, ShareKind.AMOUNT, weight = null, amount = 100)
         assertEquals(ia, BackupItemShare.from(ia).toEntity())
-        val pp = PaymentPayer(id = 7, receiptId = 5, participantId = 21, method = "現金", amount = 500)
+        val pp = PaymentPayer(id = 7, paymentId = 5, participantId = 21, method = "現金", amount = 500)
         assertEquals(pp, BackupPaymentPayer.from(pp).toEntity())
     }
 
@@ -108,7 +108,7 @@ class BackupFormat8Test {
         assertTrue(d.participants.isEmpty())
         assertTrue(d.labelAmounts.isEmpty())
         // 取り込み: 割当・支払内訳は捨て、シート・まとまり・品目のまとまりは残す
-        val r = remapSplitRows(d, receiptIdMap, itemIdMap, groupIdMap, participantIdMap = emptyMap())
+        val r = remapSplitRows(d, paymentIdMap, itemIdMap, groupIdMap, participantIdMap = emptyMap())
         assertTrue(r.itemShares.isEmpty())
         assertTrue(r.wholeShares.isEmpty())
         assertTrue(r.payers.isEmpty())
@@ -123,7 +123,7 @@ class BackupFormat8Test {
             "receiptNotDuplicates":[]}"""
         val d = BackupJson.decodeFromString(BackupData.serializer(), text)
         BackupManager.checkVersion(d.formatVersion)
-        assertEquals(1, d.expenses.size)
+        assertEquals(1, d.expenseItems.size)
         assertTrue(d.persons.isEmpty())
         assertTrue(d.splitSheets.isEmpty())
         assertTrue(d.shareGroups.isEmpty())
@@ -152,19 +152,19 @@ class BackupFormat8Test {
     // ------------------------------------------------------------ 参加者の付け替え
 
     @Test
-    fun remapParticipants_followsReceiptAndPerson_keepsNullPerson_andDropsMissingReceipt() {
+    fun remapParticipants_followsPaymentAndPerson_keepsNullPerson_andDropsMissingPayment() {
         val ps = listOf(
-            BackupParticipant(id = 21, receiptId = 5, personId = 1, isPayer = true),
-            BackupParticipant(id = 22, receiptId = 5, personId = 9, label = "新人"), // 人 9 が無い -> personId は null
-            BackupParticipant(id = 23, receiptId = 5, personId = null), // 名前なし
-            BackupParticipant(id = 24, receiptId = 9, personId = 2), // 支払い 9 が無い -> 捨てる
+            BackupParticipant(id = 21, paymentId = 5, personId = 1, isPayer = true),
+            BackupParticipant(id = 22, paymentId = 5, personId = 9, label = "新人"), // 人 9 が無い -> personId は null
+            BackupParticipant(id = 23, paymentId = 5, personId = null), // 名前なし
+            BackupParticipant(id = 24, paymentId = 9, personId = 2), // 支払い 9 が無い -> 捨てる
         )
-        val r = remapParticipants(ps, receiptIdMap, personIdMap)
+        val r = remapParticipants(ps, paymentIdMap, personIdMap)
         assertEquals(
             listOf(
-                21L to SplitParticipant(id = 0, receiptId = 50, personId = 100, isPayer = true),
-                22L to SplitParticipant(id = 0, receiptId = 50, personId = null, label = "新人"),
-                23L to SplitParticipant(id = 0, receiptId = 50, personId = null),
+                21L to SplitParticipant(id = 0, paymentId = 50, personId = 100, isPayer = true),
+                22L to SplitParticipant(id = 0, paymentId = 50, personId = null, label = "新人"),
+                23L to SplitParticipant(id = 0, paymentId = 50, personId = null),
             ),
             r,
         )
@@ -172,13 +172,13 @@ class BackupFormat8Test {
 
     @Test
     fun remapSplitRows_v8_keepsSharesThatPointAtMappedParticipants() {
-        val r = remapSplitRows(v8Data(), receiptIdMap, itemIdMap, groupIdMap, participantIdMap)
+        val r = remapSplitRows(v8Data(), paymentIdMap, itemIdMap, groupIdMap, participantIdMap)
         assertEquals(
             listOf(ItemShare(300, 310, ShareKind.RATIO, weight = 2, amount = null), ItemShare(300, 320, ShareKind.RATIO, weight = 1, amount = null)),
             r.itemShares,
         )
         assertEquals(listOf(WholeShare(50, 320, ShareKind.AMOUNT, amount = 300)), r.wholeShares)
-        assertEquals(listOf(PaymentPayer(id = 0, receiptId = 50, participantId = 310, method = "カード", amount = 980)), r.payers)
+        assertEquals(listOf(PaymentPayer(id = 0, paymentId = 50, participantId = 310, method = "カード", amount = 980)), r.payers)
         assertEquals(listOf(SplitLabelAmount(50, "新人", 3000)), r.labelAmounts)
         assertFalse(r.sheets.isEmpty())
     }

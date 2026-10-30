@@ -3,12 +3,12 @@ package com.amgm.personallog.ui.ledger
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
 import com.amgm.personallog.data.repository.ExpenseRepository
-import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.repository.PaymentRepository
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.data.repository.toBuild
 import com.amgm.personallog.data.settings.PaymentReadStore
@@ -23,7 +23,7 @@ import com.amgm.personallog.domain.PaymentValues
 import com.amgm.personallog.domain.WriteBackTarget
 import com.amgm.personallog.domain.split.IndividualExpense
 import com.amgm.personallog.domain.split.IndividualExpenses
-import com.amgm.personallog.receipt.ReceiptDedup
+import com.amgm.personallog.receipt.PaymentDedup
 import com.amgm.personallog.receipt.ReceiptImageStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -43,8 +43,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** 重複の組の1件(支払い)。summary は ReceiptDedup.summary。 */
-data class DuplicateMember(val receiptId: Long, val summary: String)
+/** 重複の組の1件(支払い)。summary は PaymentDedup.summary。 */
+data class DuplicateMember(val paymentId: Long, val summary: String)
 
 /**
  * 紐づく支払いの重複の組。members は組の全員で、先頭がマージ先(登録日時の古い順・同じなら id の小さい順)。
@@ -66,21 +66,21 @@ data class PaymentUiState(
     val loading: Boolean = true,
     val notFound: Boolean = false,
     val kind: PaymentKind = PaymentKind.GROUP,
-    val group: ExpenseGroup? = null,
-    val items: List<Expense> = emptyList(),
+    val group: Expense? = null,
+    val items: List<ExpenseItem> = emptyList(),
     /** 家計簿で消した支払い由来の品目(一覧・合計には入らない。「元に戻す」で品目に戻る)。 */
-    val deletedItems: List<Expense> = emptyList(),
+    val deletedItems: List<ExpenseItem> = emptyList(),
     /** 紐づく支払い。サムネイル・支払い先・「支払いを開く」に使う。 */
-    val receipt: Receipt? = null,
+    val payment: Payment? = null,
     /** 紐づく支払いの品目(金額不明の判定に使う。計算の正は支払い)。 */
-    val paymentItems: List<ReceiptItem> = emptyList(),
+    val paymentItems: List<PaymentItem> = emptyList(),
     /** 支払いの日時 "yyyy-MM-dd HH:mm"。日時を変えるときの警告に使う。 */
-    val receiptAt: String? = null,
+    val paymentAt: String? = null,
     /** 割り勘の参加者の数(割り勘が無ければ1)。2人以上では金額をここで直せない。 */
     val splitPeople: Int = 1,
     /** 割り勘があるとき(参加者2人以上)の、自分の個別支出。計算できなければ null。 */
     val individual: IndividualExpense? = null,
-    /** 割り勘で自分が参加者に入っていない(自分の分が0円で、家計簿に行が無い)支払い。receipt だけが入る。 */
+    /** 割り勘で自分が参加者に入っていない(自分の分が0円で、家計簿に行が無い)支払い。payment だけが入る。 */
     val selfExcluded: Boolean = false,
     /** 紐づく支払いが重複の組に入っていれば、その組の情報(マージ先・マージ元のどちらの画面にも出す)。 */
     val duplicate: DuplicateInfo? = null,
@@ -110,7 +110,7 @@ data class PaymentUiState(
 
     /** 支払いの合計と品目の不一致(合計 − 分かっている品目の合計)。エラーでなければ null。支払いが無ければ null。 */
     val paymentMismatch: Long?
-        get() = receipt?.takeIf { paymentItems.isNotEmpty() }?.let { UnknownAmounts.mismatch(it.totalAmount, paymentItems) }
+        get() = payment?.takeIf { paymentItems.isNotEmpty() }?.let { UnknownAmounts.mismatch(it.totalAmount, paymentItems) }
 
     /**
      * 「未入力を全て不明にする」を出せるか(markBlankItemsUnknown)。
@@ -121,7 +121,7 @@ data class PaymentUiState(
 
     /** 「差額を不明の品目として足す」で足す金額(addDifferenceAsUnknownItem)。出さないときは null。 */
     val differenceForUnknownItem: Long?
-        get() = receipt?.takeIf { paymentItems.isNotEmpty() }?.let { UnknownAmounts.differenceForUnknownItem(it.totalAmount, paymentItems) }
+        get() = payment?.takeIf { paymentItems.isNotEmpty() }?.let { UnknownAmounts.differenceForUnknownItem(it.totalAmount, paymentItems) }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -129,7 +129,7 @@ data class PaymentUiState(
 class PaymentDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: ExpenseRepository,
-    private val receipts: ReceiptRepository,
+    private val payments: PaymentRepository,
     private val splits: SplitRepository,
     private val readStore: PaymentReadStore,
     private val images: ReceiptImageStore,
@@ -153,8 +153,8 @@ class PaymentDetailViewModel @Inject constructor(
      * 自分が外れた支払いの画面。家計簿に行が無いので、支払いと割り勘だけを見る。
      * 家計簿に行が出来た(割り勘で自分が入った)ときは、通常の詳細とは別の画面なので notFound にして戻す。
      */
-    private fun excludedFlow(receiptId: Long): Flow<PaymentUiState> =
-        combine(receipts.observeReceipt(receiptId), receipts.observePaymentLink(receiptId)) { r, link -> r to link }
+    private fun excludedFlow(paymentId: Long): Flow<PaymentUiState> =
+        combine(payments.observePayment(paymentId), payments.observePaymentLink(paymentId)) { r, link -> r to link }
             .map { (r, link) ->
                 if (r == null || link != null) {
                     PaymentUiState(loading = false, notFound = true, kind = kind)
@@ -162,9 +162,9 @@ class PaymentDetailViewModel @Inject constructor(
                     PaymentUiState(
                         loading = false,
                         kind = kind,
-                        receipt = r,
-                        receiptAt = repository.receiptDateTime(receiptId),
-                        splitPeople = receipts.participantCount(receiptId),
+                        payment = r,
+                        paymentAt = repository.paymentDateTime(paymentId),
+                        splitPeople = payments.participantCount(paymentId),
                         selfExcluded = true,
                     )
                 }
@@ -174,29 +174,29 @@ class PaymentDetailViewModel @Inject constructor(
      * まとまりに紐づく支払いと、その品目。確定(下書き→確定)は支払いの行を書き換えるので、支払いも観測する。
      * 支出の行が変わらなくても、支払いの状態(下書きか)の変化がこの画面に届くようにする。
      */
-    private fun paymentFlow(gid: Long): Flow<Pair<Receipt?, List<ReceiptItem>>> =
-        repository.observeGroup(gid).map { it?.receiptId }.distinctUntilChanged().flatMapLatest { rid ->
+    private fun paymentFlow(gid: Long): Flow<Pair<Payment?, List<PaymentItem>>> =
+        repository.observeGroup(gid).map { it?.paymentId }.distinctUntilChanged().flatMapLatest { rid ->
             if (rid == null) {
-                flowOf<Pair<Receipt?, List<ReceiptItem>>>(null to emptyList())
+                flowOf<Pair<Payment?, List<PaymentItem>>>(null to emptyList())
             } else {
-                combine(receipts.observeReceipt(rid), receipts.observeItems(rid)) { r, items -> r to items }
+                combine(payments.observePayment(rid), payments.observeItems(rid)) { r, items -> r to items }
             }
         }
 
     /** 支出(まとまり)の画面。 */
     private fun groupFlow(gid: Long): Flow<PaymentUiState> =
-        combine(repository.observeGroup(gid), repository.observeGroupItems(gid), paymentFlow(gid)) { g, items, payment ->
+        combine(repository.observeGroup(gid), repository.observeGroupItems(gid), paymentFlow(gid)) { g, items, loaded ->
             if (g == null) {
                 PaymentUiState(loading = false, notFound = true, kind = PaymentKind.GROUP)
             } else {
-                val (receipt, paymentItems) = payment
+                val (payment, paymentItems) = loaded
                 val (gone, visible) = items.sortedBy { it.id }.partition { it.deletedByUser }
-                val people = receipts.participantCount(g.receiptId)
+                val people = payments.participantCount(g.paymentId)
                 PaymentUiState(
                     loading = false, kind = PaymentKind.GROUP, group = g, items = visible, deletedItems = gone,
-                    receipt = receipt, paymentItems = paymentItems, receiptAt = repository.receiptDateTime(g.receiptId),
+                    payment = payment, paymentItems = paymentItems, paymentAt = repository.paymentDateTime(g.paymentId),
                     splitPeople = people,
-                    individual = if (people >= 2) selfIndividual(g.receiptId) else null,
+                    individual = if (people >= 2) selfIndividual(g.paymentId) else null,
                 )
             }
         }
@@ -209,7 +209,7 @@ class PaymentDetailViewModel @Inject constructor(
                 else -> {
                     // 旧ルート(単独の支出の id): 移行で品目になったので、その品目が属する支出を開く
                     val gid = try {
-                        repository.groupIdOfExpense(id)
+                        repository.groupIdOfExpenseItem(id)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
@@ -223,19 +223,19 @@ class PaymentDetailViewModel @Inject constructor(
                 }
             }
             // 重複の組(支払い一覧と同じ判定。マージ先・マージ元のどちらの画面にも出す)
-            val sets = combine(receipts.observeReceipts(), receipts.observeNotDuplicates()) { list, notDup ->
-                PaymentMerge.duplicateSets(list, ReceiptDedup.notDuplicateSet(notDup))
+            val sets = combine(payments.observePayments(), payments.observeNotDuplicates()) { list, notDup ->
+                PaymentMerge.duplicateSets(list, PaymentDedup.notDuplicateSet(notDup))
             }
             combine(flow, sets) { st, all -> st to all }
                 .mapLatest { (st, all) ->
-                    val rid = st.receipt?.id
+                    val rid = st.payment?.id
                     st.copy(duplicate = rid?.let { duplicateInfo(it, PaymentMerge.setContaining(it, all)) })
                 }
                 .catch { e ->
                     _state.update { it.copy(loading = false, error = "読み込みに失敗しました: ${e.message}") }
                 }.collect { s ->
                     // 支払いが分かった時点で既読にする
-                    s.receipt?.id?.let { markRead(it) }
+                    s.payment?.id?.let { markRead(it) }
                     // 画面のエラーと削除の完了は、DB から来た値で消さない
                     _state.update { st -> s.copy(error = st.error, finished = st.finished) }
                 }
@@ -245,12 +245,12 @@ class PaymentDetailViewModel @Inject constructor(
     fun dismissError() = _state.update { it.copy(error = null) }
 
     /** 支払いを既読にする(1回だけ)。既読の保存に失敗しても、画面は続ける。 */
-    private fun markRead(receiptId: Long) {
-        if (markedReadId == receiptId) return
-        markedReadId = receiptId
+    private fun markRead(paymentId: Long) {
+        if (markedReadId == paymentId) return
+        markedReadId = paymentId
         viewModelScope.launch {
             try {
-                readStore.markRead(receiptId)
+                readStore.markRead(paymentId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -262,7 +262,7 @@ class PaymentDetailViewModel @Inject constructor(
     /**
      * 支払いの組の情報。set が null(組に入っていない)なら null。読めなければ、差分の無い組として扱わず null にする。
      */
-    private suspend fun duplicateInfo(receiptId: Long, set: List<Receipt>?): DuplicateInfo? {
+    private suspend fun duplicateInfo(paymentId: Long, set: List<Payment>?): DuplicateInfo? {
         if (set == null) return null
         val ids = set.map { it.id }
         val cached = differenceCache
@@ -270,7 +270,7 @@ class PaymentDetailViewModel @Inject constructor(
             cached.second
         } else {
             try {
-                PaymentMerge.hasDifference(PaymentMerge.fieldDiffs(receipts.mergeSnapshots(ids)))
+                PaymentMerge.hasDifference(PaymentMerge.fieldDiffs(payments.mergeSnapshots(ids)))
                     .also { differenceCache = ids to it }
             } catch (e: CancellationException) {
                 throw e
@@ -280,8 +280,8 @@ class PaymentDetailViewModel @Inject constructor(
         }
         return DuplicateInfo(
             setIds = ids,
-            members = set.map { DuplicateMember(it.id, ReceiptDedup.summary(it)) },
-            isTarget = ids.first() == receiptId,
+            members = set.map { DuplicateMember(it.id, PaymentDedup.summary(it)) },
+            isTarget = ids.first() == paymentId,
             hasDifference = differs,
         )
     }
@@ -290,13 +290,13 @@ class PaymentDetailViewModel @Inject constructor(
      * 支払いの割り勘から、自分の個別支出を作る(読み込みは SplitRepository.load と toBuild。保存はしない)。
      * 支払いが無いか、計算できないときは null。まとまりの名前は、そこに入っている品名をつなぐ。
      */
-    private suspend fun selfIndividual(receiptId: Long?): IndividualExpense? {
-        if (receiptId == null) return null
+    private suspend fun selfIndividual(paymentId: Long?): IndividualExpense? {
+        if (paymentId == null) return null
         return try {
-            val receipt = receipts.getReceipt(receiptId) ?: return null
-            val items = receipts.getItems(receiptId)
-            val data = splits.load(receiptId)
-            val build = data.toBuild(receipt.totalAmount, items)
+            val payment = payments.getPayment(paymentId) ?: return null
+            val items = payments.getItems(paymentId)
+            val data = splits.load(paymentId)
+            val build = data.toBuild(payment.totalAmount, items)
             val itemsById = items.associateBy { it.id }
             val names = data.groups.associate { gw ->
                 val itemNames = gw.itemIds.mapNotNull { itemsById[it]?.name?.trim()?.ifEmpty { null } }.distinct()
@@ -343,7 +343,7 @@ class PaymentDetailViewModel @Inject constructor(
 
     /** 支出のまとまりの金額・日時・カテゴリ・メモを直す。日時と金額は支払いへ書き戻す。 */
     fun saveGroup(
-        original: ExpenseGroup,
+        original: Expense,
         date: String,
         time: String,
         amount: Int,
@@ -351,11 +351,11 @@ class PaymentDetailViewModel @Inject constructor(
         memo: String,
         onDone: (String?) -> Unit,
     ) = write(onDone) {
-        if (original.receiptId == null) {
+        if (original.paymentId == null) {
             repository.updateGroup(PaymentEdit.editGroup(original, date, time, amount, category, memo))
             null
         } else {
-            receipts.writeBackFromLedger(
+            payments.writeBackFromLedger(
                 WriteBackTarget.Group(original),
                 PaymentValues(date, time, amount, category, name = "", memo = memo),
             )
@@ -364,8 +364,8 @@ class PaymentDetailViewModel @Inject constructor(
 
     /** 品目を直す。original が null なら、まとまりへ品目を足す。 */
     fun saveItem(
-        group: ExpenseGroup?,
-        original: Expense?,
+        group: Expense?,
+        original: ExpenseItem?,
         date: String,
         time: String,
         amount: Int,
@@ -378,25 +378,25 @@ class PaymentDetailViewModel @Inject constructor(
         val d = group?.date ?: date
         val t = group?.time ?: time
         if (original != null) {
-            if (original.receiptId == null) {
-                repository.update(PaymentEdit.editExpense(original, d, t, amount, category, name, memo))
+            if (original.paymentId == null) {
+                repository.update(PaymentEdit.editExpenseItem(original, d, t, amount, category, name, memo))
                 null
             } else {
                 // 品目が1つだけなら、その金額は支出の金額と同じ(金額を直すと、支出の金額と同じに支払いの合計・品目へ書き戻す)
                 val onlyItem = _state.value.onlyOneItem
-                receipts.writeBackFromLedger(
+                payments.writeBackFromLedger(
                     WriteBackTarget.Item(original, onlyItem = onlyItem),
                     PaymentValues(d, t, amount, category, name, memo),
                 )
             }
         } else if (group != null) {
             // 品目は支払いの品目として足す。家計簿の品目は、支払いを保存するときに作られる(支出だけを単独では作らない)
-            val receiptId = group.receiptId
-            val receipt = checkNotNull(receipts.getReceipt(receiptId)) { "支払いが見つかりません" }
-            val item = ReceiptItem(
-                receiptId = receiptId, name = name.trim(), amount = amount, category = category, memo = memo.trim(),
+            val paymentId = group.paymentId
+            val payment = checkNotNull(payments.getPayment(paymentId)) { "支払いが見つかりません" }
+            val item = PaymentItem(
+                paymentId = paymentId, name = name.trim(), amount = amount, category = category, memo = memo.trim(),
             )
-            receipts.save(receipt, receipts.getItems(receiptId) + item)
+            payments.save(payment, payments.getItems(paymentId) + item)
             null
         } else {
             null
@@ -404,11 +404,11 @@ class PaymentDetailViewModel @Inject constructor(
     }
 
     /** 支払い先(店名)を直す。 */
-    fun saveStore(receiptId: Long, storeName: String, onDone: (String?) -> Unit) = write(onDone) {
+    fun saveStore(paymentId: Long, storeName: String, onDone: (String?) -> Unit) = write(onDone) {
         if (storeName.isBlank()) {
             "支払い先を入力してください。"
         } else {
-            receipts.saveStoreName(receiptId, storeName)
+            payments.saveStoreName(paymentId, storeName)
             null
         }
     }
@@ -420,7 +420,7 @@ class PaymentDetailViewModel @Inject constructor(
         val sum = s.itemSum
         if (sum <= 0L || sum > Int.MAX_VALUE) return
         write(null) {
-            receipts.writeBackFromLedger(
+            payments.writeBackFromLedger(
                 WriteBackTarget.Group(g),
                 PaymentValues(g.date, g.time, sum.toInt(), g.category, name = "", memo = g.memo),
             )
@@ -428,29 +428,29 @@ class PaymentDetailViewModel @Inject constructor(
     }
 
     /** 家計簿で消した品目を元に戻す。 */
-    fun restoreItem(expense: Expense) = run { repository.restore(expense) }
+    fun restoreItem(expenseItem: ExpenseItem) = run { repository.restore(expenseItem) }
 
     /** 品目の1つの欄を、支払いの値に戻す。 */
-    fun revertItemField(expense: Expense, field: PaymentField) = run {
-        if (!repository.revertExpenseField(expense.id, field)) {
+    fun revertItemField(expenseItem: ExpenseItem, field: PaymentField) = run {
+        if (!repository.revertExpenseItemField(expenseItem.id, field)) {
             _state.update { it.copy(error = "支払いの値を求められませんでした。") }
         }
     }
 
     /** 支出のまとまりの1つの欄を、支払いの値に戻す。 */
-    fun revertGroupField(group: ExpenseGroup, field: PaymentField) = run {
+    fun revertGroupField(group: Expense, field: PaymentField) = run {
         if (!repository.revertGroupField(group.id, field)) {
             _state.update { it.copy(error = "支払いの値を求められませんでした。") }
         }
     }
 
     /** 品目を消す。支出の品目は1つ以上必要なので、最後の1つは消さずに理由を出す(支出ごと消すのは支払いの削除 deletePayment)。 */
-    fun deleteItem(expense: Expense) {
+    fun deleteItem(expenseItem: ExpenseItem) {
         if (_state.value.items.size <= 1) {
             _state.update { it.copy(error = ExpenseRepository.MESSAGE_LAST_ITEM) }
             return
         }
-        run { repository.delete(expense) }
+        run { repository.delete(expenseItem) }
     }
 
     // ------------------------------------------------------------ 金額不明(段階2の画面から呼ぶ)
@@ -458,35 +458,35 @@ class PaymentDetailViewModel @Inject constructor(
     /**
      * 「未入力を全て不明にする」。支出の品目のうち金額が未入力(0円)のものを、金額不明にする。
      * 支払いに紐づく支出では、計算の正は支払いなので、支払いの品目(金額が0のもの)を不明にして家計簿を作り直す
-     * (ReceiptRepository.markBlankItemsUnknown)。割り勘が2人以上のときは、金額の内訳は割り勘で決まるので行わない。
+     * (PaymentRepository.markBlankItemsUnknown)。割り勘が2人以上のときは、金額の内訳は割り勘で決まるので行わない。
      */
     fun markBlankItemsUnknown(onDone: ((String?) -> Unit)? = null) = write(onDone) {
         val g = _state.value.group ?: return@write null
-        val receiptId = g.receiptId
+        val paymentId = g.paymentId
         if (_state.value.splitPeople >= 2) return@write MESSAGE_SPLIT_UNKNOWN
-        receipts.markBlankItemsUnknown(receiptId)
+        payments.markBlankItemsUnknown(paymentId)
     }
 
     /**
      * 「差額を不明の品目として足す」。支払いの合計 − 分かっている品目の合計 を、金額不明の品目1つとして支払いに足す
-     * (ReceiptRepository.addDifferenceAsUnknownItem)。割り勘が2人以上のときは行わない。
+     * (PaymentRepository.addDifferenceAsUnknownItem)。割り勘が2人以上のときは行わない。
      */
     fun addDifferenceAsUnknownItem(onDone: ((String?) -> Unit)? = null) = write(onDone) {
         val g = _state.value.group ?: return@write null
-        val receiptId = g.receiptId
+        val paymentId = g.paymentId
         if (_state.value.splitPeople >= 2) return@write MESSAGE_SPLIT_UNKNOWN
-        receipts.addDifferenceAsUnknownItem(receiptId)
+        payments.addDifferenceAsUnknownItem(paymentId)
     }
 
     /**
      * 1つの品目の「金額不明」を切り替える。支払いの品目に紐づく品目だけ(支払いの品目の印を変えて家計簿を作り直す)。
-     * 品目の無い支払いの1品目(receiptItemId なし)は、金額が支出と同じなので不明にできない。
+     * 品目の無い支払いの1品目(paymentItemId なし)は、金額が支出と同じなので不明にできない。
      */
-    fun setItemUnknown(expense: Expense, unknown: Boolean, onDone: ((String?) -> Unit)? = null) = write(onDone) {
-        val receiptId = expense.receiptId ?: return@write MESSAGE_NOT_LINKED
-        val itemId = expense.receiptItemId ?: return@write MESSAGE_BLANK_ITEM_UNKNOWN
+    fun setItemUnknown(expenseItem: ExpenseItem, unknown: Boolean, onDone: ((String?) -> Unit)? = null) = write(onDone) {
+        val paymentId = expenseItem.paymentId ?: return@write MESSAGE_NOT_LINKED
+        val itemId = expenseItem.paymentItemId ?: return@write MESSAGE_BLANK_ITEM_UNKNOWN
         if (_state.value.splitPeople >= 2) return@write MESSAGE_SPLIT_UNKNOWN
-        receipts.setItemUnknown(receiptId, itemId, unknown)
+        payments.setItemUnknown(paymentId, itemId, unknown)
     }
 
     companion object {
@@ -500,9 +500,9 @@ class PaymentDetailViewModel @Inject constructor(
      * 割り勘で自分が外れた支払い(支出が無い)の画面では、その支払いを削除する。
      */
     fun deletePayment() {
-        val receiptId = _state.value.group?.receiptId ?: _state.value.receipt?.id ?: return
+        val paymentId = _state.value.group?.paymentId ?: _state.value.payment?.id ?: return
         run {
-            val deleted = receipts.deletePayment(receiptId)
+            val deleted = payments.deletePayment(paymentId)
             deleted?.let { images.delete(it.imagePath) }
             _state.update { it.copy(finished = true) }
         }

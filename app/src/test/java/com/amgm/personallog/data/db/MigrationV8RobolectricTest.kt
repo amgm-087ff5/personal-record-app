@@ -87,7 +87,7 @@ class MigrationV8RobolectricTest {
         """{"date":"2026-10-09","time":"18:32","store":"A","items":[{"name":"牛乳","amount":$amount}]""" +
             (if (total != null) ""","total":$total""" else "") + "}"
 
-    private fun insertReceipt(db: SupportSQLiteDatabase, id: Long, total: Int, status: String, rawJson: String) {
+    private fun insertPayment(db: SupportSQLiteDatabase, id: Long, total: Int, status: String, rawJson: String) {
         db.execSQL(
             "INSERT INTO receipts (id, purchasedAt, storeName, totalAmount, imagePath, rawJson, status, createdAt, imageHash, isAdvance, ownAmount) " +
                 "VALUES (?, '2026-10-09 18:32', '店', ?, ?, ?, ?, ?, ?, 0, NULL)",
@@ -96,15 +96,15 @@ class MigrationV8RobolectricTest {
     }
 
     /** 5件の支払い・品目・支出・グループが入った v7 を作って閉じる。 */
-    private fun createV7(withOrphans: Boolean = false, withReceipts: Boolean = true) {
+    private fun createV7(withOrphans: Boolean = false, withPayments: Boolean = true) {
         val h = helper(7, onCreate = { db -> schema7().forEach { db.execSQL(it) } })
         val db = h.writableDatabase
-        if (withReceipts) {
-            insertReceipt(db, 1, 748, "confirmed", raw("748", 748))
-            insertReceipt(db, 2, 198, "draft", raw(null)) // 旧方式の補完値と同じ -> 空欄
-            insertReceipt(db, 3, 500, "draft", raw(null)) // 手で入れた値 -> 残す
-            insertReceipt(db, 4, 0, "draft", "") // 読み取り失敗の仮の0円 -> 空欄
-            insertReceipt(db, 5, 750, "confirmed", raw("748", 748)) // 確定済みで印字と違う -> unknown
+        if (withPayments) {
+            insertPayment(db, 1, 748, "confirmed", raw("748", 748))
+            insertPayment(db, 2, 198, "draft", raw(null)) // 旧方式の補完値と同じ -> 空欄
+            insertPayment(db, 3, 500, "draft", raw(null)) // 手で入れた値 -> 残す
+            insertPayment(db, 4, 0, "draft", "") // 読み取り失敗の仮の0円 -> 空欄
+            insertPayment(db, 5, 750, "confirmed", raw("748", 748)) // 確定済みで印字と違う -> unknown
             for ((i, rid) in listOf(1L, 1L, 3L).withIndex()) {
                 db.execSQL(
                     "INSERT INTO receipt_items (receiptId, name, amount, category, taxRate, priceIncludesTax, memo) VALUES (?, ?, 100, '食費', 10, 1, '')",
@@ -116,7 +116,7 @@ class MigrationV8RobolectricTest {
             db.execSQL("INSERT INTO expenses (id, date, time, amount, category, memo, receiptId, createdAt, groupId, timeEdited) VALUES (2, '2026-10-09', '', 300, '食費', '', NULL, 2, NULL, 0)")
         }
         // 採番を進めておく: id 9 を入れて消す(最大 id は 5 のまま、seq は 9)
-        insertReceipt(db, 9, 1, "draft", "")
+        insertPayment(db, 9, 1, "draft", "")
         db.execSQL("DELETE FROM receipts WHERE id = 9")
         if (withOrphans) {
             // 移行と無関係な古い不整合(外部キーが無効の時期に入ったもの)
@@ -151,14 +151,14 @@ class MigrationV8RobolectricTest {
         assertEquals(2L, db.long("SELECT COUNT(*) FROM expenses"))
         // 外部キーを有効にしても違反は無い
         db.execSQL("PRAGMA foreign_keys = ON")
-        assertEquals(0L, db.receiptsFkViolationsForTest())
+        assertEquals(0L, db.paymentsFkViolationsForTest())
         db.query("PRAGMA foreign_key_check").use { assertFalse(it.moveToFirst()) }
         // 画像ハッシュなど既存の列の値も保たれる
         assertEquals(1L, db.long("SELECT COUNT(*) FROM receipts WHERE id = 3 AND imageHash = 'hash3' AND imagePath = 'receipts/3.jpg'"))
         db.close()
     }
 
-    private fun SupportSQLiteDatabase.receiptsFkViolationsForTest(): Long = with(Migrations) { receiptsFkViolations() }
+    private fun SupportSQLiteDatabase.paymentsFkViolationsForTest(): Long = with(Migrations) { receiptsFkViolations() }
 
     @Test
     fun migration_decidesTotalAndSource() {
@@ -188,8 +188,8 @@ class MigrationV8RobolectricTest {
     }
 
     @Test
-    fun migration_emptyReceiptsTable_keepsSequence() {
-        createV7(withReceipts = false)
+    fun migration_emptyPaymentsTable_keepsSequence() {
+        createV7(withPayments = false)
         val db = migrate()
         assertEquals(0L, db.long("SELECT COUNT(*) FROM receipts"))
         assertEquals(9L, db.seq())
@@ -235,10 +235,10 @@ class MigrationV8RobolectricTest {
             assertEquals(AppDatabase.VERSION, db.version)
             // 5 件 + v11 -> v12 で、支払いに属さない単独の支出(id 2)が手入力の支払いになった1件
             // − v15 -> v16 で、支出の無い確定済みの支払い(id 5)は消える(下書き 2・3・4 は残る)
-            assertEquals(5L, db.long("SELECT COUNT(*) FROM receipts"))
-            assertEquals(0L, db.long("SELECT COUNT(*) FROM receipts WHERE id = 5"))
-            assertEquals(3L, db.long("SELECT COUNT(*) FROM receipt_items"))
-            assertEquals(0L, db.long("SELECT COUNT(*) FROM receipt_not_duplicates"))
+            assertEquals(5L, db.long("SELECT COUNT(*) FROM payments"))
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM payments WHERE id = 5"))
+            assertEquals(3L, db.long("SELECT COUNT(*) FROM payment_items"))
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM payment_not_duplicates"))
             db.query("PRAGMA foreign_key_check").use { assertFalse(it.moveToFirst()) }
         } finally {
             room.close()

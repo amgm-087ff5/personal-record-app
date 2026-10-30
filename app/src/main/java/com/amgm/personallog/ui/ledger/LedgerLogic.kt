@@ -2,9 +2,9 @@ package com.amgm.personallog.ui.ledger
 
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.data.model.CategoryTotal
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
-import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.Payment
 import com.amgm.personallog.domain.LedgerCalc
 import java.time.LocalDate
 import java.time.LocalTime
@@ -28,7 +28,7 @@ sealed interface LedgerEntry {
     val createdAt: Long
 
     /** この行のもとになった支払いの id(手入力なら null)。下書き・割り勘の警告の表示に使う。 */
-    val receiptId: Long?
+    val paymentId: Long?
 
     /**
      * この行をカテゴリ別に数えるときの内訳(合計は amount と一致する)。
@@ -37,13 +37,13 @@ sealed interface LedgerEntry {
     val categoryParts: List<CategoryTotal>
 
     /** items は品目(支出)。amount は支出金額(正)。 */
-    data class Group(val group: ExpenseGroup, val items: List<Expense>) : LedgerEntry {
+    data class Group(val group: Expense, val items: List<ExpenseItem>) : LedgerEntry {
         override val date: String get() = group.date
         override val time: String get() = group.time
         override val amount: Long get() = group.amount.toLong()
         override val category: String get() = group.category
         override val createdAt: Long get() = group.createdAt
-        override val receiptId: Long? get() = group.receiptId
+        override val paymentId: Long? get() = group.paymentId
 
         override val categoryParts: List<CategoryTotal>
             get() {
@@ -64,15 +64,15 @@ sealed interface LedgerEntry {
     /**
      * 割り勘で自分を外した支払い(自分の分が 0 円で、家計簿に支出の行が無いもの)。
      * 金額は 0 円で、カテゴリ別の内訳は空(合計・カテゴリ集計に何も足さない)。
-     * 一覧に「自分の分 ¥0（対象外）」として出すためだけの行。詳細画面は支払い(receipt.id)で開く。
+     * 一覧に「自分の分 ¥0（対象外）」として出すためだけの行。詳細画面は支払い(payment.id)で開く。
      */
-    data class Excluded(val receipt: Receipt) : LedgerEntry {
-        override val date: String get() = LedgerCalc.splitPurchasedAt(receipt.purchasedAt).first
-        override val time: String get() = LedgerCalc.splitPurchasedAt(receipt.purchasedAt).second
+    data class Excluded(val payment: Payment) : LedgerEntry {
+        override val date: String get() = LedgerCalc.splitPurchasedAt(payment.purchasedAt).first
+        override val time: String get() = LedgerCalc.splitPurchasedAt(payment.purchasedAt).second
         override val amount: Long get() = 0L
         override val category: String get() = Categories.UNCATEGORIZED
-        override val createdAt: Long get() = receipt.createdAt
-        override val receiptId: Long? get() = receipt.id
+        override val createdAt: Long get() = payment.createdAt
+        override val paymentId: Long? get() = payment.id
         override val categoryParts: List<CategoryTotal> get() = emptyList()
     }
 }
@@ -88,7 +88,7 @@ data class MonthTotal(val yearMonth: String, val total: Long)
 data class HeadcountParse(val value: Int?, val error: String?)
 
 /** 入力フォームの検証結果。エラーが無ければ date / amount / category が入る。 */
-data class ExpenseValidation(
+data class ExpenseItemValidation(
     val dateError: String? = null,
     val timeError: String? = null,
     val amountError: String? = null,
@@ -129,16 +129,16 @@ object LedgerLogic {
      * グループが渡されていない品目・グループに属さない行(v13 以前の古い行、自分の分が0円の間の消した品目)は数えない
      * (グループが別の月に動いたとき、品目が元の月に残って二重に数えられるのを防ぐ)。
      * 月・日の振り分けはグループの日付に従う。並びは日付の降順、同じ日は作成の新しい順。
-     * excluded は割り勘で自分を外した支払いの0円の行(excludedReceipts で作る)。金額は 0 なので合計には影響しない。
+     * excluded は割り勘で自分を外した支払いの0円の行(excludedPayments で作る)。金額は 0 なので合計には影響しない。
      */
     fun buildEntries(
-        expenses: List<Expense>,
-        groups: List<ExpenseGroup>,
+        expenseItems: List<ExpenseItem>,
+        groups: List<Expense>,
         excluded: List<LedgerEntry.Excluded> = emptyList(),
     ): List<LedgerEntry> {
         val groupIds = groups.map { it.id }.toSet()
         // 家計簿で消した品目(deletedByUser)は、一覧にも集計にも入れない
-        val itemsByGroup = expenses
+        val itemsByGroup = expenseItems
             .filter { e -> e.groupId != null && e.groupId in groupIds && !e.deletedByUser }
             .groupBy { it.groupId!! }
         val grouped = groups.map { LedgerEntry.Group(it, itemsByGroup[it.id].orEmpty().sortedBy { x -> x.id }) }
@@ -150,19 +150,19 @@ object LedgerLogic {
 
     /**
      * 割り勘で自分を外した支払いを、0円の行にする対象を選ぶ。
-     * 条件: 割り勘のシートがある(splitReceiptIds)・家計簿の行が1つも無い(rowReceiptIds に無い)・合計がある・
+     * 条件: 割り勘のシートがある(splitPaymentIds)・家計簿の行が1つも無い(rowPaymentIds に無い)・合計がある・
      * 支払いの日付が from..to の中(yyyy-MM-dd の文字列で比べる)。
      * 行が無いのは「自分の分が 0 円」のときだけ(行は自分の分が 0 円なら作らない)。合計が無い下書きは対象外。
      */
-    fun excludedReceipts(
-        receipts: List<Receipt>,
-        splitReceiptIds: Set<Long>,
-        rowReceiptIds: Set<Long>,
+    fun excludedPayments(
+        payments: List<Payment>,
+        splitPaymentIds: Set<Long>,
+        rowPaymentIds: Set<Long>,
         from: String,
         to: String,
     ): List<LedgerEntry.Excluded> =
-        receipts.asSequence()
-            .filter { it.id != 0L && it.id in splitReceiptIds && it.id !in rowReceiptIds }
+        payments.asSequence()
+            .filter { it.id != 0L && it.id in splitPaymentIds && it.id !in rowPaymentIds }
             .filter { it.totalAmount != null }
             .filter { val d = LedgerCalc.splitPurchasedAt(it.purchasedAt).first; d >= from && d <= to }
             .map { LedgerEntry.Excluded(it) }
@@ -212,8 +212,8 @@ object LedgerLogic {
         return months.map { m -> MonthTotal(m, byMonth[m].orEmpty().sumOf { it.amount }) }
     }
 
-    fun filterMonth(expenses: List<Expense>, yearMonth: String): List<Expense> =
-        expenses.filter { it.date.startsWith(yearMonth) }
+    fun filterMonth(expenseItems: List<ExpenseItem>, yearMonth: String): List<ExpenseItem> =
+        expenseItems.filter { it.date.startsWith(yearMonth) }
 
     /** "2026-10-05" -> "10月5日(月)" */
     /**
@@ -254,7 +254,7 @@ object LedgerLogic {
     fun defaultTime(dateText: String, today: LocalDate, nowTime: LocalTime): String =
         if (dateText == today.toString()) nowTime.format(HH_MM) else "12:00"
 
-    fun validate(dateText: String, timeText: String, amountText: String, category: String?): ExpenseValidation {
+    fun validate(dateText: String, timeText: String, amountText: String, category: String?): ExpenseItemValidation {
         var dateError: String? = null
         var timeError: String? = null
         var amountError: String? = null
@@ -294,6 +294,6 @@ object LedgerLogic {
 
         if (category.isNullOrBlank()) categoryError = "カテゴリを選択してください"
 
-        return ExpenseValidation(dateError, timeError, amountError, categoryError, date, time, amount, category)
+        return ExpenseItemValidation(dateError, timeError, amountError, categoryError, date, time, amount, category)
     }
 }

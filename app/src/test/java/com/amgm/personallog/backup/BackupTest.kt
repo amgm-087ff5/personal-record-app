@@ -1,6 +1,6 @@
 package com.amgm.personallog.backup
 
-import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.Payment
 import com.amgm.personallog.data.model.TotalSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -18,11 +18,11 @@ class BackupTest {
             exportedAt = 123L,
             diaryEntries = listOf(BackupDiaryEntry(1, "2026-10-01", "今日は\"晴れ\"\n改行あり", 10, 20)),
             diaryPhotos = listOf(BackupDiaryPhoto(1, 1, "diary/a.jpg", null, 0)),
-            receipts = listOf(BackupReceipt(5, "2026-10-02 12:30", "店", 980, "receipts/r.jpg", "{\"a\":1}", "confirmed", 30)),
-            receiptItems = listOf(BackupReceiptItem(id = 1, receiptId = 5, name = "牛乳", memo = "2本目", amount = 150, category = "食費", ownAmount = 100)),
-            expenses = listOf(
-                BackupExpense(1, "2026-10-02", "12:30", 980, "食費", "店", 5, 40),
-                BackupExpense(2, "2026-10-03", "", 500, "その他", "", null, 41),
+            payments = listOf(BackupPayment(5, "2026-10-02 12:30", "店", 980, "receipts/r.jpg", "{\"a\":1}", "confirmed", 30)),
+            paymentItems = listOf(BackupPaymentItem(id = 1, paymentId = 5, name = "牛乳", memo = "2本目", amount = 150, category = "食費", ownAmount = 100)),
+            expenseItems = listOf(
+                BackupExpenseItem(1, "2026-10-02", "12:30", 980, "食費", "店", 5, 40),
+                BackupExpenseItem(2, "2026-10-03", "", 500, "その他", "", null, 41),
             ),
         )
         val text = BackupJson.encodeToString(BackupData.serializer(), data)
@@ -36,33 +36,33 @@ class BackupTest {
     fun json_ignoresUnknownKeysAndUsesDefaults() {
         val text = """{"formatVersion":1,"future":"x","expenses":[{"id":1,"date":"2026-10-01","amount":1,"category":"食費","createdAt":0,"extra":true}]}"""
         val d = BackupJson.decodeFromString(BackupData.serializer(), text)
-        assertEquals(1, d.expenses.size)
-        assertEquals("", d.expenses[0].memo)
-        assertNull(d.expenses[0].receiptId)
+        assertEquals(1, d.expenseItems.size)
+        assertEquals("", d.expenseItems[0].memo)
+        assertNull(d.expenseItems[0].paymentId)
     }
 
     @Test
     fun entityConversion_isLossless() {
-        val e = BackupExpense(3, "2026-01-01", "09:00", 10, "食費", "m", 7, 99, uid = "u-1")
-        assertEquals(e, BackupExpense.from(e.toEntity()))
-        val r = BackupReceipt(1, "2026-01-01", "s", 1, "receipts/x.jpg", "{}", "draft", 2)
-        assertEquals(r, BackupReceipt.from(r.toEntity()))
+        val e = BackupExpenseItem(3, "2026-01-01", "09:00", 10, "食費", "m", 7, 99, uid = "u-1")
+        assertEquals(e, BackupExpenseItem.from(e.toEntity()))
+        val r = BackupPayment(1, "2026-01-01", "s", 1, "receipts/x.jpg", "{}", "draft", 2)
+        assertEquals(r, BackupPayment.from(r.toEntity()))
     }
 
     @Test
-    fun receiptWithoutTime_keepsExpenseTimeEmpty_onRestore() {
+    fun paymentWithoutTime_keepsExpenseItemTimeEmpty_onRestore() {
         // 支払いに時刻が無い支出は、復元しても 00:00 や作成時刻で補完しない
-        val e = BackupExpense(4, "2026-01-01", "", 10, "食費", "", 7, 99)
+        val e = BackupExpenseItem(4, "2026-01-01", "", 10, "食費", "", 7, 99)
         assertEquals("", e.toEntity(linkedTime = "").time)
         // 古いバックアップ(時刻なし・支払い紐づきなし)は作成時刻から補う
-        val legacy = BackupExpense(5, "2026-01-01", "", 10, "食費", "", null, 0)
+        val legacy = BackupExpenseItem(5, "2026-01-01", "", 10, "食費", "", null, 0)
         assertTrue(legacy.toEntity().time.matches(Regex("""\d{2}:\d{2}""")))
     }
 
     @Test
     fun legacyItem_isExpandedOnImport() {
         // v3までの形式: 数量2・負担割合50%
-        val legacy = BackupReceiptItem(id = 1, receiptId = 9, name = "洗剤", amount = 200, category = "日用品", quantity = 2.0, unitPrice = 100, ownPercent = 50)
+        val legacy = BackupPaymentItem(id = 1, paymentId = 9, name = "洗剤", amount = 200, category = "日用品", quantity = 2.0, unitPrice = 100, ownPercent = 50)
         val rows = legacy.toUnitRows()
         assertEquals(2, rows.size)
         assertEquals(listOf(100, 100), rows.map { it.amount })
@@ -131,30 +131,30 @@ class BackupTest {
             formatVersion = BACKUP_FORMAT_VERSION,
             dbVersion = 9,
             exportedAt = 1L,
-            receipts = listOf(
-                BackupReceipt(
+            payments = listOf(
+                BackupPayment(
                     id = 5, purchasedAt = "2026-10-02 12:30", storeName = "店", totalAmount = null,
                     imagePath = "receipts/r.jpg", rawJson = "{}", status = "draft", createdAt = 30,
                     totalSource = TotalSource.UNKNOWN, imageHash = "abc123",
                     rotationDegrees = 91.5f, cropLeft = 0.1f, cropTop = 0.2f, cropRight = 0.9f, cropBottom = 0.8f,
                 ),
-                BackupReceipt(
+                BackupPayment(
                     id = 6, purchasedAt = "2026-10-02 12:31", storeName = "店", totalAmount = 980,
                     imagePath = "receipts/s.jpg", rawJson = "{}", status = "confirmed", createdAt = 31,
                     totalSource = TotalSource.ITEMS,
                 ),
             ),
-            receiptNotDuplicates = listOf(BackupNotDuplicate(5, 6, 77)),
+            paymentNotDuplicates = listOf(BackupNotDuplicate(5, 6, 77)),
         )
         val text = BackupJson.encodeToString(BackupData.serializer(), data)
         val back = BackupJson.decodeFromString(BackupData.serializer(), text)
         assertEquals(data, back)
-        assertNull(back.receipts[0].totalAmount)
-        assertEquals(TotalSource.ITEMS, back.receipts[1].totalSource)
-        assertEquals(listOf(BackupNotDuplicate(5, 6, 77)), back.receiptNotDuplicates)
+        assertNull(back.payments[0].totalAmount)
+        assertEquals(TotalSource.ITEMS, back.payments[1].totalSource)
+        assertEquals(listOf(BackupNotDuplicate(5, 6, 77)), back.paymentNotDuplicates)
         // エンティティとの往復で失われない
-        for (r in back.receipts) assertEquals(r, BackupReceipt.from(r.toEntity()))
-        val e = back.receipts[0].toEntity()
+        for (r in back.payments) assertEquals(r, BackupPayment.from(r.toEntity()))
+        val e = back.payments[0].toEntity()
         assertNull(e.totalAmount)
         assertEquals("abc123", e.imageHash)
         assertEquals(91.5f, e.rotationDegrees, 0f)
@@ -168,7 +168,7 @@ class BackupTest {
             "expenseGroups":[]}"""
         val d = BackupJson.decodeFromString(BackupData.serializer(), text)
         BackupManager.checkVersion(d.formatVersion)
-        val r = d.receipts.single()
+        val r = d.payments.single()
         assertEquals(500, r.totalAmount)
         assertEquals(TotalSource.UNKNOWN, r.totalSource)
         assertNull(r.imageHash)
@@ -177,7 +177,7 @@ class BackupTest {
         assertEquals(0f, r.cropTop, 0f)
         assertEquals(1f, r.cropRight, 0f)
         assertEquals(1f, r.cropBottom, 0f)
-        assertTrue(d.receiptNotDuplicates.isEmpty())
+        assertTrue(d.paymentNotDuplicates.isEmpty())
         val e = r.toEntity()
         assertEquals(500, e.totalAmount)
         assertEquals("confirmed", e.status)
@@ -186,10 +186,10 @@ class BackupTest {
     }
 
     @Test
-    fun confirmedReceiptWithoutTotal_isRestoredAsDraft() {
-        val r = BackupReceipt(1, "2026-01-01", "s", null, "receipts/x.jpg", "{}", "confirmed", 2)
+    fun confirmedPaymentWithoutTotal_isRestoredAsDraft() {
+        val r = BackupPayment(1, "2026-01-01", "s", null, "receipts/x.jpg", "{}", "confirmed", 2)
         assertEquals("draft", r.toEntity().status)
-        val ok = BackupReceipt(1, "2026-01-01", "s", 100, "receipts/x.jpg", "{}", "confirmed", 2)
+        val ok = BackupPayment(1, "2026-01-01", "s", 100, "receipts/x.jpg", "{}", "confirmed", 2)
         assertEquals("confirmed", ok.toEntity().status)
     }
 
@@ -203,11 +203,11 @@ class BackupTest {
         )
         val map = mapOf(1L to 10L, 2L to 20L, 4L to 10L)
         val r = remapNotDuplicates(pairs, map)
-        assertEquals(listOf(10L to 20L), r.map { it.receiptIdLow to it.receiptIdHigh }.distinct())
+        assertEquals(listOf(10L to 20L), r.map { it.paymentIdLow to it.paymentIdHigh }.distinct())
         assertEquals(1, r.size)
         // 付け替えで大小が逆転した組は Low < High に直る
         val flipped = remapNotDuplicates(listOf(BackupNotDuplicate(1, 2, 0)), mapOf(1L to 9L, 2L to 4L))
-        assertEquals(4L to 9L, flipped.single().let { it.receiptIdLow to it.receiptIdHigh })
+        assertEquals(4L to 9L, flipped.single().let { it.paymentIdLow to it.paymentIdHigh })
         assertTrue(remapNotDuplicates(pairs, emptyMap()).isEmpty())
     }
 
@@ -217,14 +217,14 @@ class BackupTest {
         total: Int? = 500,
         path: String = "receipts/$id.jpg",
         hash: String? = null,
-    ) = Receipt(
+    ) = Payment(
         id = id, purchasedAt = at, storeName = "店", totalAmount = total, imagePath = path,
         rawJson = "{}", createdAt = id, imageHash = hash,
     )
 
     @Test
     fun mergeIndex_usesImageHashWhenPresent() {
-        val idx = ReceiptMergeIndex(listOf(entity(1, hash = "h1"), entity(2, hash = "h2")))
+        val idx = PaymentMergeIndex(listOf(entity(1, hash = "h1"), entity(2, hash = "h2")))
         // 日時や画像パスが違っても、ハッシュが同じなら同じレシート
         assertEquals(2L, idx.take(entity(90, at = "2030-01-01 00:00", total = 1, path = "other.jpg", hash = "h2")))
         // 日時・合計・パスが同じでも、ハッシュが違えば別の支払い
@@ -233,18 +233,18 @@ class BackupTest {
 
     @Test
     fun mergeIndex_fallsBackToLegacyKey_andHandlesNullTotal() {
-        val idx = ReceiptMergeIndex(listOf(entity(1, total = null), entity(2, total = 700)))
+        val idx = PaymentMergeIndex(listOf(entity(1, total = null), entity(2, total = 700)))
         assertEquals(1L, idx.take(entity(50, total = null, path = "receipts/1.jpg")))
         assertNull(idx.take(entity(51, total = 701, path = "receipts/2.jpg")))
         assertEquals(2L, idx.take(entity(52, total = 700, path = "receipts/2.jpg")))
         // 既存のハッシュの有無に関係なく、バックアップにハッシュが無ければ従来のキー
-        val idx2 = ReceiptMergeIndex(listOf(entity(3, hash = "h3")))
+        val idx2 = PaymentMergeIndex(listOf(entity(3, hash = "h3")))
         assertEquals(3L, idx2.take(entity(60, path = "receipts/3.jpg")))
     }
 
     @Test
     fun mergeIndex_matchesOneToOne() {
-        val idx = ReceiptMergeIndex(listOf(entity(1, hash = "same")))
+        val idx = PaymentMergeIndex(listOf(entity(1, hash = "same")))
         assertEquals(1L, idx.take(entity(10, hash = "same")))
         // 同じ画像を2枚持つバックアップ: 2枚目は既存に対応が無いので新規
         assertNull(idx.take(entity(11, hash = "same")))
@@ -252,7 +252,7 @@ class BackupTest {
 
     @Test
     fun mergeIndex_hashedBackupFindsExistingWithoutHashByLegacyKey() {
-        val idx = ReceiptMergeIndex(listOf(entity(1, hash = null), entity(2, hash = "other", path = "receipts/1.jpg")))
+        val idx = PaymentMergeIndex(listOf(entity(1, hash = null), entity(2, hash = "other", path = "receipts/1.jpg")))
         // 既存にハッシュが無ければ従来のキーで見つかる
         assertEquals(1L, idx.take(entity(10, hash = "newhash", path = "receipts/1.jpg")))
         // 既存に別のハッシュがあるものは別の画像
@@ -261,7 +261,7 @@ class BackupTest {
 
     @Test
     fun legacyFormat_decidesTotalAndSourceLikeTheMigration() {
-        fun r(total: Int, status: String, raw: String) = BackupReceipt(
+        fun r(total: Int, status: String, raw: String) = BackupPayment(
             id = 1, purchasedAt = "2026-10-09 18:32", storeName = "A", totalAmount = total, imagePath = "p",
             rawJson = raw, status = status, createdAt = 1,
         )

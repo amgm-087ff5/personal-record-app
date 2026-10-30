@@ -1,8 +1,8 @@
 package com.amgm.personallog.ledger
 
 import com.amgm.personallog.data.model.CategoryTotal
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.ui.ledger.LedgerEntry
 import com.amgm.personallog.ui.ledger.LedgerLogic
 import org.junit.Assert.assertEquals
@@ -15,11 +15,11 @@ import java.time.LocalDate
 
 class LedgerLogicTest {
     private fun e(id: Long, date: String, amount: Int, cat: String = "食費") =
-        Expense(id = id, date = date, amount = amount, category = cat, createdAt = 0)
+        ExpenseItem(id = id, date = date, amount = amount, category = cat, createdAt = 0)
 
     /** 品名が空の1品目だけを持つ支出(v14〜 の品目なしの支出の形)。 */
     private fun one(id: Long, date: String, amount: Int, cat: String = "食費") = LedgerEntry.Group(
-        ExpenseGroup(receiptId = 1L, id = id, date = date, amount = amount, category = cat, createdAt = 0),
+        Expense(paymentId = 1L, id = id, date = date, amount = amount, category = cat, createdAt = 0),
         listOf(e(id * 100, date, amount, cat).copy(groupId = id)),
     )
 
@@ -75,13 +75,13 @@ class LedgerLogicTest {
 
     @Test
     fun buildEntries_groupCountsOnceAndItemsStayInside() {
-        val group = ExpenseGroup(receiptId = 1L, id = 7, date = "2026-10-03", amount = 1000, category = "食費", memo = "スーパー", createdAt = 5)
+        val group = Expense(paymentId = 1L, id = 7, date = "2026-10-03", amount = 1000, category = "食費", memo = "スーパー", createdAt = 5)
         val items = listOf(
-            Expense(id = 11, date = "2026-10-03", amount = 400, category = "食費", groupId = 7, createdAt = 5),
-            Expense(id = 12, date = "2026-10-03", amount = 300, category = "日用品", groupId = 7, createdAt = 5),
+            ExpenseItem(id = 11, date = "2026-10-03", amount = 400, category = "食費", groupId = 7, createdAt = 5),
+            ExpenseItem(id = 12, date = "2026-10-03", amount = 300, category = "日用品", groupId = 7, createdAt = 5),
         )
         // 品目の無い支払いの支出(品名が空の1品目)
-        val blankGroup = ExpenseGroup(receiptId = 1L, id = 8, date = "2026-10-03", amount = 50, category = "その他", createdAt = 4)
+        val blankGroup = Expense(paymentId = 1L, id = 8, date = "2026-10-03", amount = 50, category = "その他", createdAt = 4)
         val blank = e(13, "2026-10-03", 50, "その他").copy(groupId = 8)
         // まとまりの無い行(v13 以前の単独の支出の形)は一覧に入れない
         val ungrouped = e(14, "2026-10-03", 999, "その他")
@@ -104,7 +104,7 @@ class LedgerLogicTest {
     @Test
     fun buildEntries_childWithoutItsGroupIsNotCounted() {
         // groupId のある行は、グループが渡されていなければ数えない(月をまたいだ二重計上の防止)
-        val orphan = Expense(id = 1, date = "2026-10-01", amount = 10, groupId = 99, createdAt = 1)
+        val orphan = ExpenseItem(id = 1, date = "2026-10-01", amount = 10, groupId = 99, createdAt = 1)
         val entries = LedgerLogic.buildEntries(listOf(orphan), emptyList())
         assertTrue(entries.isEmpty())
     }
@@ -175,10 +175,10 @@ class LedgerLogicTest {
     }
 
     @Test
-    fun entries_carryTimeFromExpenseAndGroup() {
-        val g = ExpenseGroup(receiptId = 1L, id = 3, date = "2026-10-03", time = "18:45", amount = 100, category = "食費", createdAt = 1)
-        val g2 = ExpenseGroup(receiptId = 1L, id = 5, date = "2026-10-03", time = "08:10", amount = 50, category = "食費", createdAt = 1)
-        val single = Expense(id = 4, date = "2026-10-03", time = "08:10", amount = 50, category = "食費", groupId = 5, createdAt = 1)
+    fun entries_carryTimeFromExpenseItemAndGroup() {
+        val g = Expense(paymentId = 1L, id = 3, date = "2026-10-03", time = "18:45", amount = 100, category = "食費", createdAt = 1)
+        val g2 = Expense(paymentId = 1L, id = 5, date = "2026-10-03", time = "08:10", amount = 50, category = "食費", createdAt = 1)
+        val single = ExpenseItem(id = 4, date = "2026-10-03", time = "08:10", amount = 50, category = "食費", groupId = 5, createdAt = 1)
         val rows = LedgerLogic.buildEntries(listOf(single), listOf(g, g2))
         assertEquals(setOf("18:45", "08:10"), rows.map { it.time }.toSet())
     }

@@ -6,11 +6,11 @@ import android.provider.DocumentsContract
 import androidx.room.withTransaction
 import com.amgm.personallog.data.db.AppDatabase
 import com.amgm.personallog.data.db.DiaryDao
+import com.amgm.personallog.data.db.ExpenseItemDao
 import com.amgm.personallog.data.db.ExpenseDao
-import com.amgm.personallog.data.db.ExpenseGroupDao
-import com.amgm.personallog.data.db.ReceiptDao
+import com.amgm.personallog.data.db.PaymentDao
 import com.amgm.personallog.data.db.SplitDao
-import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.data.model.Person
 import com.amgm.personallog.domain.LedgerCalc
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -35,9 +35,9 @@ class BackupManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val db: AppDatabase,
     private val diaryDao: DiaryDao,
-    private val receiptDao: ReceiptDao,
+    private val paymentDao: PaymentDao,
+    private val expenseItemDao: ExpenseItemDao,
     private val expenseDao: ExpenseDao,
-    private val expenseGroupDao: ExpenseGroupDao,
     private val splitDao: SplitDao,
 ) {
     private val filesDir: File get() = context.filesDir
@@ -49,10 +49,10 @@ class BackupManager @Inject constructor(
             onProgress(BackupProgress("データを集めています"))
             val entries = diaryDao.observeAll().first()
             val photos = diaryDao.observeAllPhotos().first()
-            val receipts = receiptDao.observeAll().first()
-            val items = receipts.flatMap { receiptDao.getItems(it.id) }
-            val expenses = expenseDao.observeAll().first()
-            val groups = expenseGroupDao.observeAll().first()
+            val payments = paymentDao.observeAll().first()
+            val items = payments.flatMap { paymentDao.getItems(it.id) }
+            val expenseItems = expenseItemDao.observeAll().first()
+            val groups = expenseDao.observeAll().first()
             val persons = splitDao.getPersons()
             val data = BackupData(
                 formatVersion = BACKUP_FORMAT_VERSION,
@@ -60,11 +60,11 @@ class BackupManager @Inject constructor(
                 exportedAt = System.currentTimeMillis(),
                 diaryEntries = entries.map { BackupDiaryEntry.from(it) },
                 diaryPhotos = photos.map { BackupDiaryPhoto.from(it) },
-                receipts = receipts.map { BackupReceipt.from(it) },
-                receiptItems = items.map { BackupReceiptItem.from(it) },
-                expenses = expenses.map { BackupExpense.from(it) },
-                expenseGroups = groups.map { BackupExpenseGroup.from(it) },
-                receiptNotDuplicates = receiptDao.getAllNotDuplicates().map { BackupNotDuplicate.from(it) },
+                payments = payments.map { BackupPayment.from(it) },
+                paymentItems = items.map { BackupPaymentItem.from(it) },
+                expenseItems = expenseItems.map { BackupExpenseItem.from(it) },
+                expenses = groups.map { BackupExpense.from(it) },
+                paymentNotDuplicates = paymentDao.getAllNotDuplicates().map { BackupNotDuplicate.from(it) },
                 persons = persons.map { BackupPerson.from(it) },
                 splitSheets = splitDao.getAllSheets().map { BackupSplitSheet.from(it) },
                 shareGroups = splitDao.getAllGroups().map { BackupShareGroup.from(it) },
@@ -93,7 +93,7 @@ class BackupManager @Inject constructor(
                     zip.closeEntry()
                 }
             }
-            ExportResult(entries.size, receipts.size, expenses.size, files.size)
+            ExportResult(entries.size, payments.size, expenseItems.size, files.size)
         } catch (e: Throwable) {
             try {
                 DocumentsContract.deleteDocument(context.contentResolver, uri)
@@ -156,12 +156,12 @@ class BackupManager @Inject constructor(
                 val backup = data ?: throw BackupException("このZIPは個人記録のバックアップではありません(data.json がありません)")
                 validatePaths(backup)
                 // 支払いに属さない支出は、手入力の支払いに変えてから入れる(支出は必ず支払いから作る)
-                val conversion = convertOrphanExpensesToManualPayments(backup)
+                val conversion = convertOrphanExpenseItemsToManualPayments(backup)
                 // 単独の支出(形式9以前)は、自分の支出(まとまり)+ 品名が空の1品目に変えてから入れる(DB の v14 の移行と同じ)
-                val converted = convertSingleExpensesToGroups(conversion.data)
+                val converted = convertSingleExpenseItemsToGroups(conversion.data)
 
                 onProgress(BackupProgress("データベースに取り込んでいます"))
-                val result = importData(converted, mode, fileCount, conversion.manualReceiptIds)
+                val result = importData(converted, mode, fileCount, conversion.manualPaymentIds)
 
                 onProgress(BackupProgress("画像を配置しています"))
                 try {
@@ -188,7 +188,7 @@ class BackupManager @Inject constructor(
     }
 
     private fun validatePaths(data: BackupData) {
-        val bad = data.diaryPhotos.map { it.filePath }.plus(data.receipts.map { it.imagePath })
+        val bad = data.diaryPhotos.map { it.filePath }.plus(data.payments.map { it.imagePath })
             .firstOrNull { !BackupPaths.isSafeStoredPath(it) }
         if (bad != null) throw BackupException("安全でない画像パスが含まれているため取り込みを中止しました: $bad")
     }
@@ -197,51 +197,51 @@ class BackupManager @Inject constructor(
         data: BackupData,
         mode: ImportMode,
         fileCount: Int,
-        manualReceiptIds: Set<Long>,
+        manualPaymentIds: Set<Long>,
     ): ImportResult =
         db.withTransaction {
-            if (mode == ImportMode.REPLACE) replaceAll(data, fileCount, manualReceiptIds)
-            else mergeAll(data, fileCount, manualReceiptIds)
+            if (mode == ImportMode.REPLACE) replaceAll(data, fileCount, manualPaymentIds)
+            else mergeAll(data, fileCount, manualPaymentIds)
         }
 
-    private suspend fun replaceAll(data: BackupData, fileCount: Int, manualReceiptIds: Set<Long>): ImportResult {
+    private suspend fun replaceAll(data: BackupData, fileCount: Int, manualPaymentIds: Set<Long>): ImportResult {
+        expenseItemDao.observeAll().first().forEach { expenseItemDao.delete(it) }
         expenseDao.observeAll().first().forEach { expenseDao.delete(it) }
-        expenseGroupDao.observeAll().first().forEach { expenseGroupDao.delete(it) }
-        receiptDao.observeAll().first().forEach { receiptDao.delete(it) }
+        paymentDao.observeAll().first().forEach { paymentDao.delete(it) }
         diaryDao.observeAll().first().forEach { diaryDao.delete(it) }
 
         data.diaryEntries.forEach { diaryDao.insert(it.toEntity()) }
         data.diaryPhotos.forEach { diaryDao.insertPhoto(it.toEntity()) }
-        val replaceItemsByReceipt = data.receiptItems.groupBy { it.receiptId }
+        val replaceItemsByPayment = data.paymentItems.groupBy { it.paymentId }
         // バックアップ内の支払い id -> 復元後の id(割り勘の表の付け替えに使う)
-        val receiptIdMap = HashMap<Long, Long>()
-        data.receipts.forEach { r ->
-            receiptIdMap[r.id] = receiptDao.insert(
-                r.toEntity(replaceItemsByReceipt[r.id].orEmpty(), legacyFormat = isLegacyReceipt(data, r.id, manualReceiptIds)),
+        val paymentIdMap = HashMap<Long, Long>()
+        data.payments.forEach { r ->
+            paymentIdMap[r.id] = paymentDao.insert(
+                r.toEntity(replaceItemsByPayment[r.id].orEmpty(), legacyFormat = isLegacyPayment(data, r.id, manualPaymentIds)),
             )
         }
-        // 品目は1件ずつ入れて、バックアップ内の id -> 復元後の id を控える(支出の receiptItemId の付け替えに使う)
+        // 品目は1件ずつ入れて、バックアップ内の id -> 復元後の id を控える(支出の paymentItemId の付け替えに使う)
         val itemIdMap = HashMap<Long, Long>()
-        for (bi in data.receiptItems) {
-            val newIds = bi.toEntities().map { receiptDao.insertItem(it) }
+        for (bi in data.paymentItems) {
+            val newIds = bi.toEntities().map { paymentDao.insertItem(it) }
             newIds.firstOrNull()?.let { itemIdMap[bi.id] = it }
         }
-        val receiptIds = data.receipts.map { it.id }.toSet()
+        val paymentIds = data.payments.map { it.id }.toSet()
         // 「重複ではない」の組。replace は id をそのまま使うので、支払いが無い組だけ捨てる
-        receiptDao.insertNotDuplicates(remapNotDuplicates(data.receiptNotDuplicates, receiptIds.associateWith { it }))
-        val times = receiptTimes(data)
-        data.expenseGroups.forEach { g ->
-            val rid = requireNotNull(g.receiptId?.takeIf { it in receiptIds }) { "支払いに属さない支出は取り込めません(id=${g.id})" }
-            expenseGroupDao.insert(g.toEntity(linkedTime(g.receiptId, times)).copy(receiptId = rid))
+        paymentDao.insertNotDuplicates(remapNotDuplicates(data.paymentNotDuplicates, paymentIds.associateWith { it }))
+        val times = paymentTimes(data)
+        data.expenses.forEach { g ->
+            val rid = requireNotNull(g.paymentId?.takeIf { it in paymentIds }) { "支払いに属さない支出は取り込めません(id=${g.id})" }
+            expenseDao.insert(g.toEntity(linkedTime(g.paymentId, times)).copy(paymentId = rid))
         }
-        val groupIds = data.expenseGroups.map { it.id }.toSet()
-        if (data.expenses.isNotEmpty()) {
-            expenseDao.insertAll(
-                data.expenses.map { e ->
-                    e.toEntity(linkedTime(e.receiptId, times)).copy(
-                        receiptId = e.receiptId?.takeIf { it in receiptIds },
+        val groupIds = data.expenses.map { it.id }.toSet()
+        if (data.expenseItems.isNotEmpty()) {
+            expenseItemDao.insertAll(
+                data.expenseItems.map { e ->
+                    e.toEntity(linkedTime(e.paymentId, times)).copy(
+                        paymentId = e.paymentId?.takeIf { it in paymentIds },
                         groupId = e.groupId?.takeIf { it in groupIds },
-                        receiptItemId = remapReceiptItemId(e.receiptItemId, itemIdMap),
+                        paymentItemId = remapPaymentItemId(e.paymentItemId, itemIdMap),
                     )
                 },
             )
@@ -250,12 +250,12 @@ class BackupManager @Inject constructor(
         // 形式6以前のファイルは人の行が無いので、消したあと自分1人だけになる
         splitDao.getPersons().forEach { splitDao.deletePerson(it) }
         val personIdMap = importPersons(data.persons)
-        importSplitRows(data, receiptIdMap, itemIdMap, personIdMap)
+        importSplitRows(data, paymentIdMap, itemIdMap, personIdMap)
         return ImportResult(
             diaryEntries = data.diaryEntries.size,
             diaryPhotos = data.diaryPhotos.size,
-            receipts = data.receipts.size,
-            expenses = data.expenses.size,
+            payments = data.payments.size,
+            expenseItems = data.expenseItems.size,
             skipped = 0,
             files = fileCount,
         )
@@ -264,21 +264,21 @@ class BackupManager @Inject constructor(
     /**
      * 旧形式(形式4以前)の支払いか。変換で作った手入力の支払いは、旧形式の合計判定(TotalSourceInit)を通さない。
      */
-    private fun isLegacyReceipt(data: BackupData, receiptId: Long, manualReceiptIds: Set<Long>): Boolean =
-        data.formatVersion < 5 && receiptId !in manualReceiptIds
+    private fun isLegacyPayment(data: BackupData, paymentId: Long, manualPaymentIds: Set<Long>): Boolean =
+        data.formatVersion < 5 && paymentId !in manualPaymentIds
 
     /** バックアップ内の支払い id -> 支払いの時刻 "HH:mm"(時刻が無ければ 00:00)。古いバックアップの支出の初期値に使う。 */
-    private fun receiptTimes(data: BackupData): Map<Long, String> =
-        data.receipts.associate { it.id to LedgerCalc.splitPurchasedAt(it.purchasedAt).second }
+    private fun paymentTimes(data: BackupData): Map<Long, String> =
+        data.payments.associate { it.id to LedgerCalc.splitPurchasedAt(it.purchasedAt).second }
 
-    private fun linkedTime(receiptId: Long?, times: Map<Long, String>): String? = receiptId?.let { times[it] }
+    private fun linkedTime(paymentId: Long?, times: Map<Long, String>): String? = paymentId?.let { times[it] }
 
-    private suspend fun mergeAll(data: BackupData, fileCount: Int, manualReceiptIds: Set<Long>): ImportResult {
+    private suspend fun mergeAll(data: BackupData, fileCount: Int, manualPaymentIds: Set<Long>): ImportResult {
         var skipped = 0
         var addedEntries = 0
         var addedPhotos = 0
-        var addedReceipts = 0
-        var addedExpenses = 0
+        var addedPayments = 0
+        var addedExpenseItems = 0
 
         // 日記(日付で重複判定。既存があれば既存を優先)
         val entryByDate = diaryDao.observeAll().first().associate { it.date to it.id }.toMutableMap()
@@ -307,100 +307,100 @@ class BackupManager @Inject constructor(
         }
 
         // レシート(画像ハッシュがあればハッシュで、無ければ日時・店名・合計・画像パスで照合)
-        val receiptIndex = ReceiptMergeIndex(receiptDao.observeAll().first())
-        val receiptIdMap = HashMap<Long, Long>()
-        val itemsByReceipt = data.receiptItems.groupBy { it.receiptId }
+        val paymentIndex = PaymentMergeIndex(paymentDao.observeAll().first())
+        val paymentIdMap = HashMap<Long, Long>()
+        val itemsByPayment = data.paymentItems.groupBy { it.paymentId }
         // バックアップ内の品目 id -> 復元後の品目 id。新しく入れた支払いの品目だけ対応が取れる(既存の支払いに当たったものは null になる)
         val itemIdMap = HashMap<Long, Long>()
         // 今回新しく入れた支払い・品目だけの対応(割り勘の表は、これに当たる分だけ入れる)
-        val newReceiptIdMap = HashMap<Long, Long>()
+        val newPaymentIdMap = HashMap<Long, Long>()
         val newItemIdMap = HashMap<Long, Long>()
-        for (r in data.receipts) {
-            val entity = r.toEntity(itemsByReceipt[r.id].orEmpty(), legacyFormat = isLegacyReceipt(data, r.id, manualReceiptIds))
-            val existing = receiptIndex.take(entity)
+        for (r in data.payments) {
+            val entity = r.toEntity(itemsByPayment[r.id].orEmpty(), legacyFormat = isLegacyPayment(data, r.id, manualPaymentIds))
+            val existing = paymentIndex.take(entity)
             if (existing != null) {
-                receiptIdMap[r.id] = existing
-                // 既存の支払いの品目と照合して、支出の receiptItemId を付け替えられるようにする
-                itemIdMap.putAll(matchExistingItems(itemsByReceipt[r.id].orEmpty(), receiptDao.getItems(existing)))
+                paymentIdMap[r.id] = existing
+                // 既存の支払いの品目と照合して、支出の paymentItemId を付け替えられるようにする
+                itemIdMap.putAll(matchExistingItems(itemsByPayment[r.id].orEmpty(), paymentDao.getItems(existing)))
                 skipped++
             } else {
-                val newId = receiptDao.insert(entity.copy(id = 0))
-                receiptIdMap[r.id] = newId
-                newReceiptIdMap[r.id] = newId
-                for (bi in itemsByReceipt[r.id].orEmpty()) {
-                    val newIds = bi.toEntities().map { receiptDao.insertItem(it.copy(id = 0, receiptId = newId)) }
+                val newId = paymentDao.insert(entity.copy(id = 0))
+                paymentIdMap[r.id] = newId
+                newPaymentIdMap[r.id] = newId
+                for (bi in itemsByPayment[r.id].orEmpty()) {
+                    val newIds = bi.toEntities().map { paymentDao.insertItem(it.copy(id = 0, paymentId = newId)) }
                     newIds.firstOrNull()?.let {
                         itemIdMap[bi.id] = it
                         newItemIdMap[bi.id] = it
                     }
                 }
-                addedReceipts++
+                addedPayments++
             }
         }
 
         // 「重複ではない」の組: 復元後の支払い id に付け替える。対応が取れない組は捨てる
-        receiptDao.insertNotDuplicates(remapNotDuplicates(data.receiptNotDuplicates, receiptIdMap))
+        paymentDao.insertNotDuplicates(remapNotDuplicates(data.paymentNotDuplicates, paymentIdMap))
 
         // 支出(まとまり、uid があれば uid で、無い古い形式は日付・金額・カテゴリ・メモ・支払いで重複判定)。
         // 既存と重複したグループの品目は飛ばす
-        val groupIndex = GroupMergeIndex(expenseGroupDao.observeAll().first())
+        val groupIndex = GroupMergeIndex(expenseDao.observeAll().first())
         val groupIdMap = HashMap<Long, Long>()
         val duplicateGroups = HashSet<Long>()
-        val times = receiptTimes(data)
-        for (g in data.expenseGroups) {
-            val rid = requireNotNull(g.receiptId?.let { receiptIdMap[it] }) { "支払いに属さない支出は取り込めません(id=${g.id})" }
-            val entity = g.toEntity(linkedTime(g.receiptId, times)).copy(id = 0, receiptId = rid)
+        val times = paymentTimes(data)
+        for (g in data.expenses) {
+            val rid = requireNotNull(g.paymentId?.let { paymentIdMap[it] }) { "支払いに属さない支出は取り込めません(id=${g.id})" }
+            val entity = g.toEntity(linkedTime(g.paymentId, times)).copy(id = 0, paymentId = rid)
             val existing = groupIndex.find(g.uid, entity)
             if (existing != null) {
                 groupIdMap[g.id] = existing
                 duplicateGroups.add(g.id)
                 skipped++
             } else {
-                val newId = expenseGroupDao.insert(entity)
+                val newId = expenseDao.insert(entity)
                 groupIdMap[g.id] = newId
                 groupIndex.add(entity, newId)
             }
         }
 
         // 支出(uid があれば uid で、無い古い形式は同一内容の件数ベースで重複判定。同じ日に同額の買い物が2件あっても保たれる)
-        val existingExpenses = expenseDao.observeAll().first()
-        val expenseIndex = ExpenseMergeIndex(existingExpenses)
-        val existingByUid = existingExpenses.filter { it.uid.isNotEmpty() }.associateBy { it.uid }
-        val toInsert = ArrayList<com.amgm.personallog.data.model.Expense>()
-        for (e in data.expenses) {
+        val existingExpenseItems = expenseItemDao.observeAll().first()
+        val expenseItemIndex = ExpenseItemMergeIndex(existingExpenseItems)
+        val existingByUid = existingExpenseItems.filter { it.uid.isNotEmpty() }.associateBy { it.uid }
+        val toInsert = ArrayList<com.amgm.personallog.data.model.ExpenseItem>()
+        for (e in data.expenseItems) {
             // 同じ uid の既存の行がある場合、他の欄は既存を優先するが、家計簿で消した印(deletedByUser)だけは取り込む(OR)
             if (e.deletedByUser && e.uid.isNotEmpty()) {
-                existingByUid[e.uid]?.takeIf { !it.deletedByUser }?.let { expenseDao.setDeletedByUser(it.id, true) }
+                existingByUid[e.uid]?.takeIf { !it.deletedByUser }?.let { expenseItemDao.setDeletedByUser(it.id, true) }
             }
             if (e.groupId != null && e.groupId in duplicateGroups) {
                 skipped++
                 continue
             }
-            val mappedReceipt = e.receiptId?.let { receiptIdMap[it] }
+            val mappedPayment = e.paymentId?.let { paymentIdMap[it] }
             val mappedGroup = e.groupId?.let { groupIdMap[it] }
-            if (expenseIndex.isDuplicate(e, mappedReceipt, mappedGroup)) {
+            if (expenseItemIndex.isDuplicate(e, mappedPayment, mappedGroup)) {
                 skipped++
             } else {
                 toInsert.add(
-                    e.toEntity(linkedTime(e.receiptId, times)).copy(
+                    e.toEntity(linkedTime(e.paymentId, times)).copy(
                         id = 0,
-                        receiptId = mappedReceipt,
+                        paymentId = mappedPayment,
                         groupId = mappedGroup,
-                        receiptItemId = remapReceiptItemId(e.receiptItemId, itemIdMap),
+                        paymentItemId = remapPaymentItemId(e.paymentItemId, itemIdMap),
                     ),
                 )
-                addedExpenses++
+                addedExpenseItems++
             }
         }
-        if (toInsert.isNotEmpty()) expenseDao.insertAll(toInsert)
+        if (toInsert.isNotEmpty()) expenseItemDao.insertAll(toInsert)
 
         // 割り勘の表(v7 以降)。人は uid で照合し(自分は端末の自分に合わせる)、表は「今回新しく入れた支払い」の分だけ入れる。
-        // 既存の支払いと同じと判定されたもの(receiptIdMap にあって newReceiptIdMap に無いもの)は端末側の割り勘を残し、二重に入れない。
+        // 既存の支払いと同じと判定されたもの(paymentIdMap にあって newPaymentIdMap に無いもの)は端末側の割り勘を残し、二重に入れない。
         // 既存の支払いに当たった分の割り勘は、バックアップ側を捨てる(端末側の割り勘を上書きしない)
         val personIdMap = importPersons(data.persons)
-        importSplitRows(data, newReceiptIdMap, newItemIdMap, personIdMap)
+        importSplitRows(data, newPaymentIdMap, newItemIdMap, personIdMap)
 
-        return ImportResult(addedEntries, addedPhotos, addedReceipts, addedExpenses, skipped, fileCount)
+        return ImportResult(addedEntries, addedPhotos, addedPayments, addedExpenseItems, skipped, fileCount)
     }
 
     /**
@@ -435,24 +435,24 @@ class BackupManager @Inject constructor(
     /**
      * 割り勘の表を入れる。順番は 参加者 -> まとまり -> (品目のまとまり・割当・全体の入力・支払内訳・ラベル金額・シート)。
      * 参加者とまとまりは先に入れて新しい id を控え、そのあと他の行を付け替えて入れる。
-     * receiptIdMap / itemIdMap は取り込み対象の分だけ渡す(既存に当たった支払いは渡さない)。
+     * paymentIdMap / itemIdMap は取り込み対象の分だけ渡す(既存に当たった支払いは渡さない)。
      * personIdMap はバックアップの人 id -> 端末の人 id(対応が無い人は参加者の personId を null にする)。
      */
     private suspend fun importSplitRows(
         data: BackupData,
-        receiptIdMap: Map<Long, Long>,
+        paymentIdMap: Map<Long, Long>,
         itemIdMap: Map<Long, Long>,
         personIdMap: Map<Long, Long>,
     ) {
         val participantIdMap = HashMap<Long, Long>()
-        for ((backupParticipantId, participant) in remapParticipants(data.participants, receiptIdMap, personIdMap)) {
+        for ((backupParticipantId, participant) in remapParticipants(data.participants, paymentIdMap, personIdMap)) {
             participantIdMap[backupParticipantId] = splitDao.insertParticipant(participant)
         }
         val groupIdMap = HashMap<Long, Long>()
-        for ((backupGroupId, group) in remapShareGroups(data.shareGroups, receiptIdMap)) {
+        for ((backupGroupId, group) in remapShareGroups(data.shareGroups, paymentIdMap)) {
             groupIdMap[backupGroupId] = splitDao.insertGroup(group)
         }
-        val rows = remapSplitRows(data, receiptIdMap, itemIdMap, groupIdMap, participantIdMap)
+        val rows = remapSplitRows(data, paymentIdMap, itemIdMap, groupIdMap, participantIdMap)
         rows.sheets.forEach { splitDao.upsertSheet(it) }
         if (rows.groupItems.isNotEmpty()) splitDao.insertGroupItems(rows.groupItems)
         if (rows.itemShares.isNotEmpty()) splitDao.insertItemShares(rows.itemShares)

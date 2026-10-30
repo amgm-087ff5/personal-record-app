@@ -39,7 +39,7 @@ data class ParsedReceipt(
 )
 
 sealed interface ParseResult {
-    data class Success(val receipt: ParsedReceipt) : ParseResult
+    data class Success(val parsed: ParsedReceipt) : ParseResult
     data class Failure(val reason: String) : ParseResult
 }
 

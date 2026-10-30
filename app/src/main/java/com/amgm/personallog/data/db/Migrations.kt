@@ -3,8 +3,8 @@ package com.amgm.personallog.data.db
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.amgm.personallog.domain.PricedLine
-import com.amgm.personallog.domain.SingleExpenseConversion
-import com.amgm.personallog.domain.legacyReceiptOwnYen
+import com.amgm.personallog.domain.SingleExpenseItemConversion
+import com.amgm.personallog.domain.legacyPaymentOwnYen
 import com.amgm.personallog.receipt.LegacyRow
 import com.amgm.personallog.receipt.ReceiptUnits
 import com.amgm.personallog.receipt.TotalSourceInit
@@ -29,6 +29,11 @@ import com.amgm.personallog.receipt.TotalSourceInit
  * 自分の支出(expense_groups)+ 品名が空の1品目に変える(MIGRATION_13_14)。
  * v15: 支出のメモに写していた店名を消す(MIGRATION_14_15)。
  * v16(支払い ⇒ 支出 の親子を崩さない): 支出は必ず支払いに属し、支払いを消すと支出も消える。支出だけ消して残った支払いを消す(MIGRATION_15_16)。
+ * v17(用語の整理): receipts→payments、receipt_items→payment_items、expenses→expense_items、expense_groups→expenses、
+ * 列 receiptId→paymentId・receiptItemId→paymentItemId に改名する(MIGRATION_16_17)。
+ *
+ * 注意: v16 までの Migration と、その説明の中の表名・列名・クラス名(Receipt・ExpenseGroup など)は、その版当時の名前のまま。
+ * 古い DB を順に移行するための SQL なので、v17 の改名に合わせて書き換えてはいけない。
  */
 object Migrations {
     /**
@@ -140,7 +145,7 @@ object Migrations {
                 }
             }
             for ((receiptId, rows) in lines) {
-                val own = legacyReceiptOwnYen(rows) ?: continue
+                val own = legacyPaymentOwnYen(rows) ?: continue
                 db.execSQL("UPDATE `receipts` SET `ownAmount` = ? WHERE `id` = ?", arrayOf<Any?>(own, receiptId))
             }
             db.execSQL(
@@ -1015,7 +1020,7 @@ object Migrations {
     /**
      * v13 -> v14: 支出は必ず「まとまり(expense_groups)+ 品目1行以上」にし、金額不明の印を足す。
      *  - receipt_items・expenses に unknownAmount(INTEGER NOT NULL DEFAULT 0)を足す。既存の行は 0(金額は分かっている)。
-     *  - 単独の支出(groupId が無く、家計簿で消していない行)ごとに、まとまりを1つ作る(SingleExpenseConversion と同じ規則):
+     *  - 単独の支出(groupId が無く、家計簿で消していない行)ごとに、まとまりを1つ作る(SingleExpenseItemConversion と同じ規則):
      *    日付・時刻・金額・カテゴリ・メモ・receiptId・作成時刻・編集済みの印を写し、uid は元の行の uid から決まる新しい値。
      *    元の行は、そのまとまりの品目にする(groupId を張り、品名は空。編集済みの印は下ろす)。id と uid は変えない。
      *  - 家計簿で消した行(deletedByUser = 1)で groupId が無いもの(立て替えの間に消した品目など。一覧・集計に出ない)は、
@@ -1056,7 +1061,7 @@ object Migrations {
                         "`amountEdited`, `categoryEdited`, `memoEdited`, `timeEdited`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     arrayOf<Any?>(
                         e.date, e.time, e.amount, e.category, e.memo, e.receiptId, e.createdAt,
-                        SingleExpenseConversion.groupUid(e.uid),
+                        SingleExpenseItemConversion.groupUid(e.uid),
                         e.amountEdited, e.categoryEdited, e.memoEdited, e.timeEdited,
                     ),
                 )
@@ -1265,8 +1270,296 @@ object Migrations {
         }
     }
 
+
+    /**
+     * v17 の改名で作り直す表1つ。oldName の行を、newName(v17 の定義)の表へ写す。
+     * oldColumns と newColumns は同じ並び(列名だけが違う)。createSql / indexSqls は Room が生成する 17.json と一致させること。
+     */
+    internal class V17Table(
+        val oldName: String,
+        val newName: String,
+        val oldColumns: String,
+        val newColumns: String,
+        val createSql: (String) -> String,
+        val indexSqls: (String) -> List<String>,
+    )
+
+    /**
+     * v17(用語の整理): 支払い=店への支払いの事実、支出=自分の負担。旧い名前は逆で紛らわしかったので改名する。
+     *   receipts → payments / receipt_items → payment_items / receipt_not_duplicates → payment_not_duplicates
+     *   expenses(支出の品目) → expense_items / expense_groups(支出) → expenses
+     *   列 receiptId → paymentId、receiptItemId → paymentItemId、receiptIdLow/High → paymentIdLow/High
+     * 新しい expenses は旧 expenses と同じ名前なので、旧 expenses → expense_items を先に作り直す(V17_TABLES の並び)。
+     * 下の V17_TABLES の oldName は v16 までの名前、newName は v17 の名前。
+     */
+    internal fun paymentsV17CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+        "`purchasedAt` TEXT NOT NULL, `storeName` TEXT NOT NULL, `totalAmount` INTEGER, `imagePath` TEXT NOT NULL, " +
+        "`rawJson` TEXT NOT NULL, `status` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `imageHash` TEXT, " +
+        "`isAdvance` INTEGER NOT NULL DEFAULT 0, `ownAmount` INTEGER, `totalSource` TEXT NOT NULL DEFAULT 'unknown', " +
+        "`rotationDegrees` REAL NOT NULL DEFAULT 0, `cropLeft` REAL NOT NULL DEFAULT 0, `cropTop` REAL NOT NULL DEFAULT 0, " +
+        "`cropRight` REAL NOT NULL DEFAULT 1, `cropBottom` REAL NOT NULL DEFAULT 1, `headcount` INTEGER)"
+
+    internal fun paymentsV17IndexSqls(@Suppress("UNUSED_PARAMETER") table: String): List<String> = emptyList()
+
+    internal fun paymentItemsV17CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+        "`paymentId` INTEGER NOT NULL, `name` TEXT NOT NULL, `amount` INTEGER NOT NULL, `category` TEXT NOT NULL, " +
+        "`taxRate` INTEGER NOT NULL DEFAULT 10, `priceIncludesTax` INTEGER NOT NULL DEFAULT 1, `memo` TEXT NOT NULL, " +
+        "`unknownAmount` INTEGER NOT NULL DEFAULT 0, " +
+        "FOREIGN KEY(`paymentId`) REFERENCES `payments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+
+    internal fun paymentItemsV17IndexSqls(table: String): List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_payment_items_paymentId` ON `$table` (`paymentId`)",
+    )
+
+    internal fun paymentNotDuplicatesV17CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`paymentIdLow` INTEGER NOT NULL, `paymentIdHigh` INTEGER NOT NULL, " +
+        "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`paymentIdLow`, `paymentIdHigh`), " +
+        "FOREIGN KEY(`paymentIdLow`) REFERENCES `payments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+        "FOREIGN KEY(`paymentIdHigh`) REFERENCES `payments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+
+    internal fun paymentNotDuplicatesV17IndexSqls(table: String): List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_payment_not_duplicates_paymentIdHigh` ON `$table` (`paymentIdHigh`)",
+    )
+
+    internal fun expenseItemsV17CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, " +
+        "`time` TEXT NOT NULL DEFAULT '', `amount` INTEGER NOT NULL, `category` TEXT NOT NULL, `memo` TEXT NOT NULL, " +
+        "`paymentId` INTEGER, `createdAt` INTEGER NOT NULL, `groupId` INTEGER, `timeEdited` INTEGER NOT NULL DEFAULT 0, " +
+        "`paymentItemId` INTEGER, `name` TEXT NOT NULL DEFAULT '', `amountEdited` INTEGER NOT NULL DEFAULT 0, " +
+        "`categoryEdited` INTEGER NOT NULL DEFAULT 0, `nameEdited` INTEGER NOT NULL DEFAULT 0, " +
+        "`memoEdited` INTEGER NOT NULL DEFAULT 0, `uid` TEXT NOT NULL, `deletedByUser` INTEGER NOT NULL DEFAULT 0, " +
+        "`unknownAmount` INTEGER NOT NULL DEFAULT 0, " +
+        "FOREIGN KEY(`paymentId`) REFERENCES `payments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+        "FOREIGN KEY(`groupId`) REFERENCES `expenses`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+        "FOREIGN KEY(`paymentItemId`) REFERENCES `payment_items`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )"
+
+    internal fun expenseItemsV17IndexSqls(table: String): List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_expense_items_paymentId` ON `$table` (`paymentId`)",
+        "CREATE INDEX IF NOT EXISTS `index_expense_items_date` ON `$table` (`date`)",
+        "CREATE INDEX IF NOT EXISTS `index_expense_items_groupId` ON `$table` (`groupId`)",
+        "CREATE INDEX IF NOT EXISTS `index_expense_items_paymentItemId` ON `$table` (`paymentItemId`)",
+    )
+
+    internal fun expensesV17CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, " +
+        "`time` TEXT NOT NULL DEFAULT '', `amount` INTEGER NOT NULL, `category` TEXT NOT NULL, `memo` TEXT NOT NULL, " +
+        "`paymentId` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `uid` TEXT NOT NULL DEFAULT '', " +
+        "`amountEdited` INTEGER NOT NULL DEFAULT 0, `categoryEdited` INTEGER NOT NULL DEFAULT 0, " +
+        "`memoEdited` INTEGER NOT NULL DEFAULT 0, `timeEdited` INTEGER NOT NULL DEFAULT 0, " +
+        "FOREIGN KEY(`paymentId`) REFERENCES `payments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+
+    internal fun expensesV17IndexSqls(table: String): List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_expenses_paymentId` ON `$table` (`paymentId`)",
+        "CREATE INDEX IF NOT EXISTS `index_expenses_date` ON `$table` (`date`)",
+    )
+
+    internal fun splitSheetsV17CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`paymentId` INTEGER NOT NULL, `mode` TEXT NOT NULL DEFAULT 'self', " +
+        "`wholeKind` TEXT NOT NULL DEFAULT 'amount', `warnings` TEXT NOT NULL DEFAULT '', PRIMARY KEY(`paymentId`), " +
+        "FOREIGN KEY(`paymentId`) REFERENCES `payments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+
+    internal fun splitSheetsV17IndexSqls(@Suppress("UNUSED_PARAMETER") table: String): List<String> = emptyList()
+
+    internal fun splitParticipantsV17CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+        "`paymentId` INTEGER NOT NULL, `personId` INTEGER, `memo` TEXT NOT NULL DEFAULT '', `label` TEXT NOT NULL DEFAULT '', " +
+        "`isPayer` INTEGER NOT NULL DEFAULT 0, `sortOrder` INTEGER NOT NULL DEFAULT 0, " +
+        "FOREIGN KEY(`paymentId`) REFERENCES `payments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+        "FOREIGN KEY(`personId`) REFERENCES `persons`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )"
+
+    internal fun splitParticipantsV17IndexSqls(table: String): List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_split_participants_paymentId` ON `$table` (`paymentId`)",
+        "CREATE INDEX IF NOT EXISTS `index_split_participants_personId` ON `$table` (`personId`)",
+    )
+
+    internal fun splitLabelAmountsV17CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`paymentId` INTEGER NOT NULL, `label` TEXT NOT NULL, " +
+        "`amount` INTEGER NOT NULL, PRIMARY KEY(`paymentId`, `label`), " +
+        "FOREIGN KEY(`paymentId`) REFERENCES `payments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+
+    internal fun splitLabelAmountsV17IndexSqls(@Suppress("UNUSED_PARAMETER") table: String): List<String> = emptyList()
+
+    internal fun shareGroupsV17CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+        "`paymentId` INTEGER NOT NULL, `pieceCount` INTEGER, `isShared` INTEGER NOT NULL DEFAULT 0, " +
+        "`sortOrder` INTEGER NOT NULL DEFAULT 0, " +
+        "FOREIGN KEY(`paymentId`) REFERENCES `payments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+
+    internal fun shareGroupsV17IndexSqls(table: String): List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_share_groups_paymentId` ON `$table` (`paymentId`)",
+    )
+
+    internal fun shareGroupItemsV17CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`groupId` INTEGER NOT NULL, `paymentItemId` INTEGER NOT NULL, " +
+        "PRIMARY KEY(`groupId`, `paymentItemId`), " +
+        "FOREIGN KEY(`groupId`) REFERENCES `share_groups`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+        "FOREIGN KEY(`paymentItemId`) REFERENCES `payment_items`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+
+    internal fun shareGroupItemsV17IndexSqls(table: String): List<String> = listOf(
+        "CREATE UNIQUE INDEX IF NOT EXISTS `index_share_group_items_paymentItemId` ON `$table` (`paymentItemId`)",
+    )
+
+    internal fun wholeSharesV17CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`paymentId` INTEGER NOT NULL, `participantId` INTEGER NOT NULL, " +
+        "`kind` TEXT NOT NULL, `weight` INTEGER, `amount` INTEGER, PRIMARY KEY(`paymentId`, `participantId`), " +
+        "FOREIGN KEY(`paymentId`) REFERENCES `payments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+        "FOREIGN KEY(`participantId`) REFERENCES `split_participants`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+
+    internal fun wholeSharesV17IndexSqls(table: String): List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_whole_shares_participantId` ON `$table` (`participantId`)",
+    )
+
+    internal fun paymentPayersV17CreateSql(table: String): String =
+        "CREATE TABLE IF NOT EXISTS `$table` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+        "`paymentId` INTEGER NOT NULL, `participantId` INTEGER NOT NULL, `method` TEXT NOT NULL DEFAULT '', " +
+        "`amount` INTEGER NOT NULL, " +
+        "FOREIGN KEY(`paymentId`) REFERENCES `payments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+        "FOREIGN KEY(`participantId`) REFERENCES `split_participants`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )"
+
+    internal fun paymentPayersV17IndexSqls(table: String): List<String> = listOf(
+        "CREATE INDEX IF NOT EXISTS `index_payment_payers_paymentId` ON `$table` (`paymentId`)",
+        "CREATE INDEX IF NOT EXISTS `index_payment_payers_participantId` ON `$table` (`participantId`)",
+    )
+
+    internal val V17_TABLES: List<V17Table> = listOf(
+        V17Table(
+            "receipts", "payments",
+            "`id`, `purchasedAt`, `storeName`, `totalAmount`, `imagePath`, `rawJson`, `status`, `createdAt`, `imageHash`, `isAdvance`, `ownAmount`, `totalSource`, `rotationDegrees`, `cropLeft`, `cropTop`, `cropRight`, `cropBottom`, `headcount`",
+            "`id`, `purchasedAt`, `storeName`, `totalAmount`, `imagePath`, `rawJson`, `status`, `createdAt`, `imageHash`, `isAdvance`, `ownAmount`, `totalSource`, `rotationDegrees`, `cropLeft`, `cropTop`, `cropRight`, `cropBottom`, `headcount`",
+            ::paymentsV17CreateSql, ::paymentsV17IndexSqls,
+        ),
+        V17Table(
+            "receipt_items", "payment_items",
+            "`id`, `receiptId`, `name`, `amount`, `category`, `taxRate`, `priceIncludesTax`, `memo`, `unknownAmount`",
+            "`id`, `paymentId`, `name`, `amount`, `category`, `taxRate`, `priceIncludesTax`, `memo`, `unknownAmount`",
+            ::paymentItemsV17CreateSql, ::paymentItemsV17IndexSqls,
+        ),
+        V17Table(
+            "receipt_not_duplicates", "payment_not_duplicates",
+            "`receiptIdLow`, `receiptIdHigh`, `createdAt`",
+            "`paymentIdLow`, `paymentIdHigh`, `createdAt`",
+            ::paymentNotDuplicatesV17CreateSql, ::paymentNotDuplicatesV17IndexSqls,
+        ),
+        V17Table(
+            "expenses", "expense_items",
+            "`id`, `date`, `time`, `amount`, `category`, `memo`, `receiptId`, `createdAt`, `groupId`, `timeEdited`, `receiptItemId`, `name`, `amountEdited`, `categoryEdited`, `nameEdited`, `memoEdited`, `uid`, `deletedByUser`, `unknownAmount`",
+            "`id`, `date`, `time`, `amount`, `category`, `memo`, `paymentId`, `createdAt`, `groupId`, `timeEdited`, `paymentItemId`, `name`, `amountEdited`, `categoryEdited`, `nameEdited`, `memoEdited`, `uid`, `deletedByUser`, `unknownAmount`",
+            ::expenseItemsV17CreateSql, ::expenseItemsV17IndexSqls,
+        ),
+        V17Table(
+            "expense_groups", "expenses",
+            "`id`, `date`, `time`, `amount`, `category`, `memo`, `receiptId`, `createdAt`, `uid`, `amountEdited`, `categoryEdited`, `memoEdited`, `timeEdited`",
+            "`id`, `date`, `time`, `amount`, `category`, `memo`, `paymentId`, `createdAt`, `uid`, `amountEdited`, `categoryEdited`, `memoEdited`, `timeEdited`",
+            ::expensesV17CreateSql, ::expensesV17IndexSqls,
+        ),
+        V17Table(
+            "split_sheets", "split_sheets",
+            "`receiptId`, `mode`, `wholeKind`, `warnings`",
+            "`paymentId`, `mode`, `wholeKind`, `warnings`",
+            ::splitSheetsV17CreateSql, ::splitSheetsV17IndexSqls,
+        ),
+        V17Table(
+            "split_participants", "split_participants",
+            "`id`, `receiptId`, `personId`, `memo`, `label`, `isPayer`, `sortOrder`",
+            "`id`, `paymentId`, `personId`, `memo`, `label`, `isPayer`, `sortOrder`",
+            ::splitParticipantsV17CreateSql, ::splitParticipantsV17IndexSqls,
+        ),
+        V17Table(
+            "split_label_amounts", "split_label_amounts",
+            "`receiptId`, `label`, `amount`",
+            "`paymentId`, `label`, `amount`",
+            ::splitLabelAmountsV17CreateSql, ::splitLabelAmountsV17IndexSqls,
+        ),
+        V17Table(
+            "share_groups", "share_groups",
+            "`id`, `receiptId`, `pieceCount`, `isShared`, `sortOrder`",
+            "`id`, `paymentId`, `pieceCount`, `isShared`, `sortOrder`",
+            ::shareGroupsV17CreateSql, ::shareGroupsV17IndexSqls,
+        ),
+        V17Table(
+            "share_group_items", "share_group_items",
+            "`groupId`, `receiptItemId`",
+            "`groupId`, `paymentItemId`",
+            ::shareGroupItemsV17CreateSql, ::shareGroupItemsV17IndexSqls,
+        ),
+        V17Table(
+            "whole_shares", "whole_shares",
+            "`receiptId`, `participantId`, `kind`, `weight`, `amount`",
+            "`paymentId`, `participantId`, `kind`, `weight`, `amount`",
+            ::wholeSharesV17CreateSql, ::wholeSharesV17IndexSqls,
+        ),
+        V17Table(
+            "payment_payers", "payment_payers",
+            "`id`, `receiptId`, `participantId`, `method`, `amount`",
+            "`id`, `paymentId`, `participantId`, `method`, `amount`",
+            ::paymentPayersV17CreateSql, ::paymentPayersV17IndexSqls,
+        ),
+
+    )
+
+    /** v17 の移行の前後で比べる値(改名しても行数と金額は変わらない)。(名前, 旧名での SQL, 新名での SQL)。 */
+    internal val V17_VERIFY_QUERIES: List<Triple<String, String, String>> = buildList {
+        for (t in V17_TABLES) add(Triple("${t.newName} の件数", "SELECT COUNT(*) FROM `${t.oldName}`", "SELECT COUNT(*) FROM `${t.newName}`"))
+        add(Triple("payments の合計の和", "SELECT COALESCE(SUM(`totalAmount`), 0) FROM `receipts`", "SELECT COALESCE(SUM(`totalAmount`), 0) FROM `payments`"))
+        add(Triple("expenses の金額の合計", "SELECT COALESCE(SUM(`amount`), 0) FROM `expense_groups`", "SELECT COALESCE(SUM(`amount`), 0) FROM `expenses`"))
+        add(Triple("expense_items の金額の合計", "SELECT COALESCE(SUM(`amount`), 0) FROM `expenses`", "SELECT COALESCE(SUM(`amount`), 0) FROM `expense_items`"))
+    }
+
+    /** AUTOINCREMENT の表を、新しい名前・新しい列名の表へ作り直す(採番を引き継ぐ)。外部キーが無効な状態で呼ぶこと。 */
+    private fun SupportSQLiteDatabase.rebuildV17(t: V17Table) {
+        val oldSeq = query("SELECT `seq` FROM `sqlite_sequence` WHERE `name` = '${t.oldName}'")
+            .use { c -> if (c.moveToFirst()) c.getLong(0) else null }
+        val tmp = "${t.newName}_new"
+        execSQL("DROP TABLE IF EXISTS `$tmp`")
+        execSQL(t.createSql(tmp))
+        execSQL("INSERT INTO `$tmp` (${t.newColumns}) SELECT ${t.oldColumns} FROM `${t.oldName}`")
+        execSQL("DROP TABLE `${t.oldName}`")
+        execSQL("ALTER TABLE `$tmp` RENAME TO `${t.newName}`")
+        // AUTOINCREMENT の主キー id を持つ表だけ(複合主キーの表は sqlite_sequence に行が無い)
+        if (t.newColumns.startsWith("`id`,")) {
+            val maxId = count("SELECT COALESCE(MAX(`id`), 0) FROM `${t.newName}`")
+            val seq = maxOf(oldSeq ?: 0L, maxId)
+            execSQL("DELETE FROM `sqlite_sequence` WHERE `name` = '${t.newName}'")
+            if (seq > 0L) execSQL("INSERT INTO `sqlite_sequence` (`name`, `seq`) VALUES ('${t.newName}', ?)", arrayOf<Any?>(seq))
+        }
+        for (sql in t.indexSqls(t.newName)) execSQL(sql)
+    }
+
+    /**
+     * v16 -> v17(改名): 表と列の名前を変える。SQLite 3.22(minSdk 28)は RENAME COLUMN が使えないので、
+     * 表ごとに「新しい定義の表を作って写し、旧い表を消して名前を付ける」で作り直す(v16 までと同じ書き方)。
+     * 外部キーの参照先・インデックス名も新しい名前に変わる。item_shares は列も参照先の表名も変わらないのでそのまま。
+     * 安全策: 外部キーが有効なら止める / 各表の件数と金額の合計が変わったら止める / 外部キー違反が増えたら止める。
+     */
+    val MIGRATION_16_17: Migration = object : Migration(16, 17) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            val fkOn = db.query("PRAGMA foreign_keys").use { c -> c.moveToFirst() && c.getInt(0) == 1 }
+            if (fkOn) {
+                throw IllegalStateException(
+                    "v17 への移行を中止しました: 外部キー(PRAGMA foreign_keys)が有効です。" +
+                        "有効なまま表を作り直すと、子のデータが連鎖で変わるおそれがあるため、何も変更せずに止めました。",
+                )
+            }
+            val fkBefore = db.fkViolations(V17_TABLES.map { it.oldName })
+            val before = V17_VERIFY_QUERIES.map { (name, oldSql, _) -> name to db.count(oldSql) }
+
+            for (t in V17_TABLES) db.rebuildV17(t)
+
+            val after = V17_VERIFY_QUERIES.map { (name, _, newSql) -> name to db.count(newSql) }
+            if (before != after) {
+                throw IllegalStateException("v17 への移行を中止しました: 件数または金額の合計が変わりました $before -> $after")
+            }
+            val fkAfter = db.fkViolations(V17_TABLES.map { it.newName })
+            if (fkAfter > fkBefore) {
+                throw IllegalStateException("v17 への移行を中止しました: 外部キーの違反が増えました $fkBefore -> $fkAfter")
+            }
+        }
+    }
+
     val ALL: Array<Migration> = arrayOf(
         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
-        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
+        MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
     )
 }

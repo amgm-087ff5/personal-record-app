@@ -43,7 +43,7 @@ class SplitSheetLogicTest {
     @Test
     fun メンバーの番号付けと表示名() {
         assertEquals("メンバー1", memberPlaceholder(1))
-        val p = SplitParticipant(id = 5, receiptId = 1, sortOrder = 1)
+        val p = SplitParticipant(id = 5, paymentId = 1, sortOrder = 1)
         assertEquals("自分", displayNameOf(p, isSelf = true, names = emptyMap(), number = 1))
         assertEquals("メンバー2", displayNameOf(p, isSelf = false, names = mapOf(5L to "  "), number = 2))
         assertEquals("髙橋", displayNameOf(p, isSelf = false, names = mapOf(5L to " 髙橋 "), number = 2))
@@ -52,10 +52,10 @@ class SplitSheetLogicTest {
     @Test
     fun ラベル一覧は空を除き重複なしで並び順を保つ() {
         val ps = listOf(
-            SplitParticipant(id = 1, receiptId = 1, label = "新人", sortOrder = 1),
-            SplitParticipant(id = 2, receiptId = 1, label = "", sortOrder = 2),
-            SplitParticipant(id = 3, receiptId = 1, label = "新人", sortOrder = 3),
-            SplitParticipant(id = 4, receiptId = 1, label = "常連", sortOrder = 4),
+            SplitParticipant(id = 1, paymentId = 1, label = "新人", sortOrder = 1),
+            SplitParticipant(id = 2, paymentId = 1, label = "", sortOrder = 2),
+            SplitParticipant(id = 3, paymentId = 1, label = "新人", sortOrder = 3),
+            SplitParticipant(id = 4, paymentId = 1, label = "常連", sortOrder = 4),
         )
         assertEquals(listOf("新人", "常連"), labelsOf(ps))
         assertEquals("その他", labelDisplay(""))

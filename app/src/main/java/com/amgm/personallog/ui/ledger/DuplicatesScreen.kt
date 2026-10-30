@@ -23,7 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.Payment
 import com.amgm.personallog.domain.PaymentMerge
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.Hairline
@@ -185,12 +185,12 @@ private fun DuplicateCard(
             }
         }
 
-        group.payments.forEachIndexed { index, receipt ->
+        group.payments.forEachIndexed { index, payment ->
             if (index > 0) Hairline()
             PaymentRow(
                 role = if (index == 0) MERGE_TARGET_LABEL else "↑ マージ元$index",
-                receipt = receipt,
-                onClick = { onOpenPayment(receipt.id) },
+                payment = payment,
+                onClick = { onOpenPayment(payment.id) },
             )
         }
 
@@ -227,7 +227,7 @@ private fun DuplicateCard(
 
 /** 支払い1行: 左に役割・日時・支払い先・登録日時、右に合計。タップで支払い詳細へ。 */
 @Composable
-private fun PaymentRow(role: String, receipt: Receipt, onClick: () -> Unit) {
+private fun PaymentRow(role: String, payment: Payment, onClick: () -> Unit) {
     val c = AppTheme.colors
     Row(
         modifier = Modifier
@@ -238,18 +238,18 @@ private fun PaymentRow(role: String, receipt: Receipt, onClick: () -> Unit) {
         Column(modifier = Modifier.weight(1f).padding(end = Space.m)) {
             Label(role, color = if (role == MERGE_TARGET_LABEL) c.accent else c.inkFaint)
             Text(
-                receipt.storeName.ifBlank { "(支払い先なし)" },
+                payment.storeName.ifBlank { "(支払い先なし)" },
                 style = AppTheme.type.title,
                 color = c.ink,
             )
-            Text(receipt.purchasedAt, style = AppTheme.type.caption, color = c.inkSoft)
+            Text(payment.purchasedAt, style = AppTheme.type.caption, color = c.inkSoft)
             Text(
-                "登録 ${registeredText(receipt.createdAt)}",
+                "登録 ${registeredText(payment.createdAt)}",
                 style = AppTheme.type.caption,
                 color = c.inkFaint,
             )
         }
-        val total = receipt.totalAmount
+        val total = payment.totalAmount
         if (total == null) {
             Text("合計 未入力", style = AppTheme.type.numeral, color = c.danger)
         } else {

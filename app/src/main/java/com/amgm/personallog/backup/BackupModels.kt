@@ -3,15 +3,15 @@ package com.amgm.personallog.backup
 import com.amgm.personallog.data.db.Migrations
 import com.amgm.personallog.data.model.DiaryEntry
 import com.amgm.personallog.data.model.DiaryPhoto
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.data.model.ItemShare
 import com.amgm.personallog.data.model.PaymentPayer
 import com.amgm.personallog.data.model.Person
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
-import com.amgm.personallog.data.model.ReceiptNotDuplicate
-import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
+import com.amgm.personallog.data.model.PaymentNotDuplicate
+import com.amgm.personallog.data.model.PaymentStatus
 import com.amgm.personallog.data.model.ShareGroup
 import com.amgm.personallog.data.model.ShareGroupItem
 import com.amgm.personallog.data.model.ShareKind
@@ -23,14 +23,15 @@ import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.model.WholeShare
 import com.amgm.personallog.data.model.newUid
 import com.amgm.personallog.domain.PricedLine
-import com.amgm.personallog.domain.SingleExpenseConversion
+import com.amgm.personallog.domain.SingleExpenseItemConversion
 import com.amgm.personallog.domain.TaxCalc
-import com.amgm.personallog.domain.legacyReceiptOwnYen
+import com.amgm.personallog.domain.legacyPaymentOwnYen
 import com.amgm.personallog.receipt.LegacyRow
 import com.amgm.personallog.receipt.ReceiptUnits
 import com.amgm.personallog.receipt.TotalSourceInit
 import com.amgm.personallog.receipt.UnitRow
 import com.amgm.personallog.domain.LedgerCalc
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -56,13 +57,13 @@ data class BackupData(
     val exportedAt: Long = 0,
     val diaryEntries: List<BackupDiaryEntry> = emptyList(),
     val diaryPhotos: List<BackupDiaryPhoto> = emptyList(),
-    val receipts: List<BackupReceipt> = emptyList(),
-    val receiptItems: List<BackupReceiptItem> = emptyList(),
-    val expenses: List<BackupExpense> = emptyList(),
+    @SerialName("receipts") val payments: List<BackupPayment> = emptyList(),
+    @SerialName("receiptItems") val paymentItems: List<BackupPaymentItem> = emptyList(),
+    @SerialName("expenses") val expenseItems: List<BackupExpenseItem> = emptyList(),
     /** v4 以降。v3 以前のファイルには無いので空として読む。 */
-    val expenseGroups: List<BackupExpenseGroup> = emptyList(),
+    @SerialName("expenseGroups") val expenses: List<BackupExpense> = emptyList(),
     /** v5 以降。「重複ではない」と判断したレシートの組。v4 以前のファイルには無いので空として読む。 */
-    val receiptNotDuplicates: List<BackupNotDuplicate> = emptyList(),
+    @SerialName("receiptNotDuplicates") val paymentNotDuplicates: List<BackupNotDuplicate> = emptyList(),
     /** v7 以降。以下の割り勘の表は、v7 以降のファイルにだけ入る。形式6以前のファイルには無いので空として読む。 */
     val persons: List<BackupPerson> = emptyList(),
     val splitSheets: List<BackupSplitSheet> = emptyList(),
@@ -94,7 +95,7 @@ data class BackupDiaryPhoto(val id: Long, val entryId: Long, val filePath: Strin
 }
 
 @Serializable
-data class BackupReceipt(
+data class BackupPayment(
     val id: Long,
     val purchasedAt: String,
     val storeName: String,
@@ -126,8 +127,8 @@ data class BackupReceipt(
      * legacyFormat: 形式4以前のバックアップ。合計と出所を TotalSourceInit で決める
      * (読み取り失敗の仮の0円を合計に戻さない。DB の v8 への移行と同じ判定)。
      */
-    fun toEntity(items: List<BackupReceiptItem> = emptyList(), legacyFormat: Boolean = false): Receipt {
-        val own = ownAmount ?: legacyReceiptOwnYen(
+    fun toEntity(items: List<BackupPaymentItem> = emptyList(), legacyFormat: Boolean = false): Payment {
+        val own = ownAmount ?: legacyPaymentOwnYen(
             items.flatMap { it.toUnitRows() }.map {
                 PricedLine(it.amount, it.taxRate, it.priceIncludesTax, it.ownAmount)
             },
@@ -136,8 +137,8 @@ data class BackupReceipt(
         val init = if (legacyFormat) TotalSourceInit.decide(status, totalAmount ?: 0, rawJson) else null
         val total = if (init != null) init.totalAmount else totalAmount
         val source = init?.totalSource ?: totalSource
-        val safeStatus = if (status == ReceiptStatus.CONFIRMED && total == null) ReceiptStatus.DRAFT else status
-        return Receipt(
+        val safeStatus = if (status == PaymentStatus.CONFIRMED && total == null) PaymentStatus.DRAFT else status
+        return Payment(
             id = id, purchasedAt = purchasedAt, storeName = storeName, totalAmount = total,
             imagePath = imagePath, rawJson = rawJson, status = safeStatus, createdAt = createdAt,
             imageHash = imageHash, isAdvance = isAdvance, ownAmount = own,
@@ -148,7 +149,7 @@ data class BackupReceipt(
         )
     }
     companion object {
-        fun from(e: Receipt) = BackupReceipt(
+        fun from(e: Payment) = BackupPayment(
             id = e.id, purchasedAt = e.purchasedAt, storeName = e.storeName, totalAmount = e.totalAmount,
             imagePath = e.imagePath, rawJson = e.rawJson, status = e.status, createdAt = e.createdAt,
             isAdvance = e.isAdvance, ownAmount = e.ownAmount,
@@ -160,11 +161,11 @@ data class BackupReceipt(
     }
 }
 
-/** 「重複ではない」の組(v5 以降)。receiptIdLow < receiptIdHigh。 */
+/** 「重複ではない」の組(v5 以降)。paymentIdLow < paymentIdHigh。 */
 @Serializable
-data class BackupNotDuplicate(val receiptIdLow: Long, val receiptIdHigh: Long, val createdAt: Long = 0) {
+data class BackupNotDuplicate(@SerialName("receiptIdLow") val paymentIdLow: Long, @SerialName("receiptIdHigh") val paymentIdHigh: Long, val createdAt: Long = 0) {
     companion object {
-        fun from(e: ReceiptNotDuplicate) = BackupNotDuplicate(e.receiptIdLow, e.receiptIdHigh, e.createdAt)
+        fun from(e: PaymentNotDuplicate) = BackupNotDuplicate(e.paymentIdLow, e.paymentIdHigh, e.createdAt)
     }
 }
 
@@ -172,19 +173,19 @@ data class BackupNotDuplicate(val receiptIdLow: Long, val receiptIdHigh: Long, v
  * 「重複ではない」の組を、復元後の支払い id に付け替える。idMap はバックアップ内の id -> 復元後の id。
  * どちらかの対応が取れない組は捨てる。同じ支払いどうしの組になったもの・重複した組も捨てる。
  */
-fun remapNotDuplicates(pairs: List<BackupNotDuplicate>, idMap: Map<Long, Long>): List<ReceiptNotDuplicate> =
+fun remapNotDuplicates(pairs: List<BackupNotDuplicate>, idMap: Map<Long, Long>): List<PaymentNotDuplicate> =
     pairs.mapNotNull { p ->
-        val low = idMap[p.receiptIdLow] ?: return@mapNotNull null
-        val high = idMap[p.receiptIdHigh] ?: return@mapNotNull null
-        ReceiptNotDuplicate.of(low, high, p.createdAt)
-    }.distinctBy { it.receiptIdLow to it.receiptIdHigh }
+        val low = idMap[p.paymentIdLow] ?: return@mapNotNull null
+        val high = idMap[p.paymentIdHigh] ?: return@mapNotNull null
+        PaymentNotDuplicate.of(low, high, p.createdAt)
+    }.distinctBy { it.paymentIdLow to it.paymentIdHigh }
 
 /**
  * 復元(マージ)で、バックアップの支払いが既存のどの支払いに当たるかを探す(純Kotlin)。
  * 照合キーは、imageHash があれば imageHash、無ければ従来のキー(日時・店名・合計・画像パス。合計は null もありうる)。
  * 同じキーが複数あっても1対1で対応させる(同じ画像を「それでも追加」した2枚が1枚に潰れない)。
  */
-class ReceiptMergeIndex(existing: List<Receipt>) {
+class PaymentMergeIndex(existing: List<Payment>) {
     private data class LegacyKey(val purchasedAt: String, val storeName: String, val totalAmount: Int?, val imagePath: String)
 
     private val byHash = HashMap<String, ArrayDeque<Long>>()
@@ -202,7 +203,7 @@ class ReceiptMergeIndex(existing: List<Receipt>) {
         }
     }
 
-    private fun legacyKey(r: Receipt) = LegacyKey(r.purchasedAt, r.storeName, r.totalAmount, r.imagePath)
+    private fun legacyKey(r: Payment) = LegacyKey(r.purchasedAt, r.storeName, r.totalAmount, r.imagePath)
 
     private fun poll(queue: ArrayDeque<Long>?, accept: (Long) -> Boolean = { true }): Long? {
         if (queue == null) return null
@@ -222,7 +223,7 @@ class ReceiptMergeIndex(existing: List<Receipt>) {
      * ハッシュがあれば、まずハッシュで探す。無ければ従来のキーでも探す
      * (既存側にハッシュが未記録の場合。既存側に別のハッシュがあるものは別の画像なので対応させない)。
      */
-    fun take(r: Receipt): Long? {
+    fun take(r: Payment): Long? {
         val hash = r.imageHash?.takeIf { it.isNotEmpty() }
         if (hash == null) return poll(byLegacy[legacyKey(r)])
         return poll(byHash[hash]) ?: poll(byLegacy[legacyKey(r)]) { hashOf[it] == null }
@@ -230,9 +231,9 @@ class ReceiptMergeIndex(existing: List<Receipt>) {
 }
 
 @Serializable
-data class BackupReceiptItem(
+data class BackupPaymentItem(
     val id: Long,
-    val receiptId: Long,
+    @SerialName("receiptId") val paymentId: Long,
     val name: String,
     val memo: String = "",
     val amount: Int = 0,
@@ -267,23 +268,23 @@ data class BackupReceiptItem(
     }
 
     /** 取り込み用の品目に変換する。 */
-    fun toEntities(): List<ReceiptItem> = toUnitRows().map {
-        ReceiptItem(
-            receiptId = receiptId, name = it.name, amount = it.amount, category = it.category,
+    fun toEntities(): List<PaymentItem> = toUnitRows().map {
+        PaymentItem(
+            paymentId = paymentId, name = it.name, amount = it.amount, category = it.category,
             taxRate = it.taxRate, priceIncludesTax = it.priceIncludesTax, memo = memo, unknownAmount = unknownAmount,
         )
     }
 
     companion object {
-        fun from(e: ReceiptItem) = BackupReceiptItem(
-            id = e.id, receiptId = e.receiptId, name = e.name, memo = e.memo, amount = e.amount, category = e.category,
+        fun from(e: PaymentItem) = BackupPaymentItem(
+            id = e.id, paymentId = e.paymentId, name = e.name, memo = e.memo, amount = e.amount, category = e.category,
             taxRate = e.taxRate, priceIncludesTax = e.priceIncludesTax, unknownAmount = e.unknownAmount,
         )
     }
 }
 
 @Serializable
-data class BackupExpense(
+data class BackupExpenseItem(
     val id: Long,
     val date: String,
     /** v7 以降。"HH:mm"。古いバックアップには無いので、取り込み時に作成時刻から補う。 */
@@ -291,14 +292,14 @@ data class BackupExpense(
     val amount: Int,
     val category: String,
     val memo: String = "",
-    val receiptId: Long? = null,
+    @SerialName("receiptId") val paymentId: Long? = null,
     val createdAt: Long,
     /** v4 以降。支出(まとまり)の品目なら、そのグループの id。 */
     val groupId: Long? = null,
     /** v7 以降。日時を支出側で変えたか。 */
     val timeEdited: Boolean = false,
     /** v6 以降。元になった支払いの品目の id(バックアップ内の id)。復元時に復元後の id へ付け替える。 */
-    val receiptItemId: Long? = null,
+    @SerialName("receiptItemId") val paymentItemId: Long? = null,
     /** v6 以降。品名。 */
     val name: String = "",
     /** v6 以降。金額・カテゴリ・品名・メモを支払い側で変えたか。 */
@@ -314,18 +315,18 @@ data class BackupExpense(
     val unknownAmount: Boolean = false,
 ) {
     /** linkedTime: 紐づく支払いの時刻(支払いがあれば)。time が空のときの初期値に使う。 */
-    fun toEntity(linkedTime: String? = null) = Expense(
+    fun toEntity(linkedTime: String? = null) = ExpenseItem(
         id = id,
         date = date,
         time = time.ifBlank { linkedTime ?: LedgerCalc.timeOfMillis(createdAt) },
         amount = amount,
         category = category,
         memo = memo,
-        receiptId = receiptId,
+        paymentId = paymentId,
         createdAt = createdAt,
         groupId = groupId,
         timeEdited = timeEdited,
-        receiptItemId = receiptItemId,
+        paymentItemId = paymentItemId,
         name = name,
         amountEdited = amountEdited,
         categoryEdited = categoryEdited,
@@ -336,10 +337,10 @@ data class BackupExpense(
         unknownAmount = unknownAmount,
     )
     companion object {
-        fun from(e: Expense) = BackupExpense(
+        fun from(e: ExpenseItem) = BackupExpenseItem(
             id = e.id, date = e.date, time = e.time, amount = e.amount, category = e.category, memo = e.memo,
-            receiptId = e.receiptId, createdAt = e.createdAt, groupId = e.groupId, timeEdited = e.timeEdited,
-            receiptItemId = e.receiptItemId, name = e.name,
+            paymentId = e.paymentId, createdAt = e.createdAt, groupId = e.groupId, timeEdited = e.timeEdited,
+            paymentItemId = e.paymentItemId, name = e.name,
             amountEdited = e.amountEdited, categoryEdited = e.categoryEdited, nameEdited = e.nameEdited,
             memoEdited = e.memoEdited, uid = e.uid, deletedByUser = e.deletedByUser, unknownAmount = e.unknownAmount,
         )
@@ -348,7 +349,7 @@ data class BackupExpense(
 
 /** 支出(まとまり、v4 以降)。amount は支出の金額。 */
 @Serializable
-data class BackupExpenseGroup(
+data class BackupExpense(
     val id: Long,
     val date: String,
     /** v7 以降。"HH:mm"。古いバックアップには無いので、取り込み時に作成時刻から補う。 */
@@ -356,7 +357,7 @@ data class BackupExpenseGroup(
     val amount: Int,
     val category: String,
     val memo: String = "",
-    val receiptId: Long? = null,
+    @SerialName("receiptId") val paymentId: Long? = null,
     val createdAt: Long,
     /** v6 以降。端末をまたいで変わらない識別子。古い形式は空(取り込み時に新しく振る)。 */
     val uid: String = "",
@@ -366,15 +367,15 @@ data class BackupExpenseGroup(
     val memoEdited: Boolean = false,
     val timeEdited: Boolean = false,
 ) {
-    fun toEntity(linkedTime: String? = null) = ExpenseGroup(
+    fun toEntity(linkedTime: String? = null) = Expense(
         id = id,
         date = date,
         time = time.ifBlank { linkedTime ?: LedgerCalc.timeOfMillis(createdAt) },
         amount = amount,
         category = category,
         memo = memo,
-        // 取り込みでは、支払いに属さない支出を先に手入力の支払いに変えている(convertOrphanExpensesToManualPayments)
-        receiptId = requireNotNull(receiptId) { "支払いに属さない支出は取り込めません(id=$id)" },
+        // 取り込みでは、支払いに属さない支出を先に手入力の支払いに変えている(convertOrphanExpenseItemsToManualPayments)
+        paymentId = requireNotNull(paymentId) { "支払いに属さない支出は取り込めません(id=$id)" },
         createdAt = createdAt,
         uid = uid.ifBlank { newUid() },
         amountEdited = amountEdited,
@@ -383,9 +384,9 @@ data class BackupExpenseGroup(
         timeEdited = timeEdited,
     )
     companion object {
-        fun from(g: ExpenseGroup) = BackupExpenseGroup(
+        fun from(g: Expense) = BackupExpense(
             id = g.id, date = g.date, time = g.time, amount = g.amount, category = g.category, memo = g.memo,
-            receiptId = g.receiptId, createdAt = g.createdAt,
+            paymentId = g.paymentId, createdAt = g.createdAt,
             uid = g.uid, amountEdited = g.amountEdited, categoryEdited = g.categoryEdited,
             memoEdited = g.memoEdited, timeEdited = g.timeEdited,
         )
@@ -394,9 +395,9 @@ data class BackupExpenseGroup(
 
 /**
  * 復元(マージ)で既存の支払いに当たったとき、バックアップの品目 id -> 既存の品目 id の対応を作る(純Kotlin)。
- * 品名・金額・税率・税込区分が同じ品目を、順番に1対1で対応させる。これで支出の receiptItemId を付け替えられる。
+ * 品名・金額・税率・税込区分が同じ品目を、順番に1対1で対応させる。これで支出の paymentItemId を付け替えられる。
  */
-fun matchExistingItems(backupItems: List<BackupReceiptItem>, existing: List<ReceiptItem>): Map<Long, Long> {
+fun matchExistingItems(backupItems: List<BackupPaymentItem>, existing: List<PaymentItem>): Map<Long, Long> {
     data class Key(val name: String, val amount: Int, val taxRate: Int, val includesTax: Boolean)
     val pool = HashMap<Key, ArrayDeque<Long>>()
     for (e in existing.sortedBy { it.id }) {
@@ -411,35 +412,35 @@ fun matchExistingItems(backupItems: List<BackupReceiptItem>, existing: List<Rece
     return out
 }
 
-/** 支出の receiptItemId を、復元後の receipt_items の id に付け替える。対応が取れなければ null。 */
-fun remapReceiptItemId(backupItemId: Long?, itemIdMap: Map<Long, Long>): Long? =
+/** 支出の paymentItemId を、復元後の payment_items の id に付け替える。対応が取れなければ null。 */
+fun remapPaymentItemId(backupItemId: Long?, itemIdMap: Map<Long, Long>): Long? =
     backupItemId?.let { itemIdMap[it] }
 
 /**
  * 復元(マージ)で、バックアップの支出(まとまり)が既存のどれに当たるかを探す(純Kotlin)。
  * uid があれば uid で照合する。uid が無い(形式5以前の)グループは従来のキー(日付・金額・カテゴリ・メモ・支払い)で照合する。
- * uid が一致しなくても、同じ支払いに属するグループ(entity.receiptId がある)は従来のキーでも照合する
+ * uid が一致しなくても、同じ支払いに属するグループ(entity.paymentId がある)は従来のキーでも照合する
  * (別の端末で確定して uid が違うだけの同じ支払いを、二重に登録しない)。
  */
-class GroupMergeIndex(existing: List<ExpenseGroup>) {
-    private data class Key(val date: String, val amount: Int, val category: String, val memo: String, val receiptId: Long?)
+class GroupMergeIndex(existing: List<Expense>) {
+    private data class Key(val date: String, val amount: Int, val category: String, val memo: String, val paymentId: Long?)
 
     private val byUid = HashMap<String, Long>()
     private val byKey = HashMap<Key, Long>()
 
     /** 既存の支払いに紐づく支出(まとまり。支払い id -> グループ id)。支払い1枚につきグループは1つ。 */
-    private val byReceipt = HashMap<Long, Long>()
+    private val byPayment = HashMap<Long, Long>()
 
     init {
         existing.forEach {
             register(it, it.id)
-            it.receiptId?.let { rid -> byReceipt.putIfAbsent(rid, it.id) }
+            it.paymentId?.let { rid -> byPayment.putIfAbsent(rid, it.id) }
         }
     }
 
-    private fun keyOf(g: ExpenseGroup) = Key(g.date, g.amount, g.category, g.memo, g.receiptId)
+    private fun keyOf(g: Expense) = Key(g.date, g.amount, g.category, g.memo, g.paymentId)
 
-    private fun register(g: ExpenseGroup, id: Long) {
+    private fun register(g: Expense, id: Long) {
         if (g.uid.isNotEmpty()) byUid.putIfAbsent(g.uid, id)
         byKey.putIfAbsent(keyOf(g), id)
     }
@@ -448,34 +449,34 @@ class GroupMergeIndex(existing: List<ExpenseGroup>) {
      * backup が既存に当たれば既存の id。当たらなければ null。
      * @param entity バックアップのグループを復元後の支払い id などに直した実体(uid は backupUid を入れておく)
      */
-    fun find(backupUid: String, entity: ExpenseGroup): Long? {
+    fun find(backupUid: String, entity: Expense): Long? {
         if (backupUid.isEmpty()) {
             byKey[keyOf(entity)]?.let { return it }
         } else {
             byUid[backupUid]?.let { return it }
             // uid は違うが同じ支払いの支出: 従来のキーでも照合する
-            if (entity.receiptId != null) byKey[keyOf(entity)]?.let { return it }
+            if (entity.paymentId != null) byKey[keyOf(entity)]?.let { return it }
         }
         // 既存の支払いに支出(まとまり)が既にあれば、バックアップのグループは追加しない(同じ支払いにグループが二重になるのを防ぐ)
-        return entity.receiptId?.let { byReceipt[it] }
+        return entity.paymentId?.let { byPayment[it] }
     }
 
     /** 新しく入れたグループを登録する(同じバックアップ内の重複にも効く)。 */
-    fun add(entity: ExpenseGroup, newId: Long) = register(entity, newId)
+    fun add(entity: Expense, newId: Long) = register(entity, newId)
 }
 
 /**
  * 復元(マージ)で、バックアップの支出が既存と重複しているかを判定する(純Kotlin)。
  * uid があれば uid で照合する。uid が無い(形式5以前の)支出は従来のキー(日付・金額・カテゴリ・メモ・支払い・グループ)の件数ベースで照合する。
- * uid が一致しなくても、同じ支払いに属する支出(復元後の receiptId がある)は従来のキーの件数ベースでも照合する。
+ * uid が一致しなくても、同じ支払いに属する支出(復元後の paymentId がある)は従来のキーの件数ベースでも照合する。
  */
-class ExpenseMergeIndex(existing: List<Expense>) {
+class ExpenseItemMergeIndex(existing: List<ExpenseItem>) {
     private data class Key(
         val date: String,
         val amount: Int,
         val category: String,
         val memo: String,
-        val receiptId: Long?,
+        val paymentId: Long?,
         val groupId: Long?,
     )
 
@@ -485,17 +486,17 @@ class ExpenseMergeIndex(existing: List<Expense>) {
     init {
         for (e in existing) {
             if (e.uid.isNotEmpty()) uids.add(e.uid)
-            val k = Key(e.date, e.amount, e.category, e.memo, e.receiptId, e.groupId)
+            val k = Key(e.date, e.amount, e.category, e.memo, e.paymentId, e.groupId)
             remaining[k] = (remaining[k] ?: 0) + 1
         }
     }
 
     /**
      * 重複なら true(取り込まない)。重複でなければ false を返し、同じバックアップ内の重複を防ぐため uid を使用済みにする。
-     * @param mappedReceiptId / mappedGroupId 復元後の id に付け替えたもの
+     * @param mappedPaymentId / mappedGroupId 復元後の id に付け替えたもの
      */
-    fun isDuplicate(e: BackupExpense, mappedReceiptId: Long?, mappedGroupId: Long?): Boolean {
-        val k = Key(e.date, e.amount, e.category, e.memo, mappedReceiptId, mappedGroupId)
+    fun isDuplicate(e: BackupExpenseItem, mappedPaymentId: Long?, mappedGroupId: Long?): Boolean {
+        val k = Key(e.date, e.amount, e.category, e.memo, mappedPaymentId, mappedGroupId)
         if (e.uid.isNotEmpty()) {
             if (!uids.add(e.uid)) {
                 // 同じ uid の既存の行に当たった。その行は従来のキーの数からも1つ引く(別の uid の行が同じ行に当たらないように)
@@ -503,7 +504,7 @@ class ExpenseMergeIndex(existing: List<Expense>) {
                 return true
             }
             // uid は初めて。ただし同じ支払いの支出なら、従来のキーの件数でも照合する
-            return mappedReceiptId != null && consume(k)
+            return mappedPaymentId != null && consume(k)
         }
         return consume(k)
     }
@@ -520,48 +521,48 @@ class ExpenseMergeIndex(existing: List<Expense>) {
 
 /**
  * 支払いに属さない支出を手入力の支払いに変えた結果。
- * manualReceiptIds: 変換で作った支払いの backup id。旧形式(形式4以前)のファイルでも、TotalSourceInit で合計の出所を変えないために使う。
+ * manualPaymentIds: 変換で作った支払いの backup id。旧形式(形式4以前)のファイルでも、TotalSourceInit で合計の出所を変えないために使う。
  */
-data class ManualPaymentConversion(val data: BackupData, val manualReceiptIds: Set<Long>)
+data class ManualPaymentConversion(val data: BackupData, val manualPaymentIds: Set<Long>)
 
 /**
  * 支払いに属さない支出グループ・単独の支出を、手入力の支払いに変える(純Kotlin)。
- * 「支払いに属さない」は、receiptId が無い、または取り込み元に無いレシートを指すもの。
+ * 「支払いに属さない」は、paymentId が無い、または取り込み元に無いレシートを指すもの。
  * 変換内容は DB の MIGRATION_11_12 と同じ:
  *  - 対象ごとに手入力の支払いを1つ作る(画像なし・確定・合計のみ・storeName は空)。日時は日付(時刻があれば "yyyy-MM-dd HH:mm")、金額は支出金額。
- *  - グループの中の支出は品目に写し、支出に receiptId と receiptItemId を張る。グループにも receiptId を張る。
- *  - 単独の支出は品目を作らず、receiptId だけ張る。
+ *  - グループの中の支出は品目に写し、支出に paymentId と paymentItemId を張る。グループにも paymentId を張る。
+ *  - 単独の支出は品目を作らず、paymentId だけ張る。
  *  - 金額・品名・カテゴリ・メモ・作成時刻は変えない。グループと単独の支出は、カテゴリとメモを編集済みにする(次の同期で既定値に戻らないように)。
  *  - 時刻が空の支出・グループは、取り込み時の既定(作成時刻)を "HH:mm" で入れる。空のままだと支払いの時刻を借りてしまうため。
  * 作る支払い・品目の id は、バックアップ内のどの id とも重ならない値にする。
  */
-fun convertOrphanExpensesToManualPayments(data: BackupData): ManualPaymentConversion {
-    val receiptIds = data.receipts.map { it.id }.toSet()
-    fun isOrphan(receiptId: Long?) = receiptId == null || receiptId !in receiptIds
-    val needsWork = data.expenseGroups.any { isOrphan(it.receiptId) } ||
-        data.expenses.any { it.groupId == null && isOrphan(it.receiptId) }
+fun convertOrphanExpenseItemsToManualPayments(data: BackupData): ManualPaymentConversion {
+    val paymentIds = data.payments.map { it.id }.toSet()
+    fun isOrphan(paymentId: Long?) = paymentId == null || paymentId !in paymentIds
+    val needsWork = data.expenses.any { isOrphan(it.paymentId) } ||
+        data.expenseItems.any { it.groupId == null && isOrphan(it.paymentId) }
     if (!needsWork) return ManualPaymentConversion(data, emptySet())
 
     var nextId = maxReferencedId(data) + 1
-    val newReceipts = ArrayList<BackupReceipt>()
-    val newItems = ArrayList<BackupReceiptItem>()
+    val newPayments = ArrayList<BackupPayment>()
+    val newItems = ArrayList<BackupPaymentItem>()
     // 変換したグループの backup id -> 作った支払いの id
     val paymentOfGroup = HashMap<Long, Long>()
 
-    val groups = data.expenseGroups.map { g ->
-        if (!isOrphan(g.receiptId)) return@map g
+    val groups = data.expenses.map { g ->
+        if (!isOrphan(g.paymentId)) return@map g
         val rid = nextId++
-        newReceipts += manualPaymentOf(rid, g.date, g.time, g.amount, g.createdAt)
+        newPayments += manualPaymentOf(rid, g.date, g.time, g.amount, g.createdAt)
         paymentOfGroup[g.id] = rid
         g.copy(
             time = g.time.ifBlank { LedgerCalc.timeOfMillis(g.createdAt) },
-            receiptId = rid,
+            paymentId = rid,
             categoryEdited = true,
             memoEdited = true,
         )
     }
 
-    val expenses = data.expenses.map { e ->
+    val expenseItems = data.expenseItems.map { e ->
         val time = e.time.ifBlank { LedgerCalc.timeOfMillis(e.createdAt) }
         val gid = e.groupId
         when {
@@ -569,62 +570,62 @@ fun convertOrphanExpensesToManualPayments(data: BackupData): ManualPaymentConver
             gid != null && gid in paymentOfGroup -> {
                 val rid = paymentOfGroup.getValue(gid)
                 val itemId = nextId++
-                newItems += BackupReceiptItem(
-                    id = itemId, receiptId = rid, name = e.name, memo = e.memo, amount = e.amount, category = e.category,
+                newItems += BackupPaymentItem(
+                    id = itemId, paymentId = rid, name = e.name, memo = e.memo, amount = e.amount, category = e.category,
                 )
-                e.copy(time = time, receiptId = rid, receiptItemId = itemId)
+                e.copy(time = time, paymentId = rid, paymentItemId = itemId)
             }
             // 単独の支出: 支払いを作り、支出に張る(品目は作らない)
-            gid == null && isOrphan(e.receiptId) -> {
+            gid == null && isOrphan(e.paymentId) -> {
                 val rid = nextId++
-                newReceipts += manualPaymentOf(rid, e.date, e.time, e.amount, e.createdAt)
-                e.copy(time = time, receiptId = rid, categoryEdited = true, memoEdited = true)
+                newPayments += manualPaymentOf(rid, e.date, e.time, e.amount, e.createdAt)
+                e.copy(time = time, paymentId = rid, categoryEdited = true, memoEdited = true)
             }
             else -> e
         }
     }
 
     val out = data.copy(
-        receipts = data.receipts + newReceipts,
-        receiptItems = data.receiptItems + newItems,
-        expenses = expenses,
-        expenseGroups = groups,
+        payments = data.payments + newPayments,
+        paymentItems = data.paymentItems + newItems,
+        expenseItems = expenseItems,
+        expenses = groups,
     )
-    return ManualPaymentConversion(out, newReceipts.map { it.id }.toSet())
+    return ManualPaymentConversion(out, newPayments.map { it.id }.toSet())
 }
 
 // ---------------------------------------------------------------- 単独の支出(形式9以前の取り込み)
 
 /**
  * 単独の支出(groupId が無く、家計簿で消していない支出)を、自分の支出(まとまり)+ 品名が空の1品目に変える(純Kotlin)。
- * 変換内容は DB の MIGRATION_13_14 と同じ(SingleExpenseConversion)。家計簿で消した groupId の無い行は、同じ支払いの
+ * 変換内容は DB の MIGRATION_13_14 と同じ(SingleExpenseItemConversion)。家計簿で消した groupId の無い行は、同じ支払いの
  * 単独の支出から作ったまとまりがあれば、そこに付け替える(消したまま)。支払いに属さない支出の変換
- * (convertOrphanExpensesToManualPayments)の後に呼ぶ(そこで作った単独の支出も変える)。
+ * (convertOrphanExpenseItemsToManualPayments)の後に呼ぶ(そこで作った単独の支出も変える)。
  * 作るまとまりの id は、バックアップ内のどのまとまりの id とも重ならない値にする。
  */
-fun convertSingleExpensesToGroups(data: BackupData): BackupData {
-    val targets = data.expenses.filter { SingleExpenseConversion.isTarget(it.groupId, it.deletedByUser) }
+fun convertSingleExpenseItemsToGroups(data: BackupData): BackupData {
+    val targets = data.expenseItems.filter { SingleExpenseItemConversion.isTarget(it.groupId, it.deletedByUser) }
     if (targets.isEmpty()) return data
-    var nextId = (data.expenseGroups.map { it.id } + data.expenses.mapNotNull { it.groupId }).maxOrNull()?.plus(1) ?: 1L
-    val newGroups = ArrayList<BackupExpenseGroup>()
+    var nextId = (data.expenses.map { it.id } + data.expenseItems.mapNotNull { it.groupId }).maxOrNull()?.plus(1) ?: 1L
+    val newGroups = ArrayList<BackupExpense>()
     // 支払い -> その支払いで最初に作ったまとまり(消した行の付け替え先)
-    val groupOfReceipt = HashMap<Long, Long>()
-    val converted = data.expenses.map { e ->
-        if (!SingleExpenseConversion.isTarget(e.groupId, e.deletedByUser)) return@map e
+    val groupOfPayment = HashMap<Long, Long>()
+    val converted = data.expenseItems.map { e ->
+        if (!SingleExpenseItemConversion.isTarget(e.groupId, e.deletedByUser)) return@map e
         val gid = nextId++
-        e.receiptId?.let { groupOfReceipt.putIfAbsent(it, gid) }
+        e.paymentId?.let { groupOfPayment.putIfAbsent(it, gid) }
         // 時刻が空の古い行は、取り込み時の既定(作成時刻)をまとまりと品目の両方に入れる(品目の時刻はまとまりに従う)
         val time = e.time.ifBlank { LedgerCalc.timeOfMillis(e.createdAt) }
-        newGroups += BackupExpenseGroup(
+        newGroups += BackupExpense(
             id = gid,
             date = e.date,
             time = time,
             amount = e.amount,
             category = e.category,
             memo = e.memo,
-            receiptId = e.receiptId,
+            paymentId = e.paymentId,
             createdAt = e.createdAt,
-            uid = SingleExpenseConversion.groupUid(e.uid),
+            uid = SingleExpenseItemConversion.groupUid(e.uid),
             amountEdited = e.amountEdited,
             categoryEdited = e.categoryEdited,
             memoEdited = e.memoEdited,
@@ -641,22 +642,22 @@ fun convertSingleExpensesToGroups(data: BackupData): BackupData {
             timeEdited = false,
         )
     }
-    val expenses = converted.map { e ->
-        val gid = e.receiptId?.let { groupOfReceipt[it] }
+    val expenseItems = converted.map { e ->
+        val gid = e.paymentId?.let { groupOfPayment[it] }
         if (e.groupId == null && e.deletedByUser && gid != null) e.copy(groupId = gid) else e
     }
-    return data.copy(expenses = expenses, expenseGroups = data.expenseGroups + newGroups)
+    return data.copy(expenseItems = expenseItems, expenses = data.expenses + newGroups)
 }
 
 /** 手入力の支払い(画像なし・確定・合計のみ)。MIGRATION_11_12 の insertV12ManualReceipt と同じ内容。 */
-private fun manualPaymentOf(id: Long, date: String, time: String, amount: Int, createdAt: Long) = BackupReceipt(
+private fun manualPaymentOf(id: Long, date: String, time: String, amount: Int, createdAt: Long) = BackupPayment(
     id = id,
     purchasedAt = Migrations.v12PurchasedAt(date, time),
     storeName = "",
     totalAmount = amount,
     imagePath = "",
     rawJson = "{}",
-    status = ReceiptStatus.CONFIRMED,
+    status = PaymentStatus.CONFIRMED,
     createdAt = createdAt,
     totalSource = TotalSource.MANUAL,
 )
@@ -664,21 +665,21 @@ private fun manualPaymentOf(id: Long, date: String, time: String, amount: Int, c
 /** バックアップ内で使われている支払い・品目の id の最大値(新しく振る id がこれと重ならないように)。 */
 private fun maxReferencedId(data: BackupData): Long {
     val ids = buildList<Long> {
-        data.receipts.forEach { add(it.id) }
-        data.receiptItems.forEach { add(it.id); add(it.receiptId) }
-        data.expenses.forEach { e ->
-            e.receiptId?.let { add(it) }
-            e.receiptItemId?.let { add(it) }
+        data.payments.forEach { add(it.id) }
+        data.paymentItems.forEach { add(it.id); add(it.paymentId) }
+        data.expenseItems.forEach { e ->
+            e.paymentId?.let { add(it) }
+            e.paymentItemId?.let { add(it) }
         }
-        data.expenseGroups.forEach { g -> g.receiptId?.let { add(it) } }
-        data.receiptNotDuplicates.forEach { add(it.receiptIdLow); add(it.receiptIdHigh) }
-        data.splitSheets.forEach { add(it.receiptId) }
-        data.participants.forEach { add(it.receiptId) }
-        data.shareGroups.forEach { add(it.id); add(it.receiptId) }
-        data.shareGroupItems.forEach { add(it.receiptItemId) }
-        data.wholeShares.forEach { add(it.receiptId) }
-        data.paymentPayers.forEach { add(it.receiptId) }
-        data.labelAmounts.forEach { add(it.receiptId) }
+        data.expenses.forEach { g -> g.paymentId?.let { add(it) } }
+        data.paymentNotDuplicates.forEach { add(it.paymentIdLow); add(it.paymentIdHigh) }
+        data.splitSheets.forEach { add(it.paymentId) }
+        data.participants.forEach { add(it.paymentId) }
+        data.shareGroups.forEach { add(it.id); add(it.paymentId) }
+        data.shareGroupItems.forEach { add(it.paymentItemId) }
+        data.wholeShares.forEach { add(it.paymentId) }
+        data.paymentPayers.forEach { add(it.paymentId) }
+        data.labelAmounts.forEach { add(it.paymentId) }
     }
     return ids.maxOrNull() ?: 0L
 }
@@ -707,29 +708,29 @@ data class BackupPerson(
 }
 
 /**
- * 割り勘シート(v7 以降。wholeKind・warnings は v8 以降で、無い形式は既定値)。receiptId はバックアップ内の支払い id。
+ * 割り勘シート(v7 以降。wholeKind・warnings は v8 以降で、無い形式は既定値)。paymentId はバックアップ内の支払い id。
  */
 @Serializable
 data class BackupSplitSheet(
-    val receiptId: Long,
+    @SerialName("receiptId") val paymentId: Long,
     val mode: String = SplitMode.SELF,
     val wholeKind: String = ShareKind.AMOUNT,
     val warnings: String = "",
 ) {
-    fun toEntity() = SplitSheet(receiptId, mode, wholeKind, warnings)
+    fun toEntity() = SplitSheet(paymentId, mode, wholeKind, warnings)
     companion object {
-        fun from(s: SplitSheet) = BackupSplitSheet(s.receiptId, s.mode, s.wholeKind, s.warnings)
+        fun from(s: SplitSheet) = BackupSplitSheet(s.paymentId, s.mode, s.wholeKind, s.warnings)
     }
 }
 
 /**
- * 支払いごとの参加者(v8 以降)。id・receiptId はバックアップ内の id。
+ * 支払いごとの参加者(v8 以降)。id・paymentId はバックアップ内の id。
  * personId は人の id(バックアップ内)。無い参加者は「名前なし」。取り込み時に人の対応が無ければ null にする。
  */
 @Serializable
 data class BackupParticipant(
     val id: Long,
-    val receiptId: Long,
+    @SerialName("receiptId") val paymentId: Long,
     val personId: Long? = null,
     val memo: String = "",
     val label: String = "",
@@ -737,46 +738,46 @@ data class BackupParticipant(
     val sortOrder: Int = 0,
 ) {
     fun toEntity() = SplitParticipant(
-        id = id, receiptId = receiptId, personId = personId, memo = memo, label = label,
+        id = id, paymentId = paymentId, personId = personId, memo = memo, label = label,
         isPayer = isPayer, sortOrder = sortOrder,
     )
     companion object {
         fun from(p: SplitParticipant) = BackupParticipant(
-            p.id, p.receiptId, p.personId, p.memo, p.label, p.isPayer, p.sortOrder,
+            p.id, p.paymentId, p.personId, p.memo, p.label, p.isPayer, p.sortOrder,
         )
     }
 }
 
-/** ラベルごとの1人あたり金額(v8 以降)。receiptId はバックアップ内の支払い id。label が "" は「その他」。 */
+/** ラベルごとの1人あたり金額(v8 以降)。paymentId はバックアップ内の支払い id。label が "" は「その他」。 */
 @Serializable
-data class BackupLabelAmount(val receiptId: Long, val label: String, val amount: Int) {
-    fun toEntity() = SplitLabelAmount(receiptId, label, amount)
+data class BackupLabelAmount(@SerialName("receiptId") val paymentId: Long, val label: String, val amount: Int) {
+    fun toEntity() = SplitLabelAmount(paymentId, label, amount)
     companion object {
-        fun from(a: SplitLabelAmount) = BackupLabelAmount(a.receiptId, a.label, a.amount)
+        fun from(a: SplitLabelAmount) = BackupLabelAmount(a.paymentId, a.label, a.amount)
     }
 }
 
-/** 品目のまとまり(v7 以降)。id と receiptId はバックアップ内の id。 */
+/** 品目のまとまり(v7 以降)。id と paymentId はバックアップ内の id。 */
 @Serializable
 data class BackupShareGroup(
     val id: Long,
-    val receiptId: Long,
+    @SerialName("receiptId") val paymentId: Long,
     val pieceCount: Int? = null,
     val isShared: Boolean = false,
     val sortOrder: Int = 0,
 ) {
-    fun toEntity() = ShareGroup(id, receiptId, pieceCount, isShared, sortOrder)
+    fun toEntity() = ShareGroup(id, paymentId, pieceCount, isShared, sortOrder)
     companion object {
-        fun from(g: ShareGroup) = BackupShareGroup(g.id, g.receiptId, g.pieceCount, g.isShared, g.sortOrder)
+        fun from(g: ShareGroup) = BackupShareGroup(g.id, g.paymentId, g.pieceCount, g.isShared, g.sortOrder)
     }
 }
 
-/** まとまりに含まれる品目(v7 以降)。groupId と receiptItemId はバックアップ内の id。 */
+/** まとまりに含まれる品目(v7 以降)。groupId と paymentItemId はバックアップ内の id。 */
 @Serializable
-data class BackupShareGroupItem(val groupId: Long, val receiptItemId: Long) {
-    fun toEntity() = ShareGroupItem(groupId, receiptItemId)
+data class BackupShareGroupItem(val groupId: Long, @SerialName("receiptItemId") val paymentItemId: Long) {
+    fun toEntity() = ShareGroupItem(groupId, paymentItemId)
     companion object {
-        fun from(s: ShareGroupItem) = BackupShareGroupItem(s.groupId, s.receiptItemId)
+        fun from(s: ShareGroupItem) = BackupShareGroupItem(s.groupId, s.paymentItemId)
     }
 }
 
@@ -801,10 +802,10 @@ data class BackupItemShare(
     }
 }
 
-/** 全体方式の割当(v8 以降)。receiptId と participantId はバックアップ内の id。personId は形式7まで(読むだけで捨てる)。 */
+/** 全体方式の割当(v8 以降)。paymentId と participantId はバックアップ内の id。personId は形式7まで(読むだけで捨てる)。 */
 @Serializable
 data class BackupWholeShare(
-    val receiptId: Long,
+    @SerialName("receiptId") val paymentId: Long,
     val participantId: Long = 0,
     val kind: String,
     val weight: Int? = null,
@@ -812,26 +813,26 @@ data class BackupWholeShare(
     /** 形式7まで。読むだけで捨てる。 */
     val personId: Long? = null,
 ) {
-    fun toEntity() = WholeShare(receiptId, participantId, kind, weight, amount)
+    fun toEntity() = WholeShare(paymentId, participantId, kind, weight, amount)
     companion object {
-        fun from(s: WholeShare) = BackupWholeShare(s.receiptId, s.participantId, s.kind, s.weight, s.amount)
+        fun from(s: WholeShare) = BackupWholeShare(s.paymentId, s.participantId, s.kind, s.weight, s.amount)
     }
 }
 
-/** 支払内訳(v8 以降)。id・receiptId・participantId はバックアップ内の id。personId は形式7まで(読むだけで捨てる)。 */
+/** 支払内訳(v8 以降)。id・paymentId・participantId はバックアップ内の id。personId は形式7まで(読むだけで捨てる)。 */
 @Serializable
 data class BackupPaymentPayer(
     val id: Long,
-    val receiptId: Long,
+    @SerialName("receiptId") val paymentId: Long,
     val participantId: Long = 0,
     val method: String = "",
     val amount: Int,
     /** 形式7まで。読むだけで捨てる。 */
     val personId: Long? = null,
 ) {
-    fun toEntity() = PaymentPayer(id, receiptId, participantId, method, amount)
+    fun toEntity() = PaymentPayer(id, paymentId, participantId, method, amount)
     companion object {
-        fun from(p: PaymentPayer) = BackupPaymentPayer(p.id, p.receiptId, p.participantId, p.method, p.amount)
+        fun from(p: PaymentPayer) = BackupPaymentPayer(p.id, p.paymentId, p.participantId, p.method, p.amount)
     }
 }
 
@@ -878,10 +879,10 @@ fun planPersons(persons: List<BackupPerson>, existingByUid: Map<String, Long>, s
  * 割り勘のまとまりを、復元後の支払い id に付け替える(純Kotlin)。返り値は (バックアップのまとまり id, 新しい行)。
  * 新しい行の id は 0(自動採番に任せる)。支払いの対応が無いまとまりは捨てる。
  */
-fun remapShareGroups(groups: List<BackupShareGroup>, receiptIdMap: Map<Long, Long>): List<Pair<Long, ShareGroup>> =
+fun remapShareGroups(groups: List<BackupShareGroup>, paymentIdMap: Map<Long, Long>): List<Pair<Long, ShareGroup>> =
     groups.mapNotNull { g ->
-        val receiptId = receiptIdMap[g.receiptId] ?: return@mapNotNull null
-        g.id to g.toEntity().copy(id = 0, receiptId = receiptId)
+        val paymentId = paymentIdMap[g.paymentId] ?: return@mapNotNull null
+        g.id to g.toEntity().copy(id = 0, paymentId = paymentId)
     }
 
 /**
@@ -892,13 +893,13 @@ fun remapShareGroups(groups: List<BackupShareGroup>, receiptIdMap: Map<Long, Lon
  */
 fun remapParticipants(
     participants: List<BackupParticipant>,
-    receiptIdMap: Map<Long, Long>,
+    paymentIdMap: Map<Long, Long>,
     personIdMap: Map<Long, Long>,
 ): List<Pair<Long, SplitParticipant>> =
     participants.mapNotNull { p ->
-        val receiptId = receiptIdMap[p.receiptId] ?: return@mapNotNull null
+        val paymentId = paymentIdMap[p.paymentId] ?: return@mapNotNull null
         val personId = p.personId?.let { personIdMap[it] }
-        p.id to p.toEntity().copy(id = 0, receiptId = receiptId, personId = personId)
+        p.id to p.toEntity().copy(id = 0, paymentId = paymentId, personId = personId)
     }
 
 /** 割り勘の表(まとまり・参加者以外)を付け替えた結果。id は未採番(自動採番に任せる)。 */
@@ -916,14 +917,14 @@ data class SplitRemapped(
  * 同じ主キーになる行は1つにまとめる(品目は1つのまとまりにしか入らない、参加者は1つの割当だけ、など)。
  * 形式7以前のファイルの itemShares・wholeShares・paymentPayers は、参照先が人で参加者に付け替えられないので捨てる
  * (形式7の時点では画面から割り勘を使えなかったため、実データは無い想定)。シート・まとまり・品目のまとまりは入れる。
- * @param receiptIdMap バックアップの支払い id -> 復元後の支払い id(取り込み対象の支払いだけ)
+ * @param paymentIdMap バックアップの支払い id -> 復元後の支払い id(取り込み対象の支払いだけ)
  * @param itemIdMap バックアップの品目 id -> 復元後の品目 id(取り込み対象の品目だけ)
  * @param groupIdMap バックアップのまとまり id -> 復元後のまとまり id
  * @param participantIdMap バックアップの参加者 id -> 復元後の参加者 id(取り込み対象の参加者だけ)
  */
 fun remapSplitRows(
     data: BackupData,
-    receiptIdMap: Map<Long, Long>,
+    paymentIdMap: Map<Long, Long>,
     itemIdMap: Map<Long, Long>,
     groupIdMap: Map<Long, Long>,
     participantIdMap: Map<Long, Long>,
@@ -932,33 +933,33 @@ fun remapSplitRows(
     val dropShares = data.formatVersion < 8
     return SplitRemapped(
         sheets = data.splitSheets.mapNotNull { s ->
-            val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
-            s.toEntity().copy(receiptId = r)
-        }.distinctBy { it.receiptId },
+            val r = paymentIdMap[s.paymentId] ?: return@mapNotNull null
+            s.toEntity().copy(paymentId = r)
+        }.distinctBy { it.paymentId },
         groupItems = data.shareGroupItems.mapNotNull { s ->
             val g = groupIdMap[s.groupId] ?: return@mapNotNull null
-            val item = itemIdMap[s.receiptItemId] ?: return@mapNotNull null
-            s.toEntity().copy(groupId = g, receiptItemId = item)
-        }.distinctBy { it.receiptItemId },
+            val item = itemIdMap[s.paymentItemId] ?: return@mapNotNull null
+            s.toEntity().copy(groupId = g, paymentItemId = item)
+        }.distinctBy { it.paymentItemId },
         itemShares = if (dropShares) emptyList() else data.itemShares.mapNotNull { s ->
             val g = groupIdMap[s.groupId] ?: return@mapNotNull null
             val p = participantIdMap[s.participantId] ?: return@mapNotNull null
             s.toEntity().copy(groupId = g, participantId = p)
         }.distinctBy { it.groupId to it.participantId },
         wholeShares = if (dropShares) emptyList() else data.wholeShares.mapNotNull { s ->
-            val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
+            val r = paymentIdMap[s.paymentId] ?: return@mapNotNull null
             val p = participantIdMap[s.participantId] ?: return@mapNotNull null
-            s.toEntity().copy(receiptId = r, participantId = p)
-        }.distinctBy { it.receiptId to it.participantId },
+            s.toEntity().copy(paymentId = r, participantId = p)
+        }.distinctBy { it.paymentId to it.participantId },
         payers = if (dropShares) emptyList() else data.paymentPayers.mapNotNull { s ->
-            val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
+            val r = paymentIdMap[s.paymentId] ?: return@mapNotNull null
             val p = participantIdMap[s.participantId] ?: return@mapNotNull null
-            s.toEntity().copy(id = 0, receiptId = r, participantId = p)
+            s.toEntity().copy(id = 0, paymentId = r, participantId = p)
         },
         labelAmounts = data.labelAmounts.mapNotNull { s ->
-            val r = receiptIdMap[s.receiptId] ?: return@mapNotNull null
-            s.toEntity().copy(receiptId = r)
-        }.distinctBy { it.receiptId to it.label },
+            val r = paymentIdMap[s.paymentId] ?: return@mapNotNull null
+            s.toEntity().copy(paymentId = r)
+        }.distinctBy { it.paymentId to it.label },
     )
 }
 
@@ -967,13 +968,13 @@ enum class ImportMode { MERGE, REPLACE }
 /** 進捗表示用。total が 0 以下なら不定。 */
 data class BackupProgress(val message: String, val current: Int = 0, val total: Int = 0)
 
-data class ExportResult(val diaryEntries: Int, val receipts: Int, val expenses: Int, val files: Int)
+data class ExportResult(val diaryEntries: Int, val payments: Int, val expenseItems: Int, val files: Int)
 
 data class ImportResult(
     val diaryEntries: Int,
     val diaryPhotos: Int,
-    val receipts: Int,
-    val expenses: Int,
+    val payments: Int,
+    val expenseItems: Int,
     val skipped: Int,
     val files: Int,
 )

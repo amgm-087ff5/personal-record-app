@@ -2,11 +2,11 @@ package com.amgm.personallog.ui.receipt
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.repository.PaymentRepository
 import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.receipt.ReceiptAdjust
-import com.amgm.personallog.receipt.ReceiptDedup
+import com.amgm.personallog.receipt.PaymentDedup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,23 +20,23 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ReceiptListViewModel @Inject constructor(
-    private val repository: ReceiptRepository,
+    private val repository: PaymentRepository,
     private val importer: ReceiptImportCoordinator,
     private val readStore: PaymentReadStore,
 ) : ViewModel() {
 
-    val receipts: StateFlow<List<Receipt>> = repository.observeReceipts()
+    val payments: StateFlow<List<Payment>> = repository.observePayments()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** 未読の支払いの id(一覧の1枚に「未読」を付ける)。 */
-    val unreadReceiptIds: StateFlow<Set<Long>> = readStore.unreadIds
+    val unreadPaymentIds: StateFlow<Set<Long>> = readStore.unreadIds
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     /** 同じ内容の別レシートがある「後から作られた側」 -> 原本。一覧の警告に使う。 */
-    val possibleDuplicates: StateFlow<Map<Long, Receipt>> =
-        combine(receipts, repository.observeNotDuplicates()) { list, notDup ->
+    val possibleDuplicates: StateFlow<Map<Long, Payment>> =
+        combine(payments, repository.observeNotDuplicates()) { list, notDup ->
             // 「重複ではない」と判断した組は警告しない
-            ReceiptDedup.laterDuplicates(list, ReceiptDedup.notDuplicateSet(notDup))
+            PaymentDedup.laterDuplicates(list, PaymentDedup.notDuplicateSet(notDup))
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /** 取り込みの状態(アプリで1つ。家計簿と共有)。 */

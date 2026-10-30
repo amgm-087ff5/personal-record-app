@@ -1,10 +1,10 @@
 package com.amgm.personallog.data.repository
 
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
-import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
+import com.amgm.personallog.data.model.PaymentStatus
 import com.amgm.personallog.domain.TaxCalc
-import com.amgm.personallog.receipt.ReceiptDedup
+import com.amgm.personallog.receipt.PaymentDedup
 import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,7 +17,7 @@ sealed interface ConfirmOutcome {
     data object Confirmed : ConfirmOutcome
 
     /** 同じ内容の確定済みの支払いがある。「追加する」か「重複ではない」を選ばせる。 */
-    data class NeedsDuplicateDecision(val duplicates: List<Receipt>) : ConfirmOutcome
+    data class NeedsDuplicateDecision(val duplicates: List<Payment>) : ConfirmOutcome
 
     /** 合計が未入力。確定には合計が要る。itemsSum は品目の計算合計(合計に入れられる値)。 */
     data class MissingTotal(val itemsSum: Long) : ConfirmOutcome
@@ -36,32 +36,32 @@ sealed interface ConfirmOutcome {
  */
 @Singleton
 class PaymentConfirmer @Inject constructor(
-    private val receipts: ReceiptRepository,
+    private val payments: PaymentRepository,
 ) {
     /**
-     * [receipt] と [items] を確定する。[checkDuplicate] が true なら重複の候補を調べる。
+     * [payment] と [items] を確定する。[checkDuplicate] が true なら重複の候補を調べる。
      * [rebuildAccepted] が true なら、家計簿の作り直しの確認は済んでいるものとして続ける。
      */
     suspend fun confirm(
-        receipt: Receipt,
-        items: List<ReceiptItem>,
+        payment: Payment,
+        items: List<PaymentItem>,
         checkDuplicate: Boolean,
         rebuildAccepted: Boolean = false,
     ): ConfirmOutcome {
-        if (receipt.totalAmount == null) return ConfirmOutcome.MissingTotal(itemsSumOf(items))
+        if (payment.totalAmount == null) return ConfirmOutcome.MissingTotal(itemsSumOf(items))
         return try {
             if (checkDuplicate) {
-                val notDup = ReceiptDedup.notDuplicateSet(receipts.notDuplicates())
-                val confirmed = receipts.allReceipts().filter { it.status == ReceiptStatus.CONFIRMED }
-                val dups = ReceiptDedup.sameContent(receipt, confirmed, notDup)
+                val notDup = PaymentDedup.notDuplicateSet(payments.notDuplicates())
+                val confirmed = payments.allPayments().filter { it.status == PaymentStatus.CONFIRMED }
+                val dups = PaymentDedup.sameContent(payment, confirmed, notDup)
                 if (dups.isNotEmpty()) return ConfirmOutcome.NeedsDuplicateDecision(dups)
             }
             if (!rebuildAccepted) {
-                val impact = receipts.confirmImpact(receipt, items)
+                val impact = payments.confirmImpact(payment, items)
                 if (impact.needsWarning) return ConfirmOutcome.NeedsRebuildDecision(impact)
             }
             // 保存と確定は1つのトランザクション(途中で失敗しても保存だけ残らない)
-            receipts.saveAndConfirm(receipt, items, perItem = true)
+            payments.saveAndConfirm(payment, items, perItem = true)
             ConfirmOutcome.Confirmed
         } catch (e: CancellationException) {
             throw e
@@ -71,5 +71,5 @@ class PaymentConfirmer @Inject constructor(
     }
 
     /** 品目の計算合計(税込・金額不明の品目は含めない)。合計に入れる値。 */
-    fun itemsSumOf(items: List<ReceiptItem>): Long = TaxCalc.paidYen(items.filterNot { it.unknownAmount })
+    fun itemsSumOf(items: List<PaymentItem>): Long = TaxCalc.paidYen(items.filterNot { it.unknownAmount })
 }

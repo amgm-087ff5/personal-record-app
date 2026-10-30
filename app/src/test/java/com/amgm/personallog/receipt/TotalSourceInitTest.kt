@@ -1,6 +1,6 @@
 package com.amgm.personallog.receipt
 
-import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.PaymentStatus
 import com.amgm.personallog.data.model.TotalSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -12,8 +12,8 @@ class TotalSourceInitTest {
         """{"date":"2026-10-09","time":"18:32","store":"A","items":[{"name":"牛乳","amount":198}]""" +
             (if (total != null) ""","total":$total""" else "") + "}"
 
-    private val confirmed = ReceiptStatus.CONFIRMED
-    private val draft = ReceiptStatus.DRAFT
+    private val confirmed = PaymentStatus.CONFIRMED
+    private val draft = PaymentStatus.DRAFT
 
     @Test
     fun printedTotalEqualsStored_isPrinted() {

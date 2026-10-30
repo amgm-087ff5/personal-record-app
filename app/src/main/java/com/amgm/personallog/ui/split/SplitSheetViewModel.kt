@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.amgm.personallog.data.model.ItemShare
 import com.amgm.personallog.data.model.Person
-import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.PaymentItem
 import com.amgm.personallog.data.model.ShareKind
 import com.amgm.personallog.data.model.SplitLabelAmount
 import com.amgm.personallog.data.model.SplitMode
@@ -13,7 +13,7 @@ import com.amgm.personallog.data.model.SplitParticipant
 import com.amgm.personallog.data.model.WholeShare
 import com.amgm.personallog.data.repository.PersonRepository
 import com.amgm.personallog.data.repository.HeadcountChange
-import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.repository.PaymentRepository
 import com.amgm.personallog.data.repository.SplitBuild
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.data.repository.SplitSheetData
@@ -123,19 +123,19 @@ data class SplitSheetUiState(
 @HiltViewModel
 class SplitSheetViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val receipts: ReceiptRepository,
+    private val payments: PaymentRepository,
     private val splits: SplitRepository,
     private val persons: PersonRepository,
 ) : ViewModel() {
 
-    private val receiptId: Long = savedStateHandle.get<Long>("receiptId") ?: 0L
+    private val paymentId: Long = savedStateHandle.get<Long>("paymentId") ?: 0L
 
     private val _state = MutableStateFlow(SplitSheetUiState())
     val state: StateFlow<SplitSheetUiState> = _state.asStateFlow()
 
     private var data: SplitSheetData? = null
     private var names: Map<Long, String> = emptyMap()
-    private var items: List<ReceiptItem> = emptyList()
+    private var items: List<PaymentItem> = emptyList()
     private var total: Int? = null
     private var members: List<Person> = emptyList()
     /** 支払いの参加人数(headcount。null は不明)。保存時の確認に使う。 */
@@ -147,15 +147,15 @@ class SplitSheetViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             try {
-                val r = receipts.getReceipt(receiptId)
+                val r = payments.getPayment(paymentId)
                 if (r == null) {
                     _state.update { it.copy(loading = false, notFound = true) }
                     return@launch
                 }
-                items = receipts.getItems(receiptId)
+                items = payments.getItems(paymentId)
                 total = r.totalAmount
                 headcount = r.headcount
-                val d = splits.load(receiptId)
+                val d = splits.load(paymentId)
                 data = d
                 names = initialNames(d.participants, d.persons)
                 recompute()
@@ -336,7 +336,7 @@ class SplitSheetViewModel @Inject constructor(
 
     private fun newParticipant(d: SplitSheetData, personId: Long?): SplitParticipant = SplitParticipant(
         id = nextTempId(d),
-        receiptId = receiptId,
+        paymentId = paymentId,
         personId = personId,
         sortOrder = (d.participants.maxOfOrNull { it.sortOrder } ?: 0) + 1,
     )
@@ -401,7 +401,7 @@ class SplitSheetViewModel @Inject constructor(
             if (!seen.add(person.id)) continue
             val p = SplitParticipant(
                 id = minOf(0L, list.minOfOrNull { it.id } ?: 0L) - 1L,
-                receiptId = receiptId,
+                paymentId = paymentId,
                 personId = person.id,
                 sortOrder = (list.maxOfOrNull { it.sortOrder } ?: 0) + 1,
             )
@@ -470,8 +470,8 @@ class SplitSheetViewModel @Inject constructor(
         val rest = d.wholeShares.filterNot { it.participantId == id }
         val row = when {
             value == null -> null
-            d.wholeKind == ShareKind.RATIO -> WholeShare(receiptId = receiptId, participantId = id, kind = ShareKind.RATIO, weight = value)
-            else -> WholeShare(receiptId = receiptId, participantId = id, kind = ShareKind.AMOUNT, amount = value)
+            d.wholeKind == ShareKind.RATIO -> WholeShare(paymentId = paymentId, participantId = id, kind = ShareKind.RATIO, weight = value)
+            else -> WholeShare(paymentId = paymentId, participantId = id, kind = ShareKind.AMOUNT, amount = value)
         }
         commit(d.copy(wholeShares = rest + listOfNotNull(row)))
     }
@@ -481,7 +481,7 @@ class SplitSheetViewModel @Inject constructor(
         val d = data ?: return
         val value = parseAmountText(text)
         val rest = d.labelAmounts.filterNot { it.label == label }
-        val row = value?.let { SplitLabelAmount(receiptId = receiptId, label = label, amount = it) }
+        val row = value?.let { SplitLabelAmount(paymentId = paymentId, label = label, amount = it) }
         commit(d.copy(labelAmounts = rest + listOfNotNull(row)))
     }
 
@@ -538,7 +538,7 @@ class SplitSheetViewModel @Inject constructor(
         val selfLabel = s.participants.firstOrNull { it.id == selfId }?.label.orEmpty()
         val current = d.wholeShares.firstOrNull { it.participantId == selfId }?.amount ?: s.labelAmounts[selfLabel]
         val value = selfAmountAfterDifference(current, w.expected, w.allocated)
-        val row = WholeShare(receiptId = receiptId, participantId = selfId, kind = ShareKind.AMOUNT, amount = value)
+        val row = WholeShare(paymentId = paymentId, participantId = selfId, kind = ShareKind.AMOUNT, amount = value)
         commit(d.copy(wholeShares = d.wholeShares.filterNot { it.participantId == selfId } + row))
     }
 
@@ -637,12 +637,12 @@ class SplitSheetViewModel @Inject constructor(
 
     /** 選んだ品目を新しいまとまりに分ける。元が空になれば消える(画面で確認済みである前提)。 */
     fun splitGroupItems(groupId: Long, itemIds: Set<Long>) = runGroupOp {
-        splits.splitGroupItems(receiptId, groupId, itemIds)
+        splits.splitGroupItems(paymentId, groupId, itemIds)
     }
 
     /** 選んだまとまりを1つにまとめる(画面で確認済みである前提)。 */
     fun mergeGroups(groupIds: Set<Long>) = runGroupOp {
-        splits.mergeGroups(receiptId, groupIds)
+        splits.mergeGroups(paymentId, groupIds)
     }
 
     /**
@@ -655,10 +655,10 @@ class SplitSheetViewModel @Inject constructor(
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             try {
-                receipts.saveSplit(d, names)
+                payments.saveSplit(d, names)
                 op()
-                receipts.syncLedger(receiptId)
-                val fresh = splits.load(receiptId)
+                payments.syncLedger(paymentId)
+                val fresh = splits.load(paymentId)
                 data = fresh
                 names = initialNames(fresh.participants, fresh.persons)
                 recompute()
@@ -710,9 +710,9 @@ class SplitSheetViewModel @Inject constructor(
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             try {
-                val saved = receipts.saveSplit(d, names)
+                val saved = payments.saveSplit(d, names)
                 if (headcountTo != null) {
-                    splits.setHeadcount(receiptId, headcountTo)
+                    splits.setHeadcount(paymentId, headcountTo)
                     headcount = headcountTo
                 }
                 data = saved

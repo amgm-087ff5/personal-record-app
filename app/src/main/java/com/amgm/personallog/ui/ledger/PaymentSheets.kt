@@ -22,8 +22,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.amgm.personallog.data.model.Categories
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.BareField
 import com.amgm.personallog.ui.design.Hairline
@@ -35,7 +35,7 @@ import com.amgm.personallog.ui.design.Space
 import com.amgm.personallog.ui.design.TextAction
 
 /**
- * 手入力の支払いの入力。合計・日時・店名・品目を入れて、支払い(receipts の表の下書き)と品目を保存する。
+ * 手入力の支払いの入力。合計・日時・店名・品目を入れて、支払い(payments の表の下書き)と品目を保存する。
  * 家計簿の支出は、保存のなかで支払いから作られる。品目の金額の合計を合計欄の下に出し、1タップで合計に入れられる。
  * onSave には作った支払いと品目を渡す。done には保存の結果(エラーメッセージ、成功なら null)を渡す。
  */
@@ -44,7 +44,7 @@ internal fun ManualPaymentSheet(
     initialDate: String,
     initialTime: String,
     onDismiss: () -> Unit,
-    onSave: (receipt: Receipt, items: List<ReceiptItem>, headcount: Int?, done: (String?) -> Unit) -> Unit,
+    onSave: (payment: Payment, items: List<PaymentItem>, headcount: Int?, done: (String?) -> Unit) -> Unit,
 ) {
     val c = AppTheme.colors
     var dateText by remember { mutableStateOf(initialDate) }
@@ -166,7 +166,7 @@ internal fun ManualPaymentSheet(
                     errors = r.errors
                     if (r.isValid) {
                         saving = true
-                        onSave(r.receipt!!, r.items, r.headcount) { err ->
+                        onSave(r.payment!!, r.items, r.headcount) { err ->
                             saving = false
                             if (err == null) onDismiss() else errors = listOf(err)
                         }

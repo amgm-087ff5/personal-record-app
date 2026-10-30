@@ -22,7 +22,7 @@ object ReceiptRoutes {
 }
 
 /** 支払い機能のナビゲーショングラフ。AppNavHost から呼ばれるので、機能内の遷移はここで完結させる。 */
-fun NavGraphBuilder.receiptGraph(navController: NavController) {
+fun NavGraphBuilder.paymentGraph(navController: NavController) {
     navigation(route = ReceiptRoutes.ROOT, startDestination = ReceiptRoutes.HOME) {
         composable(route = ReceiptRoutes.HOME) {
             ReceiptScreen(
@@ -37,7 +37,7 @@ fun NavGraphBuilder.receiptGraph(navController: NavController) {
                 navArgument("register") { type = NavType.BoolType; defaultValue = false },
             ),
         ) { entry ->
-            val receiptId = entry.arguments?.getLong("id") ?: 0L
+            val paymentId = entry.arguments?.getLong("id") ?: 0L
             ReceiptDetailScreen(
                 register = entry.arguments?.getBoolean("register") ?: false,
                 onBack = { navController.popBackStack() },
@@ -52,7 +52,7 @@ fun NavGraphBuilder.receiptGraph(navController: NavController) {
                         navController.popBackStack(LedgerRoutes.HOME, inclusive = false)
                     }
                 },
-                onOpenSplit = { navController.navigate(SplitRoutes.sheet(receiptId)) },
+                onOpenSplit = { navController.navigate(SplitRoutes.sheet(paymentId)) },
                 onOpenMerge = { ids -> navController.navigate(LedgerRoutes.merge(ids)) },
                 onOpenPayment = { link ->
                     // 支払いの詳細から来たなら、新しく積まずに戻る(行き来で履歴が伸びない)
@@ -68,10 +68,10 @@ fun NavGraphBuilder.receiptGraph(navController: NavController) {
                 },
             )
         }
-        // 割り勘シート(支払い詳細の「割り勘」から開く)。receiptId は Long の引数
+        // 割り勘シート(支払い詳細の「割り勘」から開く)。paymentId は Long の引数
         composable(
             route = SplitRoutes.SHEET,
-            arguments = listOf(navArgument("receiptId") { type = NavType.LongType }),
+            arguments = listOf(navArgument("paymentId") { type = NavType.LongType }),
         ) {
             SplitSheetScreen(onBack = { navController.popBackStack() })
         }

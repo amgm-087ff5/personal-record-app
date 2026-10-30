@@ -1,8 +1,8 @@
 package com.amgm.personallog.domain
 
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
-import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.PaymentItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -10,8 +10,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class UnknownAmountsTest {
-    private fun item(id: Long, amount: Int, unknown: Boolean = false, included: Boolean = true) = ReceiptItem(
-        id = id, receiptId = 1, name = "品$id", amount = amount, priceIncludesTax = included, unknownAmount = unknown,
+    private fun item(id: Long, amount: Int, unknown: Boolean = false, included: Boolean = true) = PaymentItem(
+        id = id, paymentId = 1, name = "品$id", amount = amount, priceIncludesTax = included, unknownAmount = unknown,
     )
 
     // ---- 不明の金額
@@ -48,7 +48,7 @@ class UnknownAmountsTest {
         assertNull(UnknownAmounts.mismatch(700L, 700L, hasUnknown = false))
         // 合計が未入力ならエラーにしない(別の警告)
         assertNull(UnknownAmounts.mismatch(null, 700L, hasUnknown = false))
-        // ReceiptItem に当てたもの
+        // PaymentItem に当てたもの
         assertNull(UnknownAmounts.mismatch(1000, listOf(item(1, 700), item(2, 0, unknown = true))))
         assertEquals(300L, UnknownAmounts.mismatch(1000, listOf(item(1, 700))))
     }
@@ -94,9 +94,9 @@ class UnknownAmountsTest {
 
     // ---- 支出の品目(ExpenseItems)
 
-    private fun group(amount: Int) = ExpenseGroup(receiptId = 1L, id = 5, date = "2026-10-05", time = "12:00", amount = amount, category = "食費", memo = "店", createdAt = 0)
-    private fun row(id: Long, amount: Int, unknown: Boolean = false, deleted: Boolean = false, itemId: Long? = id) = Expense(
-        id = id, date = "2026-10-01", amount = amount, category = "日用品", memo = "x", groupId = 5, receiptItemId = itemId,
+    private fun group(amount: Int) = Expense(paymentId = 1L, id = 5, date = "2026-10-05", time = "12:00", amount = amount, category = "食費", memo = "店", createdAt = 0)
+    private fun row(id: Long, amount: Int, unknown: Boolean = false, deleted: Boolean = false, itemId: Long? = id) = ExpenseItem(
+        id = id, date = "2026-10-01", amount = amount, category = "日用品", memo = "x", groupId = 5, paymentItemId = itemId,
         createdAt = 0, unknownAmount = unknown, deletedByUser = deleted,
     )
 
