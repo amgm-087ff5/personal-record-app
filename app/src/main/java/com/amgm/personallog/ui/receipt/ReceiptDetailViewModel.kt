@@ -81,6 +81,13 @@ private fun ItemForm.groupKey() = GroupKey(name.trim(), amount.trim(), taxRate.t
 internal fun groupItemForms(items: List<ItemForm>): List<ItemGroup> =
     items.groupBy { it.groupKey() }.values.map { units -> ItemGroup(units.first(), units) }
 
+/**
+ * 編集シートを開いた時点の対象(openedKeys)の中だけでグループ化し、key を含むまとまりを返す。
+ * 編集中に他の品目と同じ内容になって全体のグループが統合されても、対象は開いた品目のまま保たれる。
+ */
+internal fun groupItemFormsWithin(items: List<ItemForm>, openedKeys: Set<Long>, key: Long): ItemGroup? =
+    groupItemForms(items.filter { it.key in openedKeys }).firstOrNull { key in it.keys }
+
 /** 入力中の1個ぶんを計算用のモデルにする。立て替えでなければ自分の分は無視する(全額自分)。 */
 internal fun ItemForm.toItemModel(receiptId: Long = 0L): ReceiptItem = ReceiptItem(
     id = id,
