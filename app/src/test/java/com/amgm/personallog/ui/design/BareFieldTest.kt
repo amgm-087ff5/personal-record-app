@@ -38,11 +38,12 @@ class BareFieldTest {
     fun staleValuesReturnedLaterDoNotOverwriteTyping() {
         val external = mutableStateOf("")
         val emitted = mutableListOf<String>()
+        var echo = false
         composeRule.mainClock.autoAdvance = false
         composeRule.setContent {
             PersonalLogTheme {
-                // 外へ出した値を、すぐには戻さない(非同期の StateFlow を模す)。
-                BareField(value = external.value, onValueChange = { emitted += it })
+                // 外へ出した値を、最初はすぐには戻さない(非同期の StateFlow を模す)。追いついた後は ViewModel と同じく戻す。
+                BareField(value = external.value, onValueChange = { emitted += it; if (echo) external.value = it })
             }
         }
         composeRule.mainClock.advanceTimeBy(16)
@@ -64,11 +65,12 @@ class BareFieldTest {
         composeRule.mainClock.advanceTimeBy(16)
         field().assertTextEquals("abc")
 
-        // 追いついたあとの入力も続けられる
+        // 追いついたあとの入力も続けられる(以降は外が入力をそのまま戻す)
+        echo = true
         field().performTextInput("d")
+        assertEquals("abcd", emitted.last())
         composeRule.mainClock.advanceTimeBy(16)
         field().assertTextEquals("abcd")
-        assertEquals("abcd", emitted.last())
     }
 
     @Test
