@@ -23,7 +23,7 @@ class BackupFormat7Test {
     private val self = BackupPerson(id = 1, uid = "p-self", name = "自分", shortName = "私", isSelf = true, sortOrder = 0, createdAt = 10)
     private val friend = BackupPerson(id = 2, uid = "p-friend", name = "髙橋", shortName = "髙", isSelf = false, sortOrder = 1, createdAt = 11)
 
-    private val receiptIdMap = mapOf(5L to 50L, 6L to 60L)
+    private val paymentIdMap = mapOf(5L to 50L, 6L to 60L)
     private val itemIdMap = mapOf(11L to 111L, 12L to 112L)
     private val personIdMap = mapOf(1L to 100L, 2L to 200L)
     private val groupIdMap = mapOf(3L to 300L)
@@ -36,18 +36,18 @@ class BackupFormat7Test {
         exportedAt = 1,
         persons = listOf(self, friend),
         splitSheets = listOf(BackupSplitSheet(5, SplitMode.ITEM)),
-        shareGroups = listOf(BackupShareGroup(id = 3, receiptId = 5, pieceCount = 2, isShared = false, sortOrder = 0)),
-        shareGroupItems = listOf(BackupShareGroupItem(groupId = 3, receiptItemId = 11)),
+        shareGroups = listOf(BackupShareGroup(id = 3, paymentId = 5, pieceCount = 2, isShared = false, sortOrder = 0)),
+        shareGroupItems = listOf(BackupShareGroupItem(groupId = 3, paymentItemId = 11)),
         participants = listOf(
-            BackupParticipant(id = 21, receiptId = 5, personId = 1, isPayer = true),
-            BackupParticipant(id = 22, receiptId = 5, personId = 2),
+            BackupParticipant(id = 21, paymentId = 5, personId = 1, isPayer = true),
+            BackupParticipant(id = 22, paymentId = 5, personId = 2),
         ),
         itemShares = listOf(
             BackupItemShare(groupId = 3, participantId = 21, kind = ShareKind.RATIO, weight = 2),
             BackupItemShare(groupId = 3, participantId = 22, kind = ShareKind.RATIO, weight = 1),
         ),
-        wholeShares = listOf(BackupWholeShare(receiptId = 5, participantId = 22, kind = ShareKind.AMOUNT, amount = 300)),
-        paymentPayers = listOf(BackupPaymentPayer(id = 7, receiptId = 5, participantId = 21, method = "カード", amount = 980)),
+        wholeShares = listOf(BackupWholeShare(paymentId = 5, participantId = 22, kind = ShareKind.AMOUNT, amount = 300)),
+        paymentPayers = listOf(BackupPaymentPayer(id = 7, paymentId = 5, participantId = 21, method = "カード", amount = 980)),
     )
 
     @Test
@@ -56,11 +56,11 @@ class BackupFormat7Test {
         assertEquals(p, BackupPerson.from(p).toEntity())
         val sheet = SplitSheet(5, SplitMode.WHOLE, ShareKind.RATIO, "W1,W3")
         assertEquals(sheet, BackupSplitSheet.from(sheet).toEntity())
-        val g = ShareGroup(id = 3, receiptId = 5, pieceCount = 3, isShared = true, sortOrder = 1)
+        val g = ShareGroup(id = 3, paymentId = 5, pieceCount = 3, isShared = true, sortOrder = 1)
         assertEquals(g, BackupShareGroup.from(g).toEntity())
         val gi = ShareGroupItem(3, 11)
         assertEquals(gi, BackupShareGroupItem.from(gi).toEntity())
-        val sp = SplitParticipant(id = 21, receiptId = 5, personId = 1, memo = "一言", label = "新人", isPayer = true, sortOrder = 2)
+        val sp = SplitParticipant(id = 21, paymentId = 5, personId = 1, memo = "一言", label = "新人", isPayer = true, sortOrder = 2)
         assertEquals(sp, BackupParticipant.from(sp).toEntity())
         val la = SplitLabelAmount(5, "新人", 3000)
         assertEquals(la, BackupLabelAmount.from(la).toEntity())
@@ -68,7 +68,7 @@ class BackupFormat7Test {
         assertEquals(ia, BackupItemShare.from(ia).toEntity())
         val ws = WholeShare(5, 22, ShareKind.EQUAL)
         assertEquals(ws, BackupWholeShare.from(ws).toEntity())
-        val pp = PaymentPayer(id = 7, receiptId = 5, participantId = 21, method = "現金", amount = 500)
+        val pp = PaymentPayer(id = 7, paymentId = 5, participantId = 21, method = "現金", amount = 500)
         assertEquals(pp, BackupPaymentPayer.from(pp).toEntity())
     }
 
@@ -108,13 +108,13 @@ class BackupFormat7Test {
     // ------------------------------------------------------------ 付け替え
 
     @Test
-    fun remapShareGroups_followsReceiptId_andDropsMissingReceipt() {
+    fun remapShareGroups_followsPaymentId_andDropsMissingPayment() {
         val groups = listOf(
-            BackupShareGroup(id = 3, receiptId = 5, pieceCount = 2),
-            BackupShareGroup(id = 4, receiptId = 9), // 支払い 9 が対応しない -> 捨てる
+            BackupShareGroup(id = 3, paymentId = 5, pieceCount = 2),
+            BackupShareGroup(id = 4, paymentId = 9), // 支払い 9 が対応しない -> 捨てる
         )
-        val r = remapShareGroups(groups, receiptIdMap)
-        assertEquals(listOf(3L to ShareGroup(id = 0, receiptId = 50, pieceCount = 2)), r)
+        val r = remapShareGroups(groups, paymentIdMap)
+        assertEquals(listOf(3L to ShareGroup(id = 0, paymentId = 50, pieceCount = 2)), r)
     }
 
     @Test
@@ -140,12 +140,12 @@ class BackupFormat7Test {
                 BackupPaymentPayer(8, 6, 23, "", 10), // 参加者 23 が無い
             ),
         )
-        val r = remapSplitRows(data, receiptIdMap, itemIdMap, groupIdMap, participantIdMap)
+        val r = remapSplitRows(data, paymentIdMap, itemIdMap, groupIdMap, participantIdMap)
         assertEquals(listOf(SplitSheet(50, SplitMode.ITEM)), r.sheets)
         assertEquals(listOf(ShareGroupItem(300, 111)), r.groupItems)
         assertEquals(listOf(ItemShare(300, 310, ShareKind.RATIO, weight = 2, amount = null)), r.itemShares)
         assertEquals(listOf(WholeShare(50, 320, ShareKind.AMOUNT, amount = 300)), r.wholeShares)
-        assertEquals(listOf(PaymentPayer(id = 0, receiptId = 50, participantId = 310, method = "カード", amount = 980)), r.payers)
+        assertEquals(listOf(PaymentPayer(id = 0, paymentId = 50, participantId = 310, method = "カード", amount = 980)), r.payers)
     }
 
     @Test
@@ -158,14 +158,14 @@ class BackupFormat7Test {
                 BackupItemShare(3, 21, ShareKind.RATIO, weight = 2),
             ),
         )
-        val r = remapSplitRows(data, receiptIdMap, itemIdMap, groupIdMap, participantIdMap)
+        val r = remapSplitRows(data, paymentIdMap, itemIdMap, groupIdMap, participantIdMap)
         assertEquals(listOf(SplitSheet(50, SplitMode.WHOLE)), r.sheets) // 先頭が残る
         assertEquals(1, r.groupItems.size)
         assertEquals(ShareKind.EQUAL, r.itemShares.single().kind)
     }
 
     @Test
-    fun remapSplitRows_labelAmounts_followReceipt_dropMissing_andKeepOnePerLabel() {
+    fun remapSplitRows_labelAmounts_followPayment_dropMissing_andKeepOnePerLabel() {
         val data = BackupData(
             labelAmounts = listOf(
                 BackupLabelAmount(5, "新人", 3000),
@@ -174,7 +174,7 @@ class BackupFormat7Test {
                 BackupLabelAmount(9, "新人", 100), // 支払い 9 が無い -> 捨てる
             ),
         )
-        val r = remapSplitRows(data, receiptIdMap, itemIdMap, groupIdMap, participantIdMap)
+        val r = remapSplitRows(data, paymentIdMap, itemIdMap, groupIdMap, participantIdMap)
         assertEquals(listOf(SplitLabelAmount(50, "新人", 3000), SplitLabelAmount(50, "", 500)), r.labelAmounts)
     }
 }

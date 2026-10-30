@@ -21,7 +21,7 @@ class SplitGroupRulesTest {
         ItemShare(groupId = group, participantId = participant, kind = kind, weight = weight, amount = amount)
 
     private fun group(id: Long, sortOrder: Int, pieceCount: Int? = null, isShared: Boolean = false) =
-        ShareGroup(id = id, receiptId = 1L, pieceCount = pieceCount, isShared = isShared, sortOrder = sortOrder)
+        ShareGroup(id = id, paymentId = 1L, pieceCount = pieceCount, isShared = isShared, sortOrder = sortOrder)
 
     // ---- 分ける ----
 
@@ -46,11 +46,11 @@ class SplitGroupRulesTest {
 
     @Test
     fun 分けた後の新しいまとまりは個数が_null_で共通費も外れる() {
-        val g = newGroupAfterSplit(receiptId = 7L, sortOrder = 4)
+        val g = newGroupAfterSplit(paymentId = 7L, sortOrder = 4)
         assertNull(g.pieceCount)
         assertFalse(g.isShared)
         assertEquals(4, g.sortOrder)
-        assertEquals(7L, g.receiptId)
+        assertEquals(7L, g.paymentId)
     }
 
     // ---- まとめる: 割当 ----

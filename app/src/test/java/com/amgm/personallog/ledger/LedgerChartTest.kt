@@ -1,7 +1,7 @@
 package com.amgm.personallog.ledger
 
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.ui.ledger.LedgerEntry
 import com.amgm.personallog.ui.ledger.ChartLevel
 import com.amgm.personallog.ui.ledger.LedgerChart
@@ -12,15 +12,15 @@ import java.time.LocalDate
 
 class LedgerChartTest {
     private fun e(id: Long, date: String, amount: Int, cat: String) =
-        Expense(id = id, date = date, amount = amount, category = cat, createdAt = 0)
+        ExpenseItem(id = id, date = date, amount = amount, category = cat, createdAt = 0)
 
     /** 支出1件ずつを、品名が空の1品目だけを持つ支出(v14〜 の品目なしの支出の形)にして一覧の行にする。 */
-    private fun build(list: List<Expense>): List<LedgerEntry> {
-        val groups = list.map { ExpenseGroup(receiptId = 1L, id = it.id, date = it.date, time = it.time, amount = it.amount, category = it.category, createdAt = it.createdAt) }
+    private fun build(list: List<ExpenseItem>): List<LedgerEntry> {
+        val groups = list.map { Expense(paymentId = 1L, id = it.id, date = it.date, time = it.time, amount = it.amount, category = it.category, createdAt = it.createdAt) }
         return LedgerLogic.buildEntries(list.map { it.copy(groupId = it.id) }, groups)
     }
 
-    private fun entries(vararg list: Expense) = build(list.toList())
+    private fun entries(vararg list: ExpenseItem) = build(list.toList())
 
     private val oct14 = LocalDate.of(2026, 10, 14)
 
@@ -119,7 +119,7 @@ class LedgerChartTest {
     }
 
     private fun t(id: Long, date: String, time: String, amount: Int, cat: String) =
-        Expense(id = id, date = date, time = time, amount = amount, category = cat, createdAt = 0)
+        ExpenseItem(id = id, date = date, time = time, amount = amount, category = cat, createdAt = 0)
 
     @Test
     fun monthBars_canHaveSixWeeks() {

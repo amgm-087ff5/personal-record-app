@@ -98,7 +98,7 @@ class MigrationV9RobolectricTest {
     private fun SupportSQLiteDatabase.seq(table: String): Long? =
         query("SELECT seq FROM sqlite_sequence WHERE name = '$table'").use { if (it.moveToFirst()) it.getLong(0) else null }
 
-    private fun insertReceipt(db: SupportSQLiteDatabase, id: Long, v8: Boolean) {
+    private fun insertPayment(db: SupportSQLiteDatabase, id: Long, v8: Boolean) {
         val cols = if (v8) ", totalSource" else ""
         val vals = if (v8) ", 'printed'" else ""
         db.execSQL(
@@ -123,8 +123,8 @@ class MigrationV9RobolectricTest {
 
     private fun fillRows(db: SupportSQLiteDatabase, v8: Boolean, withRows: Boolean = true, withOrphans: Boolean = false) {
         if (withRows) {
-            insertReceipt(db, 1, v8)
-            insertReceipt(db, 2, v8)
+            insertPayment(db, 1, v8)
+            insertPayment(db, 2, v8)
             for ((i, rid) in listOf(1L, 1L, 2L).withIndex()) {
                 db.execSQL(
                     "INSERT INTO receipt_items (receiptId, name, amount, category, taxRate, priceIncludesTax, memo) VALUES (?, ?, 100, '食費', 10, 1, '')",
@@ -226,7 +226,7 @@ class MigrationV9RobolectricTest {
     }
 
     @Test
-    fun migration_emptyExpensesTable_keepsSequence() {
+    fun migration_emptyExpenseItemsTable_keepsSequence() {
         createV8(withRows = false)
         val db = migrate()
         assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses"))
@@ -273,11 +273,11 @@ class MigrationV9RobolectricTest {
         try {
             val db = room.openHelper.writableDatabase // 移行と Room の検証がここで走る。通らなければ例外
             assertEquals(AppDatabase.VERSION, db.version) // v9 -> v10 も Migrations.ALL で続けて走る
-            assertEquals(3L, db.long("SELECT COUNT(*) FROM expenses"))
+            assertEquals(3L, db.long("SELECT COUNT(*) FROM expense_items"))
             // v14 の移行で、単独の支出2件(id 2・3)もまとまりになる
-            assertEquals(4L, db.long("SELECT COUNT(*) FROM expense_groups"))
-            assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses WHERE groupId IS NULL"))
-            assertEquals(3L, db.long("SELECT COUNT(*) FROM receipt_items"))
+            assertEquals(4L, db.long("SELECT COUNT(*) FROM expenses"))
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM expense_items WHERE groupId IS NULL"))
+            assertEquals(3L, db.long("SELECT COUNT(*) FROM payment_items"))
             db.query("PRAGMA foreign_key_check").use { assertFalse(it.moveToFirst()) }
         } finally {
             room.close()
@@ -314,8 +314,8 @@ class MigrationV9RobolectricTest {
         try {
             val rdb = room.openHelper.writableDatabase
             assertEquals(AppDatabase.VERSION, rdb.version)
-            assertEquals(3L, rdb.long("SELECT COUNT(*) FROM expenses"))
-            assertEquals(0L, rdb.long("SELECT COUNT(*) FROM expenses WHERE uid = ''"))
+            assertEquals(3L, rdb.long("SELECT COUNT(*) FROM expense_items"))
+            assertEquals(0L, rdb.long("SELECT COUNT(*) FROM expense_items WHERE uid = ''"))
         } finally {
             room.close()
         }

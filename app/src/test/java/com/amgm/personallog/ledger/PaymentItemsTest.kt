@@ -1,9 +1,9 @@
 package com.amgm.personallog.ledger
 
 import com.amgm.personallog.data.model.CategoryTotal
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
-import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.Payment
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentKind
 import com.amgm.personallog.domain.PaymentField
@@ -24,10 +24,10 @@ import java.time.LocalDate
 
 class PaymentItemsTest {
     private fun group(amount: Int, category: String = "日用品") =
-        ExpenseGroup(receiptId = 1L, id = 7, date = "2026-10-03", time = "10:15", amount = amount, category = category, memo = "スーパー", createdAt = 5)
+        Expense(paymentId = 1L, id = 7, date = "2026-10-03", time = "10:15", amount = amount, category = category, memo = "スーパー", createdAt = 5)
 
     private fun item(id: Long, amount: Int, category: String) =
-        Expense(id = id, date = "2026-10-03", time = "10:15", amount = amount, category = category, groupId = 7, createdAt = 5)
+        ExpenseItem(id = id, date = "2026-10-03", time = "10:15", amount = amount, category = category, groupId = 7, createdAt = 5)
 
     // ------------------------------------------------------------ 品目ごとのカテゴリ集計
 
@@ -70,7 +70,7 @@ class PaymentItemsTest {
         // 品目の無い支払いの支出(品名が空の1品目)
         val single = LedgerEntry.Group(
             group(300, "食費").copy(id = 8),
-            listOf(Expense(id = 9, date = "2026-10-03", amount = 300, category = "食費", groupId = 8, createdAt = 6)),
+            listOf(ExpenseItem(id = 9, date = "2026-10-03", amount = 300, category = "食費", groupId = 8, createdAt = 6)),
         )
         val entries = listOf(g, single)
         val totals = LedgerLogic.totalsByCategory(entries)
@@ -118,7 +118,7 @@ class PaymentItemsTest {
     // ------------------------------------------------------------ 品目つきの手入力
 
     @Test
-    fun draftPayment_buildsReceiptAndItems_forTheSavePath() {
+    fun draftPayment_buildsPaymentAndItems_forTheSavePath() {
         val r = DraftPayment.build(
             "2026-10-03", "10:15", "700", " スーパー ",
             listOf(
@@ -129,22 +129,22 @@ class PaymentItemsTest {
             now = 9,
         )
         assertTrue(r.errors.toString(), r.isValid)
-        // 支払い(receipts の表)は手入力。合計が入っているので確定。店名は memo から
-        val receipt = r.receipt!!
-        assertEquals(700, receipt.totalAmount)
-        assertEquals("2026-10-03 10:15", receipt.purchasedAt)
-        assertEquals("スーパー", receipt.storeName)
-        assertEquals("", receipt.imagePath)
-        assertEquals("", receipt.rawJson)
-        assertEquals("confirmed", receipt.status)
-        assertEquals("manual", receipt.totalSource)
-        assertEquals(9L, receipt.createdAt)
-        // 品目は空行を除いて2件。支払いの保存で receiptId が入る
+        // 支払い(payments の表)は手入力。合計が入っているので確定。店名は memo から
+        val payment = r.payment!!
+        assertEquals(700, payment.totalAmount)
+        assertEquals("2026-10-03 10:15", payment.purchasedAt)
+        assertEquals("スーパー", payment.storeName)
+        assertEquals("", payment.imagePath)
+        assertEquals("", payment.rawJson)
+        assertEquals("confirmed", payment.status)
+        assertEquals("manual", payment.totalSource)
+        assertEquals(9L, payment.createdAt)
+        // 品目は空行を除いて2件。支払いの保存で paymentId が入る
         assertEquals(listOf("牛乳", "洗剤"), r.items.map { it.name })
         assertEquals(listOf("特売", ""), r.items.map { it.memo })
         assertEquals(listOf(200, 500), r.items.map { it.amount })
         assertEquals(listOf("食費", "日用品"), r.items.map { it.category })
-        assertTrue(r.items.all { it.receiptId == 0L && it.id == 0L })
+        assertTrue(r.items.all { it.paymentId == 0L && it.id == 0L })
         // 家計簿のグループのカテゴリは、金額が最も高い品目のカテゴリ(支出は支払いから作られる)
         assertEquals("日用品", LedgerCalc.groupCategory(r.items))
     }
@@ -165,24 +165,24 @@ class PaymentItemsTest {
         // 合計だけ(品目なし)は確定
         val totalOnly = DraftPayment.build("2026-10-03", "10:15", "100", "", emptyList(), 1)
         assertTrue(totalOnly.isValid)
-        assertEquals("confirmed", totalOnly.receipt!!.status)
-        assertEquals(100, totalOnly.receipt!!.totalAmount)
+        assertEquals("confirmed", totalOnly.payment!!.status)
+        assertEquals(100, totalOnly.payment!!.totalAmount)
         // 合計が空で品目があるときは、品目の合計を入れて確定
         val fromItems = DraftPayment.build(
             "2026-10-03", "10:15", "", "", listOf(DraftItem("a", "120"), DraftItem("b", "380")), 1,
         )
         assertTrue(fromItems.errors.toString(), fromItems.isValid)
-        assertEquals("confirmed", fromItems.receipt!!.status)
-        assertEquals(500, fromItems.receipt!!.totalAmount)
-        assertEquals("manual", fromItems.receipt!!.totalSource)
+        assertEquals("confirmed", fromItems.payment!!.status)
+        assertEquals(500, fromItems.payment!!.totalAmount)
+        assertEquals("manual", fromItems.payment!!.totalSource)
         // 入力した合計があれば、品目の合計より入力を優先する
         val typed = DraftPayment.build("2026-10-03", "10:15", "480", "", listOf(DraftItem("a", "120"), DraftItem("b", "380")), 1)
-        assertEquals(480, typed.receipt!!.totalAmount)
+        assertEquals(480, typed.payment!!.totalAmount)
         // 合計も品目も無ければ下書き(合計は未入力)。日付と時刻は必要
         val neither = DraftPayment.build("2026-10-03", "10:15", "", "", emptyList(), 1)
         assertTrue(neither.errors.toString(), neither.isValid)
-        assertEquals("draft", neither.receipt!!.status)
-        assertNull(neither.receipt!!.totalAmount)
+        assertEquals("draft", neither.payment!!.status)
+        assertNull(neither.payment!!.totalAmount)
         assertFalse(DraftPayment.build("2026-10-03", "", "", "", emptyList(), 1).isValid)
     }
 
@@ -197,38 +197,38 @@ class PaymentItemsTest {
     // ------------------------------------------------------------ 「支払いと違う」の印、支払いへのリンク
 
     @Test
-    fun marks_onlyForReceiptLinkedRows() {
-        val g = group(700).copy(receiptId = 1, amountEdited = true, timeEdited = true)
+    fun marks_onlyForPaymentLinkedRows() {
+        val g = group(700).copy(paymentId = 1, amountEdited = true, timeEdited = true)
         assertEquals(setOf(PaymentField.AMOUNT, PaymentField.TIME), PaymentMarks.ofGroup(g))
         // 手入力の支払いは、直しても支払いと比べるものがない
         assertTrue(PaymentMarks.ofGroup(g, fromScannedReceipt = false).isEmpty())
-        val e = item(1, 200, "食費").copy(receiptId = 1, receiptItemId = 11, nameEdited = true, memoEdited = true, categoryEdited = true)
-        assertEquals(setOf(PaymentField.NAME, PaymentField.MEMO, PaymentField.CATEGORY), PaymentMarks.ofExpense(e))
-        assertTrue(PaymentMarks.ofExpense(e.copy(receiptId = null, receiptItemId = null)).isEmpty())
+        val e = item(1, 200, "食費").copy(paymentId = 1, paymentItemId = 11, nameEdited = true, memoEdited = true, categoryEdited = true)
+        assertEquals(setOf(PaymentField.NAME, PaymentField.MEMO, PaymentField.CATEGORY), PaymentMarks.ofExpenseItem(e))
+        assertTrue(PaymentMarks.ofExpenseItem(e.copy(paymentId = null, paymentItemId = null)).isEmpty())
         // 手で足した品目(グループ内・支払いの品目と対応しない)は印なし
-        assertTrue(PaymentMarks.ofExpense(item(2, 100, "食費").copy(amountEdited = true)).isEmpty())
+        assertTrue(PaymentMarks.ofExpenseItem(item(2, 100, "食費").copy(amountEdited = true)).isEmpty())
     }
 
     @Test
-    fun marks_noneForManualPayment_evenWithReceiptId() {
-        // 手入力の支払いも receipts 表の1行なので receiptId を持つ。画像も読取原文も無ければレシートではない
-        val manual = Receipt(id = 1, purchasedAt = "2026-10-03 10:15", storeName = "", totalAmount = 700, imagePath = "", rawJson = "", createdAt = 1)
+    fun marks_noneForManualPayment_evenWithPaymentId() {
+        // 手入力の支払いも payments 表の1行なので paymentId を持つ。画像も読取原文も無ければレシートではない
+        val manual = Payment(id = 1, purchasedAt = "2026-10-03 10:15", storeName = "", totalAmount = 700, imagePath = "", rawJson = "", createdAt = 1)
         val scanned = manual.copy(imagePath = "receipts/1.jpg")
         assertFalse(PaymentMarks.isScannedReceipt(manual))
         assertTrue(PaymentMarks.isScannedReceipt(scanned))
         assertTrue(PaymentMarks.isScannedReceipt(manual.copy(rawJson = "{}")))
         assertFalse(PaymentMarks.isScannedReceipt(null))
-        val g = group(700).copy(receiptId = 1, categoryEdited = true)
+        val g = group(700).copy(paymentId = 1, categoryEdited = true)
         assertTrue(PaymentMarks.ofGroup(g, fromScannedReceipt = false).isEmpty())
         assertEquals(setOf(PaymentField.CATEGORY), PaymentMarks.ofGroup(g, fromScannedReceipt = true))
-        val single = Expense(id = 4, date = "2026-10-03", amount = 700, createdAt = 1, receiptId = 1, categoryEdited = true, memoEdited = true)
-        assertTrue(PaymentMarks.ofExpense(single, fromScannedReceipt = false).isEmpty())
+        val single = ExpenseItem(id = 4, date = "2026-10-03", amount = 700, createdAt = 1, paymentId = 1, categoryEdited = true, memoEdited = true)
+        assertTrue(PaymentMarks.ofExpenseItem(single, fromScannedReceipt = false).isEmpty())
     }
 
     @Test
     fun paymentLink_isTheGroup_orNull() {
         // v14〜 支払いの子は自分の支出(まとまり)だけ。単独の支出は無い
-        val g = group(700).copy(receiptId = 1)
+        val g = group(700).copy(paymentId = 1)
         assertEquals(PaymentLink(PaymentKind.GROUP, 7, 700), PaymentLink.resolve(listOf(g)))
         assertNull(PaymentLink.resolve(emptyList()))
         assertEquals(PaymentKind.GROUP, PaymentKind.of("group"))

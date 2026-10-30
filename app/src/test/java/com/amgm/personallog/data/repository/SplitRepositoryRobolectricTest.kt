@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import com.amgm.personallog.data.db.AppDatabase
 import com.amgm.personallog.data.model.ItemShare
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
 import com.amgm.personallog.data.model.ShareKind
 import com.amgm.personallog.data.model.SplitMode
 import com.amgm.personallog.data.model.SplitParticipant
@@ -41,7 +41,7 @@ class SplitRepositoryRobolectricTest {
         val context: Context = RuntimeEnvironment.getApplication()
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
         db.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
-        split = SplitRepository(db, db.splitDao(), db.receiptDao())
+        split = SplitRepository(db, db.splitDao(), db.paymentDao())
         persons = PersonRepository(db.splitDao())
     }
 
@@ -50,29 +50,29 @@ class SplitRepositoryRobolectricTest {
         db.close()
     }
 
-    private fun item(name: String, amount: Int) = ReceiptItem(receiptId = 0, name = name, amount = amount, category = "食費")
+    private fun item(name: String, amount: Int) = PaymentItem(paymentId = 0, name = name, amount = amount, category = "食費")
 
     /** 支払いと品目を入れて、支払いの id を返す。 */
-    private fun receiptWith(items: List<ReceiptItem>, isAdvance: Boolean = false, ownAmount: Int? = null): Long = runBlocking {
-        val id = db.receiptDao().insert(
-            Receipt(
+    private fun paymentWith(items: List<PaymentItem>, isAdvance: Boolean = false, ownAmount: Int? = null): Long = runBlocking {
+        val id = db.paymentDao().insert(
+            Payment(
                 purchasedAt = "2026-10-31 20:00", storeName = "店", totalAmount = null, imagePath = "", rawJson = "{}",
                 createdAt = 0, isAdvance = isAdvance, ownAmount = ownAmount,
             ),
         )
-        if (items.isNotEmpty()) db.receiptDao().insertItems(items.map { it.copy(receiptId = id) })
+        if (items.isNotEmpty()) db.paymentDao().insertItems(items.map { it.copy(paymentId = id) })
         id
     }
 
-    private fun newParticipant(receiptId: Long, id: Long = -1, order: Int = 1) =
-        SplitParticipant(id = id, receiptId = receiptId, personId = null, sortOrder = order)
+    private fun newParticipant(paymentId: Long, id: Long = -1, order: Int = 1) =
+        SplitParticipant(id = id, paymentId = paymentId, personId = null, sortOrder = order)
 
     // ---- 読み込み・既定値 ----
 
     @Test
-    fun load_newReceipt_hasOnlySelfParticipant_andSavesTheDefaultSheet() {
+    fun load_newPayment_hasOnlySelfParticipant_andSavesTheDefaultSheet() {
         runBlocking {
-            val rid = receiptWith(listOf(item("牛乳", 200)))
+            val rid = paymentWith(listOf(item("牛乳", 200)))
             val data = split.load(rid)
             assertEquals(SplitMode.ITEM, data.mode) // 新しいシートの既定は食べた分どおり
             assertEquals(ShareKind.AMOUNT, data.wholeKind)
@@ -87,7 +87,7 @@ class SplitRepositoryRobolectricTest {
     @Test
     fun load_legacyAdvanceWithoutSheet_returnsDefault_andDoesNotSave() {
         runBlocking {
-            val rid = receiptWith(listOf(item("牛乳", 200)), isAdvance = true, ownAmount = 500)
+            val rid = paymentWith(listOf(item("牛乳", 200)), isAdvance = true, ownAmount = 500)
             val data = split.load(rid)
             assertEquals(SplitMode.WHOLE, data.mode)
             assertEquals(ShareKind.AMOUNT, data.wholeKind)
@@ -112,7 +112,7 @@ class SplitRepositoryRobolectricTest {
     @Test
     fun save_registersNamedPeople_nameless_stayUnlinked_andSameNameIsSamePerson() {
         runBlocking {
-            val rid = receiptWith(listOf(item("牛乳", 200)))
+            val rid = paymentWith(listOf(item("牛乳", 200)))
             val loaded = split.load(rid)
             val selfPart = loaded.participants.single()
             val data = loaded.copy(participants = loaded.participants + newParticipant(rid, -1, 1) + newParticipant(rid, -2, 2))
@@ -126,7 +126,7 @@ class SplitRepositoryRobolectricTest {
             assertNull(saved.participants[2].personId) // 空の名前は未登録
 
             // 同じ名前の別の支払いは、同じ人に付く(人は増えない)
-            val rid2 = receiptWith(listOf(item("茶", 100)))
+            val rid2 = paymentWith(listOf(item("茶", 100)))
             val loaded2 = split.load(rid2)
             val saved2 = split.save(loaded2.copy(participants = loaded2.participants + newParticipant(rid2)), names = mapOf(-1L to "田中"))
             assertEquals(tanaka.id, saved2.participants.last().personId)
@@ -137,7 +137,7 @@ class SplitRepositoryRobolectricTest {
     @Test
     fun save_remapsNewParticipantIds_inItemShares() {
         runBlocking {
-            val rid = receiptWith(listOf(item("牛乳", 200)))
+            val rid = paymentWith(listOf(item("牛乳", 200)))
             val loaded = split.load(rid) // 読み込みで品目のまとまりができる
             val group = loaded.groups.single().group
             val data = loaded.copy(
@@ -157,7 +157,7 @@ class SplitRepositoryRobolectricTest {
     @Test
     fun save_removingParticipant_removesTheirShares() {
         runBlocking {
-            val rid = receiptWith(listOf(item("牛乳", 200)))
+            val rid = paymentWith(listOf(item("牛乳", 200)))
             val loaded = split.load(rid)
             val group = loaded.groups.single().group
             val first = split.save(
@@ -178,14 +178,14 @@ class SplitRepositoryRobolectricTest {
     @Test
     fun load_savedSelfMode_readsAsItem_withOnlySelfParticipant() {
         runBlocking {
-            val rid = receiptWith(listOf(item("牛乳", 200)))
+            val rid = paymentWith(listOf(item("牛乳", 200)))
             val group = split.load(rid).groups.single().group
             val self = persons.self()
             // 旧い「自分だけ」の保存に、他の参加者と割当が残っている場合
             val sato = persons.findOrCreate("佐藤")
-            val satoRowId = db.splitDao().insertParticipant(SplitParticipant(receiptId = rid, personId = sato.id, sortOrder = 5))
+            val satoRowId = db.splitDao().insertParticipant(SplitParticipant(paymentId = rid, personId = sato.id, sortOrder = 5))
             db.splitDao().insertItemShares(listOf(ItemShare(groupId = group.id, participantId = satoRowId, kind = ShareKind.EQUAL)))
-            db.splitDao().upsertSheet(SplitSheet(receiptId = rid, mode = SplitMode.SELF))
+            db.splitDao().upsertSheet(SplitSheet(paymentId = rid, mode = SplitMode.SELF))
 
             val data = split.load(rid)
             assertEquals(SplitMode.ITEM, data.mode)
@@ -203,23 +203,23 @@ class SplitRepositoryRobolectricTest {
     @Test
     fun ensureGroups_sameItemsShareAGroup_sharedHintApplies_emptyGroupsAreRemoved() {
         runBlocking {
-            val rid = receiptWith(
+            val rid = paymentWith(
                 listOf(item("辛味チキン", 300), item(" 辛味チキン", 300), item("ソーセージ", 150), item("袋", 5)),
             )
-            val itemsBefore = db.receiptDao().getItems(rid)
+            val itemsBefore = db.paymentDao().getItems(rid)
             val bag = itemsBefore.single { it.name == "袋" }
             split.ensureGroups(rid, sharedHints = mapOf(bag.id to true))
 
             val groups = db.splitDao().getGroups(rid)
             assertEquals(3, groups.size)
-            val membership = db.splitDao().getGroupItems(rid).associate { it.receiptItemId to it.groupId }
+            val membership = db.splitDao().getGroupItems(rid).associate { it.paymentItemId to it.groupId }
             val chicken = itemsBefore.filter { it.name.trim() == "辛味チキン" }.map { membership.getValue(it.id) }
             assertEquals(2, chicken.size)
             assertEquals(chicken[0], chicken[1])
             assertTrue(groups.single { it.id == membership.getValue(bag.id) }.isShared)
 
             // 品目を消すと、そのまとまりは空になるので消える
-            db.receiptDao().deleteItemById(bag.id)
+            db.paymentDao().deleteItemById(bag.id)
             split.ensureGroups(rid)
             assertEquals(2, db.splitDao().getGroups(rid).size)
         }
@@ -228,13 +228,13 @@ class SplitRepositoryRobolectricTest {
     @Test
     fun ensureGroups_doesNotMoveItemsAlreadyInAGroup_evenWhenTheirAmountChanges() {
         runBlocking {
-            val rid = receiptWith(listOf(item("牛乳", 200), item("洗剤", 500)))
+            val rid = paymentWith(listOf(item("牛乳", 200), item("洗剤", 500)))
             split.ensureGroups(rid)
-            val sausage = db.receiptDao().getItems(rid).single { it.name == "洗剤" }
-            val before = db.splitDao().getGroupItems(rid).single { it.receiptItemId == sausage.id }.groupId
-            db.receiptDao().updateItem(sausage.copy(amount = 480, name = "洗剤(特売)"))
+            val sausage = db.paymentDao().getItems(rid).single { it.name == "洗剤" }
+            val before = db.splitDao().getGroupItems(rid).single { it.paymentItemId == sausage.id }.groupId
+            db.paymentDao().updateItem(sausage.copy(amount = 480, name = "洗剤(特売)"))
             split.ensureGroups(rid)
-            val after = db.splitDao().getGroupItems(rid).single { it.receiptItemId == sausage.id }.groupId
+            val after = db.splitDao().getGroupItems(rid).single { it.paymentItemId == sausage.id }.groupId
             assertEquals(before, after)
         }
     }
@@ -262,7 +262,7 @@ class SplitRepositoryRobolectricTest {
     fun personDelete_refusedWhenUsed_andSelfIsNeverDeleted() {
         runBlocking {
             val tanaka = persons.findOrCreate("田中")
-            val rid = receiptWith(listOf(item("牛乳", 200)))
+            val rid = paymentWith(listOf(item("牛乳", 200)))
             val loaded = split.load(rid)
             split.save(loaded.copy(participants = loaded.participants + newParticipant(rid)), names = mapOf(-1L to "田中"))
             assertFalse(persons.delete(tanaka)) // 支払いの参加者として使われている

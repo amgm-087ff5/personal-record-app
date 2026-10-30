@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class ReceiptHeadcountTest {
+class PaymentHeadcountTest {
     /** headcount の値だけを変えた支払いJSON。value は JSON の値部分をそのまま入れる。 */
     private fun json(value: String?): String {
         val field = if (value == null) "" else ",\"headcount\":$value"
@@ -15,7 +15,7 @@ class ReceiptHeadcountTest {
     private fun headcountOf(text: String): Int? {
         val r = ReceiptParser.parse(text)
         assertTrue("expected success but was $r", r is ParseResult.Success)
-        return (r as ParseResult.Success).receipt.headcount
+        return (r as ParseResult.Success).parsed.headcount
     }
 
     @Test
@@ -55,8 +55,8 @@ class ReceiptHeadcountTest {
     @Test
     fun otherFieldsStillParseWhenHeadcountIsBad() {
         val r = ReceiptParser.parse(json("\"xx\"")) as ParseResult.Success
-        assertEquals("居酒屋A", r.receipt.store)
-        assertEquals(5000, r.receipt.total)
+        assertEquals("居酒屋A", r.parsed.store)
+        assertEquals(5000, r.parsed.total)
     }
 
     @Test
@@ -67,24 +67,24 @@ class ReceiptHeadcountTest {
     }
 
     @Test
-    fun draftReceipt_keepsReadHeadcount_andNullWhenUnknown() {
+    fun draftPayment_keepsReadHeadcount_andNullWhenUnknown() {
         val withCount = ParsedReceipt(
             date = "2026-10-09", time = "18:32", store = "居酒屋A", items = emptyList(),
             total = 5000, note = null, headcount = 3,
         )
-        val (receipt, _) = ReceiptMapper.draftReceipt(
+        val (payment, _) = ReceiptMapper.draftPayment(
             ScanOutcome.Parsed(withCount, "{}"), "receipts/a.jpg", now = 1L, today = "2026-10-19",
         )
-        assertEquals(3, receipt.headcount)
+        assertEquals(3, payment.headcount)
 
         val without = withCount.copy(headcount = null)
-        val (none, _) = ReceiptMapper.draftReceipt(
+        val (none, _) = ReceiptMapper.draftPayment(
             ScanOutcome.Parsed(without, "{}"), "receipts/a.jpg", now = 1L, today = "2026-10-19",
         )
         assertNull(none.headcount)
 
         // 読み取り失敗の下書きは人数を持たない
-        val (failed, _) = ReceiptMapper.draftReceipt(
+        val (failed, _) = ReceiptMapper.draftPayment(
             ScanOutcome.Failed("x"), "receipts/a.jpg", now = 1L, today = "2026-10-19",
         )
         assertNull(failed.headcount)

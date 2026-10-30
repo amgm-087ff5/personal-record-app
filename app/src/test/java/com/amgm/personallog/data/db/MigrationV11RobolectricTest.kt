@@ -129,7 +129,7 @@ class MigrationV11RobolectricTest {
     // ---- テスト ----
 
     @Test
-    fun migration_createsParticipantsFromPersons_perReceipt_selfFirst() {
+    fun migration_createsParticipantsFromPersons_perPayment_selfFirst() {
         createV10()
         val room = openRoom()
         try {
@@ -137,13 +137,13 @@ class MigrationV11RobolectricTest {
             assertEquals(AppDatabase.VERSION, db.version)
             // 支払い1: 人1(自分)・人2。支払い2: 人3。(receiptId, personId) ごとに1人
             assertEquals(3L, db.long("SELECT COUNT(*) FROM split_participants"))
-            assertEquals(2L, db.long("SELECT COUNT(*) FROM split_participants WHERE receiptId = 1"))
-            assertEquals(0L, db.long("SELECT sortOrder FROM split_participants WHERE receiptId = 1 AND personId = 1"))
-            assertEquals(1L, db.long("SELECT sortOrder FROM split_participants WHERE receiptId = 1 AND personId = 2"))
-            assertEquals(0L, db.long("SELECT sortOrder FROM split_participants WHERE receiptId = 2 AND personId = 3"))
+            assertEquals(2L, db.long("SELECT COUNT(*) FROM split_participants WHERE paymentId = 1"))
+            assertEquals(0L, db.long("SELECT sortOrder FROM split_participants WHERE paymentId = 1 AND personId = 1"))
+            assertEquals(1L, db.long("SELECT sortOrder FROM split_participants WHERE paymentId = 1 AND personId = 2"))
+            assertEquals(0L, db.long("SELECT sortOrder FROM split_participants WHERE paymentId = 2 AND personId = 3"))
             // 支払内訳に出てくる人は isPayer、それ以外は付かない
-            assertEquals(1L, db.long("SELECT isPayer FROM split_participants WHERE receiptId = 1 AND personId = 1"))
-            assertEquals(0L, db.long("SELECT isPayer FROM split_participants WHERE receiptId = 1 AND personId = 2"))
+            assertEquals(1L, db.long("SELECT isPayer FROM split_participants WHERE paymentId = 1 AND personId = 1"))
+            assertEquals(0L, db.long("SELECT isPayer FROM split_participants WHERE paymentId = 1 AND personId = 2"))
             // 新しい表の空の表
             assertEquals(0L, db.long("SELECT COUNT(*) FROM split_label_amounts"))
         } finally {
@@ -157,9 +157,9 @@ class MigrationV11RobolectricTest {
         val room = openRoom()
         try {
             val db = room.openHelper.writableDatabase
-            val p1r1 = db.long("SELECT id FROM split_participants WHERE receiptId = 1 AND personId = 1")
-            val p2r1 = db.long("SELECT id FROM split_participants WHERE receiptId = 1 AND personId = 2")
-            val p3r2 = db.long("SELECT id FROM split_participants WHERE receiptId = 2 AND personId = 3")
+            val p1r1 = db.long("SELECT id FROM split_participants WHERE paymentId = 1 AND personId = 1")
+            val p2r1 = db.long("SELECT id FROM split_participants WHERE paymentId = 1 AND personId = 2")
+            val p3r2 = db.long("SELECT id FROM split_participants WHERE paymentId = 2 AND personId = 3")
             // 品目ごとの割当: 行数・種類・重み・金額が保たれ、参照先が参加者になる
             assertEquals(3L, db.long("SELECT COUNT(*) FROM item_shares"))
             assertEquals(p1r1, db.long("SELECT participantId FROM item_shares WHERE groupId = 1 AND kind = 'equal'"))
@@ -169,17 +169,17 @@ class MigrationV11RobolectricTest {
             assertEquals(p2r1, db.long("SELECT participantId FROM item_shares WHERE groupId = 2"))
             // 全体の割当
             assertEquals(2L, db.long("SELECT COUNT(*) FROM whole_shares"))
-            assertEquals(p2r1, db.long("SELECT participantId FROM whole_shares WHERE receiptId = 1"))
-            assertEquals(p3r2, db.long("SELECT participantId FROM whole_shares WHERE receiptId = 2"))
-            assertEquals(300L, db.long("SELECT amount FROM whole_shares WHERE receiptId = 2"))
+            assertEquals(p2r1, db.long("SELECT participantId FROM whole_shares WHERE paymentId = 1"))
+            assertEquals(p3r2, db.long("SELECT participantId FROM whole_shares WHERE paymentId = 2"))
+            assertEquals(300L, db.long("SELECT amount FROM whole_shares WHERE paymentId = 2"))
             // 支払内訳: id・金額・手段が保たれ、参加者(自分)を指す
             assertEquals(1L, db.long("SELECT id FROM payment_payers"))
             assertEquals(p1r1, db.long("SELECT participantId FROM payment_payers WHERE id = 1"))
             assertEquals(748L, db.long("SELECT amount FROM payment_payers WHERE id = 1"))
             assertEquals("カード", db.str("SELECT method FROM payment_payers WHERE id = 1"))
             // 割り勘のシートは列が増え、既存の行は既定値
-            assertEquals("amount", db.str("SELECT wholeKind FROM split_sheets WHERE receiptId = 1"))
-            assertEquals("", db.str("SELECT warnings FROM split_sheets WHERE receiptId = 1"))
+            assertEquals("amount", db.str("SELECT wholeKind FROM split_sheets WHERE paymentId = 1"))
+            assertEquals("", db.str("SELECT warnings FROM split_sheets WHERE paymentId = 1"))
             db.query("PRAGMA foreign_key_check").use { assertFalse(it.moveToFirst()) }
         } finally {
             room.close()
@@ -187,13 +187,13 @@ class MigrationV11RobolectricTest {
     }
 
     @Test
-    fun migration_keepsReceiptsGroupsAndPersons() {
+    fun migration_keepsPaymentsGroupsAndPersons() {
         createV10()
         val room = openRoom()
         try {
             val db = room.openHelper.writableDatabase
-            assertEquals(2L, db.long("SELECT COUNT(*) FROM receipts"))
-            assertEquals(3L, db.long("SELECT COUNT(*) FROM receipt_items"))
+            assertEquals(2L, db.long("SELECT COUNT(*) FROM payments"))
+            assertEquals(3L, db.long("SELECT COUNT(*) FROM payment_items"))
             assertEquals(2L, db.long("SELECT COUNT(*) FROM share_groups"))
             assertEquals(2L, db.long("SELECT COUNT(*) FROM share_group_items"))
             assertEquals(3L, db.long("SELECT COUNT(*) FROM persons"))

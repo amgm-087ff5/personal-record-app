@@ -21,7 +21,7 @@ class ClaudeApiTest {
     }
 
     @Test
-    fun promptAsksForNestedReceiptAndLedgerFields() {
+    fun promptAsksForNestedPaymentAndLedgerFields() {
         val prompt = ClaudeRequest.PROMPT
         assertTrue(prompt.contains("\"receipt\""))
         assertTrue(prompt.contains("\"ledger\""))

@@ -1,6 +1,6 @@
 package com.amgm.personallog.backup
 
-import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.PaymentStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -9,17 +9,17 @@ import org.junit.Test
 class BackupHeadcountTest {
     @Test
     fun headcount_roundTrips_throughJsonAndEntity() {
-        val r = BackupReceipt(
+        val r = BackupPayment(
             id = 1, purchasedAt = "2026-10-09 18:32", storeName = "居酒屋A", totalAmount = 5000,
-            imagePath = "receipts/a.jpg", rawJson = "{}", status = ReceiptStatus.CONFIRMED, createdAt = 2,
+            imagePath = "receipts/a.jpg", rawJson = "{}", status = PaymentStatus.CONFIRMED, createdAt = 2,
             headcount = 3,
         )
-        val text = BackupJson.encodeToString(BackupReceipt.serializer(), r)
+        val text = BackupJson.encodeToString(BackupPayment.serializer(), r)
         assertTrue(text.contains("\"headcount\":3"))
-        val back = BackupJson.decodeFromString(BackupReceipt.serializer(), text)
+        val back = BackupJson.decodeFromString(BackupPayment.serializer(), text)
         assertEquals(3, back.headcount)
         assertEquals(3, back.toEntity().headcount)
-        assertEquals(r, BackupReceipt.from(r.toEntity()))
+        assertEquals(r, BackupPayment.from(r.toEntity()))
     }
 
     @Test
@@ -29,7 +29,7 @@ class BackupHeadcountTest {
             "receipts":[{"id":1,"purchasedAt":"2026-10-09","storeName":"s","totalAmount":100,
             "imagePath":"","rawJson":"{}","status":"draft","createdAt":1}]}"""
         val d = BackupJson.decodeFromString(BackupData.serializer(), text)
-        assertNull(d.receipts.single().headcount)
-        assertNull(d.receipts.single().toEntity().headcount)
+        assertNull(d.payments.single().headcount)
+        assertNull(d.payments.single().toEntity().headcount)
     }
 }

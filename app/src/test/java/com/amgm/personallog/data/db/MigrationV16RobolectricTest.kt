@@ -129,50 +129,50 @@ class MigrationV16RobolectricTest {
             assertEquals(AppDatabase.VERSION, db.version)
 
             // 支払い2(確定・支出なし)は消え、子の行も残らない。1・3・4・5 は残り、支出6 のための手入力の支払いが増える
-            val receipts = db.ids("SELECT id FROM receipts ORDER BY id")
-            assertEquals(listOf(1L, 3L, 4L, 5L), receipts.take(4))
-            assertEquals(5, receipts.size)
-            assertEquals(0L, db.long("SELECT COUNT(*) FROM receipt_items WHERE receiptId = 2"))
-            assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses WHERE receiptId = 2 OR id = 2"))
-            assertEquals(0L, db.long("SELECT COUNT(*) FROM receipt_not_duplicates"))
+            val payments = db.ids("SELECT id FROM payments ORDER BY id")
+            assertEquals(listOf(1L, 3L, 4L, 5L), payments.take(4))
+            assertEquals(5, payments.size)
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM payment_items WHERE paymentId = 2"))
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM expense_items WHERE paymentId = 2 OR id = 2"))
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM payment_not_duplicates"))
 
             // 支出6 は手入力の支払い(確定・合計 300)に紐づく。品目も支払いの品目に対応する
-            val manual = receipts.last()
-            assertEquals(manual, db.long("SELECT receiptId FROM expense_groups WHERE id = 6"))
-            assertEquals(300L, db.long("SELECT totalAmount FROM receipts WHERE id = $manual"))
-            assertEquals(1L, db.long("SELECT COUNT(*) FROM receipts WHERE id = $manual AND status = 'confirmed'"))
-            assertEquals(manual, db.long("SELECT receiptId FROM expenses WHERE id = 6"))
+            val manual = payments.last()
+            assertEquals(manual, db.long("SELECT paymentId FROM expenses WHERE id = 6"))
+            assertEquals(300L, db.long("SELECT totalAmount FROM payments WHERE id = $manual"))
+            assertEquals(1L, db.long("SELECT COUNT(*) FROM payments WHERE id = $manual AND status = 'confirmed'"))
+            assertEquals(manual, db.long("SELECT paymentId FROM expense_items WHERE id = 6"))
             // 品目1 の支払いは、まとまりの支払いに揃う
-            assertEquals(1L, db.long("SELECT receiptId FROM expenses WHERE id = 1"))
+            assertEquals(1L, db.long("SELECT paymentId FROM expense_items WHERE id = 1"))
 
             // 家計簿に入る支出は変わらない
-            assertEquals(2L, db.long("SELECT COUNT(*) FROM expense_groups"))
-            assertEquals(1000L, db.long("SELECT SUM(amount) FROM expense_groups"))
+            assertEquals(2L, db.long("SELECT COUNT(*) FROM expenses"))
+            assertEquals(1000L, db.long("SELECT SUM(amount) FROM expenses"))
 
             // 表の形: 支出の receiptId は NOT NULL、支払いを消すと支出・品目も消える(CASCADE)
-            val notNull = db.query("PRAGMA table_info(`expense_groups`)").use { c ->
+            val notNull = db.query("PRAGMA table_info(`expenses`)").use { c ->
                 var v = -1
-                while (c.moveToNext()) if (c.getString(c.getColumnIndexOrThrow("name")) == "receiptId") v = c.getInt(c.getColumnIndexOrThrow("notnull"))
+                while (c.moveToNext()) if (c.getString(c.getColumnIndexOrThrow("name")) == "paymentId") v = c.getInt(c.getColumnIndexOrThrow("notnull"))
                 v
             }
             assertEquals(1, notNull)
-            for (t in listOf("expense_groups", "expenses")) {
+            for (t in listOf("expenses", "expense_items")) {
                 val onDelete = db.query("PRAGMA foreign_key_list(`$t`)").use { c ->
                     var v = ""
-                    while (c.moveToNext()) if (c.getString(c.getColumnIndexOrThrow("table")) == "receipts") v = c.getString(c.getColumnIndexOrThrow("on_delete"))
+                    while (c.moveToNext()) if (c.getString(c.getColumnIndexOrThrow("table")) == "payments") v = c.getString(c.getColumnIndexOrThrow("on_delete"))
                     v
                 }
-                assertEquals("$t の receiptId", "CASCADE", onDelete)
+                assertEquals("$t の paymentId", "CASCADE", onDelete)
             }
 
             // 外部キーが有効な実行時: 支払いを消すと、支出と品目も消える
-            room.receiptDao().delete(room.receiptDao().getById(1L)!!)
-            assertEquals(0L, db.long("SELECT COUNT(*) FROM expense_groups WHERE id = 1"))
+            room.paymentDao().delete(room.paymentDao().getById(1L)!!)
             assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses WHERE id = 1"))
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM expense_items WHERE id = 1"))
 
             // 支出の無い下書き(支払い4)は、起動後の作り直しの対象。割り勘のシートがある支払い3 は対象外
-            assertEquals(listOf(4L, 5L), room.receiptDao().draftIdsWithoutExpense().sorted())
-            assertTrue(db.long("SELECT COUNT(*) FROM split_sheets WHERE receiptId = 3") == 1L)
+            assertEquals(listOf(4L, 5L), room.paymentDao().draftIdsWithoutExpense().sorted())
+            assertTrue(db.long("SELECT COUNT(*) FROM split_sheets WHERE paymentId = 3") == 1L)
         } finally {
             room.close()
         }

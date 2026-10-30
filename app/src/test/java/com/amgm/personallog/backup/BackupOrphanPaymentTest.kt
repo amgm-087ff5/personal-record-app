@@ -1,6 +1,6 @@
 package com.amgm.personallog.backup
 
-import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.PaymentStatus
 import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.domain.LedgerCalc
 import org.junit.Assert.assertEquals
@@ -25,96 +25,96 @@ class BackupOrphanPaymentTest {
         formatVersion = 4,
         dbVersion = 11,
         exportedAt = 1,
-        expenseGroups = listOf(
-            BackupExpenseGroup(id = 1, date = "2026-10-01", time = "12:30", amount = 1000, category = "食費", memo = "店", createdAt = 100),
-        ),
         expenses = listOf(
-            BackupExpense(id = 11, date = "2026-10-01", time = "12:30", amount = 600, category = "食費", memo = "m1", createdAt = 100, groupId = 1, name = "牛乳"),
-            BackupExpense(id = 12, date = "2026-10-01", time = "12:30", amount = 400, category = "食費", memo = "", createdAt = 100, groupId = 1, name = "パン"),
-            BackupExpense(id = 21, date = "2026-10-03", time = "", amount = 500, category = "その他", memo = "", createdAt = createdAt),
+            BackupExpense(id = 1, date = "2026-10-01", time = "12:30", amount = 1000, category = "食費", memo = "店", createdAt = 100),
+        ),
+        expenseItems = listOf(
+            BackupExpenseItem(id = 11, date = "2026-10-01", time = "12:30", amount = 600, category = "食費", memo = "m1", createdAt = 100, groupId = 1, name = "牛乳"),
+            BackupExpenseItem(id = 12, date = "2026-10-01", time = "12:30", amount = 400, category = "食費", memo = "", createdAt = 100, groupId = 1, name = "パン"),
+            BackupExpenseItem(id = 21, date = "2026-10-03", time = "", amount = 500, category = "その他", memo = "", createdAt = createdAt),
         ),
     )
 
     @Test
     fun orphanGroup_becomesManualPaymentWithLinkedItems() {
-        val out = convertOrphanExpensesToManualPayments(oldFormatData()).data
+        val out = convertOrphanExpenseItemsToManualPayments(oldFormatData()).data
 
-        val group = out.expenseGroups.single()
-        val groupReceiptId = notNull(group.receiptId)
+        val group = out.expenses.single()
+        val groupPaymentId = notNull(group.paymentId)
         assertTrue(group.categoryEdited)
         assertTrue(group.memoEdited)
 
-        val receipt = out.receipts.single { it.id == groupReceiptId }
-        assertEquals("2026-10-01 12:30", receipt.purchasedAt)
-        assertEquals(1000, receipt.totalAmount)
-        assertEquals("", receipt.imagePath)
-        assertEquals("", receipt.storeName)
-        assertEquals("{}", receipt.rawJson)
-        assertEquals(ReceiptStatus.CONFIRMED, receipt.status)
-        assertEquals(TotalSource.MANUAL, receipt.totalSource)
-        assertEquals(100L, receipt.createdAt)
+        val payment = out.payments.single { it.id == groupPaymentId }
+        assertEquals("2026-10-01 12:30", payment.purchasedAt)
+        assertEquals(1000, payment.totalAmount)
+        assertEquals("", payment.imagePath)
+        assertEquals("", payment.storeName)
+        assertEquals("{}", payment.rawJson)
+        assertEquals(PaymentStatus.CONFIRMED, payment.status)
+        assertEquals(TotalSource.MANUAL, payment.totalSource)
+        assertEquals(100L, payment.createdAt)
 
-        val children = out.expenses.filter { it.groupId == 1L }
+        val children = out.expenseItems.filter { it.groupId == 1L }
         assertEquals(2, children.size)
         for (child in children) {
-            assertEquals(groupReceiptId, child.receiptId)
-            val itemId = notNull(child.receiptItemId)
-            val item = out.receiptItems.single { it.id == itemId }
-            assertEquals(groupReceiptId, item.receiptId)
+            assertEquals(groupPaymentId, child.paymentId)
+            val itemId = notNull(child.paymentItemId)
+            val item = out.paymentItems.single { it.id == itemId }
+            assertEquals(groupPaymentId, item.paymentId)
             assertEquals(child.name, item.name)
             assertEquals(child.amount, item.amount)
             assertEquals(child.memo, item.memo)
         }
-        assertEquals(listOf(600, 400), children.map { child -> out.receiptItems.single { it.id == child.receiptItemId }.amount })
+        assertEquals(listOf(600, 400), children.map { child -> out.paymentItems.single { it.id == child.paymentItemId }.amount })
     }
 
     @Test
     fun orphanSingle_becomesManualPaymentWithoutItems() {
-        val out = convertOrphanExpensesToManualPayments(oldFormatData()).data
+        val out = convertOrphanExpenseItemsToManualPayments(oldFormatData()).data
 
-        val single = out.expenses.single { it.id == 21L }
-        val singleReceiptId = notNull(single.receiptId)
-        assertNull(single.receiptItemId)
+        val single = out.expenseItems.single { it.id == 21L }
+        val singlePaymentId = notNull(single.paymentId)
+        assertNull(single.paymentItemId)
         assertNull(single.groupId)
         assertTrue(single.categoryEdited)
         assertTrue(single.memoEdited)
         assertEquals(500, single.amount)
         assertEquals("その他", single.category)
 
-        val receipt = out.receipts.single { it.id == singleReceiptId }
-        assertEquals("2026-10-03", receipt.purchasedAt)
-        assertEquals(500, receipt.totalAmount)
-        assertEquals(TotalSource.MANUAL, receipt.totalSource)
-        assertEquals(ReceiptStatus.CONFIRMED, receipt.status)
+        val payment = out.payments.single { it.id == singlePaymentId }
+        assertEquals("2026-10-03", payment.purchasedAt)
+        assertEquals(500, payment.totalAmount)
+        assertEquals(TotalSource.MANUAL, payment.totalSource)
+        assertEquals(PaymentStatus.CONFIRMED, payment.status)
         // 単独の支出は品目を作らない
-        assertTrue(out.receiptItems.none { it.receiptId == singleReceiptId })
+        assertTrue(out.paymentItems.none { it.paymentId == singlePaymentId })
     }
 
     @Test
-    fun afterConversion_noExpenseOrGroupIsWithoutPayment() {
-        val linked = BackupExpense(id = 31, date = "2026-10-02", time = "10:00", amount = 300, category = "食費", createdAt = 1, receiptId = 5)
+    fun afterConversion_noExpenseItemOrGroupIsWithoutPayment() {
+        val linked = BackupExpenseItem(id = 31, date = "2026-10-02", time = "10:00", amount = 300, category = "食費", createdAt = 1, paymentId = 5)
         val data = oldFormatData().copy(
-            receipts = listOf(BackupReceipt(5, "2026-10-02 10:00", "店", 300, "receipts/r.jpg", "{}", ReceiptStatus.CONFIRMED, 1)),
-            expenses = oldFormatData().expenses + linked,
+            payments = listOf(BackupPayment(5, "2026-10-02 10:00", "店", 300, "receipts/r.jpg", "{}", PaymentStatus.CONFIRMED, 1)),
+            expenseItems = oldFormatData().expenseItems + linked,
         )
-        val out = convertOrphanExpensesToManualPayments(data).data
+        val out = convertOrphanExpenseItemsToManualPayments(data).data
 
-        assertEquals(0, out.expenses.count { it.groupId == null && it.receiptId == null })
-        assertEquals(0, out.expenseGroups.count { it.receiptId == null })
+        assertEquals(0, out.expenseItems.count { it.groupId == null && it.paymentId == null })
+        assertEquals(0, out.expenses.count { it.paymentId == null })
         // 既に支払いに属している支出は変えない
-        assertEquals(linked, out.expenses.single { it.id == 31L })
+        assertEquals(linked, out.expenseItems.single { it.id == 31L })
     }
 
     @Test
     fun blankTime_isFilledWithCreatedTime_soTheLedgerTimeDoesNotChange() {
-        val out = convertOrphanExpensesToManualPayments(oldFormatData()).data
+        val out = convertOrphanExpenseItemsToManualPayments(oldFormatData()).data
         val expected = LedgerCalc.timeOfMillis(createdAt)
 
-        assertEquals(expected, out.expenses.single { it.id == 21L }.time)
+        assertEquals(expected, out.expenseItems.single { it.id == 21L }.time)
         assertTrue(expected.matches(Regex("""\d{2}:\d{2}""")))
         // 時刻が空の支払いは日付だけの日時になる(時刻を借りない)
-        val singleReceiptId = notNull(out.expenses.single { it.id == 21L }.receiptId)
-        assertEquals("2026-10-03", out.receipts.single { it.id == singleReceiptId }.purchasedAt)
+        val singlePaymentId = notNull(out.expenseItems.single { it.id == 21L }.paymentId)
+        assertEquals("2026-10-03", out.payments.single { it.id == singlePaymentId }.purchasedAt)
     }
 
     @Test
@@ -124,17 +124,17 @@ class BackupOrphanPaymentTest {
             formatVersion = 8,
             dbVersion = 11,
             exportedAt = 1,
-            receipts = listOf(BackupReceipt(1, "2026-10-01", "店", 100, "receipts/a.jpg", "{}", ReceiptStatus.CONFIRMED, 1)),
-            receiptItems = listOf(BackupReceiptItem(id = 7, receiptId = 1, name = "x", amount = 100, category = "食費")),
-            expenses = listOf(BackupExpense(id = 41, date = "2026-10-04", time = "09:00", amount = 200, category = "食費", createdAt = 2, receiptId = 9)),
+            payments = listOf(BackupPayment(1, "2026-10-01", "店", 100, "receipts/a.jpg", "{}", PaymentStatus.CONFIRMED, 1)),
+            paymentItems = listOf(BackupPaymentItem(id = 7, paymentId = 1, name = "x", amount = 100, category = "食費")),
+            expenseItems = listOf(BackupExpenseItem(id = 41, date = "2026-10-04", time = "09:00", amount = 200, category = "食費", createdAt = 2, paymentId = 9)),
         )
-        val out = convertOrphanExpensesToManualPayments(data).data
+        val out = convertOrphanExpenseItemsToManualPayments(data).data
 
-        val single = out.expenses.single { it.id == 41L }
-        val newReceiptId = notNull(single.receiptId)
-        assertTrue("元の参照先 9 を使い回さない", newReceiptId > 9L)
-        assertEquals(2, out.receipts.map { it.id }.toSet().size)
-        assertEquals(1, out.receipts.count { it.id == 1L })
+        val single = out.expenseItems.single { it.id == 41L }
+        val newPaymentId = notNull(single.paymentId)
+        assertTrue("元の参照先 9 を使い回さない", newPaymentId > 9L)
+        assertEquals(2, out.payments.map { it.id }.toSet().size)
+        assertEquals(1, out.payments.count { it.id == 1L })
     }
 
     @Test
@@ -143,22 +143,22 @@ class BackupOrphanPaymentTest {
             formatVersion = 8,
             dbVersion = 12,
             exportedAt = 1,
-            receipts = listOf(BackupReceipt(1, "2026-10-01", "店", 100, "receipts/a.jpg", "{}", ReceiptStatus.CONFIRMED, 1)),
-            expenses = listOf(BackupExpense(id = 1, date = "2026-10-01", amount = 100, category = "食費", createdAt = 1, receiptId = 1)),
+            payments = listOf(BackupPayment(1, "2026-10-01", "店", 100, "receipts/a.jpg", "{}", PaymentStatus.CONFIRMED, 1)),
+            expenseItems = listOf(BackupExpenseItem(id = 1, date = "2026-10-01", amount = 100, category = "食費", createdAt = 1, paymentId = 1)),
         )
-        val conversion = convertOrphanExpensesToManualPayments(data)
+        val conversion = convertOrphanExpenseItemsToManualPayments(data)
 
         assertEquals(data, conversion.data)
-        assertTrue(conversion.manualReceiptIds.isEmpty())
+        assertTrue(conversion.manualPaymentIds.isEmpty())
     }
 
     @Test
-    fun manualReceiptIds_listExactlyTheNewPayments() {
-        val conversion = convertOrphanExpensesToManualPayments(oldFormatData())
+    fun manualPaymentIds_listExactlyTheNewPayments() {
+        val conversion = convertOrphanExpenseItemsToManualPayments(oldFormatData())
         val out = conversion.data
 
-        val expected = setOf(out.expenseGroups.single().receiptId, out.expenses.single { it.id == 21L }.receiptId)
-        assertEquals(expected, conversion.manualReceiptIds)
-        assertFalse(conversion.manualReceiptIds.contains(5L))
+        val expected = setOf(out.expenses.single().paymentId, out.expenseItems.single { it.id == 21L }.paymentId)
+        assertEquals(expected, conversion.manualPaymentIds)
+        assertFalse(conversion.manualPaymentIds.contains(5L))
     }
 }

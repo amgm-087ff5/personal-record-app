@@ -5,9 +5,9 @@ import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
-import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.repository.PaymentRepository
 import com.amgm.personallog.data.repository.SplitRepository
-import com.amgm.personallog.domain.SingleExpenseConversion
+import com.amgm.personallog.domain.SingleExpenseItemConversion
 import com.amgm.personallog.ui.ledger.LedgerEntry
 import com.amgm.personallog.ui.ledger.LedgerLogic
 import kotlinx.coroutines.flow.first
@@ -140,48 +140,48 @@ class MigrationV14RobolectricTest {
         }
 
     @Test
-    fun migration_addsUnknownColumns_andTurnsSingleExpensesIntoGroupsWithOneItem() = runBlocking {
+    fun migration_addsUnknownColumns_andTurnsSingleExpenseItemsIntoGroupsWithOneItem() = runBlocking {
         createV13()
         val room = openRoom()
         try {
             val db = room.openHelper.writableDatabase // 移行と Room の検証がここで走る。通らなければ例外
             assertEquals(AppDatabase.VERSION, db.version)
-            assertTrue(db.columnNames("receipt_items").contains("unknownAmount"))
-            assertTrue(db.columnNames("expenses").contains("unknownAmount"))
-            assertEquals(0L, db.long("SELECT COUNT(*) FROM receipt_items WHERE unknownAmount != 0"))
-            assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses WHERE unknownAmount != 0"))
+            assertTrue(db.columnNames("payment_items").contains("unknownAmount"))
+            assertTrue(db.columnNames("expense_items").contains("unknownAmount"))
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM payment_items WHERE unknownAmount != 0"))
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM expense_items WHERE unknownAmount != 0"))
 
             // 支出の行の数と id は変わらない。まとまりは 1 + 単独の支出2つ
-            assertEquals(5L, db.long("SELECT COUNT(*) FROM expenses"))
-            assertEquals(3L, db.long("SELECT COUNT(*) FROM expense_groups"))
+            assertEquals(5L, db.long("SELECT COUNT(*) FROM expense_items"))
+            assertEquals(3L, db.long("SELECT COUNT(*) FROM expenses"))
             // 単独の支出は残らない。消した品目の非表示の行は、同じ支払いのまとまりへ消したまま付け替わる
-            assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses WHERE groupId IS NULL"))
-            assertEquals(db.long("SELECT groupId FROM expenses WHERE id = 4"), db.long("SELECT groupId FROM expenses WHERE id = 5"))
-            assertEquals(1L, db.long("SELECT deletedByUser FROM expenses WHERE id = 5"))
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM expense_items WHERE groupId IS NULL"))
+            assertEquals(db.long("SELECT groupId FROM expense_items WHERE id = 4"), db.long("SELECT groupId FROM expense_items WHERE id = 5"))
+            assertEquals(1L, db.long("SELECT deletedByUser FROM expense_items WHERE id = 5"))
 
             // 支出 3: 同じ値のまとまり。品名は捨て、編集済みの印はまとまりへ移る
-            val g3 = db.long("SELECT groupId FROM expenses WHERE id = 3")
-            assertEquals("2026-10-06", db.str("SELECT date FROM expense_groups WHERE id = $g3"))
-            assertEquals("13:00", db.str("SELECT time FROM expense_groups WHERE id = $g3"))
-            assertEquals(1200L, db.long("SELECT amount FROM expense_groups WHERE id = $g3"))
-            assertEquals("外食", db.str("SELECT category FROM expense_groups WHERE id = $g3"))
-            assertEquals("自分で", db.str("SELECT memo FROM expense_groups WHERE id = $g3"))
-            assertEquals(2L, db.long("SELECT receiptId FROM expense_groups WHERE id = $g3"))
-            assertEquals(2000L, db.long("SELECT createdAt FROM expense_groups WHERE id = $g3"))
-            assertEquals(1L, db.long("SELECT categoryEdited FROM expense_groups WHERE id = $g3"))
-            assertEquals(1L, db.long("SELECT memoEdited FROM expense_groups WHERE id = $g3"))
-            assertEquals(1L, db.long("SELECT timeEdited FROM expense_groups WHERE id = $g3"))
-            assertEquals(0L, db.long("SELECT amountEdited FROM expense_groups WHERE id = $g3"))
-            assertEquals(SingleExpenseConversion.groupUid("e-3"), db.str("SELECT uid FROM expense_groups WHERE id = $g3"))
-            assertEquals("", db.str("SELECT name FROM expenses WHERE id = 3"))
-            assertEquals("e-3", db.str("SELECT uid FROM expenses WHERE id = 3"))
-            assertEquals(1200L, db.long("SELECT amount FROM expenses WHERE id = 3"))
-            assertEquals(0L, db.long("SELECT categoryEdited + memoEdited + timeEdited + nameEdited FROM expenses WHERE id = 3"))
+            val g3 = db.long("SELECT groupId FROM expense_items WHERE id = 3")
+            assertEquals("2026-10-06", db.str("SELECT date FROM expenses WHERE id = $g3"))
+            assertEquals("13:00", db.str("SELECT time FROM expenses WHERE id = $g3"))
+            assertEquals(1200L, db.long("SELECT amount FROM expenses WHERE id = $g3"))
+            assertEquals("外食", db.str("SELECT category FROM expenses WHERE id = $g3"))
+            assertEquals("自分で", db.str("SELECT memo FROM expenses WHERE id = $g3"))
+            assertEquals(2L, db.long("SELECT paymentId FROM expenses WHERE id = $g3"))
+            assertEquals(2000L, db.long("SELECT createdAt FROM expenses WHERE id = $g3"))
+            assertEquals(1L, db.long("SELECT categoryEdited FROM expenses WHERE id = $g3"))
+            assertEquals(1L, db.long("SELECT memoEdited FROM expenses WHERE id = $g3"))
+            assertEquals(1L, db.long("SELECT timeEdited FROM expenses WHERE id = $g3"))
+            assertEquals(0L, db.long("SELECT amountEdited FROM expenses WHERE id = $g3"))
+            assertEquals(SingleExpenseItemConversion.groupUid("e-3"), db.str("SELECT uid FROM expenses WHERE id = $g3"))
+            assertEquals("", db.str("SELECT name FROM expense_items WHERE id = 3"))
+            assertEquals("e-3", db.str("SELECT uid FROM expense_items WHERE id = 3"))
+            assertEquals(1200L, db.long("SELECT amount FROM expense_items WHERE id = 3"))
+            assertEquals(0L, db.long("SELECT categoryEdited + memoEdited + timeEdited + nameEdited FROM expense_items WHERE id = 3"))
 
             // 家計簿の一覧: 3件の支出。単独の支出の金額はそのまま(合計は 700 + 1200 + 300)
-            val repo = room.expenseDao()
+            val repo = room.expenseItemDao()
             val rows = repo.observeLedgerRows("2026-10-01", "2026-10-31").first()
-            val groups = room.expenseGroupDao().observeBetween("2026-10-01", "2026-10-31").first()
+            val groups = room.expenseDao().observeBetween("2026-10-01", "2026-10-31").first()
             val entries = LedgerLogic.buildEntries(rows, groups)
             assertEquals(3, entries.size)
             assertTrue(entries.all { it is LedgerEntry.Group })
@@ -202,33 +202,33 @@ class MigrationV14RobolectricTest {
         val room = openRoom()
         try {
             val db = room.openHelper.writableDatabase
-            val splits = SplitRepository(room, room.splitDao(), room.receiptDao())
-            val receipts = ReceiptRepository(room, room.receiptDao(), room.expenseDao(), room.expenseGroupDao(), splits)
-            val g3 = db.long("SELECT groupId FROM expenses WHERE id = 3")
-            val g4 = db.long("SELECT groupId FROM expenses WHERE id = 4")
-            for (rid in listOf(1L, 2L, 3L)) receipts.syncLedger(rid)
+            val splits = SplitRepository(room, room.splitDao(), room.paymentDao())
+            val payments = PaymentRepository(room, room.paymentDao(), room.expenseItemDao(), room.expenseDao(), splits)
+            val g3 = db.long("SELECT groupId FROM expense_items WHERE id = 3")
+            val g4 = db.long("SELECT groupId FROM expense_items WHERE id = 4")
+            for (rid in listOf(1L, 2L, 3L)) payments.syncLedger(rid)
 
             // 品目の無い支払い(2): まとまりと1品目は同じ行のまま。カテゴリ・メモは編集済みなので残る
-            assertEquals(g3, db.long("SELECT groupId FROM expenses WHERE id = 3"))
-            assertEquals(1L, db.long("SELECT COUNT(*) FROM expenses WHERE receiptId = 2"))
-            assertEquals(1200L, db.long("SELECT amount FROM expenses WHERE id = 3"))
-            assertEquals("外食", db.str("SELECT category FROM expense_groups WHERE id = $g3"))
-            assertEquals("自分で", db.str("SELECT memo FROM expenses WHERE id = 3"))
+            assertEquals(g3, db.long("SELECT groupId FROM expense_items WHERE id = 3"))
+            assertEquals(1L, db.long("SELECT COUNT(*) FROM expense_items WHERE paymentId = 2"))
+            assertEquals(1200L, db.long("SELECT amount FROM expense_items WHERE id = 3"))
+            assertEquals("外食", db.str("SELECT category FROM expenses WHERE id = $g3"))
+            assertEquals("自分で", db.str("SELECT memo FROM expense_items WHERE id = 3"))
 
             // 立て替え(3): まとまりは同じ行のまま。単独の支出だった1品目は、品目の行(自分の分 300 を 400:500 で配る)に置き換わる。
             // 消した品目(枝豆)は消したまま残る
-            assertEquals(listOf(g4), db.query("SELECT id FROM expense_groups WHERE receiptId = 3").use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } })
-            assertEquals(300L, db.long("SELECT amount FROM expense_groups WHERE id = $g4"))
-            assertNull(room.expenseDao().getById(4))
-            val rows3 = room.expenseDao().getByReceiptId(3)
+            assertEquals(listOf(g4), db.query("SELECT id FROM expenses WHERE paymentId = 3").use { c -> buildList { while (c.moveToNext()) add(c.getLong(0)) } })
+            assertEquals(300L, db.long("SELECT amount FROM expenses WHERE id = $g4"))
+            assertNull(room.expenseItemDao().getById(4))
+            val rows3 = room.expenseItemDao().getByPaymentId(3)
             assertTrue(rows3.all { it.groupId == g4 })
             assertEquals(listOf("ビール"), rows3.filter { !it.deletedByUser }.map { it.name })
             assertEquals(listOf("枝豆"), rows3.filter { it.deletedByUser }.map { it.name })
             assertEquals(5L, rows3.single { it.deletedByUser }.id)
 
             // 支払い1 は変わらない
-            assertEquals(listOf(1L, 2L), room.expenseDao().getByReceiptId(1).map { it.id })
-            assertEquals(0L, db.long("SELECT COUNT(*) FROM expenses WHERE groupId IS NULL"))
+            assertEquals(listOf(1L, 2L), room.expenseItemDao().getByPaymentId(1).map { it.id })
+            assertEquals(0L, db.long("SELECT COUNT(*) FROM expense_items WHERE groupId IS NULL"))
         } finally {
             room.close()
         }

@@ -1,7 +1,7 @@
 package com.amgm.personallog.domain
 
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -11,11 +11,11 @@ class TaxCalcTest {
         amount: Int,
         taxRate: Int = 10,
         included: Boolean = true,
-    ) = ReceiptItem(
-        receiptId = 1, name = "x", amount = amount, taxRate = taxRate, priceIncludesTax = included,
+    ) = PaymentItem(
+        paymentId = 1, name = "x", amount = amount, taxRate = taxRate, priceIncludesTax = included,
     )
 
-    private fun receipt(advance: Boolean, own: Int? = null) = Receipt(
+    private fun payment(advance: Boolean, own: Int? = null) = Payment(
         id = 3, purchasedAt = "2026-10-06", storeName = "店", totalAmount = 762,
         imagePath = "", rawJson = "{}", createdAt = 0, isAdvance = advance, ownAmount = own,
     )
@@ -64,7 +64,7 @@ class TaxCalcTest {
     }
 
     @Test
-    fun ownShareAtReceiptLevel_fromPickedItems_floored() {
+    fun ownShareAtPaymentLevel_fromPickedItems_floored() {
         val items = listOf(
             item(120, taxRate = 8, included = false), // 129.6 (選ぶ)
             item(123, taxRate = 8, included = false), // 132.84 (選ばない)
@@ -75,7 +75,7 @@ class TaxCalcTest {
     }
 
     @Test
-    fun legacyOwnShares_sumToReceiptOwn() {
+    fun legacyOwnShares_sumToPaymentOwn() {
         // 旧形式: 品目ごとの自分の分(円・税込)を足して、支払い全体の値にする。
         val lines = listOf(
             PricedLine(amount = 120, taxRate = 8, priceIncludesTax = false),           // 全額自分 129.6
@@ -83,32 +83,32 @@ class TaxCalcTest {
             PricedLine(amount = 500, taxRate = 10, priceIncludesTax = true),           // 全額自分 500
         )
         // 129.6 + 100 + 500 = 729.6 -> 729
-        assertEquals(729, legacyReceiptOwnYen(lines))
-        assertNull(legacyReceiptOwnYen(lines.map { it.copy(ownAmount = null) }))
+        assertEquals(729, legacyPaymentOwnYen(lines))
+        assertNull(legacyPaymentOwnYen(lines.map { it.copy(ownAmount = null) }))
     }
 
     @Test
-    fun groupFromReceipt_advanceUsesReceiptOwn_nonAdvanceIgnoresIt() {
+    fun groupFromPayment_advanceUsesPaymentOwn_nonAdvanceIgnoresIt() {
         // v14: 立て替えも支出(まとまり)+ 品目。品目は自分の分を品目の税込金額の比で配る(合計は自分の分と一致)
         val items = listOf(
             item(120, taxRate = 8, included = false),
             item(500, included = true),
         )
         // 立て替え: 支払い全体の自分の分(200円)。129.6:500 の比(税込の円 129:500)で 41 + 159
-        val advance = receipt(advance = true, own = 200)
-        val a = LedgerCalc.groupFromReceipt(advance, items, now = 1)!!
+        val advance = payment(advance = true, own = 200)
+        val a = LedgerCalc.groupFromPayment(advance, items, now = 1)!!
         assertEquals(200, a.group.amount)
         assertEquals(listOf(41L, 159L), a.items.map { it.amount.toLong() })
 
         // 立て替えで未入力: 支払総額の全額(629.6 -> 629)
-        val advanceWhole = receipt(advance = true, own = null)
-        val w = LedgerCalc.groupFromReceipt(advanceWhole, items, now = 1)!!
+        val advanceWhole = payment(advance = true, own = null)
+        val w = LedgerCalc.groupFromPayment(advanceWhole, items, now = 1)!!
         assertEquals(629, w.group.amount)
         assertEquals(listOf(129L, 500L), w.items.map { it.amount.toLong() })
 
         // 立て替えでない: own は無視、品目ごとに税込の行。支出の金額は合計欄
-        val normal = receipt(advance = false, own = 200)
-        val n = LedgerCalc.groupFromReceipt(normal, items, now = 1)!!
+        val normal = payment(advance = false, own = 200)
+        val n = LedgerCalc.groupFromPayment(normal, items, now = 1)!!
         assertEquals(762, n.group.amount)
         assertEquals(listOf(129L, 500L), n.items.map { it.amount.toLong() })
     }

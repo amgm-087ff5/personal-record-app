@@ -3,7 +3,7 @@ package com.amgm.personallog.data.repository
 import android.content.Context
 import androidx.room.Room
 import com.amgm.personallog.data.db.AppDatabase
-import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.Payment
 import com.amgm.personallog.data.model.SplitParticipant
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -33,7 +33,7 @@ class SplitSelfRemovalRobolectricTest {
     fun setUp() {
         val context: Context = RuntimeEnvironment.getApplication()
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).allowMainThreadQueries().build()
-        splits = SplitRepository(db, db.splitDao(), db.receiptDao())
+        splits = SplitRepository(db, db.splitDao(), db.paymentDao())
     }
 
     @After
@@ -42,9 +42,9 @@ class SplitSelfRemovalRobolectricTest {
     }
 
     /** 支払い1件を作る(headcount は指定どおり)。 */
-    private fun newReceipt(headcount: Int?): Long = runBlocking {
-        db.receiptDao().insert(
-            Receipt(
+    private fun newPayment(headcount: Int?): Long = runBlocking {
+        db.paymentDao().insert(
+            Payment(
                 id = 0,
                 purchasedAt = "2026-10-31 20:00",
                 storeName = "店",
@@ -60,12 +60,12 @@ class SplitSelfRemovalRobolectricTest {
     @Test
     fun 自分を外して保存すると再読込でも自分は戻らない() {
         runBlocking {
-            val rid = newReceipt(headcount = null)
+            val rid = newPayment(headcount = null)
             val first = splits.load(rid)
             assertEquals(1, first.participants.size) // headcount が null なら自分だけ
 
             // 自分の参加者を外し、名前なしの人だけにして保存する
-            val blank = SplitParticipant(id = -1L, receiptId = rid, personId = null, sortOrder = 1)
+            val blank = SplitParticipant(id = -1L, paymentId = rid, personId = null, sortOrder = 1)
             splits.save(first.copy(participants = listOf(blank), persons = emptyMap()), names = emptyMap())
 
             val reloaded = splits.load(rid)
@@ -80,7 +80,7 @@ class SplitSelfRemovalRobolectricTest {
     @Test
     fun 初めての割り勘は人数ぶんの空欄で始まる() {
         runBlocking {
-            val rid = newReceipt(headcount = 3)
+            val rid = newPayment(headcount = 3)
             val d = splits.load(rid)
             assertEquals(3, d.participants.size)
             assertEquals(1, d.participants.count { d.persons[it.id]?.isSelf == true })
@@ -91,11 +91,11 @@ class SplitSelfRemovalRobolectricTest {
     @Test
     fun 支払い側の人数を書き換えられる() {
         runBlocking {
-            val rid = newReceipt(headcount = null)
+            val rid = newPayment(headcount = null)
             splits.setHeadcount(rid, 4)
-            assertEquals(4, db.receiptDao().getById(rid)?.headcount)
+            assertEquals(4, db.paymentDao().getById(rid)?.headcount)
             splits.setHeadcount(rid, null)
-            assertNull(db.receiptDao().getById(rid)?.headcount)
+            assertNull(db.paymentDao().getById(rid)?.headcount)
         }
     }
 }

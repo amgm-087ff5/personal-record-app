@@ -10,8 +10,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.ui.design.SheetHost
 import com.amgm.personallog.ui.theme.PersonalLogTheme
 import org.junit.Rule
@@ -34,11 +34,11 @@ class ItemEditorSheetPagerTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private val group = ExpenseGroup(receiptId = 1L, date = "2026-10-01", amount = 300, createdAt = 0L)
+    private val group = Expense(paymentId = 1L, date = "2026-10-01", amount = 300, createdAt = 0L)
 
     private val items = listOf(
-        Expense(id = 1L, date = "2026-10-01", amount = 200, category = "食費", name = "牛乳", createdAt = 0L, groupId = 1L),
-        Expense(id = 2L, date = "2026-10-01", amount = 100, category = "食費", name = "パン", createdAt = 0L, groupId = 1L),
+        ExpenseItem(id = 1L, date = "2026-10-01", amount = 200, category = "食費", name = "牛乳", createdAt = 0L, groupId = 1L),
+        ExpenseItem(id = 2L, date = "2026-10-01", amount = 100, category = "食費", name = "パン", createdAt = 0L, groupId = 1L),
     )
 
     private fun setSheet(startItemId: Long = 2L) {

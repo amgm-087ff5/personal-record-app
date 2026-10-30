@@ -1,9 +1,9 @@
 package com.amgm.personallog.domain
 
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -11,24 +11,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConfirmPlannerTest {
-    private fun receipt(isAdvance: Boolean = false, total: Int = 700, store: String = "スーパー", at: String = "2026-10-05 12:30") = Receipt(
+    private fun payment(isAdvance: Boolean = false, total: Int = 700, store: String = "スーパー", at: String = "2026-10-05 12:30") = Payment(
         id = 1, purchasedAt = at, storeName = store, totalAmount = total,
         imagePath = "", rawJson = "{}", createdAt = 0, isAdvance = isAdvance,
     )
 
     private fun item(id: Long, name: String, amount: Int, category: String, memo: String = "") =
-        ReceiptItem(id = id, receiptId = 1, name = name, amount = amount, category = category, memo = memo)
+        PaymentItem(id = id, paymentId = 1, name = name, amount = amount, category = category, memo = memo)
 
     private val milk = item(11, "牛乳", 200, "食費", memo = "特売")
     private val soap = item(12, "洗剤", 500, "日用品")
 
     /** 1回目の確定の結果をDBに入れたものとして、id を振る。 */
-    private fun stored(plan: ConfirmPlan.Rebuild): Pair<ExpenseGroup, List<Expense>> {
+    private fun stored(plan: ConfirmPlan.Rebuild): Pair<Expense, List<ExpenseItem>> {
         val g = plan.group!!.copy(id = 5)
         return g to plan.children.mapIndexed { i, e -> e.copy(id = 100L + i, groupId = 5) }
     }
 
-    private fun first(r: Receipt = receipt(), items: List<ReceiptItem> = listOf(milk, soap)) =
+    private fun first(r: Payment = payment(), items: List<PaymentItem> = listOf(milk, soap)) =
         ConfirmPlanner.plan(r, items, emptyList(), emptyList(), now = 1) as ConfirmPlan.Rebuild
 
     @Test
@@ -36,7 +36,7 @@ class ConfirmPlannerTest {
         val p = first()
         assertEquals("", p.group!!.memo)  // 店名は支払い(storeName)に持ち、支出のメモには写さない(v15)
         assertEquals(700, p.group!!.amount)
-        assertEquals(listOf(11L, 12L), p.children.map { it.receiptItemId })
+        assertEquals(listOf(11L, 12L), p.children.map { it.paymentItemId })
         assertEquals(listOf("牛乳", "洗剤"), p.children.map { it.name })
         // メモは品目のメモだけ。店名と品名を連結しない
         assertEquals(listOf("特売", ""), p.children.map { it.memo })
@@ -52,7 +52,7 @@ class ConfirmPlannerTest {
         // 支払いの方は: 牛乳の品名・カテゴリを直し、洗剤の金額を変え、合計も変えた
         val items = listOf(milk.copy(name = "牛乳(特売)", category = "外食"), soap.copy(amount = 480))
         val plan = ConfirmPlanner.plan(
-            receipt(total = 700), items, listOf(editedGroup), listOf(editedMilk, children[1]), now = 2,
+            payment(total = 700), items, listOf(editedGroup), listOf(editedMilk, children[1]), now = 2,
         ) as ConfirmPlan.UpdateGroup
 
         assertEquals(5L, plan.group.id)
@@ -60,21 +60,21 @@ class ConfirmPlannerTest {
         assertEquals(700, plan.group.amount)
         assertTrue(plan.inserts.isEmpty())
         assertTrue(plan.deleteIds.isEmpty())
-        val m = plan.updates.single { it.receiptItemId == 11L }
+        val m = plan.updates.single { it.paymentItemId == 11L }
         assertEquals(250, m.amount) // 編集済み
         assertEquals("自分で", m.memo) // 編集済み
         assertEquals("牛乳(特売)", m.name) // 編集していない欄はレシートに追従
         assertEquals("外食", m.category)
-        val s = plan.updates.single { it.receiptItemId == 12L }
+        val s = plan.updates.single { it.paymentItemId == 12L }
         assertEquals(480, s.amount)
         assertEquals(children[1].id, s.id) // 行は同じ(id が保たれる)
     }
 
     @Test
-    fun reconfirm_groupFollowsReceiptWhenNotEdited() {
+    fun reconfirm_groupFollowsPaymentWhenNotEdited() {
         val (g, children) = stored(first())
         val plan = ConfirmPlanner.plan(
-            receipt(total = 720, store = "新しい店", at = "2026-10-06 09:00"),
+            payment(total = 720, store = "新しい店", at = "2026-10-06 09:00"),
             listOf(milk, soap), listOf(g), children, now = 2,
         ) as ConfirmPlan.UpdateGroup
         assertEquals(720, plan.group.amount)
@@ -92,7 +92,7 @@ class ConfirmPlannerTest {
             date = "2026-10-01", time = "08:00", timeEdited = true,
         )
         val plan = ConfirmPlanner.plan(
-            receipt(total = 700, at = "2026-10-06 09:00"), listOf(milk, soap), listOf(edited), children, now = 2,
+            payment(total = 700, at = "2026-10-06 09:00"), listOf(milk, soap), listOf(edited), children, now = 2,
         ) as ConfirmPlan.UpdateGroup
         assertEquals(650, plan.group.amount)
         assertEquals("趣味・娯楽", plan.group.category)
@@ -105,65 +105,65 @@ class ConfirmPlannerTest {
         val (g, children) = stored(first())
         val moved = children[0].copy(date = "2026-10-02", time = "07:00", timeEdited = true)
         val plan = ConfirmPlanner.plan(
-            receipt(at = "2026-10-06 09:00"), listOf(milk, soap), listOf(g), listOf(moved, children[1]), now = 2,
+            payment(at = "2026-10-06 09:00"), listOf(milk, soap), listOf(g), listOf(moved, children[1]), now = 2,
         ) as ConfirmPlan.UpdateGroup
         // 品目の日時は支出に従う(月・日の振り分けはグループの日付。品目だけ別の日にしない)
-        assertEquals("2026-10-06", plan.updates.single { it.receiptItemId == 11L }.date)
-        assertEquals("2026-10-06", plan.updates.single { it.receiptItemId == 12L }.date)
+        assertEquals("2026-10-06", plan.updates.single { it.paymentItemId == 11L }.date)
+        assertEquals("2026-10-06", plan.updates.single { it.paymentItemId == 12L }.date)
     }
 
     @Test
     fun addedItem_isInserted_removedItem_isDeleted_zeroYenItem_isNotCreatedAndDeleted() {
         val (g, children) = stored(first())
-        val extra = children[1].copy(id = 777, receiptItemId = 99) // レシートから消えた品目の支出
+        val extra = children[1].copy(id = 777, paymentItemId = 99) // レシートから消えた品目の支出
         val free = item(14, "袋", 0, "日用品")
         val bread = item(13, "パン", 150, "食費")
         // 洗剤(12)は0円になった。パン(13)を追加。袋(14)は最初から0円
         val items = listOf(milk, soap.copy(amount = 0), bread, free)
         val plan = ConfirmPlanner.plan(
-            receipt(), items, listOf(g), listOf(children[0], children[1], extra), now = 2,
+            payment(), items, listOf(g), listOf(children[0], children[1], extra), now = 2,
         ) as ConfirmPlan.UpdateGroup
 
-        assertEquals(listOf(13L), plan.inserts.map { it.receiptItemId })
+        assertEquals(listOf(13L), plan.inserts.map { it.paymentItemId })
         assertEquals("パン", plan.inserts.single().name)
-        assertEquals(listOf(11L), plan.updates.map { it.receiptItemId })
+        assertEquals(listOf(11L), plan.updates.map { it.paymentItemId })
         assertEquals(setOf(children[1].id, 777L), plan.deleteIds.toSet())
     }
 
     @Test
-    fun legacyRows_withoutReceiptItemId_areReplacedByItemRows() {
+    fun legacyRows_withoutPaymentItemId_areReplacedByItemRows() {
         // v9 より前の、品目に対応の無い行(品名なし)。v14〜 は品名が空の1品目と同じ形なので、まとまりは保ったまま
         // 品目の行に置き換える(以前は作り直し)。置き換えで消える行に直した欄があれば、失われる件数に数える
-        val legacyGroup = ExpenseGroup(id = 5, date = "2026-10-05", amount = 700, memo = "スーパー", receiptId = 1, createdAt = 0)
-        val legacyChild = Expense(id = 100, date = "2026-10-05", amount = 200, memo = "スーパー 牛乳 特売", receiptId = 1, groupId = 5, createdAt = 0)
+        val legacyGroup = Expense(id = 5, date = "2026-10-05", amount = 700, memo = "スーパー", paymentId = 1, createdAt = 0)
+        val legacyChild = ExpenseItem(id = 100, date = "2026-10-05", amount = 200, memo = "スーパー 牛乳 特売", paymentId = 1, groupId = 5, createdAt = 0)
         val plan = ConfirmPlanner.plan(
-            receipt(), listOf(milk, soap), listOf(legacyGroup), listOf(legacyChild), now = 2,
+            payment(), listOf(milk, soap), listOf(legacyGroup), listOf(legacyChild), now = 2,
         ) as ConfirmPlan.UpdateGroup
-        assertEquals(listOf(11L, 12L), plan.inserts.map { it.receiptItemId })
+        assertEquals(listOf(11L, 12L), plan.inserts.map { it.paymentItemId })
         assertEquals(listOf(100L), plan.deleteIds)
         assertEquals(0, ConfirmPlanner.lostEditedCount(plan, listOf(legacyGroup), listOf(legacyChild), emptyList()))
         assertEquals(1, ConfirmPlanner.lostEditedCount(plan, listOf(legacyGroup), listOf(legacyChild.copy(memoEdited = true)), emptyList()))
     }
 
     @Test
-    fun legacyRows_withNameButNoReceiptItemId_areRebuilt() {
+    fun legacyRows_withNameButNoPaymentItemId_areRebuilt() {
         // 品名のある対応の無い行は、品名が空の1品目ではない古い形式なので作り直す
-        val legacyGroup = ExpenseGroup(id = 5, date = "2026-10-05", amount = 700, memo = "スーパー", receiptId = 1, createdAt = 0)
-        val legacyChild = Expense(id = 100, date = "2026-10-05", amount = 200, name = "牛乳", receiptId = 1, groupId = 5, createdAt = 0)
-        val plan = ConfirmPlanner.plan(receipt(), listOf(milk, soap), listOf(legacyGroup), listOf(legacyChild), now = 2)
+        val legacyGroup = Expense(id = 5, date = "2026-10-05", amount = 700, memo = "スーパー", paymentId = 1, createdAt = 0)
+        val legacyChild = ExpenseItem(id = 100, date = "2026-10-05", amount = 200, name = "牛乳", paymentId = 1, groupId = 5, createdAt = 0)
+        val plan = ConfirmPlanner.plan(payment(), listOf(milk, soap), listOf(legacyGroup), listOf(legacyChild), now = 2)
         assertTrue(plan is ConfirmPlan.Rebuild)
         assertTrue(ConfirmPlanner.discardsExisting(plan, listOf(legacyGroup), listOf(legacyChild)))
-        assertEquals(listOf(11L, 12L), (plan as ConfirmPlan.Rebuild).children.map { it.receiptItemId })
+        assertEquals(listOf(11L, 12L), (plan as ConfirmPlan.Rebuild).children.map { it.paymentItemId })
     }
 
     @Test
     fun advance_isGroupWithItemsByRatio_andKeepsEditsOnReconfirm() {
         // v14: 立て替えも支出(まとまり)+ 品目。自分の分(300)を品目の金額の比(200:500)で配る
-        val adv = receipt(isAdvance = true).copy(ownAmount = 300)
+        val adv = payment(isAdvance = true).copy(ownAmount = 300)
         val firstPlan = ConfirmPlanner.plan(adv, listOf(milk, soap), emptyList(), emptyList(), now = 1) as ConfirmPlan.Rebuild
         assertEquals(300, firstPlan.group!!.amount)
         assertEquals(listOf(86, 214), firstPlan.children.map { it.amount })
-        assertEquals(listOf(11L, 12L), firstPlan.children.map { it.receiptItemId })
+        assertEquals(listOf(11L, 12L), firstPlan.children.map { it.paymentItemId })
 
         val (g, children) = stored(firstPlan)
         val edited = g.copy(category = "外食", categoryEdited = true)
@@ -181,27 +181,27 @@ class ConfirmPlannerTest {
         // 通常 -> 立て替え: まとまりと品目はそのまま(id を保つ)。金額だけ自分の分になる
         val (g, children) = stored(first())
         val toAdvance = ConfirmPlanner.plan(
-            receipt(isAdvance = true).copy(ownAmount = 300), listOf(milk, soap), listOf(g), children, now = 2,
+            payment(isAdvance = true).copy(ownAmount = 300), listOf(milk, soap), listOf(g), children, now = 2,
         ) as ConfirmPlan.UpdateGroup
         assertEquals(300, toAdvance.group.amount)
         assertFalse(ConfirmPlanner.discardsExisting(toAdvance, listOf(g), children))
 
         // v13 以前の立て替え(単独の1行。移行で品名が空の1品目になった) -> 通常: 品目のある支出へ作り直す
         val oldGroup = g.copy(amount = 300)
-        val blank = Expense(id = 50, date = "2026-10-05", amount = 300, memo = "スーパー", receiptId = 1, groupId = 5, createdAt = 0)
+        val blank = ExpenseItem(id = 50, date = "2026-10-05", amount = 300, memo = "スーパー", paymentId = 1, groupId = 5, createdAt = 0)
         val toNormal = ConfirmPlanner.plan(
-            receipt(), listOf(milk, soap), listOf(oldGroup), listOf(blank), now = 2,
+            payment(), listOf(milk, soap), listOf(oldGroup), listOf(blank), now = 2,
         ) as ConfirmPlan.UpdateGroup
         assertEquals(700, toNormal.group.amount)
-        assertEquals(listOf(11L, 12L), toNormal.inserts.map { it.receiptItemId })
+        assertEquals(listOf(11L, 12L), toNormal.inserts.map { it.paymentItemId })
         assertEquals(listOf(50L), toNormal.deleteIds)
     }
 
     @Test
     fun manualItemsOfTheGroup_areNotTouched() {
-        // 手で足した品目は receiptId を持たないので existingExpenses に入らない = 更新・削除の対象外
+        // 手で足した品目は paymentId を持たないので existingExpenseItems に入らない = 更新・削除の対象外
         val (g, children) = stored(first())
-        val plan = ConfirmPlanner.plan(receipt(), listOf(milk, soap), listOf(g), children, now = 2)
+        val plan = ConfirmPlanner.plan(payment(), listOf(milk, soap), listOf(g), children, now = 2)
         assertTrue(plan is ConfirmPlan.UpdateGroup)
         assertTrue((plan as ConfirmPlan.UpdateGroup).deleteIds.isEmpty())
     }
@@ -211,44 +211,44 @@ class ConfirmPlannerTest {
         // v14: 品目が全部0円でも支出は残り、品名が空の1品目(金額は支出の金額)を持つ
         val (g, children) = stored(first())
         val plan = ConfirmPlanner.plan(
-            receipt(), listOf(milk.copy(amount = 0), soap.copy(amount = 0)), listOf(g), children, now = 2,
+            payment(), listOf(milk.copy(amount = 0), soap.copy(amount = 0)), listOf(g), children, now = 2,
         ) as ConfirmPlan.UpdateGroup
         assertEquals(setOf(100L, 101L), plan.deleteIds.toSet())
         val blank = plan.inserts.single()
         assertEquals("", blank.name)
-        assertNull(blank.receiptItemId)
+        assertNull(blank.paymentItemId)
         assertEquals(700, blank.amount)
     }
 
     @Test
     fun itemlessPayment_isGroupWithOneBlankItem_andUpdatesInPlace() {
         // 品目の無い支払い: 支出 + 品名が空の1品目(金額・カテゴリ・メモは支出と同じ)
-        val firstPlan = ConfirmPlanner.plan(receipt(total = 1234), emptyList(), emptyList(), emptyList(), now = 1) as ConfirmPlan.Rebuild
+        val firstPlan = ConfirmPlanner.plan(payment(total = 1234), emptyList(), emptyList(), emptyList(), now = 1) as ConfirmPlan.Rebuild
         assertEquals(1234, firstPlan.group!!.amount)
         val only = firstPlan.children.single()
         assertEquals("", only.name)
         assertEquals(1234, only.amount)
         assertEquals("", only.memo)  // 店名は支払い(storeName)に持ち、支出のメモには写さない(v15)
-        assertNull(only.receiptItemId)
+        assertNull(only.paymentItemId)
 
         // 再確定: 合計を変えると、支出と1品目の金額が追従する(行は同じ)
         val (g, children) = stored(firstPlan)
-        val plan = ConfirmPlanner.plan(receipt(total = 1500), emptyList(), listOf(g), children, now = 2) as ConfirmPlan.UpdateGroup
+        val plan = ConfirmPlanner.plan(payment(total = 1500), emptyList(), listOf(g), children, now = 2) as ConfirmPlan.UpdateGroup
         assertEquals(1500, plan.group.amount)
         assertEquals(listOf(100L), plan.updates.map { it.id })
         assertEquals(1500, plan.updates.single().amount)
         assertTrue(plan.inserts.isEmpty() && plan.deleteIds.isEmpty())
 
         // 品目を足した: 品目の行ができ、品名が空の1品目は消える
-        val withItems = ConfirmPlanner.plan(receipt(total = 700), listOf(milk, soap), listOf(g), children, now = 3) as ConfirmPlan.UpdateGroup
-        assertEquals(listOf(11L, 12L), withItems.inserts.map { it.receiptItemId })
+        val withItems = ConfirmPlanner.plan(payment(total = 700), listOf(milk, soap), listOf(g), children, now = 3) as ConfirmPlan.UpdateGroup
+        assertEquals(listOf(11L, 12L), withItems.inserts.map { it.paymentItemId })
         assertEquals(listOf(100L), withItems.deleteIds)
     }
 
     @Test
     fun oneItem_amountAlwaysEqualsTheGroupAmount() {
         // 1品目なら、品目の金額は支出の金額(合計が品目と違っても)
-        val p = ConfirmPlanner.plan(receipt(total = 250), listOf(milk), emptyList(), emptyList(), now = 1) as ConfirmPlan.Rebuild
+        val p = ConfirmPlanner.plan(payment(total = 250), listOf(milk), emptyList(), emptyList(), now = 1) as ConfirmPlan.Rebuild
         assertEquals(250, p.group!!.amount)
         assertEquals(250, p.children.single().amount)
     }
@@ -256,14 +256,14 @@ class ConfirmPlannerTest {
     @Test
     fun unknownItem_takesTheRemainder_andFollowsTheTotal() {
         val unknown = item(13, "何か", 0, "食費").copy(unknownAmount = true)
-        val p = ConfirmPlanner.plan(receipt(total = 1000), listOf(milk, soap, unknown), emptyList(), emptyList(), now = 1) as ConfirmPlan.Rebuild
+        val p = ConfirmPlanner.plan(payment(total = 1000), listOf(milk, soap, unknown), emptyList(), emptyList(), now = 1) as ConfirmPlan.Rebuild
         assertEquals(1000, p.group!!.amount)
         assertEquals(listOf(200, 500, 300), p.children.map { it.amount })
         assertEquals(listOf(false, false, true), p.children.map { it.unknownAmount })
         // 合計を変えると、不明の品目が差を受け持つ
         val (g, children) = stored(p)
-        val plan = ConfirmPlanner.plan(receipt(total = 1100), listOf(milk, soap, unknown), listOf(g), children, now = 2) as ConfirmPlan.UpdateGroup
-        assertEquals(400, plan.updates.single { it.receiptItemId == 13L }.amount)
+        val plan = ConfirmPlanner.plan(payment(total = 1100), listOf(milk, soap, unknown), listOf(g), children, now = 2) as ConfirmPlan.UpdateGroup
+        assertEquals(400, plan.updates.single { it.paymentItemId == 13L }.amount)
     }
 
     // ------------------------------------------------------------ 品目の保存を差分にする
@@ -289,7 +289,7 @@ class ConfirmPlannerTest {
         val plan = ItemSaver.plan(1, listOf(milk), listOf(milk, milk.copy(name = "コピー"), item(999, "不明", 1, "食費")))
         assertEquals(1, plan.updates.size)
         assertEquals(listOf("コピー", "不明"), plan.inserts.map { it.name })
-        assertTrue(plan.inserts.all { it.id == 0L && it.receiptId == 1L })
+        assertTrue(plan.inserts.all { it.id == 0L && it.paymentId == 1L })
         assertTrue(plan.deleteIds.isEmpty())
     }
 
@@ -304,25 +304,25 @@ class ConfirmPlannerTest {
     @Test
     fun share_firstConfirm_groupIsSelfTotal_andRowsAreSelfAmounts() {
         val share = SelfShare(perItem = mapOf(11L to 100L, 12L to 500L), total = 600L)
-        val p = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), emptyList(), now = 1, share = share) as ConfirmPlan.Rebuild
+        val p = ConfirmPlanner.plan(payment(), listOf(milk, soap), emptyList(), emptyList(), now = 1, share = share) as ConfirmPlan.Rebuild
         assertEquals(600, p.group!!.amount)
         assertEquals(listOf(100, 500), p.children.map { it.amount })
-        assertEquals(listOf(11L, 12L), p.children.map { it.receiptItemId })
+        assertEquals(listOf(11L, 12L), p.children.map { it.paymentItemId })
     }
 
     @Test
     fun share_ignoresAdvance() {
         val share = SelfShare(perItem = mapOf(11L to 200L), total = 200L)
-        val p = ConfirmPlanner.plan(receipt(isAdvance = true), listOf(milk, soap), emptyList(), emptyList(), now = 1, share = share) as ConfirmPlan.Rebuild
+        val p = ConfirmPlanner.plan(payment(isAdvance = true), listOf(milk, soap), emptyList(), emptyList(), now = 1, share = share) as ConfirmPlan.Rebuild
         assertTrue(p.group != null)
-        assertEquals(listOf(11L), p.children.map { it.receiptItemId })
+        assertEquals(listOf(11L), p.children.map { it.paymentItemId })
     }
 
     @Test
     fun share_allZero_leavesNoRows() {
         // 割り勘で自分の分が0円のときだけ、家計簿に支出を作らない
         val share = SelfShare(perItem = emptyMap(), total = 0L)
-        val p = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), emptyList(), now = 1, share = share) as ConfirmPlan.Rebuild
+        val p = ConfirmPlanner.plan(payment(), listOf(milk, soap), emptyList(), emptyList(), now = 1, share = share) as ConfirmPlan.Rebuild
         assertNull(p.group)
         assertTrue(p.children.isEmpty())
     }
@@ -330,23 +330,23 @@ class ConfirmPlannerTest {
     @Test
     fun share_fromOldUngroupedRow_rebuildsWithGroup() {
         // まとまりの無い古い行(v13 以前の形)からは、まとまり+品目へ作り直す
-        val single = Expense(id = 50, date = "2026-10-05", amount = 700, receiptId = 1, createdAt = 0)
+        val single = ExpenseItem(id = 50, date = "2026-10-05", amount = 700, paymentId = 1, createdAt = 0)
         val share = SelfShare(perItem = mapOf(11L to 200L, 12L to 500L), total = 700L)
-        val p = ConfirmPlanner.plan(receipt(), listOf(milk, soap), emptyList(), listOf(single), now = 1, share = share)
+        val p = ConfirmPlanner.plan(payment(), listOf(milk, soap), emptyList(), listOf(single), now = 1, share = share)
         assertTrue(p is ConfirmPlan.Rebuild && p.group != null)
     }
 
     @Test
     fun share_reconfirm_updatesUneditedRowsAndGroupTotal() {
         val first = first(
-            r = receipt(),
+            r = payment(),
             items = listOf(milk, soap),
         )
         val (g, children) = stored(first)
         val share = SelfShare(perItem = mapOf(11L to 150L, 12L to 500L), total = 650L)
-        val p = ConfirmPlanner.plan(receipt(), listOf(milk, soap), listOf(g), children, now = 2, share = share) as ConfirmPlan.UpdateGroup
+        val p = ConfirmPlanner.plan(payment(), listOf(milk, soap), listOf(g), children, now = 2, share = share) as ConfirmPlan.UpdateGroup
         assertEquals(650, p.group.amount)
-        assertEquals(listOf(150), p.updates.filter { it.receiptItemId == 11L }.map { it.amount })
+        assertEquals(listOf(150), p.updates.filter { it.paymentItemId == 11L }.map { it.amount })
     }
 
     @Test

@@ -1,7 +1,7 @@
 package com.amgm.personallog.ledger
 
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.ui.ledger.ChartBar
 import com.amgm.personallog.ui.ledger.ChartLevel
 import com.amgm.personallog.ui.ledger.ChartSegment
@@ -14,19 +14,19 @@ import java.time.LocalDate
 /** グループの日時を別の月へ動かしたとき、月・日の振り分けがグループの日付に従い、二重に数えないこと。 */
 class MonthBoundaryTest {
     private fun child(id: Long, date: String, amount: Int, cat: String) =
-        Expense(id = id, date = date, amount = amount, category = cat, groupId = 7, createdAt = 1)
+        ExpenseItem(id = id, date = date, amount = amount, category = cat, groupId = 7, createdAt = 1)
 
-    private fun monthTotals(expenses: List<Expense>, groups: List<ExpenseGroup>): Map<String, Long> {
-        val entries = LedgerLogic.buildEntries(expenses, groups)
+    private fun monthTotals(expenseItems: List<ExpenseItem>, groups: List<Expense>): Map<String, Long> {
+        val entries = LedgerLogic.buildEntries(expenseItems, groups)
         return LedgerLogic.monthlyTotals(entries, listOf("2026-10", "2026-11")).associate { it.yearMonth to it.total }
     }
 
     @Test
     fun groupMovedToNextMonth_countsOnlyInTheGroupsMonth_evenIfItemDatesAreStale() {
         val items = listOf(child(1, "2026-10-31", 400, "食費"), child(2, "2026-10-31", 300, "日用品"))
-        val single = Expense(id = 3, date = "2026-10-20", amount = 50, category = "その他", groupId = 8, createdAt = 1)
-        val singleGroup = ExpenseGroup(receiptId = 1L, id = 8, date = "2026-10-20", amount = 50, category = "その他", createdAt = 1)
-        val movedGroup = ExpenseGroup(receiptId = 1L, id = 7, date = "2026-11-01", amount = 1000, category = "食費", createdAt = 1)
+        val single = ExpenseItem(id = 3, date = "2026-10-20", amount = 50, category = "その他", groupId = 8, createdAt = 1)
+        val singleGroup = Expense(paymentId = 1L, id = 8, date = "2026-10-20", amount = 50, category = "その他", createdAt = 1)
+        val movedGroup = Expense(paymentId = 1L, id = 7, date = "2026-11-01", amount = 1000, category = "食費", createdAt = 1)
         // 品目の日付が古いまま(10月)でも、10月に残らない
         val t = monthTotals(items + single, listOf(movedGroup, singleGroup))
         assertEquals(50L, t["2026-10"])
@@ -44,7 +44,7 @@ class MonthBoundaryTest {
     @Test
     fun beforeAndAfterMove_bothMonthsAreCorrect() {
         val items = listOf(child(1, "2026-10-31", 400, "食費"))
-        val before = ExpenseGroup(receiptId = 1L, id = 7, date = "2026-10-31", amount = 500, category = "食費", createdAt = 1)
+        val before = Expense(paymentId = 1L, id = 7, date = "2026-10-31", amount = 500, category = "食費", createdAt = 1)
         assertEquals(500L, monthTotals(items, listOf(before))["2026-10"])
         assertEquals(0L, monthTotals(items, listOf(before))["2026-11"])
         val after = before.copy(date = "2026-11-02")
@@ -66,7 +66,7 @@ class MonthBoundaryTest {
     @Test
     fun bars_withNegativeDifference_haveDrawnTotalAtLeastTotal() {
         // 品目の合計が支出金額より大きい(差額が負)グループ
-        val g = ExpenseGroup(receiptId = 1L, id = 7, date = "2026-10-14", amount = 500, category = "日用品", createdAt = 1)
+        val g = Expense(paymentId = 1L, id = 7, date = "2026-10-14", amount = 500, category = "日用品", createdAt = 1)
         val items = listOf(child(1, "2026-10-14", 400, "食費"), child(2, "2026-10-14", 300, "食費"))
         val entries = LedgerLogic.buildEntries(items, listOf(g))
         val bars = LedgerChart.bars(ChartLevel.YEAR, LocalDate.of(2026, 10, 14), entries)
@@ -79,7 +79,7 @@ class MonthBoundaryTest {
 
     @Test
     fun deletedItems_areLeftOutOfListAndSums_andBecomeDifference() {
-        val g = ExpenseGroup(receiptId = 1L, id = 7, date = "2026-10-14", amount = 700, category = "日用品", createdAt = 1)
+        val g = Expense(paymentId = 1L, id = 7, date = "2026-10-14", amount = 700, category = "日用品", createdAt = 1)
         val kept = child(1, "2026-10-14", 200, "食費")
         val gone = child(2, "2026-10-14", 500, "食費").copy(deletedByUser = true)
         val entry = LedgerLogic.buildEntries(listOf(kept, gone), listOf(g)).single() as com.amgm.personallog.ui.ledger.LedgerEntry.Group
