@@ -1,9 +1,9 @@
 package com.amgm.personallog.receipt
 
 import android.util.Base64
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
-import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
+import com.amgm.personallog.data.model.PaymentStatus
 import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.settings.SettingsRepository
 import kotlinx.coroutines.CancellationException
@@ -15,7 +15,7 @@ import javax.inject.Inject
 
 sealed interface ScanOutcome {
     /** 読み取り成功。raw は Claude 応答の原文。 */
-    data class Parsed(val receipt: ParsedReceipt, val raw: String) : ScanOutcome
+    data class Parsed(val parsed: ParsedReceipt, val raw: String) : ScanOutcome
 
     /** 応答は得たがJSONとして解釈できなかった(手入力で直す)。 */
     data class Unparsable(val raw: String, val reason: String) : ScanOutcome
@@ -50,7 +50,7 @@ class ReceiptScanner @Inject constructor(
             val text = ClaudeRequest.extractText(response)
                 ?: return ScanOutcome.Unparsable(response, "応答に本文がありませんでした")
             when (val r = ReceiptParser.parse(text)) {
-                is ParseResult.Success -> ScanOutcome.Parsed(r.receipt, text)
+                is ParseResult.Success -> ScanOutcome.Parsed(r.parsed, text)
                 is ParseResult.Failure -> ScanOutcome.Unparsable(text, r.reason)
             }
         } catch (e: CancellationException) {
@@ -73,10 +73,10 @@ object ReceiptMapper {
     /** 保存してある Claude 応答(rawJson)から、LLM が読んだ印字の合計を取り出す。読めなければ null。 */
     fun printedTotal(rawJson: String): Int? {
         if (rawJson.isBlank()) return null
-        return (ReceiptParser.parse(rawJson) as? ParseResult.Success)?.receipt?.total
+        return (ReceiptParser.parse(rawJson) as? ParseResult.Success)?.parsed?.total
     }
 
-    fun draftReceipt(
+    fun draftPayment(
         outcome: ScanOutcome,
         imagePath: String,
         now: Long,
@@ -85,16 +85,16 @@ object ReceiptMapper {
         imageHash: String? = null,
         createdAt: Long = now,
         adjust: ReceiptAdjust = ReceiptAdjust.NONE,
-    ): Pair<Receipt, List<ReceiptItem>> = when (outcome) {
+    ): Pair<Payment, List<PaymentItem>> = when (outcome) {
         is ScanOutcome.Parsed -> {
-            val p = outcome.receipt
+            val p = outcome.parsed
             val items = p.items.flatMap { ReceiptUnits.fromParsed(it) }.map {
-                ReceiptItem(
-                    receiptId = existingId, name = it.name, amount = it.amount, category = it.category,
+                PaymentItem(
+                    paymentId = existingId, name = it.name, amount = it.amount, category = it.category,
                     taxRate = it.taxRate, priceIncludesTax = it.priceIncludesTax, memo = it.memo,
                 )
             }
-            Receipt(
+            Payment(
                 id = existingId,
                 purchasedAt = purchasedAt(p.date ?: today, p.time),
                 storeName = p.store,
@@ -103,7 +103,7 @@ object ReceiptMapper {
                 totalSource = if (p.total != null) TotalSource.PRINTED else TotalSource.UNKNOWN,
                 imagePath = imagePath,
                 rawJson = outcome.raw,
-                status = ReceiptStatus.DRAFT,
+                status = PaymentStatus.DRAFT,
                 createdAt = createdAt,
                 imageHash = imageHash,
                 rotationDegrees = adjust.rotationDegrees,
@@ -113,16 +113,16 @@ object ReceiptMapper {
                 headcount = p.headcount,
             ) to items
         }
-        is ScanOutcome.Unparsable -> Receipt(
+        is ScanOutcome.Unparsable -> Payment(
             id = existingId, purchasedAt = today, storeName = "", totalAmount = null,
-            imagePath = imagePath, rawJson = outcome.raw, status = ReceiptStatus.DRAFT, createdAt = createdAt,
+            imagePath = imagePath, rawJson = outcome.raw, status = PaymentStatus.DRAFT, createdAt = createdAt,
             imageHash = imageHash,
             rotationDegrees = adjust.rotationDegrees,
             cropLeft = adjust.cropLeft, cropTop = adjust.cropTop, cropRight = adjust.cropRight, cropBottom = adjust.cropBottom,
         ) to emptyList()
-        is ScanOutcome.Failed -> Receipt(
+        is ScanOutcome.Failed -> Payment(
             id = existingId, purchasedAt = today, storeName = "", totalAmount = null,
-            imagePath = imagePath, rawJson = "", status = ReceiptStatus.DRAFT, createdAt = createdAt,
+            imagePath = imagePath, rawJson = "", status = PaymentStatus.DRAFT, createdAt = createdAt,
             imageHash = imageHash,
             rotationDegrees = adjust.rotationDegrees,
             cropLeft = adjust.cropLeft, cropTop = adjust.cropTop, cropRight = adjust.cropRight, cropBottom = adjust.cropBottom,

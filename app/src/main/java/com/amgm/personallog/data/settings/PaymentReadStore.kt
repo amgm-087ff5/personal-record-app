@@ -11,7 +11,7 @@ import javax.inject.Singleton
 
 /**
  * 未読の支払い(読み取り完了したのにまだ開いていないもの)の id を覚える。
- * 値は Receipt.id の文字列。支出画面か支払い詳細を開いたら既読にする。
+ * 値は Payment.id の文字列。支出画面か支払い詳細を開いたら既読にする。
  */
 @Singleton
 class PaymentReadStore @Inject constructor(

@@ -1,12 +1,12 @@
 package com.amgm.personallog.ui.receipt
 
 import android.net.Uri
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptStatus
-import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentStatus
+import com.amgm.personallog.data.repository.PaymentRepository
 import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.receipt.ReceiptAdjust
-import com.amgm.personallog.receipt.ReceiptDedup
+import com.amgm.personallog.receipt.PaymentDedup
 import com.amgm.personallog.receipt.ReceiptImageHash
 import com.amgm.personallog.receipt.ReceiptImageStore
 import com.amgm.personallog.receipt.ReceiptMapper
@@ -72,7 +72,7 @@ data class ImportItem(
      * 読み取り開始時に作った下書きのレシートID。読み取りが失敗・中止しても下書きは残り、
      * 再試行はこの下書きを読み直す。
      */
-    val receiptId: Long? = null,
+    val paymentId: Long? = null,
     val message: String? = null,
     /** 重複の相手の要約(DUPLICATE_PENDING のとき) */
     val duplicateNote: String? = null,
@@ -111,7 +111,7 @@ private class ImportSource(val uri: Uri? = null, val relativePath: String? = nul
  */
 @Singleton
 class ReceiptImportCoordinator @Inject constructor(
-    private val repository: ReceiptRepository,
+    private val repository: PaymentRepository,
     private val store: ReceiptImageStore,
     private val scanner: ReceiptScanner,
     private val readStore: PaymentReadStore,
@@ -172,7 +172,7 @@ class ReceiptImportCoordinator @Inject constructor(
             try {
                 val files = store.listStored()
                 if (files.isEmpty()) return@launch
-                val referenced = repository.allReceipts().map { it.imagePath }
+                val referenced = repository.allPayments().map { it.imagePath }
                 // 取り込み中の項目は、DB を読んだ後に確認する(読んでいる間に増えた分も守る)
                 val inUse = _state.value.imports.mapNotNull { it.imagePath }
                 val targets = ReceiptOrphans.select(files, referenced, inUse, System.currentTimeMillis())
@@ -308,7 +308,7 @@ class ReceiptImportCoordinator @Inject constructor(
                 val item = find(key)
                 val rel = item?.imagePath
                 val hash = item?.imageHash
-                val savedId = item?.receiptId
+                val savedId = item?.paymentId
                 if (savedId != null && rel != null && hash != null) {
                     // 再試行: 既に保存済みの下書きを読み直す
                     analyze(key, rel, hash, existingId = savedId)
@@ -363,7 +363,7 @@ class ReceiptImportCoordinator @Inject constructor(
         val note: String? = checkLock.withLock {
             val saved = findSavedByHash(hash)
             when {
-                saved != null -> "既存の支払い: ${ReceiptDedup.summary(saved)}"
+                saved != null -> "既存の支払い: ${PaymentDedup.summary(saved)}"
                 claimedHashes.isClaimed(hash) -> "今回の選択に同じ画像があります"
                 else -> {
                     claimedHashes.claimIfAbsent(hash, key)
@@ -382,8 +382,8 @@ class ReceiptImportCoordinator @Inject constructor(
      * 保存済み支払いから同じハッシュのものを探す。
      * ハッシュ未記録の既存レシートは、ここで画像から計算して埋める(checkLock の内側でのみ呼ぶ)。
      */
-    private suspend fun findSavedByHash(hash: String): Receipt? {
-        for (r in repository.receiptsWithoutImageHash()) {
+    private suspend fun findSavedByHash(hash: String): Payment? {
+        for (r in repository.paymentsWithoutImageHash()) {
             // 手入力の支払いは画像が無い。空のパスは filesDir そのものを指すので、計算しない
             if (r.imagePath.isBlank()) continue
             val h = withContext(Dispatchers.IO) {
@@ -395,7 +395,7 @@ class ReceiptImportCoordinator @Inject constructor(
             } ?: continue
             repository.setImageHashIfMissing(r.id, h)
         }
-        return repository.receiptsByImageHash(hash).firstOrNull()
+        return repository.paymentsByImageHash(hash).firstOrNull()
     }
 
     /**
@@ -406,26 +406,26 @@ class ReceiptImportCoordinator @Inject constructor(
     private suspend fun analyze(key: Long, rel: String, hash: String?, existingId: Long) {
         patchItem(key) { it.copy(phase = ImportPhase.WAITING, message = null) }
         // 読み直しは、取り込み時の補正ではなく、下書き(existingId)に保存してある最新の補正を使う
-        val adjust = (if (existingId != 0L) repository.getReceipt(existingId)?.adjust() else null)
+        val adjust = (if (existingId != 0L) repository.getPayment(existingId)?.adjust() else null)
             ?: find(key)?.adjust ?: ReceiptAdjust.NONE
         val draftId = if (existingId != 0L) existingId else createReadingDraft(rel, hash, adjust)
-        patchItem(key) { it.copy(receiptId = draftId) }
+        patchItem(key) { it.copy(paymentId = draftId) }
         val (result, id) = scanLimiter.withPermit {
             patchItem(key) { it.copy(phase = ImportPhase.SCANNING) }
             val scanned = scanner.scan(rel, adjust)
             val now = System.currentTimeMillis()
-            val createdAt = repository.getReceipt(draftId)?.createdAt ?: now
-            val (receipt, items) = ReceiptMapper.draftReceipt(
+            val createdAt = repository.getPayment(draftId)?.createdAt ?: now
+            val (payment, items) = ReceiptMapper.draftPayment(
                 scanned, rel, now,
                 existingId = draftId,
                 imageHash = hash,
                 createdAt = createdAt,
                 adjust = adjust,
             )
-            val sharedFlags = (scanned as? ScanOutcome.Parsed)?.let { parsed ->
-                parsed.receipt.items.flatMap { ReceiptUnits.fromParsed(it) }.map { it.shared }
+            val sharedFlags = (scanned as? ScanOutcome.Parsed)?.let { outcome ->
+                outcome.parsed.items.flatMap { ReceiptUnits.fromParsed(it) }.map { it.shared }
             }.orEmpty()
-            val savedId = repository.save(receipt, items, sharedFlags = sharedFlags)
+            val savedId = repository.save(payment, items, sharedFlags = sharedFlags)
             // 共通費の提案は保存の中でまとまりに反映済み。家計簿を今の割り勘に合わせる
             repository.syncLedger(savedId)
             scanned to savedId
@@ -438,13 +438,13 @@ class ReceiptImportCoordinator @Inject constructor(
      * (既存の家計簿の規則どおり)。rawJson が空の下書きは、まだ読めていないか読み取りに失敗したもの。
      */
     private suspend fun createReadingDraft(rel: String, hash: String?, adjust: ReceiptAdjust): Long {
-        val draft = Receipt(
+        val draft = Payment(
             purchasedAt = LocalDate.now().toString(),
             storeName = "",
             totalAmount = null,
             imagePath = rel,
             rawJson = "",
-            status = ReceiptStatus.DRAFT,
+            status = PaymentStatus.DRAFT,
             createdAt = System.currentTimeMillis(),
             imageHash = hash,
             rotationDegrees = adjust.rotationDegrees,
@@ -467,7 +467,7 @@ class ReceiptImportCoordinator @Inject constructor(
         // 読み取りが終わった支払いは、開くまで未読にする(家計簿と支払い一覧の「未読」の印)
         if (phase == ImportPhase.DONE) scope.launch { readStore.markUnread(id) }
         // 読み取りが終わっても画面を移さない。進捗の行の「開く」から開いてもらう
-        patchItem(key) { it.copy(phase = phase, receiptId = id, message = message) }
+        patchItem(key) { it.copy(phase = phase, paymentId = id, message = message) }
     }
 
     private fun fail(key: Long, message: String) {

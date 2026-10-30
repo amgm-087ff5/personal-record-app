@@ -84,7 +84,7 @@ fun PaymentMergeScreen(
                     SnapshotRow(
                         index = index,
                         snapshot = snapshot,
-                        onClick = { onOpenPayment(snapshot.receipt.id) },
+                        onClick = { onOpenPayment(snapshot.payment.id) },
                     )
                 }
                 items(s.diffs) { diff ->
@@ -121,7 +121,7 @@ fun PaymentMergeScreen(
 @Composable
 private fun SnapshotRow(index: Int, snapshot: PaymentMerge.Snapshot, onClick: () -> Unit) {
     val c = AppTheme.colors
-    val r = snapshot.receipt
+    val r = snapshot.payment
     val total = r.totalAmount?.let { formatYen(it.toLong()) } ?: "合計なし"
     Column(
         modifier = Modifier
@@ -205,7 +205,7 @@ private fun MergeFieldCard(
 }
 
 /** 同じ値の支払いをまとめた選択肢。値が空の支払いは含めない。 */
-private data class MergeOption(val receiptIds: List<Long>, val label: String, val text: String)
+private data class MergeOption(val paymentIds: List<Long>, val label: String, val text: String)
 
 @Composable
 private fun ChoosePills(
@@ -219,18 +219,18 @@ private fun ChoosePills(
         .values
         .map { group ->
             MergeOption(
-                receiptIds = group.map { it.receiptId },
+                paymentIds = group.map { it.paymentId },
                 label = group.joinToString("・") { it.label },
                 text = group.first().text,
             )
         }
     val selected = (choice as? PaymentMerge.Choice.From)?.let { from ->
-        options.firstOrNull { from.receiptId in it.receiptIds }
+        options.firstOrNull { from.paymentId in it.paymentIds }
     }
     Pills(
         options = options,
         selected = selected,
-        onSelect = { onChoose(it.receiptIds.first()) },
+        onSelect = { onChoose(it.paymentIds.first()) },
         label = { "${it.label}: ${it.text.ifEmpty { "(空)" }}" },
     )
 }

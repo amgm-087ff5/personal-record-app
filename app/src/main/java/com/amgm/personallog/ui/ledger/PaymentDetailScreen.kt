@@ -37,9 +37,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
-import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.Payment
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.domain.PaymentField
 import com.amgm.personallog.domain.split.IndividualExpense
@@ -87,7 +87,7 @@ fun PaymentDetailScreen(
     val s by viewModel.state.collectAsStateWithLifecycle()
     val c = AppTheme.colors
     // 編集中の状態は、画面の回転やプロセスの再生成でも失われないよう rememberSaveable で持つ
-    // (Expense は保存できないので id で持ち、表示のたびに最新の品目から引く)
+    // (ExpenseItem は保存できないので id で持ち、表示のたびに最新の品目から引く)
     var editingGroup by rememberSaveable { mutableStateOf(false) }
     var editingItemId by rememberSaveable { mutableStateOf<Long?>(null) }
     var addingItem by rememberSaveable { mutableStateOf(false) }
@@ -106,7 +106,7 @@ fun PaymentDetailScreen(
             }
             if (register) item(key = "steps") { RegisterSteps(current = 2) }
             // 親: この支出の元の支払い(画面の最上部。タップで支払いを開く)
-            val parent = s.receipt?.takeIf { s.group != null }
+            val parent = s.payment?.takeIf { s.group != null }
             if (parent != null) {
                 item(key = "parent") { ParentPaymentRow(parent, onOpen = { onOpenReceipt(parent.id) }) }
             }
@@ -122,15 +122,15 @@ fun PaymentDetailScreen(
                 }
             }
             val group = s.group
-            val scanned = PaymentMarks.isScannedReceipt(s.receipt)
+            val scanned = PaymentMarks.isScannedReceipt(s.payment)
             // 品目の税率は、対応する支払いの品目から引く(表示のみ。データは持たない)
             val paymentItemById = s.paymentItems.associateBy { it.id }
             s.duplicate?.let { dup ->
                 item(key = "duplicate") {
                     DuplicateNotice(
                         dup,
-                        currentId = s.receipt?.id,
-                        onOpenPayment = { s.receipt?.id?.let(onOpenReceipt) },
+                        currentId = s.payment?.id,
+                        onOpenPayment = { s.payment?.id?.let(onOpenReceipt) },
                         onOpenMerge = { onOpenMerge(dup.setIds) },
                     )
                 }
@@ -142,7 +142,7 @@ fun PaymentDetailScreen(
                         GroupHeader(
                             group, scanned,
                             // 支払い先は支払いの店名(支払いに紐づかない支出では出さない)
-                            store = s.receipt?.storeName,
+                            store = s.payment?.storeName,
                             onEditStore = { editingStore = true },
                             onEdit = { editingGroup = true },
                             onRevert = { viewModel.revertGroupField(group, it) },
@@ -163,7 +163,7 @@ fun PaymentDetailScreen(
                 }
                 items(s.items.size, key = { "item-" + s.items[it].id }) { i ->
                     Column(Modifier.fillMaxWidth().nestedLine(c.line)) {
-                        val taxLabels = s.items[i].receiptItemId?.let { paymentItemById[it] }?.let(PaymentMarks::taxLabels).orEmpty()
+                        val taxLabels = s.items[i].paymentItemId?.let { paymentItemById[it] }?.let(PaymentMarks::taxLabels).orEmpty()
                         ItemRow(
                             s.items[i], scanned, taxLabels = taxLabels,
                             onClick = { editingItemId = s.items[i].id }, onRevert = { viewModel.revertItemField(s.items[i], it) },
@@ -241,7 +241,7 @@ fun PaymentDetailScreen(
                 }
             } else if (s.selfExcluded) {
                 // 割り勘で自分が外れた支払い。家計簿には自分の行が無く、支払いと割り勘だけを見せる
-                s.receipt?.let { r ->
+                s.payment?.let { r ->
                     item(key = "excluded-note") {
                         Text(
                             "この支払いに自分は含まれていません",
@@ -285,15 +285,15 @@ fun PaymentDetailScreen(
     val group = s.group
     if (editingGroup && group != null) {
         // グループ自体の編集には既存のシートを使う(品名の欄は出さない)
-        ExpenseEditorSheet(
-            original = Expense(
+        ExpenseItemEditorSheet(
+            original = ExpenseItem(
                 date = group.date, time = group.time, amount = group.amount, category = group.category,
-                memo = group.memo, receiptId = group.receiptId, createdAt = group.createdAt,
+                memo = group.memo, paymentId = group.paymentId, createdAt = group.createdAt,
             ),
             initialDate = group.date,
             initialTime = group.time,
-            linkedReceiptAt = s.receiptAt,
-            fromScannedReceipt = PaymentMarks.isScannedReceipt(s.receipt),
+            linkedPaymentAt = s.paymentAt,
+            fromScannedReceipt = PaymentMarks.isScannedReceipt(s.payment),
             onDismiss = { editingGroup = false },
             onSave = { date, time, amount, category, _, memo, done ->
                 viewModel.saveGroup(group, date, time, amount, category, memo, done)
@@ -321,14 +321,14 @@ fun PaymentDetailScreen(
             onSaveItem = { original, amount, category, name, memo, done ->
                 viewModel.saveItem(group, original, group.date, group.time, amount, category, name, memo, done)
             },
-            onSetUnknown = { expense, unknown, done -> viewModel.setItemUnknown(expense, unknown, done) },
-            onDeleteItem = { expense -> viewModel.deleteItem(expense) },
+            onSetUnknown = { expenseItem, unknown, done -> viewModel.setItemUnknown(expenseItem, unknown, done) },
+            onDeleteItem = { expenseItem -> viewModel.deleteItem(expenseItem) },
         )
     }
     if (deletingGroup && (group != null || s.selfExcluded)) {
         ConfirmSheet(
             title = if (s.selfExcluded) "支払いを削除" else "支出を削除",
-            message = deletePaymentMessage(s.receipt, isExpense = !s.selfExcluded),
+            message = deletePaymentMessage(s.payment, isExpense = !s.selfExcluded),
             confirmText = "削除",
             onDismiss = { deletingGroup = false },
             onConfirm = {
@@ -337,12 +337,12 @@ fun PaymentDetailScreen(
             },
         )
     }
-    val receipt = s.receipt
-    if (editingStore && receipt != null) {
+    val payment = s.payment
+    if (editingStore && payment != null) {
         StoreSheet(
-            current = receipt.storeName,
+            current = payment.storeName,
             onDismiss = { editingStore = false },
-            onSave = { name, done -> viewModel.saveStore(receipt.id, name, done) },
+            onSave = { name, done -> viewModel.saveStore(payment.id, name, done) },
         )
     }
 }
@@ -352,12 +352,12 @@ fun PaymentDetailScreen(
  * タップで支払い詳細を開く。支払い先・レシート画像・割り勘は支払い詳細で見る。
  */
 @Composable
-private fun ParentPaymentRow(receipt: Receipt, onOpen: () -> Unit) {
+private fun ParentPaymentRow(payment: Payment, onOpen: () -> Unit) {
     val c = AppTheme.colors
-    val (date, time) = LedgerCalc.splitPurchasedAt(receipt.purchasedAt)
+    val (date, time) = LedgerCalc.splitPurchasedAt(payment.purchasedAt)
     val dateText = LedgerLogic.dayLabel(date) + if (time.isNotEmpty()) " $time" else ""
-    val totalText = receipt.totalAmount?.let { LedgerLogic.formatYen(it.toLong()) } ?: "未入力"
-    val summary = listOf(receipt.storeName.ifBlank { "(店名未入力)" }, dateText, "合計 $totalText").joinToString(" · ")
+    val totalText = payment.totalAmount?.let { LedgerLogic.formatYen(it.toLong()) } ?: "未入力"
+    val summary = listOf(payment.storeName.ifBlank { "(店名未入力)" }, dateText, "合計 $totalText").joinToString(" · ")
     Column(
         Modifier
             .fillMaxWidth()
@@ -411,7 +411,7 @@ private fun DuplicateNotice(dup: DuplicateInfo, currentId: Long?, onOpenPayment:
         )
         dup.members.forEachIndexed { i, m ->
             val role = if (i == 0) "マージ先" else "← マージ元"
-            val mine = if (m.receiptId == currentId) "（この支払い）" else ""
+            val mine = if (m.paymentId == currentId) "（この支払い）" else ""
             Text(
                 "$role  ${m.summary}$mine",
                 style = AppTheme.type.caption,
@@ -450,7 +450,7 @@ private fun StoreRow(store: String, onEdit: () -> Unit) {
  * 支払いが無い(支払いに紐づかない)支出では出さない。
  */
 @Composable
-private fun SplitRow(people: Int, receiptId: Long, onOpenSplit: (Long) -> Unit) {
+private fun SplitRow(people: Int, paymentId: Long, onOpenSplit: (Long) -> Unit) {
     val c = AppTheme.colors
     Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge, vertical = Space.xs)) {
         if (people >= 2) {
@@ -462,7 +462,7 @@ private fun SplitRow(people: Int, receiptId: Long, onOpenSplit: (Long) -> Unit) 
         }
         TextAction(
             if (people >= 2) "全体支出を開く" else "負担割り",
-            onClick = { onOpenSplit(receiptId) },
+            onClick = { onOpenSplit(paymentId) },
         )
     }
 }
@@ -590,7 +590,7 @@ private fun fieldLabel(f: PaymentField): String = when (f) {
  */
 @Composable
 private fun GroupHeader(
-    group: ExpenseGroup,
+    group: Expense,
     scanned: Boolean,
     store: String?,
     onEditStore: () -> Unit,
@@ -651,9 +651,9 @@ private fun GroupHeader(
 }
 
 @Composable
-private fun ItemRow(item: Expense, scanned: Boolean, taxLabels: List<String>, onClick: () -> Unit, onRevert: (PaymentField) -> Unit) {
+private fun ItemRow(item: ExpenseItem, scanned: Boolean, taxLabels: List<String>, onClick: () -> Unit, onRevert: (PaymentField) -> Unit) {
     val c = AppTheme.colors
-    val marks = PaymentMarks.ofExpense(item, scanned)
+    val marks = PaymentMarks.ofExpenseItem(item, scanned)
     val sub = listOfNotNull(
         item.category,
         item.memo.ifBlank { null },
@@ -686,7 +686,7 @@ private fun ItemRow(item: Expense, scanned: Boolean, taxLabels: List<String>, on
 
 /** 家計簿で消した品目の行。「元に戻す」で品目に戻る。 */
 @Composable
-private fun DeletedItemRow(item: Expense, onRestore: () -> Unit) {
+private fun DeletedItemRow(item: ExpenseItem, onRestore: () -> Unit) {
     val c = AppTheme.colors
     Column(Modifier.fillMaxWidth().padding(horizontal = Space.edge)) {
         Row(Modifier.fillMaxWidth().padding(vertical = Space.xs), verticalAlignment = Alignment.CenterVertically) {
@@ -708,13 +708,13 @@ private fun DeletedItemRow(item: Expense, onRestore: () -> Unit) {
 
 /** レシート由来のとき: サムネイルと「支払いを開く」。 */
 @Composable
-private fun ReceiptBlock(imagePath: String?, receiptId: Long?, onOpenReceipt: (Long) -> Unit) {
-    if (receiptId == null) return
+private fun ReceiptBlock(imagePath: String?, paymentId: Long?, onOpenReceipt: (Long) -> Unit) {
+    if (paymentId == null) return
     val c = AppTheme.colors
     Row(
         Modifier
             .fillMaxWidth()
-            .tappable { onOpenReceipt(receiptId) }
+            .tappable { onOpenReceipt(paymentId) }
             .padding(horizontal = Space.edge, vertical = Space.m),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Space.m),
@@ -762,14 +762,14 @@ private fun ReceiptThumb(imagePath: String?) {
  * 削除の確認文。支出は支払いの子なので、支出を消すと元の支払い(店名・日時・合計)とレシート画像も消える。
  * 支出だけを消すと「払ったのに自分の負担が無い支払い」が残り、0円の支払いと区別できず、再保存で支出が復活するため。
  */
-internal fun deletePaymentMessage(receipt: Receipt?, isExpense: Boolean): String {
-    val what = receipt?.let { r ->
+internal fun deletePaymentMessage(payment: Payment?, isExpense: Boolean): String {
+    val what = payment?.let { r ->
         listOf(r.storeName.ifBlank { null }, r.purchasedAt, r.totalAmount?.let { LedgerLogic.formatYen(it.toLong()) })
             .filterNotNull().joinToString(" · ")
     }.orEmpty()
-    val payment = if (what.isEmpty()) "元の支払い" else "元の支払い($what)"
+    val origin = if (what.isEmpty()) "元の支払い" else "元の支払い($what)"
     return if (isExpense) {
-        "この支出を削除します。${payment}とレシート画像も一緒に削除されます。"
+        "この支出を削除します。${origin}とレシート画像も一緒に削除されます。"
     } else {
         "この支払い${if (what.isEmpty()) "" else "($what)"}とレシート画像を削除します。"
     }

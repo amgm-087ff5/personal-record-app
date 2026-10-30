@@ -3,7 +3,7 @@ package com.amgm.personallog.ui.ledger
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.repository.PaymentRepository
 import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.domain.PaymentMerge
 import com.amgm.personallog.receipt.ReceiptImageStore
@@ -40,7 +40,7 @@ data class PaymentMergeUiState(
 @HiltViewModel
 class PaymentMergeViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val repository: ReceiptRepository,
+    private val repository: PaymentRepository,
     private val readStore: PaymentReadStore,
     private val images: ReceiptImageStore,
 ) : ViewModel() {
@@ -78,10 +78,10 @@ class PaymentMergeViewModel @Inject constructor(
     }
 
     /** 候補の支払いの値を選ぶ。手入力の文字と検査エラーは消す。 */
-    fun choose(field: PaymentMerge.Field, receiptId: Long) {
+    fun choose(field: PaymentMerge.Field, paymentId: Long) {
         _state.update {
             it.copy(
-                choices = it.choices + (field to PaymentMerge.Choice.From(receiptId)),
+                choices = it.choices + (field to PaymentMerge.Choice.From(paymentId)),
                 drafts = it.drafts - field,
                 errors = it.errors - field,
             )

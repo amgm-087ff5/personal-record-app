@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.amgm.personallog.backup.ImportMode
 import com.amgm.personallog.data.model.Categories
-import com.amgm.personallog.data.model.Expense
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.BareField
@@ -71,7 +71,7 @@ import java.time.ZoneOffset
 
 internal fun entryKey(entry: LedgerEntry): String = when (entry) {
     is LedgerEntry.Group -> "grp-" + entry.group.id
-    is LedgerEntry.Excluded -> "rcp-" + entry.receipt.id
+    is LedgerEntry.Excluded -> "rcp-" + entry.payment.id
 }
 
 /** カテゴリの色。定義済みカテゴリは順番で固定し、それ以外は名前から決まる色にする。未分類は inkFaint。 */
@@ -336,15 +336,15 @@ internal fun DayBlock(
     day: DayGroup,
     expandedGroups: Map<Long, Boolean>,
     /** 下書きの支払いの id(行に「下書き」を付ける)。 */
-    draftReceiptIds: Set<Long>,
+    draftPaymentIds: Set<Long>,
     /** 割り勘に警告がある支払いの id(行に「要確認」を付ける)。 */
-    warnReceiptIds: Set<Long>,
+    warnPaymentIds: Set<Long>,
     /** 画像のあるレシート(レシート由来の支払い)の id。行の「レシート由来」は、ここに含まれる支払いの行だけに付ける。 */
-    imageReceiptIds: Set<Long>,
+    imagePaymentIds: Set<Long>,
     /** 重複の候補がある支払いの id(行に「重複?」を付ける)。 */
-    duplicateReceiptIds: Set<Long> = emptySet(),
+    duplicatePaymentIds: Set<Long> = emptySet(),
     /** 未読の支払いの id(行に「未読」を付ける)。 */
-    unreadReceiptIds: Set<Long> = emptySet(),
+    unreadPaymentIds: Set<Long> = emptySet(),
     /** 支払いの id → 支払い先(店名)。行の見出しに使う。 */
     storeNames: Map<Long, String> = emptyMap(),
     onToggleGroup: (Long) -> Unit,
@@ -387,12 +387,12 @@ internal fun DayBlock(
                     when (entry) {
                         is LedgerEntry.Group -> GroupLine(
                             entry = entry,
-                            storeName = entry.receiptId?.let { storeNames[it] },
-                            draftReceiptIds = draftReceiptIds,
-                            warnReceiptIds = warnReceiptIds,
-                            imageReceiptIds = imageReceiptIds,
-                            duplicateReceiptIds = duplicateReceiptIds,
-                            unreadReceiptIds = unreadReceiptIds,
+                            storeName = entry.paymentId?.let { storeNames[it] },
+                            draftPaymentIds = draftPaymentIds,
+                            warnPaymentIds = warnPaymentIds,
+                            imagePaymentIds = imagePaymentIds,
+                            duplicatePaymentIds = duplicatePaymentIds,
+                            unreadPaymentIds = unreadPaymentIds,
                             expanded = expandedGroups[entry.group.id] == true,
                             onToggle = { onToggleGroup(entry.group.id) },
                             onOpen = { onOpen(entry) },
@@ -401,10 +401,10 @@ internal fun DayBlock(
                         is LedgerEntry.Excluded -> ExcludedLine(
                             entry = entry,
                             onClick = { onOpen(entry) },
-                            draftReceiptIds = draftReceiptIds,
-                            warnReceiptIds = warnReceiptIds,
-                            duplicateReceiptIds = duplicateReceiptIds,
-                            unreadReceiptIds = unreadReceiptIds,
+                            draftPaymentIds = draftPaymentIds,
+                            warnPaymentIds = warnPaymentIds,
+                            duplicatePaymentIds = duplicatePaymentIds,
+                            unreadPaymentIds = unreadPaymentIds,
                         )
                     }
                 }
@@ -419,37 +419,37 @@ internal fun DayBlock(
  */
 @Composable
 private fun RowBadges(
-    receiptId: Long?,
-    draftReceiptIds: Set<Long>,
-    warnReceiptIds: Set<Long>,
-    duplicateReceiptIds: Set<Long> = emptySet(),
-    unreadReceiptIds: Set<Long> = emptySet(),
+    paymentId: Long?,
+    draftPaymentIds: Set<Long>,
+    warnPaymentIds: Set<Long>,
+    duplicatePaymentIds: Set<Long> = emptySet(),
+    unreadPaymentIds: Set<Long> = emptySet(),
 ) {
-    if (receiptId == null) return
-    if (receiptId in unreadReceiptIds) UnreadBadge(modifier = Modifier.padding(start = Space.xs))
-    if (receiptId in draftReceiptIds) Stamp("下書き", modifier = Modifier.padding(start = Space.xs))
-    if (receiptId in warnReceiptIds) Stamp("要確認", modifier = Modifier.padding(start = Space.xs), tone = StampTone.Danger)
-    if (receiptId in duplicateReceiptIds) Stamp("重複?", modifier = Modifier.padding(start = Space.xs), tone = StampTone.Danger)
+    if (paymentId == null) return
+    if (paymentId in unreadPaymentIds) UnreadBadge(modifier = Modifier.padding(start = Space.xs))
+    if (paymentId in draftPaymentIds) Stamp("下書き", modifier = Modifier.padding(start = Space.xs))
+    if (paymentId in warnPaymentIds) Stamp("要確認", modifier = Modifier.padding(start = Space.xs), tone = StampTone.Danger)
+    if (paymentId in duplicatePaymentIds) Stamp("重複?", modifier = Modifier.padding(start = Space.xs), tone = StampTone.Danger)
 }
 
 @Composable
-private fun ExpenseLine(
-    expense: Expense,
+private fun ExpenseItemLine(
+    expenseItem: ExpenseItem,
     onClick: () -> Unit,
     /** 行の印(下書き・要確認)を出すか。グループの中の品目には出さない。 */
     showBadges: Boolean = false,
-    draftReceiptIds: Set<Long> = emptySet(),
-    warnReceiptIds: Set<Long> = emptySet(),
+    draftPaymentIds: Set<Long> = emptySet(),
+    warnPaymentIds: Set<Long> = emptySet(),
     /** 画像のあるレシートの id。「レシート由来」の印は、ここに含まれる支払いの行にだけ付ける(手入力の支払いには付けない)。 */
-    imageReceiptIds: Set<Long> = emptySet(),
-    duplicateReceiptIds: Set<Long> = emptySet(),
+    imagePaymentIds: Set<Long> = emptySet(),
+    duplicatePaymentIds: Set<Long> = emptySet(),
 ) {
     val c = AppTheme.colors
-    val title = listOf(expense.name, expense.memo).filter { it.isNotBlank() }.joinToString(" ").ifBlank { expense.category }
+    val title = listOf(expenseItem.name, expenseItem.memo).filter { it.isNotBlank() }.joinToString(" ").ifBlank { expenseItem.category }
     val sub = listOfNotNull(
-        expense.time.ifEmpty { null },
-        if (expense.name.isNotBlank() || expense.memo.isNotBlank()) expense.category else null,
-        if (expense.receiptId != null && expense.receiptId in imageReceiptIds) "レシート由来" else null,
+        expenseItem.time.ifEmpty { null },
+        if (expenseItem.name.isNotBlank() || expenseItem.memo.isNotBlank()) expenseItem.category else null,
+        if (expenseItem.paymentId != null && expenseItem.paymentId in imagePaymentIds) "レシート由来" else null,
     ).joinToString(" · ")
     Row(
         Modifier.fillMaxWidth().tappable(onClick).padding(vertical = Space.s + Space.xs),
@@ -465,14 +465,14 @@ private fun ExpenseLine(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                if (showBadges) RowBadges(expense.receiptId, draftReceiptIds, warnReceiptIds, duplicateReceiptIds)
+                if (showBadges) RowBadges(expenseItem.paymentId, draftPaymentIds, warnPaymentIds, duplicatePaymentIds)
             }
             if (sub.isNotEmpty()) {
                 Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         Spacer(Modifier.width(Space.s))
-        Text(LedgerLogic.formatYen(expense.amount.toLong()), style = AppTheme.type.numeral, color = c.ink)
+        Text(LedgerLogic.formatYen(expenseItem.amount.toLong()), style = AppTheme.type.numeral, color = c.ink)
     }
 }
 
@@ -481,13 +481,13 @@ private fun ExpenseLine(
 private fun ExcludedLine(
     entry: LedgerEntry.Excluded,
     onClick: () -> Unit,
-    draftReceiptIds: Set<Long>,
-    warnReceiptIds: Set<Long>,
-    duplicateReceiptIds: Set<Long>,
-    unreadReceiptIds: Set<Long>,
+    draftPaymentIds: Set<Long>,
+    warnPaymentIds: Set<Long>,
+    duplicatePaymentIds: Set<Long>,
+    unreadPaymentIds: Set<Long>,
 ) {
     val c = AppTheme.colors
-    val time = LedgerCalc.splitPurchasedAt(entry.receipt.purchasedAt).second
+    val time = LedgerCalc.splitPurchasedAt(entry.payment.purchasedAt).second
     val sub = listOfNotNull(
         time.ifEmpty { null },
         "自分の分 ${LedgerLogic.formatYen(0L)}（対象外）",
@@ -499,14 +499,14 @@ private fun ExcludedLine(
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    entry.receipt.storeName.ifBlank { "支払い" },
+                    entry.payment.storeName.ifBlank { "支払い" },
                     style = AppTheme.type.title,
                     color = c.ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds, duplicateReceiptIds, unreadReceiptIds)
+                RowBadges(entry.paymentId, draftPaymentIds, warnPaymentIds, duplicatePaymentIds, unreadPaymentIds)
             }
             Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -520,11 +520,11 @@ private fun GroupLine(
     entry: LedgerEntry.Group,
     /** 支払い先(店名)。空または無ければ見出しはカテゴリになる。 */
     storeName: String?,
-    draftReceiptIds: Set<Long>,
-    warnReceiptIds: Set<Long>,
-    imageReceiptIds: Set<Long>,
-    duplicateReceiptIds: Set<Long>,
-    unreadReceiptIds: Set<Long>,
+    draftPaymentIds: Set<Long>,
+    warnPaymentIds: Set<Long>,
+    imagePaymentIds: Set<Long>,
+    duplicatePaymentIds: Set<Long>,
+    unreadPaymentIds: Set<Long>,
     expanded: Boolean,
     onToggle: () -> Unit,
     onOpen: () -> Unit,
@@ -561,7 +561,7 @@ private fun GroupLine(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    RowBadges(entry.receiptId, draftReceiptIds, warnReceiptIds, duplicateReceiptIds, unreadReceiptIds)
+                    RowBadges(entry.paymentId, draftPaymentIds, warnPaymentIds, duplicatePaymentIds, unreadPaymentIds)
                 }
                 Text(sub, style = AppTheme.type.caption, color = c.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -572,7 +572,7 @@ private fun GroupLine(
             Column(Modifier.fillMaxWidth().padding(start = Space.m, bottom = Space.s)) {
                 entry.items.forEach { item ->
                     Hairline()
-                    ExpenseLine(item, onClick = onOpen, imageReceiptIds = imageReceiptIds)
+                    ExpenseItemLine(item, onClick = onOpen, imagePaymentIds = imagePaymentIds)
                 }
                 Hairline(dashed = true)
                 Spacer(Modifier.height(Space.s))
@@ -625,12 +625,12 @@ internal fun ConfirmSheet(
 
 /** 支出の追加・編集シート。 */
 @Composable
-internal fun ExpenseEditorSheet(
-    original: Expense?,
+internal fun ExpenseItemEditorSheet(
+    original: ExpenseItem?,
     initialDate: String,
     initialTime: String,
     /** 紐づく支払いの日時 "yyyy-MM-dd HH:mm"。紐づかなければ null。 */
-    linkedReceiptAt: String?,
+    linkedPaymentAt: String?,
     onDismiss: () -> Unit,
     onSave: (date: String, time: String, amount: Int, category: String, name: String, memo: String, done: (String?) -> Unit) -> Unit,
     onDelete: (() -> Unit)?,
@@ -651,12 +651,12 @@ internal fun ExpenseEditorSheet(
     val c = AppTheme.colors
     var dateText by remember { mutableStateOf(initialDate) }
     var timeText by remember { mutableStateOf(initialTime) }
-    var pendingSave by remember { mutableStateOf<ExpenseValidation?>(null) }
+    var pendingSave by remember { mutableStateOf<ExpenseItemValidation?>(null) }
     var amountText by remember { mutableStateOf(original?.amount?.toString() ?: "") }
     var category by remember { mutableStateOf(original?.category) }
     var memo by remember { mutableStateOf(original?.memo ?: "") }
     var name by remember { mutableStateOf(original?.name ?: "") }
-    var validation by remember { mutableStateOf<ExpenseValidation?>(null) }
+    var validation by remember { mutableStateOf<ExpenseItemValidation?>(null) }
     var saveError by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
@@ -680,7 +680,7 @@ internal fun ExpenseEditorSheet(
         if (extra != null && extra !in base) base + extra else base
     }
 
-    fun doSave(v: ExpenseValidation) {
+    fun doSave(v: ExpenseItemValidation) {
         saving = true
         onSave(v.date!!, v.time!!, v.amount!!, v.category!!, name, memo) { err ->
             saving = false
@@ -694,9 +694,9 @@ internal fun ExpenseEditorSheet(
             Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding(),
             verticalArrangement = Arrangement.spacedBy(Space.m),
         ) {
-            if (original?.receiptId != null && fromScannedReceipt) {
+            if (original?.paymentId != null && fromScannedReceipt) {
                 Text(
-                    "レシート由来です" + (linkedReceiptAt?.let { "(支払いの日時 $it)" } ?: ""),
+                    "レシート由来です" + (linkedPaymentAt?.let { "(支払いの日時 $it)" } ?: ""),
                     style = AppTheme.type.caption,
                     color = c.accent,
                 )
@@ -795,7 +795,7 @@ internal fun ExpenseEditorSheet(
                     if (v.isValid) {
                         // 紐づく支払いと日時が違うまま日時を変えて保存しようとしたら、確認を挟む(支払いは変更しない)
                         val dateTimeChanged = original != null && (v.date != original.date || v.time != original.time)
-                        val mismatch = fromScannedReceipt && linkedReceiptAt != null && "${v.date} ${v.time}" != linkedReceiptAt
+                        val mismatch = fromScannedReceipt && linkedPaymentAt != null && "${v.date} ${v.time}" != linkedPaymentAt
                         if (dateTimeChanged && mismatch) pendingSave = v else doSave(v)
                     }
                 },
@@ -828,7 +828,7 @@ internal fun ExpenseEditorSheet(
     pendingSave?.let { v ->
         ConfirmSheet(
             title = "支払いの日時と異なります",
-            message = "この支出は支払い(${linkedReceiptAt ?: ""})に紐づいています。" +
+            message = "この支出は支払い(${linkedPaymentAt ?: ""})に紐づいています。" +
                 "入力した日時(${v.date} ${v.time})は支払いと異なります。" +
                 "支払いの日時は変更されません。このまま保存しますか？",
             confirmText = "このまま保存",

@@ -44,8 +44,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.amgm.personallog.data.model.Categories
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.BareField
 import com.amgm.personallog.ui.design.InkButton
@@ -75,7 +75,7 @@ internal data class ItemDraft(
 ) {
     companion object {
         /** 保存済みの品目から、ページの初期値を作る。 */
-        fun of(e: Expense): ItemDraft = ItemDraft(
+        fun of(e: ExpenseItem): ItemDraft = ItemDraft(
             key = e.id,
             id = e.id,
             name = e.name,
@@ -220,14 +220,14 @@ internal object ItemPagerLogic {
     /** 「不明」の印を出すか。 */
     fun unknownToggle(
         isNew: Boolean,
-        receiptLinked: Boolean,
+        paymentLinked: Boolean,
         splitPeople: Int,
         onlyOneItem: Boolean,
-        hasReceiptItem: Boolean,
+        hasPaymentItem: Boolean,
     ): UnknownToggle = when {
-        !receiptLinked || splitPeople >= 2 || onlyOneItem -> UnknownToggle.Hidden
+        !paymentLinked || splitPeople >= 2 || onlyOneItem -> UnknownToggle.Hidden
         isNew -> UnknownToggle.AfterSave
-        !hasReceiptItem -> UnknownToggle.Hidden
+        !hasPaymentItem -> UnknownToggle.Hidden
         else -> UnknownToggle.Enabled
     }
 
@@ -273,9 +273,9 @@ private val PAGER_HEIGHT: Dp = 330.dp
  */
 @Composable
 internal fun ItemEditorSheet(
-    group: ExpenseGroup,
+    group: Expense,
     /** 消していない品目(支出の中の並び順)。 */
-    items: List<Expense>,
+    items: List<ExpenseItem>,
     /** 開く品目の id。追加のときは null。 */
     startItemId: Long?,
     /** true なら、末尾に空の新しい品目を足した状態で開く。 */
@@ -283,14 +283,14 @@ internal fun ItemEditorSheet(
     splitPeople: Int,
     onlyOneItem: Boolean,
     onDismiss: () -> Unit,
-    onSaveItem: (original: Expense?, amount: Int, category: String, name: String, memo: String, done: (String?) -> Unit) -> Unit,
-    onSetUnknown: (expense: Expense, unknown: Boolean, done: (String?) -> Unit) -> Unit,
-    onDeleteItem: (Expense) -> Unit,
+    onSaveItem: (original: ExpenseItem?, amount: Int, category: String, name: String, memo: String, done: (String?) -> Unit) -> Unit,
+    onSetUnknown: (expenseItem: ExpenseItem, unknown: Boolean, done: (String?) -> Unit) -> Unit,
+    onDeleteItem: (ExpenseItem) -> Unit,
 ) {
     val c = AppTheme.colors
     val latestItems by rememberUpdatedState(items)
-    fun latestExpense(id: Long): Expense? = latestItems.firstOrNull { it.id == id }
-    fun latestDraft(id: Long): ItemDraft? = latestExpense(id)?.let { ItemDraft.of(it) }
+    fun latestExpenseItem(id: Long): ExpenseItem? = latestItems.firstOrNull { it.id == id }
+    fun latestDraft(id: Long): ItemDraft? = latestExpenseItem(id)?.let { ItemDraft.of(it) }
     fun isDirty(d: ItemDraft): Boolean = ItemPagerLogic.changes(d, d.id?.let { latestDraft(it) }).hasChanges
 
     // 新しい品目の key は負の値(既存の id と重ならない)
@@ -330,7 +330,7 @@ internal fun ItemEditorSheet(
     // 指で引いて離したときに増える。増えたら品目を足す(下の LaunchedEffect)
     var addTick by remember { mutableIntStateOf(0) }
 
-    val receiptLinked = true // 支出は必ず支払いに属する(v16〜)
+    val paymentLinked = true // 支出は必ず支払いに属する(v16〜)
     val amountLock: String? = when {
         splitPeople >= 2 -> "割り勘が2人以上のため、金額は支払いの画面で直します"
         else -> null
@@ -375,7 +375,7 @@ internal fun ItemEditorSheet(
         }
         when (val op = ops[index]) {
             is ItemSaveOp.SetUnknown -> {
-                val e = latestExpense(op.id)
+                val e = latestExpenseItem(op.id)
                 if (e == null) {
                     fail(MESSAGE_MISSING)
                     return
@@ -383,7 +383,7 @@ internal fun ItemEditorSheet(
                 onSetUnknown(e, op.unknown) { err -> if (err == null) runOps(ops, index + 1) else fail(err) }
             }
             is ItemSaveOp.Save -> {
-                val original = op.id?.let { latestExpense(it) }
+                val original = op.id?.let { latestExpenseItem(it) }
                 if (op.id != null && original == null) {
                     fail(MESSAGE_MISSING)
                     return
@@ -461,21 +461,21 @@ internal fun ItemEditorSheet(
             ) {
                 HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { p ->
                     val draft = drafts.getOrNull(p) ?: return@HorizontalPager
-                    val saved = draft.id?.let { latestExpense(it) }
+                    val saved = draft.id?.let { latestExpenseItem(it) }
                     val toggle = ItemPagerLogic.unknownToggle(
                         isNew = draft.id == null,
-                        receiptLinked = receiptLinked,
+                        paymentLinked = paymentLinked,
                         splitPeople = splitPeople,
                         onlyOneItem = onlyOneItem,
-                        hasReceiptItem = saved?.receiptItemId != null,
+                        hasPaymentItem = saved?.paymentItemId != null,
                     )
                     ItemPage(
                         draft = draft,
                         categories = ItemPagerLogic.categoryOptions(draft.category),
                         // 品目が1つだけでも、支払いの品目に対応する品目の金額は直せる(支出の金額の変更と同じに支払いへ書き戻す)。
-                        // 品目の無い支払いの1品目(receiptItemId なし)だけは、金額が支出の金額に従うので直せない
+                        // 品目の無い支払いの1品目(paymentItemId なし)だけは、金額が支出の金額に従うので直せない
                         amountLock = amountLock
-                            ?: if (onlyOneItem && saved != null && saved.receiptItemId == null) "品目の無い支払いの品目の金額は、支出の金額と同じです" else null,
+                            ?: if (onlyOneItem && saved != null && saved.paymentItemId == null) "品目の無い支払いの品目の金額は、支出の金額と同じです" else null,
                         computedAmount = saved?.amount?.toString(),
                         unknownToggle = toggle,
                         detailOpen = detailOpen[draft.key] == true,
@@ -543,7 +543,7 @@ internal fun ItemEditorSheet(
     }
 
     confirmDeleteId?.let { id ->
-        val target = latestExpense(id)
+        val target = latestExpenseItem(id)
         if (target != null) {
             val others = drafts.any { it.id != id && isDirty(it) }
             ConfirmSheet(

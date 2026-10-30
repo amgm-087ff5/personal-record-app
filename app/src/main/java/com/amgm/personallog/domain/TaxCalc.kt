@@ -1,6 +1,6 @@
 package com.amgm.personallog.domain
 
-import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.PaymentItem
 import java.math.BigDecimal
 
 /**
@@ -37,18 +37,18 @@ object TaxCalc {
     }
 
     /** 税込での支払額(単位)。税抜表示なら 金額×(100+税率)/100 円。 */
-    fun paidUnits(item: ReceiptItem): Long = paidUnits(item.amount, item.taxRate, item.priceIncludesTax)
+    fun paidUnits(item: PaymentItem): Long = paidUnits(item.amount, item.taxRate, item.priceIncludesTax)
 
     /** 単位を円に変換して小数点以下を切り捨てる(負の値も床関数で切り捨て)。 */
     fun floorYen(units: Long): Long = Math.floorDiv(units, UNITS_PER_YEN)
 
     /** 税込の支払総額(円、切り捨て)。 */
-    fun paidYen(items: List<ReceiptItem>): Long = floorYen(items.sumOf { paidUnits(it) })
+    fun paidYen(items: List<PaymentItem>): Long = floorYen(items.sumOf { paidUnits(it) })
 
     /**
      * 品目ごとの税込支払額(円の整数)。累積して切り捨てた差分にするので、合計は [paidYen] と一致する。
      */
-    fun paidYenPerItem(items: List<ReceiptItem>): List<Long> {
+    fun paidYenPerItem(items: List<PaymentItem>): List<Long> {
         var cumulative = 0L
         var previousFloor = 0L
         return items.map { item ->
@@ -64,7 +64,7 @@ object TaxCalc {
      * 支払い全体の「自分の払う分」(円・税込)を、選ばれた品目の税込支払額の合計から求める(切り捨て)。
      * 割り勘の補助機能で使う。
      */
-    fun ownYenOfPicked(items: List<ReceiptItem>, picked: List<Boolean>): Long =
+    fun ownYenOfPicked(items: List<PaymentItem>, picked: List<Boolean>): Long =
         floorYen(items.indices.filter { picked[it] }.sumOf { paidUnits(items[it]) })
 
     /**
@@ -72,7 +72,7 @@ object TaxCalc {
      * (整数の合計に対する床除算なので誤差が出ない)。税抜の品目の税抜は印字額そのまま。
      * 税額 = 税込(単位) − 税抜(単位)。値引き(負の金額)も同じ式で、税率が既定の10%なら税額がずれうる。
      */
-    fun breakdownByRate(items: List<ReceiptItem>): TaxBreakdown {
+    fun breakdownByRate(items: List<PaymentItem>): TaxBreakdown {
         val rates = items.map { normalizeTaxRate(it.taxRate) }.distinct().sorted()
         val lines = rates.map { rate ->
             val ofRate = items.filter { normalizeTaxRate(it.taxRate) == rate }
@@ -91,7 +91,7 @@ object TaxCalc {
     }
 
     /** 品目の税込価格の表示用(小数あり)。例: "129.6" / "120" */
-    fun paidYenText(item: ReceiptItem): String = unitsToText(paidUnits(item))
+    fun paidYenText(item: PaymentItem): String = unitsToText(paidUnits(item))
 
     fun unitsToText(units: Long): String =
         BigDecimal.valueOf(units, 4).stripTrailingZeros().toPlainString()
@@ -124,7 +124,7 @@ data class PricedLine(
  * 旧形式の品目の自分の分から、支払い全体の自分の分(円)を求める。
  * どの行にも自分の分が無ければ null(全額自分)。ある行は自分の分、無い行は税込価格の全額を足す。
  */
-fun legacyReceiptOwnYen(lines: List<PricedLine>): Int? {
+fun legacyPaymentOwnYen(lines: List<PricedLine>): Int? {
     if (lines.all { it.ownAmount == null }) return null
     val units = lines.sumOf { line ->
         line.ownAmount?.let { it.toLong() * TaxCalc.UNITS_PER_YEN }

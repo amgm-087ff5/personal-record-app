@@ -53,8 +53,8 @@ interface SplitDao {
     suspend fun deletePerson(person: Person)
 
     // 割り勘シート
-    @Query("SELECT * FROM split_sheets WHERE receiptId = :receiptId LIMIT 1")
-    suspend fun getSheet(receiptId: Long): SplitSheet?
+    @Query("SELECT * FROM split_sheets WHERE paymentId = :paymentId LIMIT 1")
+    suspend fun getSheet(paymentId: Long): SplitSheet?
 
     @Query("SELECT * FROM split_sheets")
     suspend fun getAllSheets(): List<SplitSheet>
@@ -65,14 +65,14 @@ interface SplitDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSheet(sheet: SplitSheet)
 
-    @Query("UPDATE split_sheets SET warnings = :warnings WHERE receiptId = :receiptId")
-    suspend fun setWarnings(receiptId: Long, warnings: String)
+    @Query("UPDATE split_sheets SET warnings = :warnings WHERE paymentId = :paymentId")
+    suspend fun setWarnings(paymentId: Long, warnings: String)
 
     // 参加者
-    @Query("SELECT * FROM split_participants WHERE receiptId = :receiptId ORDER BY sortOrder, id")
-    suspend fun getParticipants(receiptId: Long): List<SplitParticipant>
+    @Query("SELECT * FROM split_participants WHERE paymentId = :paymentId ORDER BY sortOrder, id")
+    suspend fun getParticipants(paymentId: Long): List<SplitParticipant>
 
-    @Query("SELECT * FROM split_participants ORDER BY receiptId, sortOrder, id")
+    @Query("SELECT * FROM split_participants ORDER BY paymentId, sortOrder, id")
     suspend fun getAllParticipants(): List<SplitParticipant>
 
     @Insert
@@ -85,23 +85,23 @@ interface SplitDao {
     suspend fun deleteParticipantsByIds(ids: List<Long>)
 
     // ラベルごとの金額(全体方式・金額)
-    @Query("SELECT * FROM split_label_amounts WHERE receiptId = :receiptId")
-    suspend fun getLabelAmounts(receiptId: Long): List<SplitLabelAmount>
+    @Query("SELECT * FROM split_label_amounts WHERE paymentId = :paymentId")
+    suspend fun getLabelAmounts(paymentId: Long): List<SplitLabelAmount>
 
     @Query("SELECT * FROM split_label_amounts")
     suspend fun getAllLabelAmounts(): List<SplitLabelAmount>
 
-    @Query("DELETE FROM split_label_amounts WHERE receiptId = :receiptId")
-    suspend fun deleteLabelAmounts(receiptId: Long)
+    @Query("DELETE FROM split_label_amounts WHERE paymentId = :paymentId")
+    suspend fun deleteLabelAmounts(paymentId: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLabelAmounts(rows: List<SplitLabelAmount>)
 
     // 品目のまとまり
-    @Query("SELECT * FROM share_groups WHERE receiptId = :receiptId ORDER BY sortOrder, id")
-    suspend fun getGroups(receiptId: Long): List<ShareGroup>
+    @Query("SELECT * FROM share_groups WHERE paymentId = :paymentId ORDER BY sortOrder, id")
+    suspend fun getGroups(paymentId: Long): List<ShareGroup>
 
-    @Query("SELECT * FROM share_groups ORDER BY receiptId, sortOrder, id")
+    @Query("SELECT * FROM share_groups ORDER BY paymentId, sortOrder, id")
     suspend fun getAllGroups(): List<ShareGroup>
 
     @Insert
@@ -116,9 +116,9 @@ interface SplitDao {
     @Query(
         "SELECT share_group_items.* FROM share_group_items " +
             "INNER JOIN share_groups ON share_groups.id = share_group_items.groupId " +
-            "WHERE share_groups.receiptId = :receiptId",
+            "WHERE share_groups.paymentId = :paymentId",
     )
-    suspend fun getGroupItems(receiptId: Long): List<ShareGroupItem>
+    suspend fun getGroupItems(paymentId: Long): List<ShareGroupItem>
 
     @Query("SELECT * FROM share_group_items")
     suspend fun getAllGroupItems(): List<ShareGroupItem>
@@ -126,11 +126,11 @@ interface SplitDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGroupItems(items: List<ShareGroupItem>)
 
-    @Query("DELETE FROM share_group_items WHERE receiptItemId = :receiptItemId")
-    suspend fun deleteGroupItemByItem(receiptItemId: Long)
+    @Query("DELETE FROM share_group_items WHERE paymentItemId = :paymentItemId")
+    suspend fun deleteGroupItemByItem(paymentItemId: Long)
 
     /** 分けるとき: 品目を元のまとまりから新しいまとまりへ移す(品目の id は一意なので衝突しない)。 */
-    @Query("UPDATE share_group_items SET groupId = :toGroupId WHERE groupId = :fromGroupId AND receiptItemId IN (:itemIds)")
+    @Query("UPDATE share_group_items SET groupId = :toGroupId WHERE groupId = :fromGroupId AND paymentItemId IN (:itemIds)")
     suspend fun moveItems(fromGroupId: Long, toGroupId: Long, itemIds: List<Long>)
 
     /** まとめるとき: 消える側のまとまりの品目を、残す先へ全部移す。 */
@@ -150,80 +150,80 @@ interface SplitDao {
     @Query(
         "SELECT item_shares.* FROM item_shares " +
             "INNER JOIN share_groups ON share_groups.id = item_shares.groupId " +
-            "WHERE share_groups.receiptId = :receiptId",
+            "WHERE share_groups.paymentId = :paymentId",
     )
-    suspend fun getItemShares(receiptId: Long): List<ItemShare>
+    suspend fun getItemShares(paymentId: Long): List<ItemShare>
 
     @Query("SELECT * FROM item_shares")
     suspend fun getAllItemShares(): List<ItemShare>
 
-    @Query("DELETE FROM item_shares WHERE groupId IN (SELECT id FROM share_groups WHERE receiptId = :receiptId)")
-    suspend fun deleteItemSharesOfReceipt(receiptId: Long)
+    @Query("DELETE FROM item_shares WHERE groupId IN (SELECT id FROM share_groups WHERE paymentId = :paymentId)")
+    suspend fun deleteItemSharesOfPayment(paymentId: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItemShares(shares: List<ItemShare>)
 
     // 全体方式の入力
-    @Query("SELECT * FROM whole_shares WHERE receiptId = :receiptId")
-    suspend fun getWholeShares(receiptId: Long): List<WholeShare>
+    @Query("SELECT * FROM whole_shares WHERE paymentId = :paymentId")
+    suspend fun getWholeShares(paymentId: Long): List<WholeShare>
 
     @Query("SELECT * FROM whole_shares")
     suspend fun getAllWholeShares(): List<WholeShare>
 
-    @Query("DELETE FROM whole_shares WHERE receiptId = :receiptId")
-    suspend fun deleteWholeShares(receiptId: Long)
+    @Query("DELETE FROM whole_shares WHERE paymentId = :paymentId")
+    suspend fun deleteWholeShares(paymentId: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWholeShares(shares: List<WholeShare>)
 
     // 支払内訳
-    @Query("SELECT * FROM payment_payers WHERE receiptId = :receiptId ORDER BY id")
-    suspend fun getPayers(receiptId: Long): List<PaymentPayer>
+    @Query("SELECT * FROM payment_payers WHERE paymentId = :paymentId ORDER BY id")
+    suspend fun getPayers(paymentId: Long): List<PaymentPayer>
 
     @Query("SELECT * FROM payment_payers ORDER BY id")
     suspend fun getAllPayers(): List<PaymentPayer>
 
-    @Query("DELETE FROM payment_payers WHERE receiptId = :receiptId")
-    suspend fun deletePayers(receiptId: Long)
+    @Query("DELETE FROM payment_payers WHERE paymentId = :paymentId")
+    suspend fun deletePayers(paymentId: Long)
 
     @Insert
     suspend fun insertPayers(payers: List<PaymentPayer>)
 
-    // 支払いのマージ(中身の付け替え)。share_group_items / item_shares は親の id にぶら下がるので、親の receiptId を付け替えれば一緒に移る
+    // 支払いのマージ(中身の付け替え)。share_group_items / item_shares は親の id にぶら下がるので、親の paymentId を付け替えれば一緒に移る
 
     /** 割り勘の入力(シートか参加者)があるか。 */
     @Query(
-        "SELECT (SELECT COUNT(*) FROM split_sheets WHERE receiptId = :receiptId) + " +
-            "(SELECT COUNT(*) FROM split_participants WHERE receiptId = :receiptId)",
+        "SELECT (SELECT COUNT(*) FROM split_sheets WHERE paymentId = :paymentId) + " +
+            "(SELECT COUNT(*) FROM split_participants WHERE paymentId = :paymentId)",
     )
-    suspend fun countSplitRows(receiptId: Long): Int
+    suspend fun countSplitRows(paymentId: Long): Int
 
-    @Query("DELETE FROM split_sheets WHERE receiptId = :receiptId")
-    suspend fun deleteSheet(receiptId: Long)
+    @Query("DELETE FROM split_sheets WHERE paymentId = :paymentId")
+    suspend fun deleteSheet(paymentId: Long)
 
     /** 参加者を消すと、その参加者の item_shares・whole_shares・payment_payers も CASCADE で消える。 */
-    @Query("DELETE FROM split_participants WHERE receiptId = :receiptId")
-    suspend fun deleteParticipantsOfReceipt(receiptId: Long)
+    @Query("DELETE FROM split_participants WHERE paymentId = :paymentId")
+    suspend fun deleteParticipantsOfPayment(paymentId: Long)
 
     /** まとまりを消すと、share_group_items・item_shares も CASCADE で消える。 */
-    @Query("DELETE FROM share_groups WHERE receiptId = :receiptId")
-    suspend fun deleteGroupsOfReceipt(receiptId: Long)
+    @Query("DELETE FROM share_groups WHERE paymentId = :paymentId")
+    suspend fun deleteGroupsOfPayment(paymentId: Long)
 
-    @Query("UPDATE split_sheets SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
-    suspend fun moveSheet(fromReceiptId: Long, toReceiptId: Long)
+    @Query("UPDATE split_sheets SET paymentId = :toPaymentId WHERE paymentId = :fromPaymentId")
+    suspend fun moveSheet(fromPaymentId: Long, toPaymentId: Long)
 
-    @Query("UPDATE split_participants SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
-    suspend fun moveParticipants(fromReceiptId: Long, toReceiptId: Long)
+    @Query("UPDATE split_participants SET paymentId = :toPaymentId WHERE paymentId = :fromPaymentId")
+    suspend fun moveParticipants(fromPaymentId: Long, toPaymentId: Long)
 
-    @Query("UPDATE split_label_amounts SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
-    suspend fun moveLabelAmounts(fromReceiptId: Long, toReceiptId: Long)
+    @Query("UPDATE split_label_amounts SET paymentId = :toPaymentId WHERE paymentId = :fromPaymentId")
+    suspend fun moveLabelAmounts(fromPaymentId: Long, toPaymentId: Long)
 
-    @Query("UPDATE share_groups SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
-    suspend fun moveGroups(fromReceiptId: Long, toReceiptId: Long)
+    @Query("UPDATE share_groups SET paymentId = :toPaymentId WHERE paymentId = :fromPaymentId")
+    suspend fun moveGroups(fromPaymentId: Long, toPaymentId: Long)
 
-    @Query("UPDATE whole_shares SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
-    suspend fun moveWholeShares(fromReceiptId: Long, toReceiptId: Long)
+    @Query("UPDATE whole_shares SET paymentId = :toPaymentId WHERE paymentId = :fromPaymentId")
+    suspend fun moveWholeShares(fromPaymentId: Long, toPaymentId: Long)
 
-    @Query("UPDATE payment_payers SET receiptId = :toReceiptId WHERE receiptId = :fromReceiptId")
-    suspend fun movePayers(fromReceiptId: Long, toReceiptId: Long)
+    @Query("UPDATE payment_payers SET paymentId = :toPaymentId WHERE paymentId = :fromPaymentId")
+    suspend fun movePayers(fromPaymentId: Long, toPaymentId: Long)
 }

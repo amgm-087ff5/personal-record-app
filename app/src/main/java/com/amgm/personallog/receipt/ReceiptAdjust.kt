@@ -1,6 +1,6 @@
 package com.amgm.personallog.receipt
 
-import com.amgm.personallog.data.model.Receipt
+import com.amgm.personallog.data.model.Payment
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.cos
@@ -162,5 +162,5 @@ object ReceiptGeometry {
 }
 
 /** 支払いに保存してある補正値。 */
-fun Receipt.adjust(): ReceiptAdjust =
+fun Payment.adjust(): ReceiptAdjust =
     ReceiptAdjust(rotationDegrees, cropLeft, cropTop, cropRight, cropBottom).sanitized()

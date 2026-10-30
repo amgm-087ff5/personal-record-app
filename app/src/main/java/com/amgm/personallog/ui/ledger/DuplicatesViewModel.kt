@@ -2,10 +2,10 @@ package com.amgm.personallog.ui.ledger
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.repository.PaymentRepository
 import com.amgm.personallog.domain.PaymentMerge
-import com.amgm.personallog.receipt.ReceiptDedup
+import com.amgm.personallog.receipt.PaymentDedup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +24,7 @@ import javax.inject.Inject
  * diffs は [PaymentMerge.fieldDiffs] の結果(Field の定義順)。
  */
 data class DuplicateGroup(
-    val payments: List<Receipt>,
+    val payments: List<Payment>,
     val diffs: List<PaymentMerge.FieldDiff>,
 ) {
     /** 組の支払いの id(並びはマージ先から)。マージと「重複ではない」はこの id で動く。 */
@@ -49,11 +49,11 @@ sealed interface DuplicatesUiState {
 
 /**
  * 重複の可能性がある支払いの一覧(DuplicatesScreen)の ViewModel。
- * 判定は [ReceiptDedup] と [PaymentMerge.duplicateSets] に任せ、ここは組ごとの差分を用意する。
+ * 判定は [PaymentDedup] と [PaymentMerge.duplicateSets] に任せ、ここは組ごとの差分を用意する。
  */
 @HiltViewModel
 class DuplicatesViewModel @Inject constructor(
-    private val repository: ReceiptRepository,
+    private val repository: PaymentRepository,
 ) : ViewModel() {
 
     private val _actionError = MutableStateFlow<String?>(null)
@@ -62,12 +62,12 @@ class DuplicatesViewModel @Inject constructor(
     val actionError: StateFlow<String?> = _actionError.asStateFlow()
 
     val state: StateFlow<DuplicatesUiState> = combine(
-        repository.observeReceipts(),
+        repository.observePayments(),
         repository.observeNotDuplicates(),
-    ) { receipts, notDup ->
-        PaymentMerge.duplicateSets(receipts, ReceiptDedup.notDuplicateSet(notDup))
+    ) { payments, notDup ->
+        PaymentMerge.duplicateSets(payments, PaymentDedup.notDuplicateSet(notDup))
     }
-        .mapLatest<List<List<Receipt>>, DuplicatesUiState> { sets ->
+        .mapLatest<List<List<Payment>>, DuplicatesUiState> { sets ->
             DuplicatesUiState.Loaded(
                 sets.map { buildGroup(it) }.filter { it.payments.size >= 2 },
             )
@@ -76,10 +76,10 @@ class DuplicatesViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DuplicatesUiState.Loading)
 
     /** 組の支払いを比較して、一覧に出す形にする。 */
-    private suspend fun buildGroup(set: List<Receipt>): DuplicateGroup {
+    private suspend fun buildGroup(set: List<Payment>): DuplicateGroup {
         val snapshots = repository.mergeSnapshots(set.map { it.id })
         return DuplicateGroup(
-            payments = snapshots.map { it.receipt },
+            payments = snapshots.map { it.payment },
             diffs = PaymentMerge.fieldDiffs(snapshots),
         )
     }

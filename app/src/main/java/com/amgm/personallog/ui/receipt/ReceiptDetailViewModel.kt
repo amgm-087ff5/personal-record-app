@@ -4,15 +4,15 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.amgm.personallog.data.model.Categories
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
-import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
+import com.amgm.personallog.data.model.PaymentStatus
 import com.amgm.personallog.data.model.TotalSource
 import com.amgm.personallog.data.repository.HeadcountSyncChange
 import com.amgm.personallog.data.repository.ParticipantSyncService
 import com.amgm.personallog.data.repository.ConfirmOutcome
 import com.amgm.personallog.data.repository.PaymentConfirmer
-import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.repository.PaymentRepository
 import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.domain.PaymentLink
 import com.amgm.personallog.domain.PaymentMerge
@@ -22,7 +22,7 @@ import com.amgm.personallog.domain.TaxCalc
 import com.amgm.personallog.domain.UnknownAmounts
 import com.amgm.personallog.domain.UnknownItems
 import com.amgm.personallog.receipt.ReceiptCalc
-import com.amgm.personallog.receipt.ReceiptDedup
+import com.amgm.personallog.receipt.PaymentDedup
 import com.amgm.personallog.receipt.ReceiptAdjust
 import com.amgm.personallog.receipt.ReceiptImageStore
 import com.amgm.personallog.receipt.adjust
@@ -50,7 +50,7 @@ data class ItemForm(
     val category: String,
     val taxRate: String,
     val priceIncludesTax: Boolean,
-    /** ReceiptItem の id。新規の行は 0。保存で id を保ち、家計簿の行との対応を切らないために持つ。 */
+    /** PaymentItem の id。新規の行は 0。保存で id を保ち、家計簿の行との対応を切らないために持つ。 */
     val id: Long = 0L,
     /** 割り勘の補助: この品目を「自分の払う分」の計算に含めるか(画面だけの状態。保存しない)。 */
     val picked: Boolean = false,
@@ -89,9 +89,9 @@ internal fun groupItemFormsWithin(items: List<ItemForm>, openedKeys: Set<Long>, 
     groupItemForms(items.filter { it.key in openedKeys }).firstOrNull { key in it.keys }
 
 /** 入力中の1個ぶんを計算用のモデルにする。立て替えでなければ自分の分は無視する(全額自分)。 */
-internal fun ItemForm.toItemModel(receiptId: Long = 0L): ReceiptItem = ReceiptItem(
+internal fun ItemForm.toItemModel(paymentId: Long = 0L): PaymentItem = PaymentItem(
     id = id,
-    receiptId = receiptId,
+    paymentId = paymentId,
     name = name.trim(),
     amount = amount.toIntOrNull() ?: 0,
     category = category,
@@ -104,7 +104,7 @@ internal fun ItemForm.toItemModel(receiptId: Long = 0L): ReceiptItem = ReceiptIt
 /** 金額の入力: 数字と、先頭の「-」(値引き)だけを通す。 */
 private fun String.filterAmount(): String = filterIndexed { i, c -> c.isDigit() || (c == '-' && i == 0) }
 
-private fun ReceiptItem.toForm(key: Long) = ItemForm(
+private fun PaymentItem.toForm(key: Long) = ItemForm(
     key = key,
     id = id,
     name = name,
@@ -241,7 +241,7 @@ data class DetailUiState(
     val keptDeletedCount: Int = 0,
     /** この支払いに紐づく家計簿の自分の支出(まとまり)。無ければ null。 */
     val paymentLink: PaymentLink? = null,
-    /** 参加人数(整数。空は未入力)。保存で receipts.headcount に入り、割り勘の参加者もそれに合わせる。 */
+    /** 参加人数(整数。空は未入力)。保存で payments.headcount に入り、割り勘の参加者もそれに合わせる。 */
     val headcount: String = "",
     /** 人数を減らしたとき、消す人を選ぶ確認。null なら出さない。 */
     val headcountChoice: HeadcountChoice? = null,
@@ -314,7 +314,7 @@ data class DetailUiState(
 @HiltViewModel
 class ReceiptDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val repository: ReceiptRepository,
+    private val repository: PaymentRepository,
     private val store: ReceiptImageStore,
     private val scanner: ReceiptScanner,
     private val syncService: ParticipantSyncService,
@@ -322,7 +322,7 @@ class ReceiptDetailViewModel @Inject constructor(
     private val readStore: PaymentReadStore,
 ) : ViewModel() {
 
-    private val receiptId: Long = savedStateHandle.get<Long>("id") ?: 0L
+    private val paymentId: Long = savedStateHandle.get<Long>("id") ?: 0L
     private var nextKey = 1L
 
     /** 保存済みの人数(割り勘の参加者と合わせた後の値)。人数が変わったかの判定に使う。 */
@@ -332,15 +332,15 @@ class ReceiptDetailViewModel @Inject constructor(
     private var pendingSave: (() -> Unit)? = null
 
     /** 読み込んだレシート。フォームに無い列(回転・トリミングなど)を保存で失わないよう、これを土台にする。 */
-    private var loadedReceipt: Receipt? = null
+    private var loadedPayment: Payment? = null
 
     /** 重複の判定に使う、このレシート以外の保存済みレシートと「重複ではない」の組(読み込み時に取得)。 */
-    private var otherReceipts: List<Receipt> = emptyList()
+    private var otherPayments: List<Payment> = emptyList()
     private var notDuplicateSet: MutableSet<Pair<Long, Long>> = HashSet()
 
     /** 重複の組(支払いの id。マージ先が先頭)。組に入っていなければ空。 */
-    private fun mergeIdsOf(r: Receipt): List<Long> =
-        PaymentMerge.setContaining(r.id, PaymentMerge.duplicateSets(listOf(r) + otherReceipts, notDuplicateSet))
+    private fun mergeIdsOf(r: Payment): List<Long> =
+        PaymentMerge.setContaining(r.id, PaymentMerge.duplicateSets(listOf(r) + otherPayments, notDuplicateSet))
             ?.map { it.id }.orEmpty()
 
     private val _state = MutableStateFlow(DetailUiState())
@@ -348,27 +348,27 @@ class ReceiptDetailViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val r = repository.getReceipt(receiptId)
+            val r = repository.getPayment(paymentId)
             if (r == null) {
                 _state.update { it.copy(loading = false, notFound = true) }
                 return@launch
             }
-            val items = repository.getItems(receiptId)
+            val items = repository.getItems(paymentId)
             val (d, t) = splitPurchasedAt(r.purchasedAt)
-            loadedReceipt = r
+            loadedPayment = r
             storedHeadcount = r.headcount
-            notDuplicateSet = HashSet(ReceiptDedup.notDuplicateSet(repository.notDuplicates()))
-            otherReceipts = repository.allReceipts().filter { it.id != r.id }
-            val earlier = ReceiptDedup.earlierDuplicates(r, otherReceipts, notDuplicateSet)
+            notDuplicateSet = HashSet(PaymentDedup.notDuplicateSet(repository.notDuplicates()))
+            otherPayments = repository.allPayments().filter { it.id != r.id }
+            val earlier = PaymentDedup.earlierDuplicates(r, otherPayments, notDuplicateSet)
             _state.value = DetailUiState(
                 loading = false,
                 imagePath = r.imagePath,
                 rawJson = r.rawJson,
                 createdAt = r.createdAt,
                 imageHash = r.imageHash,
-                possibleDuplicates = earlier.map { DuplicateRef(it.id, ReceiptDedup.summary(it)) },
+                possibleDuplicates = earlier.map { DuplicateRef(it.id, PaymentDedup.summary(it)) },
                 mergeIds = mergeIdsOf(r),
-                confirmed = r.status == ReceiptStatus.CONFIRMED,
+                confirmed = r.status == PaymentStatus.CONFIRMED,
                 isAdvance = r.isAdvance,
                 ownAmount = r.ownAmount?.toString().orEmpty(),
                 date = d,
@@ -383,7 +383,7 @@ class ReceiptDetailViewModel @Inject constructor(
                 headcount = r.headcount?.toString().orEmpty(),
             )
             markRead()
-            repository.observePaymentLink(receiptId).collect { link ->
+            repository.observePaymentLink(paymentId).collect { link ->
                 _state.update { it.copy(paymentLink = link) }
             }
         }
@@ -392,7 +392,7 @@ class ReceiptDetailViewModel @Inject constructor(
     /** 支払いを開いたので既読にする。既読の保存に失敗しても、画面は続ける。 */
     private suspend fun markRead() {
         try {
-            readStore.markRead(receiptId)
+            readStore.markRead(paymentId)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -404,17 +404,17 @@ class ReceiptDetailViewModel @Inject constructor(
 
     /**
      * 重複の警告を、いまの入力(日付・時刻・合計)で計算し直す。保存済みの「重複ではない」の組も考慮する。
-     * 読み込み前(loadedReceipt が null)は何もしない。
+     * 読み込み前(loadedPayment が null)は何もしない。
      */
     private fun recomputeDuplicates() {
-        val base = loadedReceipt ?: return
+        val base = loadedPayment ?: return
         _state.update { s ->
             val current = base.copy(
                 purchasedAt = ReceiptMapper.purchasedAt(s.date.trim(), s.time.trim()),
                 totalAmount = s.total.toIntOrNull(),
             )
-            val earlier = ReceiptDedup.earlierDuplicates(current, otherReceipts, notDuplicateSet)
-            s.copy(possibleDuplicates = earlier.map { DuplicateRef(it.id, ReceiptDedup.summary(it)) })
+            val earlier = PaymentDedup.earlierDuplicates(current, otherPayments, notDuplicateSet)
+            s.copy(possibleDuplicates = earlier.map { DuplicateRef(it.id, PaymentDedup.summary(it)) })
         }
     }
 
@@ -461,7 +461,7 @@ class ReceiptDetailViewModel @Inject constructor(
         _state.update { it.copy(headcountChoice = null, busy = true, error = null) }
         viewModelScope.launch {
             try {
-                syncService.apply(receiptId, c.target, c.change.autoRemoveIds + c.selected, addCount = 0)
+                syncService.apply(paymentId, c.target, c.change.autoRemoveIds + c.selected, addCount = 0)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -499,7 +499,7 @@ class ReceiptDetailViewModel @Inject constructor(
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             val planned = try {
-                syncService.plan(receiptId, target)
+                syncService.plan(paymentId, target)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -523,7 +523,7 @@ class ReceiptDetailViewModel @Inject constructor(
                 return@launch
             }
             try {
-                syncService.apply(receiptId, target, planned.change.autoRemoveIds, planned.change.add)
+                syncService.apply(paymentId, target, planned.change.autoRemoveIds, planned.change.add)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -643,8 +643,8 @@ class ReceiptDetailViewModel @Inject constructor(
     fun dismissError() = _state.update { it.copy(error = null) }
     fun dismissInfo() = _state.update { it.copy(info = null) }
 
-    /** フォームを検証して Receipt と品目に変換。不正なら error をセットして null。 */
-    private fun buildFromForm(strict: Boolean): Pair<Receipt, List<ReceiptItem>>? {
+    /** フォームを検証して Payment と品目に変換。不正なら error をセットして null。 */
+    private fun buildFromForm(strict: Boolean): Pair<Payment, List<PaymentItem>>? {
         val s = _state.value
         val date = s.date.trim()
         if (!ReceiptCalc.isValidDate(date)) {
@@ -679,22 +679,22 @@ class ReceiptDetailViewModel @Inject constructor(
             _state.update { it.copy(error = "「自分の払う分」は金額(円)で入力してください。") }
             return null
         }
-        val items = s.items.map { it.toItemModel(receiptId) }
-        val base = loadedReceipt ?: run {
+        val items = s.items.map { it.toItemModel(paymentId) }
+        val base = loadedPayment ?: run {
             _state.update { it.copy(error = "支払いを読み込めていないため保存できません。") }
             return null
         }
         // 合計は補完しない。空なら null のまま(下書きは保存できる。確定は startConfirm で止める)
         val total = s.total.toIntOrNull()
-        val receipt = base.copy(
-            id = receiptId,
+        val payment = base.copy(
+            id = paymentId,
             purchasedAt = ReceiptMapper.purchasedAt(date, time),
             storeName = s.store.trim(),
             totalAmount = total,
             totalSource = if (total == null) TotalSource.UNKNOWN else s.totalSource,
             imagePath = s.imagePath,
             rawJson = s.rawJson,
-            status = if (s.confirmed) ReceiptStatus.CONFIRMED else ReceiptStatus.DRAFT,
+            status = if (s.confirmed) PaymentStatus.CONFIRMED else PaymentStatus.DRAFT,
             createdAt = s.createdAt,
             imageHash = s.imageHash,
             isAdvance = s.isAdvance,
@@ -704,7 +704,7 @@ class ReceiptDetailViewModel @Inject constructor(
             cropRight = s.adjust.cropRight, cropBottom = s.adjust.cropBottom,
             headcount = headcount,
         )
-        return receipt to items
+        return payment to items
     }
 
     /** 下書きとして保存(確定済み支払いでは使わない)。 */
@@ -731,7 +731,7 @@ class ReceiptDetailViewModel @Inject constructor(
     }
 
     /**
-     * 確定: 支払い・品目を保存し、家計簿(Expense)を作り直す。
+     * 確定: 支払い・品目を保存し、家計簿(ExpenseItem)を作り直す。
      * 合計が空なら確認(missingTotalPrompt)を出して止める。
      * 重複の候補(時刻5分以内+同じ合計。「重複ではない」の組は除く)の確定済み支払いが既にあれば、確認を出して止める(既定はキャンセル)。
      */
@@ -759,8 +759,8 @@ class ReceiptDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 refs.forEach {
-                    repository.markNotDuplicate(receiptId, it.id)
-                    notDuplicateSet.add(ReceiptDedup.pairOf(receiptId, it.id))
+                    repository.markNotDuplicate(paymentId, it.id)
+                    notDuplicateSet.add(PaymentDedup.pairOf(paymentId, it.id))
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -789,9 +789,9 @@ class ReceiptDetailViewModel @Inject constructor(
     fun markNotDuplicate(otherId: Long) {
         viewModelScope.launch {
             try {
-                repository.markNotDuplicate(receiptId, otherId)
-                notDuplicateSet.add(ReceiptDedup.pairOf(receiptId, otherId))
-                val base = loadedReceipt
+                repository.markNotDuplicate(paymentId, otherId)
+                notDuplicateSet.add(PaymentDedup.pairOf(paymentId, otherId))
+                val base = loadedPayment
                 _state.update { s ->
                     s.copy(
                         possibleDuplicates = s.possibleDuplicates.filterNot { it.id == otherId },
@@ -825,11 +825,11 @@ class ReceiptDetailViewModel @Inject constructor(
                 ConfirmOutcome.Confirmed -> {
                     storedHeadcount = built.first.headcount
                     // 確定で作られた支出(まとまり)を、finished と一緒に出す(確定の直後は DB の観測より先に来るため、ここで読む)
-                    val link = repository.observePaymentLink(receiptId).first()
+                    val link = repository.observePaymentLink(paymentId).first()
                     _state.update { it.copy(busy = false, confirmed = true, finished = true, finishedLink = link) }
                 }
                 is ConfirmOutcome.NeedsDuplicateDecision -> _state.update {
-                    it.copy(busy = false, duplicateWarning = outcome.duplicates.map { d -> DuplicateRef(d.id, ReceiptDedup.summary(d)) })
+                    it.copy(busy = false, duplicateWarning = outcome.duplicates.map { d -> DuplicateRef(d.id, PaymentDedup.summary(d)) })
                 }
                 is ConfirmOutcome.MissingTotal -> _state.update { it.copy(busy = false, missingTotalPrompt = true) }
                 is ConfirmOutcome.NeedsRebuildDecision -> _state.update {
@@ -865,8 +865,8 @@ class ReceiptDetailViewModel @Inject constructor(
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             try {
-                repository.setAdjust(receiptId, clean)
-                loadedReceipt = loadedReceipt?.copy(
+                repository.setAdjust(paymentId, clean)
+                loadedPayment = loadedPayment?.copy(
                     rotationDegrees = clean.rotationDegrees,
                     cropLeft = clean.cropLeft, cropTop = clean.cropTop,
                     cropRight = clean.cropRight, cropBottom = clean.cropBottom,
@@ -894,7 +894,7 @@ class ReceiptDetailViewModel @Inject constructor(
             _state.update { cur ->
                 when (outcome) {
                     is ScanOutcome.Parsed -> {
-                        val p = outcome.receipt
+                        val p = outcome.parsed
                         val units = p.items.flatMap { ReceiptUnits.fromParsed(it) }
                         cur.copy(
                             busy = false,
@@ -932,7 +932,7 @@ class ReceiptDetailViewModel @Inject constructor(
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             try {
-                repository.deletePayment(receiptId)?.let { store.delete(it.imagePath) }
+                repository.deletePayment(paymentId)?.let { store.delete(it.imagePath) }
                 _state.update { it.copy(busy = false, finished = true) }
             } catch (e: CancellationException) {
                 throw e

@@ -1,7 +1,7 @@
 package com.amgm.personallog.domain.split
 
 /**
- * 品目1個ぶん(receipt_items の1行)の税込金額。家計簿の行は品目ごとなので、割り勘の結果を品目へ配り直すのに使う。
+ * 品目1個ぶん(payment_items の1行)の税込金額。家計簿の行は品目ごとなので、割り勘の結果を品目へ配り直すのに使う。
  * groupId はその品目が入っているまとまり(無ければ null)。category は家計簿のカテゴリ。
  */
 data class ItemYen(val itemId: Long, val groupId: Long?, val yen: Long, val category: String)

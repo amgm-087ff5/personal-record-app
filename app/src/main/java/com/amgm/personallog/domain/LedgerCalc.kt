@@ -2,11 +2,11 @@ package com.amgm.personallog.domain
 
 import com.amgm.personallog.data.model.Categories
 import com.amgm.personallog.data.model.CategoryTotal
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
-import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
+import com.amgm.personallog.data.model.PaymentStatus
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
@@ -38,16 +38,16 @@ object LedgerCalc {
     }
 
     /** 支出リストをカテゴリごとに合計し、金額の多い順に返す。 */
-    fun totalsByCategory(expenses: List<Expense>): List<CategoryTotal> =
-        expenses.groupBy { it.category }
+    fun totalsByCategory(expenseItems: List<ExpenseItem>): List<CategoryTotal> =
+        expenseItems.groupBy { it.category }
             .map { (cat, list) -> CategoryTotal(cat, list.sumOf { it.amount.toLong() }) }
             .sortedByDescending { it.total }
 
     /** 支払い1件ぶんの自分の支出。items は品目(groupId は未設定)。必ず1行以上。 */
-    data class ReceiptGroup(val group: ExpenseGroup, val items: List<Expense>)
+    data class PaymentGroup(val group: Expense, val items: List<ExpenseItem>)
 
     /** グループのカテゴリの既定値: 税込でなく印字の金額が最も高い品目のカテゴリ。 */
-    fun groupCategory(items: List<ReceiptItem>): String =
+    fun groupCategory(items: List<PaymentItem>): String =
         items.maxByOrNull { it.amount }?.category ?: Categories.UNCATEGORIZED
 
     /**
@@ -55,40 +55,40 @@ object LedgerCalc {
      *
      * 支出の金額(自分の負担):
      *  - share(割り勘の自分の分)があるとき: share.total。立て替えの指定は無視する(割り勘が立て替えに置き換わる)。
-     *  - 立て替え: 支払い全体の自分の分(receipt.ownAmount)。未入力なら支払総額。
-     *  - それ以外: 支払いの合計(receipt.totalAmount)。合計が未入力(下書き)なら品目の合計。
+     *  - 立て替え: 支払い全体の自分の分(payment.ownAmount)。未入力なら支払総額。
+     *  - それ以外: 支払いの合計(payment.totalAmount)。合計が未入力(下書き)なら品目の合計。
      * 品目:
      *  - share があるとき: 品目ごとの自分の分(share.perItem)。全体で割る割り勘も、SplitLedger が品目の金額の比で配った値になる。
      *  - 立て替え: 支出の金額を、品目の税込の金額の比で配る(最大剰余。合計は支出の金額と一致)。
      *  - それ以外: 品目ごとの税込の支払額。金額が不明の品目は、合計 − 分かっている品目の合計(UnknownAmounts)。
-     *  - 0円の品目は作らない(金額不明の品目は残す)。品目が無い・全部0円のときは、品名が空の1品目(receiptItemId なし。金額・カテゴリ・メモは支出と同じ)。
+     *  - 0円の品目は作らない(金額不明の品目は残す)。品目が無い・全部0円のときは、品名が空の1品目(paymentItemId なし。金額・カテゴリ・メモは支出と同じ)。
      *  - 品目が1つだけなら、その金額は支出の金額にする(ExpenseItems.normalize)。
      * 自分の分が0円(割り勘で自分を外した)ときだけ null(家計簿に行を作らない)。
      * 合計も品目も無い確定済みの支払いは不正なので例外(下書きなら0円の支出)。
      */
-    fun groupFromReceipt(receipt: Receipt, items: List<ReceiptItem>, now: Long, share: SelfShare? = null): ReceiptGroup? {
+    fun groupFromPayment(payment: Payment, items: List<PaymentItem>, now: Long, share: SelfShare? = null): PaymentGroup? {
         if (share != null && share.total == 0L) return null
-        val (date, time) = splitPurchasedAt(receipt.purchasedAt)
-        val advance = share == null && receipt.isAdvance
+        val (date, time) = splitPurchasedAt(payment.purchasedAt)
+        val advance = share == null && payment.isAdvance
         val amount: Long = when {
             share != null -> share.total
-            advance -> receipt.ownAmount?.toLong() ?: paidTotal(receipt, items)
-            else -> receipt.totalAmount?.toLong() ?: paidTotal(receipt, items)
+            advance -> payment.ownAmount?.toLong() ?: paidTotal(payment, items)
+            else -> payment.totalAmount?.toLong() ?: paidTotal(payment, items)
         }
         val paid: List<Long> = when {
             share != null -> items.map { share.perItem[it.id] ?: 0L }
-            advance -> ExpenseItems.allocateByRatio(amount, UnknownAmounts.paidYenPerItem(items, receipt.totalAmount))
+            advance -> ExpenseItems.allocateByRatio(amount, UnknownAmounts.paidYenPerItem(items, payment.totalAmount))
                 ?: List(items.size) { 0L }
-            else -> UnknownAmounts.paidYenPerItem(items, receipt.totalAmount)
+            else -> UnknownAmounts.paidYenPerItem(items, payment.totalAmount)
         }
-        val group = ExpenseGroup(
+        val group = Expense(
             date = date,
             time = time,
             amount = amount.toInt(),
             category = groupCategory(items),
             // 支払い先(店名)は支払いの storeName に持ち、支出の画面・一覧はそこから出す。メモは利用者のメモだけ(既定は空)
             memo = "",
-            receiptId = receipt.id,
+            paymentId = payment.id,
             createdAt = now,
         )
         val children = items.mapIndexedNotNull { i, it ->
@@ -96,34 +96,34 @@ object LedgerCalc {
             if (paid[i] == 0L && !(share == null && it.unknownAmount)) {
                 null
             } else {
-                Expense(
+                ExpenseItem(
                     date = date,
                     time = time,
                     amount = paid[i].toInt(),
                     category = it.category,
                     name = it.name,
                     memo = it.memo,
-                    receiptId = receipt.id,
-                    receiptItemId = it.id.takeIf { id -> id != 0L },
+                    paymentId = payment.id,
+                    paymentItemId = it.id.takeIf { id -> id != 0L },
                     createdAt = now,
                     unknownAmount = it.unknownAmount,
                 )
             }
         }.ifEmpty { listOf(blankItem(group)) }
-        return ReceiptGroup(group, ExpenseItems.normalize(group, children))
+        return PaymentGroup(group, ExpenseItems.normalize(group, children))
     }
 
     /**
      * 品目の無い支払いの支出が持つ1品目。品名は空、金額・カテゴリ・メモ・日時は支出(group)と同じ。
-     * receiptItemId は無い(支払いの品目に対応しない)。
+     * paymentItemId は無い(支払いの品目に対応しない)。
      */
-    fun blankItem(group: ExpenseGroup): Expense = Expense(
+    fun blankItem(group: Expense): ExpenseItem = ExpenseItem(
         date = group.date,
         time = group.time,
         amount = group.amount,
         category = group.category,
         memo = group.memo,
-        receiptId = group.receiptId,
+        paymentId = group.paymentId,
         createdAt = group.createdAt,
         name = "",
     )
@@ -132,13 +132,13 @@ object LedgerCalc {
      * 品目の税込合計(不明の品目は除く)、品目が無ければ合計欄。
      * 下書きで合計も品目も無いときは 0 円(下書きも家計簿に入れ、集計で下書きの件数に数える)。確定済みで合計が無いのは不正なので例外。
      */
-    private fun paidTotal(receipt: Receipt, items: List<ReceiptItem>): Long =
+    private fun paidTotal(payment: Payment, items: List<PaymentItem>): Long =
         if (items.isEmpty()) {
-            receipt.totalAmount?.toLong() ?: run {
-                require(receipt.status == ReceiptStatus.DRAFT) { "合計が未入力のレシートは家計簿にできません(id=${receipt.id})" }
+            payment.totalAmount?.toLong() ?: run {
+                require(payment.status == PaymentStatus.DRAFT) { "合計が未入力のレシートは家計簿にできません(id=${payment.id})" }
                 0L
             }
         } else {
-            UnknownAmounts.itemsYen(items, receipt.totalAmount)
+            UnknownAmounts.itemsYen(items, payment.totalAmount)
         }
 }

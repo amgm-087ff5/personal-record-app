@@ -36,7 +36,7 @@ fun ImportPanel(
     /** 読み取りが済んだ項目の「開く ›」。引数は取り込みの下書きのレシートID。 */
     onOpen: ((Long) -> Unit)? = null,
     /** まだ確定していない支払いの id。その項目の「開く ›」は「確認する ›」と出す。 */
-    draftReceiptIds: Set<Long> = emptySet(),
+    draftPaymentIds: Set<Long> = emptySet(),
     onClear: (() -> Unit)? = null,
 ) {
     val c = AppTheme.colors
@@ -80,10 +80,10 @@ fun ImportPanel(
                     color = if (item.phase == ImportPhase.FAILED) c.danger else c.inkSoft,
                     modifier = Modifier.weight(1f),
                 )
-                val receiptId = item.receiptId
-                if (item.phase == ImportPhase.DONE && onOpen != null && receiptId != null) {
-                    val label = if (receiptId in draftReceiptIds) "確認する ›" else "開く ›"
-                    TextAction(label, onClick = { onOpen(receiptId) }, color = c.ink)
+                val paymentId = item.paymentId
+                if (item.phase == ImportPhase.DONE && onOpen != null && paymentId != null) {
+                    val label = if (paymentId in draftPaymentIds) "確認する ›" else "開く ›"
+                    TextAction(label, onClick = { onOpen(paymentId) }, color = c.ink)
                 }
             }
         }

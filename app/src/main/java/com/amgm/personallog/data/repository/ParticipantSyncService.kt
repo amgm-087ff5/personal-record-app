@@ -2,7 +2,7 @@ package com.amgm.personallog.data.repository
 
 import androidx.room.withTransaction
 import com.amgm.personallog.data.db.AppDatabase
-import com.amgm.personallog.data.db.ReceiptDao
+import com.amgm.personallog.data.db.PaymentDao
 import com.amgm.personallog.data.db.SplitDao
 import com.amgm.personallog.data.model.SplitParticipant
 import com.amgm.personallog.domain.split.ParticipantFacts
@@ -14,7 +14,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 支払い側の人数(receipts.headcount)の変更を、割り勘の参加者(split_participants)に合わせる計画。
+ * 支払い側の人数(payments.headcount)の変更を、割り勘の参加者(split_participants)に合わせる計画。
  * - add: 増やす人数(名前なし・割当なしの空欄メンバーを足す)。
  * - autoRemoveIds: 確認なしで消す参加者(名前・割当・支出の無い行)。
  * - choiceIds: 消す人を選ばせる候補(末尾から。自分も含む)。
@@ -67,20 +67,20 @@ fun planHeadcountChange(participants: List<ParticipantFacts>, target: Int): Head
 @Singleton
 class ParticipantSyncService @Inject constructor(
     private val db: AppDatabase,
-    private val receiptRepository: ReceiptRepository,
+    private val paymentRepository: PaymentRepository,
 ) {
     private val splitDao: SplitDao get() = db.splitDao()
-    private val receiptDao: ReceiptDao get() = db.receiptDao()
+    private val paymentDao: PaymentDao get() = db.paymentDao()
 
     /** 目標人数に合わせる計画を作る(DB は変えない)。対象外なら null。変更が無ければ change.isEmpty。 */
-    suspend fun plan(receiptId: Long, target: Int?): HeadcountPlan? {
+    suspend fun plan(paymentId: Long, target: Int?): HeadcountPlan? {
         if (target == null) return null
-        val sheet = splitDao.getSheet(receiptId) ?: return null
+        val sheet = splitDao.getSheet(paymentId) ?: return null
         if (SplitModeReading.isSelfOnly(sheet.mode)) return null
         val self = splitDao.getSelf()
-        val participants = splitDao.getParticipants(receiptId)
-        val allocated = splitDao.getItemShares(receiptId).map { it.participantId }.toSet() +
-            splitDao.getWholeShares(receiptId).map { it.participantId }.toSet()
+        val participants = splitDao.getParticipants(paymentId)
+        val allocated = splitDao.getItemShares(paymentId).map { it.participantId }.toSet() +
+            splitDao.getWholeShares(paymentId).map { it.participantId }.toSet()
         val persons = splitDao.getPersons().associateBy { it.id }
         val facts = participants.map { p ->
             ParticipantFacts(
@@ -108,17 +108,17 @@ class ParticipantSyncService @Inject constructor(
      * 計画どおりに参加者を増やし・消し、人数(headcount)を保存し、家計簿を合わせる。
      * removeIds は自動で消す人と、選んだ人を合わせたもの。1つのトランザクションで参加者と人数を変える。
      */
-    suspend fun apply(receiptId: Long, target: Int, removeIds: List<Long>, addCount: Int) {
+    suspend fun apply(paymentId: Long, target: Int, removeIds: List<Long>, addCount: Int) {
         db.withTransaction {
             if (removeIds.isNotEmpty()) splitDao.deleteParticipantsByIds(removeIds)
             if (addCount > 0) {
-                val top = (splitDao.getParticipants(receiptId).maxOfOrNull { it.sortOrder } ?: 0) + 1
+                val top = (splitDao.getParticipants(paymentId).maxOfOrNull { it.sortOrder } ?: 0) + 1
                 repeat(addCount) { i ->
-                    splitDao.insertParticipant(SplitParticipant(receiptId = receiptId, personId = null, sortOrder = top + i))
+                    splitDao.insertParticipant(SplitParticipant(paymentId = paymentId, personId = null, sortOrder = top + i))
                 }
             }
-            receiptDao.setHeadcount(receiptId, target)
+            paymentDao.setHeadcount(paymentId, target)
         }
-        receiptRepository.syncLedger(receiptId)
+        paymentRepository.syncLedger(paymentId)
     }
 }

@@ -7,6 +7,17 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
 
+/*
+ * 用語(DB v17〜。v16 までは逆の名前で紛らわしかったので改名した)。ドメインの規則はこの定義に従う。
+ *   支払い     Payment      payments       店への支払いの事実。レシート画像・合計・店名・日時を持つ(旧 receipts / Receipt)
+ *   支払いの品目 PaymentItem  payment_items  支払いの明細1個ぶん。paymentId で支払いに属する(旧 receipt_items / ReceiptItem)
+ *   支出       Expense      expenses       支払い1件に対する自分の負担(家計簿の1行のまとまり)。paymentId で支払いに属する(旧 expense_groups / ExpenseGroup)
+ *   支出の品目  ExpenseItem  expense_items  支出の明細。groupId で支出に、paymentItemId で支払いの品目に紐づく(旧 expenses / Expense)
+ * 列: paymentId(旧 receiptId)、paymentItemId(旧 receiptItemId)。支出の品目の親の支出は、列名 groupId のまま。
+ * 画面名(ReceiptDetailScreen など)とレシート画像・読み取り(imagePath・ReceiptParser など)は「レシート」のまま。
+ * バックアップ(BackupModels)のファイルの項目名は互換のため旧名のまま(@SerialName)。
+ */
+
 /** 日記(1日1件)。date は "yyyy-MM-dd"。 */
 @Entity(tableName = "diary_entries", indices = [Index(value = ["date"], unique = true)])
 data class DiaryEntry(
@@ -38,9 +49,9 @@ data class DiaryPhoto(
     val sortOrder: Int = 0,
 )
 
-/** 支払い。purchasedAt は "yyyy-MM-dd" または "yyyy-MM-dd HH:mm"。status は ReceiptStatus。 */
-@Entity(tableName = "receipts")
-data class Receipt(
+/** 支払い。purchasedAt は "yyyy-MM-dd" または "yyyy-MM-dd HH:mm"。status は PaymentStatus。 */
+@Entity(tableName = "payments")
+data class Payment(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val purchasedAt: String,
     val storeName: String,
@@ -49,7 +60,7 @@ data class Receipt(
     val imagePath: String,
     /** Claude応答の原文(JSON文字列) */
     val rawJson: String,
-    val status: String = ReceiptStatus.DRAFT,
+    val status: String = PaymentStatus.DRAFT,
     val createdAt: Long,
     /** 原本画像(imagePath)のSHA-256(16進小文字)。重複検知用。 */
     val imageHash: String? = null,
@@ -77,12 +88,12 @@ data class Receipt(
     val headcount: Int? = null,
 )
 
-object ReceiptStatus {
+object PaymentStatus {
     const val DRAFT = "draft"
     const val CONFIRMED = "confirmed"
 }
 
-/** Receipt.totalSource の値。合計がどこから来たか。 */
+/** Payment.totalSource の値。合計がどこから来たか。 */
 object TotalSource {
     /** レシートの印字をLLMが読んだ値 */
     const val PRINTED = "printed"
@@ -98,37 +109,37 @@ object TotalSource {
 }
 
 /**
- * 「重複ではない」と判断した支払いの組。小さい id を receiptIdLow に正規化して持つ。
+ * 「重複ではない」と判断した支払いの組。小さい id を paymentIdLow に正規化して持つ。
  * どちらかの支払いを削除すると組も消える(外部キーの CASCADE)。
  */
 @Entity(
-    tableName = "receipt_not_duplicates",
-    primaryKeys = ["receiptIdLow", "receiptIdHigh"],
+    tableName = "payment_not_duplicates",
+    primaryKeys = ["paymentIdLow", "paymentIdHigh"],
     foreignKeys = [
         ForeignKey(
-            entity = Receipt::class,
+            entity = Payment::class,
             parentColumns = ["id"],
-            childColumns = ["receiptIdLow"],
+            childColumns = ["paymentIdLow"],
             onDelete = ForeignKey.CASCADE,
         ),
         ForeignKey(
-            entity = Receipt::class,
+            entity = Payment::class,
             parentColumns = ["id"],
-            childColumns = ["receiptIdHigh"],
+            childColumns = ["paymentIdHigh"],
             onDelete = ForeignKey.CASCADE,
         ),
     ],
-    indices = [Index("receiptIdHigh")],
+    indices = [Index("paymentIdHigh")],
 )
-data class ReceiptNotDuplicate(
-    val receiptIdLow: Long,
-    val receiptIdHigh: Long,
+data class PaymentNotDuplicate(
+    val paymentIdLow: Long,
+    val paymentIdHigh: Long,
     val createdAt: Long,
 ) {
     companion object {
         /** 2つの id から正規化した組を作る(小さい方が Low)。同じ id なら null。 */
-        fun of(a: Long, b: Long, createdAt: Long): ReceiptNotDuplicate? =
-            if (a == b) null else ReceiptNotDuplicate(minOf(a, b), maxOf(a, b), createdAt)
+        fun of(a: Long, b: Long, createdAt: Long): PaymentNotDuplicate? =
+            if (a == b) null else PaymentNotDuplicate(minOf(a, b), maxOf(a, b), createdAt)
     }
 }
 
@@ -137,20 +148,20 @@ data class ReceiptNotDuplicate(
  * 同じ品名・金額などの行は表示時にまとめる(データにグループは持たない)。
  */
 @Entity(
-    tableName = "receipt_items",
+    tableName = "payment_items",
     foreignKeys = [
         ForeignKey(
-            entity = Receipt::class,
+            entity = Payment::class,
             parentColumns = ["id"],
-            childColumns = ["receiptId"],
+            childColumns = ["paymentId"],
             onDelete = ForeignKey.CASCADE,
         ),
     ],
-    indices = [Index("receiptId")],
+    indices = [Index("paymentId")],
 )
-data class ReceiptItem(
+data class PaymentItem(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val receiptId: Long,
+    val paymentId: Long,
     val name: String,
     /** 1個ぶんの印字金額。税込/税抜は priceIncludesTax で決まる。値引きは負の値。 */
     val amount: Int = 0,
@@ -173,24 +184,24 @@ data class ReceiptItem(
 
 /**
  * 自分の支出(支払い1件に対する自分の負担)。amount は自分の負担額(確定値で、正)。
- * 品目は Expense.groupId で紐づき、必ず1行以上ある(品目の無い支払いは、品名が空の1品目を持つ)。
+ * 品目は ExpenseItem.groupId で紐づき、必ず1行以上ある(品目の無い支払いは、品名が空の1品目を持つ)。
  * 品目が1つのとき、その品目の金額は amount と同じ。品目の合計と amount がずれる場合は表示で差額を示す。
- * 支出は必ず支払い(receiptId)に属する(v16〜 NOT NULL)。支払いを消すと支出も消える(CASCADE)。
- * 支出だけを消すことはしない(ReceiptRepository.deletePayment で支払いごと消す)。親の無い支出・子の無い支払いを作らない。
+ * 支出は必ず支払い(paymentId)に属する(v16〜 NOT NULL)。支払いを消すと支出も消える(CASCADE)。
+ * 支出だけを消すことはしない(PaymentRepository.deletePayment で支払いごと消す)。親の無い支出・子の無い支払いを作らない。
  */
 @Entity(
-    tableName = "expense_groups",
+    tableName = "expenses",
     foreignKeys = [
         ForeignKey(
-            entity = Receipt::class,
+            entity = Payment::class,
             parentColumns = ["id"],
-            childColumns = ["receiptId"],
+            childColumns = ["paymentId"],
             onDelete = ForeignKey.CASCADE,
         ),
     ],
-    indices = [Index("receiptId"), Index("date")],
+    indices = [Index("paymentId"), Index("date")],
 )
-data class ExpenseGroup(
+data class Expense(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val date: String,
     /** 支払った時刻 "HH:mm"。支払いの日時に従う。 */
@@ -200,7 +211,7 @@ data class ExpenseGroup(
     val category: String = Categories.UNCATEGORIZED,
     val memo: String = "",
     /** 親の支払い。必ず入る(v16〜)。 */
-    val receiptId: Long,
+    val paymentId: Long,
     val createdAt: Long,
     /** 端末をまたいで変わらない識別子(バックアップの復元時の照合キー)。 */
     @ColumnInfo(defaultValue = "''")
@@ -220,35 +231,35 @@ data class ExpenseGroup(
 fun newUid(): String = UUID.randomUUID().toString()
 
 /**
- * 支出の品目(自分の支出 expense_groups の子)。amount は円で、支出は正の値。receiptId は支払い由来の場合のみ。
+ * 支出の品目(自分の支出 expenses の子)。amount は円で、支出は正の値。paymentId は支払い由来の場合のみ。
  * groupId は必ず入る(v14 で「単独の支出」= groupId なし をやめた)。null は v13 以前の古い行と、取り込み前の旧形式だけ。
- * 支払いを消すと品目も消える(receiptId・groupId とも CASCADE。v16〜)。
+ * 支払いを消すと品目も消える(paymentId・groupId とも CASCADE。v16〜)。
  */
 @Entity(
-    tableName = "expenses",
+    tableName = "expense_items",
     foreignKeys = [
         ForeignKey(
-            entity = Receipt::class,
+            entity = Payment::class,
             parentColumns = ["id"],
-            childColumns = ["receiptId"],
+            childColumns = ["paymentId"],
             onDelete = ForeignKey.CASCADE,
         ),
         ForeignKey(
-            entity = ExpenseGroup::class,
+            entity = Expense::class,
             parentColumns = ["id"],
             childColumns = ["groupId"],
             onDelete = ForeignKey.CASCADE,
         ),
         ForeignKey(
-            entity = ReceiptItem::class,
+            entity = PaymentItem::class,
             parentColumns = ["id"],
-            childColumns = ["receiptItemId"],
+            childColumns = ["paymentItemId"],
             onDelete = ForeignKey.SET_NULL,
         ),
     ],
-    indices = [Index("receiptId"), Index("date"), Index("groupId"), Index("receiptItemId")],
+    indices = [Index("paymentId"), Index("date"), Index("groupId"), Index("paymentItemId")],
 )
-data class Expense(
+data class ExpenseItem(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val date: String,
     /** 支払った時刻 "HH:mm"(必須)。レシート由来の初期値はレシートの時刻。 */
@@ -257,7 +268,7 @@ data class Expense(
     val amount: Int,
     val category: String = Categories.UNCATEGORIZED,
     val memo: String = "",
-    val receiptId: Long? = null,
+    val paymentId: Long? = null,
     val createdAt: Long,
     val groupId: Long? = null,
     /**
@@ -266,7 +277,7 @@ data class Expense(
     @ColumnInfo(defaultValue = "0")
     val timeEdited: Boolean = false,
     /** 元になった支払いの品目。支払いの再確定で、同じ品目の行を探すのに使う。手入力・古い行は null。 */
-    val receiptItemId: Long? = null,
+    val paymentItemId: Long? = null,
     /** 品名。 */
     @ColumnInfo(defaultValue = "''")
     val name: String = "",

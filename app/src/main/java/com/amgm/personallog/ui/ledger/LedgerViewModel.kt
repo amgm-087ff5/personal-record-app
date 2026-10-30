@@ -9,22 +9,22 @@ import com.amgm.personallog.backup.BackupManager
 import com.amgm.personallog.backup.BackupProgress
 import com.amgm.personallog.backup.ImportMode
 import com.amgm.personallog.data.db.AppDatabase
+import com.amgm.personallog.data.model.ExpenseItem
 import com.amgm.personallog.data.model.Expense
-import com.amgm.personallog.data.model.ExpenseGroup
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptItem
-import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentItem
+import com.amgm.personallog.data.model.PaymentStatus
 import com.amgm.personallog.data.repository.ExpenseRepository
-import com.amgm.personallog.data.repository.ReceiptRepository
+import com.amgm.personallog.data.repository.PaymentRepository
 import com.amgm.personallog.data.repository.SplitRepository
 import com.amgm.personallog.data.settings.PaymentReadStore
 import com.amgm.personallog.domain.LedgerCalc
 import com.amgm.personallog.receipt.ReceiptAdjust
-import com.amgm.personallog.receipt.ReceiptDedup
+import com.amgm.personallog.receipt.PaymentDedup
 import com.amgm.personallog.receipt.ReceiptImageStore
 import com.amgm.personallog.ui.receipt.ReceiptImportCoordinator
 import com.amgm.personallog.ui.receipt.ReceiptListUiState
-import com.amgm.personallog.ui.receipt.draftReceiptIds
+import com.amgm.personallog.ui.receipt.draftPaymentIds
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -66,19 +66,19 @@ data class LedgerUiState(
     /** この月の行のうち、割り勘に警告がある支払いの件数。 */
     val warnCount: Int = 0,
     /** 下書きの支払いの id(行の「下書き」の印に使う)。 */
-    val draftReceiptIds: Set<Long> = emptySet(),
+    val draftPaymentIds: Set<Long> = emptySet(),
     /** 割り勘に警告がある支払いの id(行の「要確認」の印に使う)。 */
-    val warnReceiptIds: Set<Long> = emptySet(),
+    val warnPaymentIds: Set<Long> = emptySet(),
     /** 画像のあるレシート(レシート由来の支払い)の id。行の「レシート由来」の印に使う。手入力の支払い(画像なし)は含まない。 */
-    val imageReceiptIds: Set<Long> = emptySet(),
+    val imagePaymentIds: Set<Long> = emptySet(),
     /** 重複の候補がある支払い(後から作られた側)の id。行の「重複?」の印に使う。支払い一覧と同じ判定。 */
-    val duplicateReceiptIds: Set<Long> = emptySet(),
+    val duplicatePaymentIds: Set<Long> = emptySet(),
     /** 支払いの id → 支払い先(店名)。家計簿の行の見出しに使う。 */
     val storeNames: Map<Long, String> = emptyMap(),
     /** この月の行のうち、重複の候補がある支払いの件数。 */
     val duplicateCount: Int = 0,
     /** 未読の支払い(取り込みを読み終えて、まだ開いていない)の id。行の「未読」の印に使う。 */
-    val unreadReceiptIds: Set<Long> = emptySet(),
+    val unreadPaymentIds: Set<Long> = emptySet(),
     val error: String? = null,
     val backup: BackupUiState = BackupUiState(),
 )
@@ -93,20 +93,20 @@ private data class Snapshot(
     val chartLegend: List<CategoryShare>,
     val draftCount: Int,
     val warnCount: Int,
-    val draftReceiptIds: Set<Long>,
-    val warnReceiptIds: Set<Long>,
-    val imageReceiptIds: Set<Long>,
-    val duplicateReceiptIds: Set<Long>,
+    val draftPaymentIds: Set<Long>,
+    val warnPaymentIds: Set<Long>,
+    val imagePaymentIds: Set<Long>,
+    val duplicatePaymentIds: Set<Long>,
     val duplicateCount: Int,
     val storeNames: Map<Long, String>,
-    val unreadReceiptIds: Set<Long>,
+    val unreadPaymentIds: Set<Long>,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class LedgerViewModel @Inject constructor(
     private val repository: ExpenseRepository,
-    private val receipts: ReceiptRepository,
+    private val payments: PaymentRepository,
     private val splits: SplitRepository,
     private val backupManager: BackupManager,
     private val db: AppDatabase,
@@ -125,8 +125,8 @@ class LedgerViewModel @Inject constructor(
     val imports: StateFlow<ReceiptListUiState> = importer.state
 
     /** 取り込みの結果のうち、まだ下書きの支払いの id(「開く ›」を「確認する ›」にする)。 */
-    val importDraftIds: StateFlow<Set<Long>> = combine(imports, receipts.observeReceipts()) { st, list ->
-        draftReceiptIds(st.imports.map { it.receiptId }, list)
+    val importDraftIds: StateFlow<Set<Long>> = combine(imports, payments.observePayments()) { st, list ->
+        draftPaymentIds(st.imports.map { it.paymentId }, list)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     fun newImportCameraPath(): String = importer.newCameraPath()
@@ -162,8 +162,8 @@ class LedgerViewModel @Inject constructor(
     /**
      * 取り込んだレシートから作られた支出(まとまり)の id。支出が無ければ null(その場合は支払いの詳細を開く)。
      */
-    suspend fun paymentGroupIdOfReceipt(receiptId: Long): Long? =
-        repository.groupsOfReceipt(receiptId).firstOrNull()?.id
+    suspend fun paymentGroupIdOfPayment(paymentId: Long): Long? =
+        repository.groupsOfPayment(paymentId).firstOrNull()?.id
 
     init {
         viewModelScope.launch {
@@ -183,28 +183,28 @@ class LedgerViewModel @Inject constructor(
                     repository.observeGroupsBetween(from, to),
                     // 支払いと重複の除外、未読の id をまとめる(combine の本数の上限を超えないため入れ子にする)
                     combine(
-                        combine(receipts.observeReceipts(), receipts.observeNotDuplicates()) { list, notDup -> list to notDup },
+                        combine(payments.observePayments(), payments.observeNotDuplicates()) { list, notDup -> list to notDup },
                         readStore.unreadIds,
                     ) { (list, notDup), unread -> Triple(list, notDup, unread) },
                     splits.observeSheets(),
-                    db.expenseDao().observeReceiptIdsWithRows(),
-                ) { all, groups, (receiptList, notDup, unread), sheets, rowReceiptIds ->
+                    db.expenseItemDao().observePaymentIdsWithRows(),
+                ) { all, groups, (paymentList, notDup, unread), sheets, rowPaymentIds ->
                     // 割り勘で自分を外した支払い(自分の分が0円で行が無い)は、0円の行として一覧に出す
-                    val excluded = LedgerLogic.excludedReceipts(
-                        receipts = receiptList,
-                        splitReceiptIds = sheets.mapTo(HashSet()) { it.receiptId },
-                        rowReceiptIds = rowReceiptIds.toHashSet(),
+                    val excluded = LedgerLogic.excludedPayments(
+                        payments = paymentList,
+                        splitPaymentIds = sheets.mapTo(HashSet()) { it.paymentId },
+                        rowPaymentIds = rowPaymentIds.toHashSet(),
                         from = from,
                         to = to,
                     )
                     snapshot(
                         f, l, all, groups,
-                        draftIds = receiptList.filter { it.status == ReceiptStatus.DRAFT }.mapTo(HashSet()) { it.id },
-                        warnIds = sheets.filter { it.warnings.isNotBlank() }.mapTo(HashSet()) { it.receiptId },
-                        imageIds = receiptList.filter { it.imagePath.isNotEmpty() }.mapTo(HashSet()) { it.id },
-                        duplicateIds = ReceiptDedup.laterDuplicates(receiptList, ReceiptDedup.notDuplicateSet(notDup)).keys,
+                        draftIds = paymentList.filter { it.status == PaymentStatus.DRAFT }.mapTo(HashSet()) { it.id },
+                        warnIds = sheets.filter { it.warnings.isNotBlank() }.mapTo(HashSet()) { it.paymentId },
+                        imageIds = paymentList.filter { it.imagePath.isNotEmpty() }.mapTo(HashSet()) { it.id },
+                        duplicateIds = PaymentDedup.laterDuplicates(paymentList, PaymentDedup.notDuplicateSet(notDup)).keys,
                         excluded = excluded,
-                        storeNames = receiptList.associate { it.id to it.storeName },
+                        storeNames = paymentList.associate { it.id to it.storeName },
                         unreadIds = unread,
                     )
                 }
@@ -224,13 +224,13 @@ class LedgerViewModel @Inject constructor(
                         chartLegend = s.chartLegend,
                         draftCount = s.draftCount,
                         warnCount = s.warnCount,
-                        draftReceiptIds = s.draftReceiptIds,
-                        warnReceiptIds = s.warnReceiptIds,
-                        imageReceiptIds = s.imageReceiptIds,
-                        duplicateReceiptIds = s.duplicateReceiptIds,
+                        draftPaymentIds = s.draftPaymentIds,
+                        warnPaymentIds = s.warnPaymentIds,
+                        imagePaymentIds = s.imagePaymentIds,
+                        duplicatePaymentIds = s.duplicatePaymentIds,
                         duplicateCount = s.duplicateCount,
                         storeNames = s.storeNames,
-                        unreadReceiptIds = s.unreadReceiptIds,
+                        unreadPaymentIds = s.unreadPaymentIds,
                     )
                 }
             }
@@ -240,8 +240,8 @@ class LedgerViewModel @Inject constructor(
     private fun snapshot(
         f: LocalDate,
         l: ChartLevel,
-        all: List<Expense>,
-        groups: List<ExpenseGroup>,
+        all: List<ExpenseItem>,
+        groups: List<Expense>,
         draftIds: Set<Long>,
         warnIds: Set<Long>,
         imageIds: Set<Long>,
@@ -263,15 +263,15 @@ class LedgerViewModel @Inject constructor(
             chartBars = LedgerChart.bars(l, f, entries),
             chartLegend = LedgerChart.legend(entries, l, f),
             // 下書き・要確認は支払い単位のフラグ。支出の行数ではなく、今月の行に出てくる支払いの数で数える
-            draftCount = current.mapNotNull { it.receiptId }.distinct().count { it in draftIds },
-            warnCount = current.mapNotNull { it.receiptId }.distinct().count { it in warnIds },
-            draftReceiptIds = draftIds,
-            warnReceiptIds = warnIds,
-            imageReceiptIds = imageIds,
-            duplicateReceiptIds = duplicateIds,
-            duplicateCount = current.mapNotNull { it.receiptId }.distinct().count { it in duplicateIds },
+            draftCount = current.mapNotNull { it.paymentId }.distinct().count { it in draftIds },
+            warnCount = current.mapNotNull { it.paymentId }.distinct().count { it in warnIds },
+            draftPaymentIds = draftIds,
+            warnPaymentIds = warnIds,
+            imagePaymentIds = imageIds,
+            duplicatePaymentIds = duplicateIds,
+            duplicateCount = current.mapNotNull { it.paymentId }.distinct().count { it in duplicateIds },
             storeNames = storeNames,
-            unreadReceiptIds = unreadIds,
+            unreadPaymentIds = unreadIds,
         )
     }
 
@@ -296,15 +296,15 @@ class LedgerViewModel @Inject constructor(
     fun dismissError() { _uiState.update { it.copy(error = null) } }
 
     /** 支出が紐づく支払いの日時 "yyyy-MM-dd HH:mm"。紐づかなければ null。 */
-    suspend fun linkedReceiptDateTime(expense: Expense): String? = repository.linkedReceiptDateTime(expense)
+    suspend fun linkedPaymentDateTime(expenseItem: ExpenseItem): String? = repository.linkedPaymentDateTime(expenseItem)
 
     /**
      * 手入力の支払いを保存する(支払いの表と品目)。家計簿の支出は、この保存のなかで支払いから作られる。
      * onDone には保存した支払いの id と、エラーメッセージ(成功なら null)を渡す。
      */
     fun addManualPayment(
-        receipt: Receipt,
-        items: List<ReceiptItem>,
+        payment: Payment,
+        items: List<PaymentItem>,
         headcount: Int?,
         onDone: (Long?, String?) -> Unit,
     ) {
@@ -313,12 +313,12 @@ class LedgerViewModel @Inject constructor(
                 // 保存と人数の書き込みを1つのトランザクションにする(人数だけ残る状態を作らない)
                 val id = db.withTransaction {
                     // 確定(合計か品目がある)は詳細画面の確定と同じ saveAndConfirm を通す。下書きは save のまま
-                    val savedId = if (receipt.status == ReceiptStatus.CONFIRMED) {
-                        receipts.saveAndConfirm(receipt, items)
+                    val savedId = if (payment.status == PaymentStatus.CONFIRMED) {
+                        payments.saveAndConfirm(payment, items)
                     } else {
-                        receipts.save(receipt, items)
+                        payments.save(payment, items)
                     }
-                    if (headcount != null) db.receiptDao().setHeadcount(savedId, headcount)
+                    if (headcount != null) db.paymentDao().setHeadcount(savedId, headcount)
                     savedId
                 }
                 onDone(id, null)
@@ -331,10 +331,10 @@ class LedgerViewModel @Inject constructor(
     }
 
     /** 支出を、元の支払い・レシート画像ごと削除する(支払い ⇒ 支出 の親子をまとめて消す)。 */
-    fun deletePayment(group: ExpenseGroup) {
+    fun deletePayment(group: Expense) {
         viewModelScope.launch {
             try {
-                receipts.deletePayment(group.receiptId)?.let { images.delete(it.imagePath) }
+                payments.deletePayment(group.paymentId)?.let { images.delete(it.imagePath) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -343,10 +343,10 @@ class LedgerViewModel @Inject constructor(
         }
     }
 
-    fun deleteExpense(expense: Expense) {
+    fun deleteExpenseItem(expenseItem: ExpenseItem) {
         viewModelScope.launch {
             try {
-                repository.delete(expense)
+                repository.delete(expenseItem)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -378,7 +378,7 @@ class LedgerViewModel @Inject constructor(
                 val r = backupManager.export(uri) { setProgress(it) }
                 showResult(
                     "エクスポート完了",
-                    "日記 ${r.diaryEntries}件、支払い ${r.receipts}件、支出 ${r.expenses}件、画像 ${r.files}枚を書き出しました。",
+                    "日記 ${r.diaryEntries}件、支払い ${r.payments}件、支出 ${r.expenseItems}件、画像 ${r.files}枚を書き出しました。",
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -405,7 +405,7 @@ class LedgerViewModel @Inject constructor(
                 val r = backupManager.importZip(uri, mode) { setProgress(it) }
                 showResult(
                     "インポート完了",
-                    "日記 ${r.diaryEntries}件、写真 ${r.diaryPhotos}件、支払い ${r.receipts}件、支出 ${r.expenses}件を取り込みました。" +
+                    "日記 ${r.diaryEntries}件、写真 ${r.diaryPhotos}件、支払い ${r.payments}件、支出 ${r.expenseItems}件を取り込みました。" +
                         "重複などでスキップ ${r.skipped}件、画像 ${r.files}枚。",
                 )
             } catch (e: CancellationException) {

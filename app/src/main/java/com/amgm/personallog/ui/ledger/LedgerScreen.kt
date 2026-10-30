@@ -31,7 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.amgm.personallog.data.model.ExpenseGroup
+import com.amgm.personallog.data.model.Expense
 import com.amgm.personallog.domain.PaymentKind
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.Hairline
@@ -73,7 +73,7 @@ fun LedgerScreen(
     val importDrafts by viewModel.importDraftIds.collectAsStateWithLifecycle()
     val c = AppTheme.colors
     val scope = rememberCoroutineScope()
-    // 家計簿の支出は、支払い(receipts の表)を保存したときに作られる。支出だけを単独で追加する入口は無い
+    // 家計簿の支出は、支払い(payments の表)を保存したときに作られる。支出だけを単独で追加する入口は無い
     // 「＋ 記録」で開く3択シート(レシートを撮る / 写真から選ぶ / 手動で登録)
     var creatingPayment by remember { mutableStateOf(false) }
     // 撮影中の保存先(画面回転・プロセス再生成後も結果を受け取れるよう保存する)
@@ -102,20 +102,20 @@ fun LedgerScreen(
     }
     // 取り込みの「開く ›」: その支払いの支出(まとまり)を開く。支出が無ければ支払いの詳細
     // 下書きは登録の手順で開く(「確認する ›」)。確定済みは支出の画面(「開く ›」)
-    val openImported: (Long) -> Unit = { receiptId ->
-        if (receiptId in importDrafts) {
-            onRegisterPayment(receiptId)
+    val openImported: (Long) -> Unit = { paymentId ->
+        if (paymentId in importDrafts) {
+            onRegisterPayment(paymentId)
         } else {
             scope.launch {
-                val groupId = viewModel.paymentGroupIdOfReceipt(receiptId)
-                if (groupId != null) onOpenPayment(PaymentKind.GROUP, groupId) else onOpenReceipt(receiptId)
+                val groupId = viewModel.paymentGroupIdOfPayment(paymentId)
+                if (groupId != null) onOpenPayment(PaymentKind.GROUP, groupId) else onOpenReceipt(paymentId)
             }
         }
     }
     // 「手動で登録」で開く手入力の支払いシート
     var manualPaymentOpen by remember { mutableStateOf(false) }
     val expandedGroups = remember { mutableStateMapOf<Long, Boolean>() }
-    var deletingGroup by remember { mutableStateOf<ExpenseGroup?>(null) }
+    var deletingGroup by remember { mutableStateOf<Expense?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
@@ -152,7 +152,7 @@ fun LedgerScreen(
                             onDismissError = viewModel::dismissImportError,
                             onRetry = viewModel::retryImport,
                             onOpen = openImported,
-                            draftReceiptIds = importDrafts,
+                            draftPaymentIds = importDrafts,
                             onClear = viewModel::clearImports,
                         )
                     }
@@ -265,22 +265,22 @@ fun LedgerScreen(
                     DayBlock(
                         day = day,
                         expandedGroups = expandedGroups,
-                        draftReceiptIds = state.draftReceiptIds,
-                        warnReceiptIds = state.warnReceiptIds,
-                        imageReceiptIds = state.imageReceiptIds,
-                        duplicateReceiptIds = state.duplicateReceiptIds,
-                        unreadReceiptIds = state.unreadReceiptIds,
+                        draftPaymentIds = state.draftPaymentIds,
+                        warnPaymentIds = state.warnPaymentIds,
+                        imagePaymentIds = state.imagePaymentIds,
+                        duplicatePaymentIds = state.duplicatePaymentIds,
+                        unreadPaymentIds = state.unreadPaymentIds,
                         storeNames = state.storeNames,
                         onToggleGroup = { id -> expandedGroups[id] = expandedGroups[id] != true },
                         onOpen = { entry ->
                             // 下書きの行は、登録の手順(支払いの画面から)で開く。確定済みの行は支出の画面
-                            val draftId = entry.receiptId?.takeIf { it in state.draftReceiptIds }
+                            val draftId = entry.paymentId?.takeIf { it in state.draftPaymentIds }
                             if (draftId != null) {
                                 onRegisterPayment(draftId)
                             } else {
                                 when (entry) {
                                     is LedgerEntry.Group -> onOpenPayment(PaymentKind.GROUP, entry.group.id)
-                                    is LedgerEntry.Excluded -> onOpenExcludedPayment(entry.receipt.id)
+                                    is LedgerEntry.Excluded -> onOpenExcludedPayment(entry.payment.id)
                                 }
                             }
                         },
@@ -379,8 +379,8 @@ fun LedgerScreen(
             initialDate = initialDate,
             initialTime = LedgerLogic.defaultTime(initialDate, LocalDate.now(), LocalTime.now()),
             onDismiss = { manualPaymentOpen = false },
-            onSave = { receipt, items, headcount, done ->
-                viewModel.addManualPayment(receipt, items, headcount) { id, err ->
+            onSave = { payment, items, headcount, done ->
+                viewModel.addManualPayment(payment, items, headcount) { id, err ->
                     done(err)
                     // 保存できたら、その支払いの詳細を開く(支払い一覧の手入力と同じ遷移)
                     if (id != null) onOpenReceipt(id)

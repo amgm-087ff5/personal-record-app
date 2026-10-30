@@ -22,8 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.amgm.personallog.data.model.Receipt
-import com.amgm.personallog.data.model.ReceiptStatus
+import com.amgm.personallog.data.model.Payment
+import com.amgm.personallog.data.model.PaymentStatus
 import com.amgm.personallog.ui.design.AppTheme
 import com.amgm.personallog.ui.design.Label
 import com.amgm.personallog.ui.design.PaperScreen
@@ -39,9 +39,9 @@ import com.amgm.personallog.ui.ledger.UnreadBadge
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 /** 月見出し付きの一覧の1行分。 */
-private class SlipEntry(val month: String?, val receipt: Receipt, val lastOfMonth: Boolean)
+private class SlipEntry(val month: String?, val payment: Payment, val lastOfMonth: Boolean)
 
-private fun monthOf(r: Receipt): String {
+private fun monthOf(r: Payment): String {
     val head = r.purchasedAt.take(7)
     val y = head.take(4)
     val m = head.drop(5)
@@ -52,12 +52,12 @@ private fun monthOf(r: Receipt): String {
     }
 }
 
-private fun buildEntries(receipts: List<Receipt>): List<SlipEntry> =
-    receipts.mapIndexed { i, r ->
+private fun buildEntries(payments: List<Payment>): List<SlipEntry> =
+    payments.mapIndexed { i, r ->
         val month = monthOf(r)
-        val prev = receipts.getOrNull(i - 1)?.let { monthOf(it) }
-        val next = receipts.getOrNull(i + 1)?.let { monthOf(it) }
-        SlipEntry(month = if (month != prev) month else null, receipt = r, lastOfMonth = month != next)
+        val prev = payments.getOrNull(i - 1)?.let { monthOf(it) }
+        val next = payments.getOrNull(i + 1)?.let { monthOf(it) }
+        SlipEntry(month = if (month != prev) month else null, payment = r, lastOfMonth = month != next)
     }
 
 /** 絞り込み(一覧の表示対象)。判定は画像の有無: imagePath が空なら手入力。 */
@@ -65,7 +65,7 @@ private const val FILTER_ALL = 0
 private const val FILTER_RECEIPT = 1
 private const val FILTER_MANUAL = 2
 
-private fun Receipt.matches(filter: Int): Boolean = when (filter) {
+private fun Payment.matches(filter: Int): Boolean = when (filter) {
     FILTER_RECEIPT -> imagePath.isNotBlank()
     FILTER_MANUAL -> imagePath.isBlank()
     else -> true
@@ -89,15 +89,15 @@ fun ReceiptScreen(
     onBack: (() -> Unit)? = null,
     viewModel: ReceiptListViewModel = hiltViewModel(),
 ) {
-    val receipts by viewModel.receipts.collectAsStateWithLifecycle()
+    val payments by viewModel.payments.collectAsStateWithLifecycle()
     val duplicates by viewModel.possibleDuplicates.collectAsStateWithLifecycle()
-    val unread by viewModel.unreadReceiptIds.collectAsStateWithLifecycle()
+    val unread by viewModel.unreadPaymentIds.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // 一覧の絞り込み(FILTER_* の値)
     var filter by rememberSaveable { mutableStateOf(FILTER_ALL) }
 
-    val visible = remember(receipts, filter) { receipts.filter { it.matches(filter) } }
+    val visible = remember(payments, filter) { payments.filter { it.matches(filter) } }
     val entries = remember(visible) { buildEntries(visible) }
 
     PaperScreen(modifier = modifier) {
@@ -120,7 +120,7 @@ fun ReceiptScreen(
                 }
             }
 
-            if (receipts.isNotEmpty()) {
+            if (payments.isNotEmpty()) {
                 item(key = "filter") {
                     Row(
                         modifier = Modifier
@@ -136,7 +136,7 @@ fun ReceiptScreen(
                 }
             }
 
-            if (receipts.isEmpty()) {
+            if (payments.isEmpty()) {
                 item(key = "empty") {
                     Text(
                         "まだ支払いがありません。家計簿の「＋ 記録」から追加してください。",
@@ -155,7 +155,7 @@ fun ReceiptScreen(
                     )
                 }
             } else {
-                items(entries, key = { it.receipt.id }) { e ->
+                items(entries, key = { it.payment.id }) { e ->
                     Column(modifier = Modifier.fillMaxWidth()) {
                         if (e.month != null) {
                             Label(
@@ -170,10 +170,10 @@ fun ReceiptScreen(
                                 .sheet(RoundedCornerShape(16.dp), depth = 10.dp),
                         ) {
                             ReceiptSlip(
-                                r = e.receipt,
-                                isDuplicate = duplicates[e.receipt.id] != null,
-                                isUnread = e.receipt.id in unread,
-                                onClick = { onOpenReceipt(e.receipt.id) },
+                                r = e.payment,
+                                isDuplicate = duplicates[e.payment.id] != null,
+                                isUnread = e.payment.id in unread,
+                                onClick = { onOpenReceipt(e.payment.id) },
                             )
                         }
                     }
@@ -197,7 +197,7 @@ fun ReceiptScreen(
 
 /** 一覧の1枚: 左に日付と店名、右に金額と状態の判子。 */
 @Composable
-private fun ReceiptSlip(r: Receipt, isDuplicate: Boolean, isUnread: Boolean, onClick: () -> Unit) {
+private fun ReceiptSlip(r: Payment, isDuplicate: Boolean, isUnread: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -225,7 +225,7 @@ private fun ReceiptSlip(r: Receipt, isDuplicate: Boolean, isUnread: Boolean, onC
             if (isDuplicate) Stamp("重複の可能性", tone = StampTone.Danger)
             // 画像の無い支払いは手入力
             if (r.imagePath.isBlank()) Stamp("手入力", tone = StampTone.Neutral)
-            if (r.status == ReceiptStatus.DRAFT) {
+            if (r.status == PaymentStatus.DRAFT) {
                 Stamp("未確定", tone = StampTone.Accent)
             } else {
                 Stamp("確定", tone = StampTone.Moss)

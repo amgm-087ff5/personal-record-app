@@ -1,9 +1,9 @@
 package com.amgm.personallog.domain
 
-import com.amgm.personallog.data.model.ReceiptItem
+import com.amgm.personallog.data.model.PaymentItem
 
 /**
- * 金額が「不明」の品目の計算(純Kotlin)。支払いの品目(receipt_items)・支出の品目(expenses)の両方で使う。
+ * 金額が「不明」の品目の計算(純Kotlin)。支払いの品目(payment_items)・支出の品目(expense_items)の両方で使う。
  *
  * 規則(利用者の決定 2026-10-28):
  *  - 計算の正は合計額。品目はメモに近い内訳。
@@ -23,10 +23,10 @@ object UnknownAmounts {
     }
 
     /** 分かっている品目(不明でない)の税込の支払総額(円、切り捨て)。 */
-    fun knownPaidYen(items: List<ReceiptItem>): Long = TaxCalc.paidYen(items.filterNot { it.unknownAmount })
+    fun knownPaidYen(items: List<PaymentItem>): Long = TaxCalc.paidYen(items.filterNot { it.unknownAmount })
 
     /** 不明の品目に配る金額の合計。合計が無い(下書き)・不明の品目が無いときは0。差が負なら0。 */
-    fun unknownYen(items: List<ReceiptItem>, total: Int?): Long {
+    fun unknownYen(items: List<PaymentItem>, total: Int?): Long {
         if (total == null || items.none { it.unknownAmount }) return 0L
         return (total.toLong() - knownPaidYen(items)).coerceAtLeast(0L)
     }
@@ -35,7 +35,7 @@ object UnknownAmounts {
      * 品目ごとの税込支払額(円の整数。items と同じ並び)。
      * 分かっている品目は TaxCalc.paidYenPerItem(分かっている品目だけで累積して切り捨て)、不明の品目は unknownYen を均等に分けた値。
      */
-    fun paidYenPerItem(items: List<ReceiptItem>, total: Int?): List<Long> {
+    fun paidYenPerItem(items: List<PaymentItem>, total: Int?): List<Long> {
         if (items.none { it.unknownAmount }) return TaxCalc.paidYenPerItem(items)
         val known = TaxCalc.paidYenPerItem(items.filterNot { it.unknownAmount }).iterator()
         val unknown = splitEqually(unknownYen(items, total), items.count { it.unknownAmount }).iterator()
@@ -43,7 +43,7 @@ object UnknownAmounts {
     }
 
     /** 品目の合計(不明の品目は求めた金額で数える)。合計があり不明の差が0以上なら、合計と一致する。 */
-    fun itemsYen(items: List<ReceiptItem>, total: Int?): Long = paidYenPerItem(items, total).sum()
+    fun itemsYen(items: List<PaymentItem>, total: Int?): Long = paidYenPerItem(items, total).sum()
 
     /**
      * 合計と品目の不一致(合計 − 分かっている品目の合計)。エラーでなければ null。
@@ -60,24 +60,24 @@ object UnknownAmounts {
         }
     }
 
-    /** 支払いの品目と合計の不一致(mismatch を ReceiptItem に当てたもの)。 */
-    fun mismatch(total: Int?, items: List<ReceiptItem>): Long? =
+    /** 支払いの品目と合計の不一致(mismatch を PaymentItem に当てたもの)。 */
+    fun mismatch(total: Int?, items: List<PaymentItem>): Long? =
         mismatch(total?.toLong(), knownPaidYen(items), items.any { it.unknownAmount })
 
-    // ---- 保存済みの支払いの品目(ReceiptItem)に当てたもの。画面の入力中の品目は ReceiptDetailViewModel が ItemForm で行う
+    // ---- 保存済みの支払いの品目(PaymentItem)に当てたもの。画面の入力中の品目は ReceiptDetailViewModel が ItemForm で行う
 
     /**
      * 保存済みの支払いの品目のうち「未入力」のもの: 金額が0で、不明でない。
      * 画面の空欄は保存すると0円になるため、0円の品目を未入力と見なす(0円の品目を本当に0円で持ちたいときは不明にしない)。
      */
-    fun isBlank(item: ReceiptItem): Boolean = item.amount == 0 && !item.unknownAmount
+    fun isBlank(item: PaymentItem): Boolean = item.amount == 0 && !item.unknownAmount
 
     /** 「未入力を全て不明にする」(保存済みの品目)。 */
-    fun markBlankAsUnknown(items: List<ReceiptItem>): List<ReceiptItem> =
+    fun markBlankAsUnknown(items: List<PaymentItem>): List<PaymentItem> =
         UnknownItems.markBlankAsUnknown(items, { isBlank(it) }) { it.copy(unknownAmount = true) }
 
     /** 「差額を不明の品目として足す」で足す金額(保存済みの品目と合計)。出さないときは null。 */
-    fun differenceForUnknownItem(total: Int?, items: List<ReceiptItem>): Long? =
+    fun differenceForUnknownItem(total: Int?, items: List<PaymentItem>): Long? =
         UnknownItems.differenceForUnknownItem(
             total = total?.toLong(),
             knownSum = knownPaidYen(items),
@@ -89,14 +89,14 @@ object UnknownAmounts {
      * 差額を不明の品目として足す(保存済みの品目)。足す品目は品名が空・未分類・金額0(不明の品目の金額は使わない)。
      * 足さないときは items のまま。
      */
-    fun withDifferenceItem(receiptId: Long, total: Int?, items: List<ReceiptItem>): List<ReceiptItem> =
+    fun withDifferenceItem(paymentId: Long, total: Int?, items: List<PaymentItem>): List<PaymentItem> =
         UnknownItems.withDifferenceItem(
             items = items,
             total = total?.toLong(),
             knownSum = knownPaidYen(items),
             isBlank = { isBlank(it) },
             isUnknown = { it.unknownAmount },
-            newUnknownItem = { ReceiptItem(receiptId = receiptId, name = "", amount = 0, unknownAmount = true) },
+            newUnknownItem = { PaymentItem(paymentId = paymentId, name = "", amount = 0, unknownAmount = true) },
         )
 }
 

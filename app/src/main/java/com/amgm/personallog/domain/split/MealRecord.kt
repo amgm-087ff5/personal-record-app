@@ -10,7 +10,7 @@ import java.util.Locale
 
 /**
  * 食べた記録の1行。1行 = 支払いの1つのまとまりのうち、自分が食べた分。
- * - paymentId: 支払い(receipts)の id。支払いに紐づかない行(後で単独で差し込む記録)は null。
+ * - paymentId: 支払い(payments)の id。支払いに紐づかない行(後で単独で差し込む記録)は null。
  * - at: "yyyy-MM-dd" または "yyyy-MM-dd HH:mm"(支払いの日時)。
  * - name: 品名(まとまりの品目の名前。複数なら「最初の品名 ほかN品」)。
  * - quantity: 量の表示。「全部」「1/人数」「M/N個」「¥X分」のいずれか。
