@@ -20,6 +20,8 @@
   --expense:#34529E; --expense-t:#ECF0F9;
   --unknown:#9A6420; --unknown-t:#F8F1E6;
   --special:#B7791F; --special-t:#FBF2E2;
+  --schedule:#3A7CA5; --schedule-t:#E8F1F7; --g-schedule:linear-gradient(135deg,#7FC0DD 0%,#3A7CA5 100%);
+  --todo:#B0573A; --todo-t:#F8ECE6; --g-todo:linear-gradient(135deg,#D58463 0%,#A54E31 100%);
   --g-entity:linear-gradient(135deg,#5E8BE6 0%,#3B5EBF 100%);
   --g-activity:linear-gradient(135deg,#46AFC6 0%,#2B7C98 100%);
   --g-note:linear-gradient(135deg,#4FAE9D 0%,#2D7A6F 100%);
@@ -45,7 +47,7 @@ svg.i{width:1em;height:1em;flex:none;vertical-align:-.12em}
   body{display:flex;align-items:center;justify-content:center;padding:24px 0}
   .device{height:min(844px,calc(100dvh - 48px));border-radius:40px;box-shadow:var(--sh-soft),0 0 0 10px #F7F9FC,0 0 0 11px #CDD5E2}
 }
-.scroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;padding:36px var(--s5) 112px;scrollbar-width:none}
+.scroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;padding:36px var(--s5) 170px;scrollbar-width:none}
 .scroll::-webkit-scrollbar{display:none}
 .view{display:flex;flex-direction:column;gap:var(--s6);animation:fade .18s ease-out}
 .view.push{animation:push .22s cubic-bezier(.2,.7,.2,1)}
@@ -196,7 +198,7 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 /* ===== Bottom nav ===== */
 .nav{position:absolute;left:var(--s5);right:var(--s5);bottom:calc(14px + env(safe-area-inset-bottom));height:66px;display:flex;align-items:center;justify-content:space-around;
   background:rgba(255,255,255,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.9);border-radius:22px;box-shadow:var(--sh-soft);z-index:5}
-.nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;width:66px;height:56px;border-radius:14px;white-space:nowrap;letter-spacing:-.02em;font-size:9.5px;font-weight:600;color:var(--muted)}
+.nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:1;min-width:0;height:56px;border-radius:14px;white-space:nowrap;letter-spacing:-.02em;font-size:9.5px;font-weight:600;color:var(--muted)}
 .nav a svg{font-size:19px}
 .nav a.on{color:var(--c)}
 .nav .plus{width:50px;height:50px;border-radius:15px;background:var(--g-entity);color:#fff;font-size:24px;display:grid;place-items:center;box-shadow:var(--sh-soft),inset 0 1px 0 rgba(255,255,255,.35)}
@@ -255,7 +257,7 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 .grp-kids .lrow{min-height:42px;padding-left:28px;background:#FAFBFD}
 /* ===== 家計簿 ===== */
 /* カテゴリ = 帳簿のインデックス(左に帯・右が丸い) */
-.cat{display:inline-flex;align-items:center;height:22px;padding:0 10px 0 8px;border-radius:3px 11px 11px 3px;border-left:3px solid var(--expense);background:var(--expense-t);color:var(--expense);font-size:11.5px;font-weight:600;white-space:nowrap}
+.cat{display:inline-flex;align-items:center;height:22px;padding:0 10px 0 8px;border-radius:3px 11px 11px 3px;border-left:3px solid var(--cc,var(--expense));background:color-mix(in srgb,var(--cc,var(--expense)) 13%,#fff);color:color-mix(in srgb,var(--cc,var(--expense)) 78%,#1A2338);font-size:11.5px;font-weight:600;white-space:nowrap}
 .cat.ghost{background:rgba(255,255,255,.2);color:#fff;border-left-color:#fff}
 /* 特別感: 非日常だけ印を付ける(日常は既定なので出さない) */
 .spc{display:inline-flex;align-items:center;gap:3px;height:20px;padding:0 8px;border-radius:6px;background:var(--special-t);color:var(--special);font-size:10.5px;font-weight:700;white-space:nowrap}
@@ -288,6 +290,86 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 .segm{display:inline-flex;padding:3px;background:#EEF1F6;border-radius:10px;align-self:flex-start}
 .segm button{height:38px;padding:0 14px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--text2)}
 .segm button.on{background:#fff;color:var(--text);box-shadow:var(--sh-card)} .segm button.on.sp{color:var(--special)}
+/* ===== 各タブ最上部: このページは何か + サマリ ===== */
+.intro{border-radius:14px;padding:12px 14px;background:linear-gradient(180deg,color-mix(in srgb,var(--c) 9%,#fff),#fff);border:1px solid color-mix(in srgb,var(--c) 20%,transparent)}
+.idesc{font-size:12px;line-height:1.6;color:var(--text2);margin-bottom:10px}
+.istats{display:grid;grid-auto-flow:column;grid-auto-columns:1fr}
+.ist{display:flex;flex-direction:column;justify-content:center;min-height:48px;padding:0 10px;border-left:1px solid color-mix(in srgb,var(--c) 20%,transparent);min-width:0}
+.ist:first-child{padding-left:0;border-left:0}
+.iv{font-size:18px;font-weight:700;line-height:1.2;color:color-mix(in srgb,var(--c) 85%,#1A2338)}
+.il{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+a.ist .il::after{content:" ›";color:var(--muted)}
+/* FAB */
+.fab{position:absolute;right:18px;bottom:calc(96px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:18px;background:var(--g-entity);color:#fff;font-size:28px;display:grid;place-items:center;box-shadow:var(--sh-soft),inset 0 1px 0 rgba(255,255,255,.35);z-index:6}
+/* 予定(=これからのアクティビティ): 点線の輪郭 */
+.b-plan{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;border:1.5px dashed var(--schedule);color:var(--schedule);font-size:10.5px;font-weight:600;white-space:nowrap}
+.kid.plan::before{border-style:dashed;border-color:var(--schedule);background:#fff}
+.kid.plan .t{color:var(--schedule)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cwd{font-size:10px;text-align:center;color:var(--muted);padding:2px 0 4px}
+.cwd.sun{color:#C4553F}.cwd.sat{color:#3D6FB6}
+.cday{min-height:60px;display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:4px 2px;border-radius:10px;min-width:0}
+.cday .dn{font-size:12px;font-weight:600;height:22px;width:24px;display:grid;place-items:center;align-self:center;border-radius:7px}
+.cday.sun .dn{color:#C4553F}.cday.sat .dn{color:#3D6FB6}
+.cday.sel{background:var(--schedule-t)}
+.cday.today .dn{background:var(--schedule);color:#fff}
+.cday.out{opacity:.35}
+.ebar{display:block;font-size:8.5px;line-height:13px;height:13px;border-radius:3px;padding:0 3px;background:color-mix(in srgb,var(--schedule) 16%,#fff);color:var(--schedule);white-space:nowrap;overflow:hidden;text-overflow:clip;font-style:normal;text-align:left;font-weight:600}
+.ebar.hol{background:#FBE7E2;color:#C4553F}.ebar.pay{background:var(--expense-t);color:var(--expense)}
+.emore{font-size:8.5px;color:var(--muted);font-style:normal;line-height:11px}
+.adot{width:6px;height:6px;border-radius:2px;background:var(--activity);align-self:center}
+.ev{display:flex;align-items:center;gap:12px;min-height:58px;padding:8px 12px;border-radius:14px;background:#fff;border:1.5px dashed color-mix(in srgb,var(--schedule) 50%,transparent)}
+.ev.pay{border-color:color-mix(in srgb,var(--expense) 45%,transparent)}
+.ev.hol{border-color:#EBB9AE}
+.evt{width:42px;flex:none;display:flex;flex-direction:column;font-size:11px;color:var(--muted);line-height:1.3}
+.evt b{font-size:13px;color:var(--schedule)}
+.evb{flex:1;min-width:0;display:flex;flex-direction:column}
+.evb b{font-size:14px;font-weight:600}
+.rec{font-size:10.5px;font-weight:700;color:var(--activity);background:var(--activity-t);border-radius:6px;padding:2px 7px;white-space:nowrap}
+.arow{display:flex;align-items:center;gap:10px;min-height:48px;padding:6px 12px;border-radius:14px;background:var(--activity-t)}
+.dgrid{position:relative}
+.hline{position:absolute;left:44px;right:0;border-top:1px solid var(--border)}
+.hlab{position:absolute;left:0;width:36px;text-align:right;font-size:10px;color:var(--muted);transform:translateY(-7px)}
+.blk{position:absolute;left:52px;right:76px;border-radius:12px;border:1.5px dashed var(--schedule);background:color-mix(in srgb,var(--schedule) 9%,#fff);padding:5px 10px;font-size:11px;overflow:hidden;color:var(--text2)}
+.blk b{display:block;font-size:13px;color:var(--schedule)}
+.ablk{position:absolute;right:2px;width:68px;height:26px;border-radius:8px;background:var(--activity);color:#fff;font-size:10.5px;font-weight:600;display:grid;place-items:center;white-space:nowrap;overflow:hidden}
+.nowl{position:absolute;left:44px;right:0;border-top:2px solid #D2563C;z-index:2}
+.nowl::before{content:"";position:absolute;left:-5px;top:-5px;width:8px;height:8px;border-radius:3px;background:#D2563C}
+.obj-p .hero{background:var(--g-schedule);border-radius:30px;outline:2px dashed rgba(255,255,255,.6);outline-offset:-8px;padding:20px 22px}
+.obj-p .lbl{height:24px;padding:0 10px 0 8px;border-radius:999px;background:rgba(255,255,255,.2)}
+/* ToDo: チェック欄の付いたカード */
+.task{display:flex;align-items:center;gap:12px;min-height:56px;padding:6px 14px;border-bottom:1px solid var(--border)}
+.task:last-child{border-bottom:0}
+.chk{position:relative;width:26px;height:26px;border-radius:8px;border:2px solid var(--todo);display:grid;place-items:center;color:#fff;flex:none;font-size:14px;background:#fff}
+.chk::after{content:"";position:absolute;inset:-11px}
+.task.done .chk,.chk.on{background:var(--todo)}
+.tbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.tt{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task.done .tt{text-decoration:line-through;color:var(--muted)}
+.tmeta{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden}
+.due{font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:5px;background:#EEF1F6;color:var(--text2)}
+.due.over{background:#FBE7E2;color:#C4553F}.due.today{background:var(--todo-t);color:var(--todo)}
+.mini{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--entity)}
+.mini.ev{all:unset;display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--schedule)}
+.pri{color:#C4553F;font-weight:800;font-size:14px;width:12px;text-align:center}
+.qadd{display:flex;align-items:center;gap:10px;min-height:52px;padding:0 6px 0 14px;border-radius:14px;background:#fff;border:1.5px solid color-mix(in srgb,var(--todo) 35%,transparent)}
+.qadd input{flex:1;min-width:0;border:0;outline:0;font:inherit;font-size:14px;height:48px;background:none;color:var(--text)}
+.pill.todo.on{background:var(--todo);border-color:var(--todo)}
+.pill.cal.on{background:var(--schedule);border-color:var(--schedule)}
+.tsec{font-size:12px;font-weight:700;color:var(--text2);padding:0 2px}
+.tsec.over{color:#C4553F}
+.obj-t .hero{flex-direction:row;padding:0;gap:0;border-radius:18px;background:var(--g-todo);align-items:stretch}
+.obj-t .hc{width:64px;flex:none;display:grid;place-items:center;background:rgba(0,0,0,.12)}
+.obj-t .hc .chk{width:34px;height:34px;border-color:#fff;background:transparent;font-size:18px}
+.obj-t .hc .chk.on{background:#fff;color:var(--todo)}
+.obj-t .hb{flex:1;padding:16px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:0}
+.suggest.todo{background:var(--todo-t);color:var(--todo)}
+.suggest.todo .btn{background:var(--todo)}
+.ghead{display:flex;align-items:center;gap:8px;min-height:40px;width:100%;padding:0 2px;text-align:left}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.sw{width:36px;height:36px;border-radius:10px;border:3px solid #fff;box-shadow:0 0 0 1px var(--border)}
+.sw.on{box-shadow:0 0 0 2px var(--text)}
+.sw.inh{background:repeating-linear-gradient(45deg,#EEF1F6 0 4px,#fff 4px 8px)!important}
 .legend{display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:center;font-size:12px;color:var(--text2)}
 </style>
 </head>
@@ -296,6 +378,7 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
   <button class="mockchip" onclick="openAbout()">モック ⓘ</button>
   <div class="scroll" id="scroll"><div id="app"></div></div>
   <nav class="nav" id="nav"></nav>
+  <button class="fab" onclick="openCreate()">＋</button>
   <div class="scrim" onclick="closeSheet()"></div>
   <div class="sheet" id="sheet"></div>
   <div class="toast" id="toast"></div>
@@ -308,6 +391,8 @@ const IC={
   activity:sv('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
   expense:sv('<path d="M4 5h16a1 1 0 0 1 1 1v3a3 3 0 0 0 0 6v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a3 3 0 0 0 0-6V6a1 1 0 0 1 1-1Z"/><path d="M9 6v12" stroke-dasharray="1.5 2.5"/>'),
   note:sv('<path d="M6 3h8.5L20 8.5V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v6h6"/>'),
+  schedule:sv('<rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'),
+  todo:sv('<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="m8 12.5 3 3 5-6"/>'),
   type:sv('<path d="M3 12 10 4.5h9.5A1.5 1.5 0 0 1 21 6v12a1.5 1.5 0 0 1-1.5 1.5H10Z"/><circle cx="11" cy="12" r="1.4" fill="currentColor"/>'),
 };
 /* ======================= データ(架空) ======================= */
@@ -362,12 +447,15 @@ const X={
 const DAYS=['d1030','d1029','d1028','d1027'];
 /* カテゴリ: 階層 = 種類の軸。sp = 特別感の既定(子は親から継承、支出ごとに上書き可) */
 const CATS={
-  food:{n:'食費'}, cook:{n:'自炊',p:'food'}, eatout:{n:'外食',p:'food'}, cafe:{n:'カフェ・軽食',p:'food'},
-  daily:{n:'日用品'},
-  trans:{n:'交通費'}, train:{n:'電車',p:'trans'}, taxi:{n:'タクシー',p:'trans',sp:'非日常'},
-  fun:{n:'娯楽'}, hobby:{n:'趣味',p:'fun'}, travel:{n:'旅行',p:'fun',sp:'非日常'},
-  gift:{n:'贈り物',sp:'非日常'},
+  house:{n:'住居',c:'#5E6E91',fx:'固定'}, rent:{n:'家賃',p:'house'},
+  comm:{n:'通信',c:'#3E9AA0',fx:'固定'}, phone:{n:'スマホ',p:'comm'}, sub:{n:'サブスク',p:'comm'},
+  food:{n:'食費',c:'#D9734E'}, cook:{n:'自炊',p:'food'}, eatout:{n:'外食',p:'food'}, cafe:{n:'カフェ・軽食',p:'food'},
+  daily:{n:'日用品',c:'#7FA77F'},
+  trans:{n:'交通費',c:'#4C8BC9'}, train:{n:'電車',p:'trans'}, taxi:{n:'タクシー',p:'trans',sp:'非日常'},
+  fun:{n:'娯楽',c:'#9B7AC0'}, hobby:{n:'趣味',p:'fun'}, travel:{n:'旅行',p:'fun',sp:'非日常'},
+  gift:{n:'贈り物',c:'#C98B9A',sp:'非日常'},
 };
+const COLORS=['#5E6E91','#3E9AA0','#D9734E','#7FA77F','#4C8BC9','#9B7AC0','#C98B9A','#C9A23E'];
 /* 10月のほかの支払い(タイムラインには出さない架空データ) */
 [['d1025','2026-10-25','日','p5','電車','JR 青葉台駅',null,1280,'x5','train'],
  ['d1022','2026-10-22','木','p6','映画','シネマ青葉',null,2000,'x6','hobby'],
@@ -377,14 +465,49 @@ const CATS={
  ['d1005','2026-10-05','月','p10','タクシー','タクシー',null,2400,'x10','taxi'],
  ['d1003','2026-10-03','土','p11','温泉旅行の宿','宿 山の湯',null,18000,'x11','travel'],
  ['d1002','2026-10-02','金','p12','コーヒー',null,'minato',580,'x12','cafe'],
+ ['d1027','2026-10-27','火','p13','家賃','大家(振込)',null,85000,'x13','rent'],
+ ['d1010','2026-10-10','土','p14','スマホ料金','モバイル通信',null,3280,'x14','phone'],
+ ['d1015','2026-10-15','木','p15','動画サブスク','動画配信',null,990,'x15','sub'],
 ].forEach(([d,date,dw,pid,title,shopName,shopId,amt,xid,cat,sp])=>{
-  A[d]={type:'日記',date,dd:String(+date.slice(8)),dw,body:'',kids:[pid]};
+  if(A[d])A[d].kids.push(pid);else A[d]={type:'日記',date,dd:String(+date.slice(8)),dw,body:'',kids:[pid]};
   const roles=[['支払先',shopId,shopName],['支払者','me']];if(pid==='p8')roles.push(['同席','hanako']);
   A[pid]={type:'支払い',parent:d,time:'19:00',title,pay:'カード ••1234',amt,roles,items:[{n:title,price:amt,b:'自分',tax:10}],x:xid};
   X[xid]={pay:pid,amt,cat,sp,memo:'',items:[{n:title,price:amt,b:'全額'}]};
 });
-/* 過去の月(日常, 非日常) */
-const TREND=[['5月',36200,4800],['6月',39800,2200],['7月',35400,15800],['8月',41100,22500],['9月',37900,5100]];
+/* 過去の月: 大分類ごとの合計 */
+const TREND=[['5月',{house:85000,comm:4270,food:19800,daily:2900,trans:4100,fun:6200,gift:0}],
+ ['6月',{house:85000,comm:4270,food:21400,daily:3400,trans:3600,fun:2800,gift:3000}],
+ ['7月',{house:85000,comm:4270,food:18800,daily:2600,trans:6900,fun:19800,gift:0}],
+ ['8月',{house:85000,comm:4270,food:22600,daily:3100,trans:9200,fun:24500,gift:5400}],
+ ['9月',{house:85000,comm:4270,food:20100,daily:2800,trans:3900,fun:4600,gift:0}]];
+/* 予定(=これからのアクティビティ)。終わると記録(rec)に結び付く */
+const TODAY='2026-10-31';
+const EV={
+  e9:{t:'在宅作業',d:'2026-10-31',s:'10:00',e:'12:00',place:['home']},
+  e1:{t:'花子さんと映画',d:'2026-10-31',s:'15:00',e:'17:10',place:[null,'シネマ青葉'],who:['hanako'],todo:['t2'],memo:'チケットはネットで予約',alarm:'30分前'},
+  e2:{t:'夕食の買い物',d:'2026-10-31',s:'18:30',e:'19:00',place:['super'],todo:['t4','t5','t6'],alarm:'なし'},
+  e3:{t:'歯医者',d:'2026-11-02',s:'10:00',e:'11:00',place:[null,'さくら歯科'],todo:['t3'],alarm:'1時間前'},
+  e4:{t:'家賃の支払い',d:'2026-10-27',all:1,rep:'毎月27日',pay:{amt:85000,cat:'rent'},rec:'p13'},
+  e5:{t:'花子さんとランチ',d:'2026-10-30',s:'12:00',e:'13:00',place:['aoba'],who:['hanako'],rec:'p1'},
+  e6:{t:'温泉旅行',d:'2026-11-08',d2:'2026-11-09',all:1,place:[null,'宿 山の湯'],who:['hanako']},
+  e7:{t:'スマホ料金',d:'2026-10-10',all:1,rep:'毎月10日',pay:{amt:3280,cat:'phone'},rec:'p14'},
+  e8:{t:'文化の日',d:'2026-11-03',all:1,hol:1},
+  e10:{t:'動画サブスク',d:'2026-10-15',all:1,rep:'毎月15日',pay:{amt:990,cat:'sub'},rec:'p15'},
+};
+/* ToDo: 完了状態を持つ。対象エンティティ・予定・支払い(購入)に結び付く */
+const LISTS={inbox:{n:'受信箱'},life:{n:'生活'},shop:{n:'買い物',shop:'super'}};
+const TD={
+  t2:{t:'映画のチケットを予約',due:'2026-10-31',list:'inbox',ev:'e1',pri:1},
+  t9:{t:'資源ごみを出す',due:'2026-10-31',list:'life',rep:'毎週土曜',done:'2026-10-31'},
+  t7:{t:'ドラッグ桜のポイントを交換',due:'2026-10-29',list:'inbox',ent:['drug']},
+  t3:{t:'歯医者の問診票を書く',due:'2026-11-01',list:'life',ev:'e3'},
+  t1:{t:'花子さんの誕生日プレゼントを選ぶ',due:'2026-11-05',list:'life',pri:1,ent:['hanako'],sub:[['候補を3つ挙げる',1],['予算を決める',0],['注文する',0]],memo:'ノートの「誕生日プレゼント候補」を見る'},
+  t8:{t:'年末調整の書類を出す',due:'2026-11-14',list:'life'},
+  t4:{t:'牛乳',list:'shop',ev:'e2'},
+  t6:{t:'食器用洗剤',list:'shop',ev:'e2'},
+  t5:{t:'卵',list:'shop',ev:'e2',done:'2026-10-29',pay:'p2'},
+  t10:{t:'スマホの料金プランを見直す',list:'inbox',memo:'通信費(固定費)を下げたい'},
+};
 const TYPE_PROPS={person:['電話','誕生日','住所'],colleague:['部署'],split:['略称'],place:['住所'],shop:['営業時間','定休日'],company:['所在地'],thing:['購入日'],doc:['発行元','期限']};
 
 /* ======================= helpers ======================= */
@@ -412,10 +535,26 @@ const MK={
   note:`<span class="mk" style="border-radius:8px;background:var(--g-note);-webkit-mask:linear-gradient(225deg,#0000 7px,#000 7.5px);mask:linear-gradient(225deg,#0000 7px,#000 7.5px)">${IC.note}</span>`,
   type:`<span class="mk" style="background:var(--type);clip-path:polygon(11px 0,100% 0,100% 100%,11px 100%,0 50%);border-radius:0 8px 8px 0;padding-left:6px">${IC.type}</span>`,
 };
+MK.schedule=`<span class="mk" style="border-radius:10px;background:var(--g-schedule);outline:1.5px dashed rgba(255,255,255,.7);outline-offset:-4px">${IC.schedule}</span>`;
+MK.todo=`<span class="mk" style="border-radius:10px;background:var(--g-todo)">${IC.todo}</span>`;
 MK.ledger=`<span class="mk" style="border-radius:8px;background:var(--g-expense);-webkit-mask:radial-gradient(circle 5px at 0 50%,#0000 97%,#000) left/51% 100% no-repeat,radial-gradient(circle 5px at 100% 50%,#0000 97%,#000) right/51% 100% no-repeat;mask:radial-gradient(circle 5px at 0 50%,#0000 97%,#000) left/51% 100% no-repeat,radial-gradient(circle 5px at 100% 50%,#0000 97%,#000) right/51% 100% no-repeat">${IC.expense}</span>`;
 const catAnc=k=>{const r=[];while(k){r.unshift(k);k=CATS[k].p}return r};
 const catName=k=>CATS[k].n;
 const catPath=k=>catAnc(k).map(c=>CATS[c].n).join(' › ');
+const catColor=k=>{for(const c of catAnc(k).reverse())if(CATS[c].c)return CATS[c].c;return '#8B94A7'};
+const catChip=(k,path)=>`<span class="cat" style="--cc:${catColor(k)}">${path?catPath(k):CATS[k].n}</span>`;
+const catFx=k=>{for(const c of catAnc(k).reverse())if(CATS[c].fx)return CATS[c].fx;return '変動'};
+const xFx=x=>x.fx||catFx(x.cat);
+const ROOTS=()=>Object.keys(CATS).filter(k=>!CATS[k].p);
+const intro=(c,desc,stats)=>`<div class="intro" style="--c:var(--${c})"><div class="idesc">${desc}</div><div class="istats">${stats.map(([l,v,href])=>href?`<a class="ist" href="${href}"><span class="iv num">${v}</span><span class="il">${l}</span></a>`:`<div class="ist"><span class="iv num">${v}</span><span class="il">${l}</span></div>`).join('')}</div></div>`;
+const mdw=d=>{const dt=new Date(d);return `${dt.getMonth()+1}/${dt.getDate()}(${'日月火水木金土'[dt.getDay()]})`};
+const addDays=(d,n)=>{const dt=new Date(d);dt.setDate(dt.getDate()+n);return dt.toISOString().slice(0,10)};
+const repOn=(e,d)=>e.rep&&d>e.d&&+d.slice(8)===+e.d.slice(8);
+const evOn=d=>Object.entries(EV).filter(([k,e])=>e.d===d||(e.d2&&e.d<=d&&d<=e.d2)||repOn(e,d)).sort((a,b)=>(a[1].all?'0':a[1].s).localeCompare(b[1].all?'0':b[1].s));
+const actsOn=d=>Object.entries(A).filter(([k,a])=>a.type!=='日記'&&a.parent&&A[a.parent].date===d);
+const placeOf=e=>e.place?(e.place[0]?E[e.place[0]].n:e.place[1]):'';
+const nextOn=e=>{if(!e.rep)return e.d;const dom=String(+e.d.slice(8)).padStart(2,'0');let y=+TODAY.slice(0,4),m=+TODAY.slice(5,7);let d=`${y}-${String(m).padStart(2,'0')}-${dom}`;if(d<=TODAY){m++;if(m>12){m=1;y++}d=`${y}-${String(m).padStart(2,'0')}-${dom}`}return d};
+const tdOpen=k=>!TD[k].done;
 const catSp=k=>{for(const c of catAnc(k).reverse())if(CATS[c].sp)return CATS[c].sp;return '日常'};
 const xSp=x=>x.sp||catSp(x.cat);
 const shopOf=x=>{const r=A[x.pay].roles[0];return r[1]?E[r[1]].n:r[2]};
@@ -453,11 +592,16 @@ function togTree(btn){const k=btn.closest('.tnode').querySelector(':scope>.tkids
 function vActivities(){
   return `<div class="view">
   ${ptitle('activity','アクティビティ')}
+  ${intro('activity','時間に紐づく出来事の記録。1日の日記の中に支払い・会話・移動がぶら下がる。予定は終わると記録に結び付く。',[['10月の記録',Object.values(A).filter(a=>a.type!=='日記'&&A[a.parent]&&A[a.parent].date.startsWith('2026-10')).length+'件'],['今日の予定',evOn(TODAY).length+'件','#/schedule'],['今日のToDo',Object.values(TD).filter(t=>!t.done&&t.due&&t.due<=TODAY).length+'件','#/todo']])}
+  <div class="day raised">
+    <div class="day-h"><span class="dd num"><span>土</span><b>31</b></span><span class="b-act">今日</span><span class="sub grow ellipsis">まだ記録がありません</span><button class="btn" style="height:36px" onclick="toast('今日の日記を書く(モック)')">＋ 書く</button></div>
+    <div class="rail">${evOn(TODAY).filter(([k,e])=>!e.all).map(([k,e])=>`<a class="kid plan" href="#/ev/${k}"><span class="t num">${e.s}</span><span class="b-plan">予定</span><span class="ti grow ellipsis">${e.t}<span class="cap"> · ${placeOf(e)}</span></span></a>`).join('')}</div>
+  </div>
   <div class="chips"><span class="pill on">すべて</span><span class="pill">日記</span><span class="pill">支払い</span><span class="pill">会話</span><span class="pill">移動</span></div>
   ${DAYS.map(d=>{const a=A[d];return `<div class="day raised">
     <a class="day-h" href="#/a/${d}"><span class="dd num"><span>${a.dw}</span><b>${a.dd}</b></span>
       ${bAct('日記')}<span class="sub grow ellipsis">${a.body||'—'}</span>${a.photos?`<span class="cap">写真${a.photos}</span>`:''}</a>
-    <div class="rail">${a.kids.map(k=>{const c=A[k];const x=c.x&&X[c.x];return `<a class="kid" href="#/a/${k}">
+    <div class="rail">${[...a.kids].sort((p,q)=>A[p].time.localeCompare(A[q].time)).map(k=>{const c=A[k];const x=c.x&&X[c.x];return `<a class="kid" href="#/a/${k}">
       <span class="t num">${c.time}</span>${c.amt?'':bAct(c.type)}
       <span class="ti grow ellipsis">${c.amt?(c.roles[0][1]?E[c.roles[0][1]].n:c.roles[0][2]):c.title+`<span class="cap"> · ${E[c.roles[0][1]].n}</span>`}</span>
       ${c.amt?`<span class="row" style="gap:6px">${bExp(yen(x.amt))}<span class="amt num">${yen(c.amt)}</span></span>`:''}</a>`}).join('')}</div>
@@ -467,78 +611,89 @@ function vActivities(){
 let ledgerAxis='cat',ledgerFilter=null;
 function vLedger(){
   const xs=Object.values(X);const tot=xs.reduce((a,x)=>a+x.amt,0);
-  const sp=xs.filter(x=>xSp(x)==='非日常').reduce((a,x)=>a+x.amt,0);
-  const months=[...TREND,['10月',tot-sp,sp]];
-  const avg=Math.round(TREND.reduce((a,m)=>a+m[1]+m[2],0)/TREND.length);
-  const prev=TREND[TREND.length-1];const diff=Math.round((tot-(prev[1]+prev[2]))/(prev[1]+prev[2])*100);
-  /* 推移グラフ(日常+非日常の積み上げ) */
-  const max=Math.max(...months.map(m=>m[1]+m[2]),avg),W=326,H=118,bw=30,gap=(W-bw*months.length)/(months.length-1);
-  const bars=months.map((m,i)=>{const x0=i*(bw+gap),hd=m[1]/max*H,hs=m[2]/max*H,cur=i===months.length-1;
-    return `<g opacity="${cur?1:.5}"><rect x="${x0}" y="${H-hd}" width="${bw}" height="${hd}" rx="${Math.min(6,hd/2)}" fill="url(#gd)"/>${hs?`<rect x="${x0}" y="${H-hd-hs-2}" width="${bw}" height="${hs}" rx="${Math.min(6,hs/2)}" fill="url(#gs)"/>`:''}</g>
-    <text x="${x0+bw/2}" y="${H+16}" text-anchor="middle" class="ax${cur?' on':''}">${m[0]}</text>${cur?`<text x="${x0+bw/2}" y="${H-hd-hs-8}" text-anchor="middle" class="axv">${(Math.round((m[1]+m[2])/100)/10)}k</text>`:''}`}).join('');
+  const sumBy=f=>xs.filter(f).reduce((a,x)=>a+x.amt,0);
+  const sp=sumBy(x=>xSp(x)==='非日常'),fx=sumBy(x=>xFx(x)==='固定');
+  const roots=ROOTS();
+  const cur={};roots.forEach(r=>cur[r]=sumBy(x=>catAnc(x.cat)[0]===r));
+  const months=[...TREND,['10月',cur]];
+  const mt=m=>Object.values(m[1]).reduce((a,b)=>a+b,0);
+  const avg=Math.round(TREND.reduce((a,m)=>a+mt(m),0)/TREND.length);
+  const prevT=mt(TREND[TREND.length-1]);const diff=Math.round((tot-prevT)/prevT*100);
+  /* 推移: カテゴリ(大分類)ごとの積み上げ */
+  const max=Math.max(...months.map(mt),avg),W=326,H=128,bw=32,gap=(W-bw*months.length)/(months.length-1);
+  const bars=months.map((m,i)=>{const x0=i*(bw+gap),isCur=i===months.length-1;let y=H;
+    const segs=roots.map(r=>{const v=m[1][r]||0;if(!v)return '';const h=v/max*H;y-=h;return `<rect x="${x0}" y="${y+0.75}" width="${bw}" height="${Math.max(h-1.5,1)}" rx="${Math.min(4,h/2)}" fill="${catColor(r)}"/>`}).join('');
+    return `<g opacity="${isCur?1:.5}">${segs}</g><text x="${x0+bw/2}" y="${H+16}" text-anchor="middle" class="ax${isCur?' on':''}">${m[0]}</text>${isCur?`<text x="${x0+bw/2}" y="${y-6}" text-anchor="middle" class="axv">${Math.round(mt(m)/1000)}k</text>`:''}`}).join('');
   const ay=H-avg/max*H;
-  const chart=`<svg class="chart" viewBox="0 -18 ${W} ${H+38}"><defs><linearGradient id="gd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7395E3"/><stop offset="1" stop-color="#34529E"/></linearGradient><linearGradient id="gs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#EBC271"/><stop offset="1" stop-color="#B7791F"/></linearGradient></defs>
-    <line x1="0" x2="${W}" y1="${ay}" y2="${ay}" stroke="#8B94A7" stroke-dasharray="3 4" stroke-width="1"/><text x="0" y="${ay-4}" class="avg">5か月平均</text>${bars}</svg>`;
-  /* 内訳(軸を切り替え) */
+  const chart=`<svg class="chart" viewBox="0 -18 ${W} ${H+38}"><line x1="0" x2="${W}" y1="${ay}" y2="${ay}" stroke="#8B94A7" stroke-dasharray="3 4"/><text x="0" y="${ay-4}" class="avg">5か月平均</text>${bars}</svg>`;
+  /* 内訳 */
   let bmax=1;
-  const brow=(label,list,axis,key,lead='')=>{const d=list.filter(x=>xSp(x)!=='非日常').reduce((a,x)=>a+x.amt,0),sv=list.filter(x=>xSp(x)==='非日常').reduce((a,x)=>a+x.amt,0);
+  const brow=(label,list,axis,key,color)=>{const v=list.reduce((a,x)=>a+x.amt,0);
     const on=ledgerFilter&&ledgerFilter[0]===axis&&ledgerFilter[1]===key;
-    return `<button class="brow ${on?'on':''}" onclick="setFilter('${axis}','${key}')">${lead}<span class="grow ellipsis" style="font-size:13px">${label}</span><span class="bar"><i class="d" style="width:${d/bmax*100}%"></i><i class="s" style="width:${sv/bmax*100}%"></i></span><span class="bamt num">${yen(d+sv)}</span></button>`};
-  const groupBy=f=>{const m={};xs.forEach(x=>[].concat(f(x)).forEach(k=>(m[k]=m[k]||[]).push(x)));return Object.entries(m).sort((a,b)=>b[1].reduce((s,x)=>s+x.amt,0)-a[1].reduce((s,x)=>s+x.amt,0))};
-  const sumCat=k=>xs.filter(x=>catAnc(x.cat).includes(k)).reduce((a,x)=>a+x.amt,0);
+    return `<button class="brow ${on?'on':''}" onclick="setFilter('${axis}','${key}')"><span class="grow ellipsis" style="font-size:13px">${label}</span><span class="cap num" style="width:34px;text-align:right">${Math.round(v/tot*100)}%</span><span class="bar"><i style="width:${v/bmax*100}%;background:${color}"></i></span><span class="bamt num">${yen(v)}</span></button>`};
+  const sumCat=k=>sumBy(x=>catAnc(x.cat).includes(k));
   const cnode=k=>{const list=xs.filter(x=>catAnc(x.cat).includes(k));if(!list.length)return '';
     const kids=Object.keys(CATS).filter(c=>CATS[c].p===k&&sumCat(c)).sort((a,b)=>sumCat(b)-sumCat(a));
-    return `<div class="tnode"><div class="trow" style="padding-right:0">${kids.length?`<button class="ttog" onclick="togTree(this)">▾</button>`:'<span class="ttog"></span>'}${brow(`<span class="cat">${CATS[k].n}</span>`,list,'cat',k)}</div>${kids.length?`<div class="tkids">${kids.map(cnode).join('')}</div>`:''}</div>`};
+    return `<div class="tnode"><div class="trow" style="padding-right:0">${kids.length?`<button class="ttog" onclick="togTree(this)">${CATS[k].p?'▾':'▸'}</button>`:'<span class="ttog"></span>'}${brow(catChip(k),list,'cat',k,catColor(k))}</div>${kids.length?`<div class="tkids" hidden>${kids.map(cnode).join('')}</div>`:''}</div>`};
   let body;
-  const tops={cat:Object.keys(CATS).filter(k=>!CATS[k].p).map(sumCat),sp:groupBy(xSp),shop:groupBy(shopOf),who:groupBy(whoOf)}[ledgerAxis];
-  bmax=Math.max(...tops.map(t=>typeof t==='number'?t:t[1].reduce((a,x)=>a+x.amt,0)));
-  if(ledgerAxis==='cat')body=`<div class="flat tree">${Object.keys(CATS).filter(k=>!CATS[k].p).sort((a,b)=>sumCat(b)-sumCat(a)).map(cnode).join('')}</div>`;
-  else if(ledgerAxis==='sp')body=`<div class="flat blist">${groupBy(xSp).map(([k,l])=>brow(k==='非日常'?'<span class="spc">✦ 非日常</span>':'日常',l,'sp',k)).join('')}</div>`;
-  else if(ledgerAxis==='shop')body=`<div class="flat blist">${groupBy(shopOf).map(([k,l])=>brow(k,l,'shop',k)).join('')}</div>`;
-  else body=`<div class="flat blist">${groupBy(whoOf).map(([k,l])=>brow(k,l,'who',k)).join('')}</div>`;
-  const match=x=>{if(!ledgerFilter)return true;const[ax,k]=ledgerFilter;
-    return ax==='cat'?catAnc(x.cat).includes(k):ax==='sp'?xSp(x)===k:ax==='shop'?shopOf(x)===k:whoOf(x).includes(k)};
+  if(ledgerAxis==='cat'){bmax=Math.max(...roots.map(sumCat));body=`<div class="flat tree">${roots.filter(sumCat).sort((a,b)=>sumCat(b)-sumCat(a)).map(cnode).join('')}</div>`}
+  else if(ledgerAxis==='fx'){bmax=Math.max(fx,tot-fx);body=`<div class="flat blist">${brow('<b>固定費</b> <span class="cap">家賃・通信など毎月決まった額</span>',xs.filter(x=>xFx(x)==='固定'),'fx','固定','#5E6E91')}${brow('<b>変動費</b> <span class="cap">月ごとに変わる</span>',xs.filter(x=>xFx(x)!=='固定'),'fx','変動','#7FA0D6')}</div>`}
+  else{bmax=Math.max(sp,tot-sp);body=`<div class="flat blist">${brow('日常',xs.filter(x=>xSp(x)!=='非日常'),'sp','日常','var(--expense)')}${brow('<span class="spc">✦ 非日常</span>',xs.filter(x=>xSp(x)==='非日常'),'sp','非日常','var(--special)')}</div>`}
+  const match=x=>{if(!ledgerFilter)return true;const[ax,k]=ledgerFilter;return ax==='cat'?catAnc(x.cat).includes(k):ax==='sp'?xSp(x)===k:xFx(x)===k};
   const fl=Object.entries(X).filter(([k,x])=>match(x)).sort((a,b)=>xDate(b[1]).localeCompare(xDate(a[1])));
-  const flabel=ledgerFilter?({cat:k=>catPath(k),sp:k=>k,shop:k=>k,who:k=>'同席: '+k}[ledgerFilter[0]])(ledgerFilter[1]):'';
+  const flabel=ledgerFilter?(ledgerFilter[0]==='cat'?catPath(ledgerFilter[1]):ledgerFilter[1]):'';
+  const upcoming=Object.entries(EV).filter(([k,e])=>e.pay).map(([k,e])=>[k,e,nextOn(e)]).filter(([k,e,d])=>d>TODAY).sort((a,b)=>a[2].localeCompare(b[2]));
   return `<div class="view">
   ${ptitle('ledger','家計簿',`<a class="cap hit" href="#/cats" style="color:var(--expense);font-weight:600">カテゴリの管理 ›</a>`)}
+  <div class="cap" style="margin-top:-12px;padding:0 2px;font-size:12px;color:var(--text2)">自分の支出(支払いのうち自分の負担)を月ごとに集計する。</div>
   <div class="mswitch"><button onclick="toast('前の月(モック)')">‹</button><b>2026年10月</b><button onclick="toast('次の月(モック)')">›</button></div>
   ${heroX(`<span class="meta">自分の支出の合計</span><span class="big num">${yen(tot)}</span><span class="meta">前月比 ${diff>0?'+':''}${diff}% · 5か月平均 ${yen(avg)}</span>
-    <div class="spl"><i style="flex:${tot-sp}"></i><i class="s" style="flex:${sp}"></i></div><span class="meta">日常 ${yen(tot-sp)} · ✦ 非日常 ${yen(sp)}</span>`)}
+    <div class="spl">${roots.filter(r=>cur[r]).map(r=>`<i style="flex:${cur[r]};background:${catColor(r)};box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)"></i>`).join('')}</div>
+    <span class="meta">固定費 ${yen(fx)} · 変動費 ${yen(tot-fx)} · ✦ 非日常 ${yen(sp)}</span>`)}
+  ${upcoming.length?`<div class="stack">${sec('これからの固定費',upcoming.length+'件','')}<div class="flat">${upcoming.map(([k,e,d])=>`<a class="lrow" href="#/ev/${k}"><span class="cap num" style="width:52px;color:var(--schedule);font-weight:600">${mdw(d)}</span><span class="grow ellipsis" style="font-size:13px">${e.t}</span>${catChip(e.pay.cat)}<span class="num" style="font-weight:600;font-size:13px">${yen(e.pay.amt)}</span></a>`).join('')}</div></div>`:''}
   <div class="stack">${sec('月々の推移','6か月')}
-    <div class="flat chartc"><div class="row" style="gap:12px"><span class="lg"><i style="background:var(--expense)"></i>日常</span><span class="lg"><i style="background:var(--special)"></i>非日常</span><span class="grow"></span><span class="cap">点線 = 5か月平均</span></div>${chart}</div></div>
+    <div class="flat chartc"><div class="row" style="gap:10px;flex-wrap:wrap">${roots.map(r=>`<span class="lg"><i style="background:${catColor(r)}"></i>${CATS[r].n}</span>`).join('')}</div>${chart}</div></div>
   <div class="stack">${sec('内訳')}
-    <div class="seg">${[['cat','カテゴリ'],['sp','特別感'],['shop','店'],['who','同席']].map(([k,l])=>`<button class="${ledgerAxis===k?'on':''}" onclick="setAxis('${k}')">${l}</button>`).join('')}</div>
-    <div class="cap" style="padding:0 2px">${ledgerAxis==='shop'||ledgerAxis==='who'?'店・同席は支払いの役割から自動で集計(手で付けない軸)':'カテゴリ・特別感は支出に付ける軸。行をタップで下の一覧を絞り込み'}</div>
+    <div class="seg">${[['cat','カテゴリ'],['fx','固定・変動'],['sp','特別感']].map(([k,l])=>`<button class="${ledgerAxis===k?'on':''}" onclick="setAxis('${k}')">${l}</button>`).join('')}</div>
+    <div class="cap" style="padding:0 2px">${ledgerAxis==='cat'?'▸ で小分類を開く。':''}行をタップで下の一覧を絞り込み</div>
     ${body}</div>
   <div class="stack">${sec('自分の支出',fl.length+'件')}
-    ${ledgerFilter?`<div class="filterbar"><span class="cap">絞り込み</span><b class="grow ellipsis" style="color:var(--expense)">${flabel}</b><button class="btn ghost" style="height:34px" onclick="setFilter()">✕ 解除</button></div>`:''}
+    ${ledgerFilter?`<div class="filterbar"><span class="cap">絞り込み</span><b class="grow ellipsis" style="color:var(--expense)">${flabel}</b><button class="btn ghost" style="height:36px" onclick="setFilter()">✕ 解除</button></div>`:''}
     <div class="tlist">${fl.map(([k,x])=>`<a class="tkt" href="#/x/${k}">
-    <span class="tstub num">${md(xDate(x))}</span><span class="grow ellipsis">${shopOf(x)}<span class="cap"> · ${catName(x.cat)}</span></span>${xSp(x)==='非日常'?'<span class="spc">✦</span>':''}<span class="num tamt">${yen(x.amt)}</span></a>`).join('')}</div></div>
+    <span class="tstub num" style="background:color-mix(in srgb,${catColor(x.cat)} 14%,#fff);color:color-mix(in srgb,${catColor(x.cat)} 80%,#1A2338)">${md(xDate(x))}</span><span class="grow ellipsis">${shopOf(x)}<span class="cap"> · ${catName(x.cat)}</span></span>${xSp(x)==='非日常'?'<span class="spc">✦</span>':''}<span class="num tamt">${yen(x.amt)}</span></a>`).join('')}</div></div>
   </div>`;
 }
-function setAxis(a){ledgerAxis=a;ledgerFilter=null;render()}
+function setAxis(a){ledgerAxis=a;ledgerFilter=null;const y=$('#scroll').scrollTop;render();$('#scroll').scrollTop=y}
 function setFilter(ax,k){const y=$('#scroll').scrollTop;ledgerFilter=(!ax||(ledgerFilter&&ledgerFilter[0]===ax&&ledgerFilter[1]===k))?null:[ax,k];render();$('#scroll').scrollTop=y}
 function setSp(id,v){const x=X[id];x.sp=v===catSp(x.cat)?undefined:v;const y=$('#scroll').scrollTop;render();$('#scroll').scrollTop=y}
-let entityFilter='shop';
+function setFx(id,v){const x=X[id];x.fx=v===catFx(x.cat)?undefined:v;const y=$('#scroll').scrollTop;render();$('#scroll').scrollTop=y}
+let entityFilter='';
 function vEntities(f){
   if(f!==undefined)entityFilter=f||'';
-  const list=Object.entries(E).filter(([k,e])=>k!=='me'&&(!entityFilter||e.t.some(t=>isUnder(t,entityFilter))));
+  const all=Object.entries(E).filter(([k])=>k!=='me');
+  const list=all.filter(([k,e])=>!entityFilter||e.t.some(t=>isUnder(t,entityFilter)));
   const path=entityFilter?typeAnc(entityFilter):[];
   const kids=Object.entries(TYPES).filter(([k,t])=>entityFilter&&t.p===entityFilter);
+  const groups={};list.forEach(([k,e])=>(groups[e.t[0]]=groups[e.t[0]]||[]).push([k,e]));
+  const order=Object.keys(TYPES).filter(t=>groups[t]);
+  const rc=r=>all.filter(([k,e])=>e.t.some(t=>isUnder(t,r))).length;
+  const card=([k,e])=>{const n=actsOf(k).length;return `<a class="fcard" href="#/e/${k}"><span class="ftab">${e.i}</span>
+    <div class="fbody"><b class="ellipsis">${e.n}</b><div class="row" style="gap:4px;overflow:hidden">${e.t.map(t=>`<span class="type tiny">${TYPES[t].n}</span>`).join('')}</div>
+    ${n?`<span class="fcount"><span class="mk-a" style="width:8px;height:8px;border-width:2px"></span>${n}</span>`:''}</div></a>`};
   return `<div class="view">
   ${ptitle('entity','エンティティ',`<a class="cap hit" href="#/types" style="color:var(--type);font-weight:600">種類の管理 ›</a>`)}
+  ${intro('entity','人・場所・物など、事実(プロパティ)と関係を持つ対象。種類のラベルで分類し、1つにつき1枚のノートを持てる。',[['人物',rc('person'),'#/entities/person'],['場所',rc('place'),'#/entities/place'],['会社',rc('company'),'#/entities/company'],['ノート',Object.keys(NOTES).length,'#/notes']])}
   <div class="flat" style="padding:var(--s3) var(--s4);display:flex;flex-direction:column;gap:var(--s2)">
-    <div class="row" style="flex-wrap:wrap;gap:6px"><span class="cap">種類</span>
+    <div class="row" style="flex-wrap:wrap;gap:6px;min-height:28px"><span class="cap">絞り込み</span>
       ${path.length?path.map((t,i)=>`${i?'<span class="cap">›</span>':''}${tag(t)}`).join(''):'<span class="sub">すべて</span>'}
-      <span class="grow"></span>${entityFilter?`<a class="cap" href="#/entities/">解除 ✕</a>`:''}<span class="cap">${list.length}件</span></div>
+      <span class="grow"></span>${entityFilter?`<a class="cap hit" href="#/entities/">解除 ✕</a>`:''}<span class="cap">${list.length}件</span></div>
     ${kids.length?`<div class="cap">配下も含めて表示: ${kids.map(([k,t])=>t.n).join('・')}</div>`:''}
   </div>
-  ${list.length?`<div class="fgrid">${list.map(([k,e])=>{const n=actsOf(k).length;return `<a class="fcard" href="#/e/${k}"><span class="ftab">${e.i}</span>
-    <div class="fbody"><b class="ellipsis">${e.n}</b><div class="row" style="gap:4px;overflow:hidden">${e.t.map(t=>`<span class="type tiny">${TYPES[t].n}</span>`).join('')}</div>
-    ${n?`<span class="fcount"><span class="mk-a" style="width:8px;height:8px;border-width:2px"></span>${n}</span>`:''}</div></a>`}).join('')}</div>`:'<div class="empty">該当なし</div>'}
+  ${order.map(t=>`<div class="stack egroup"><button class="ghead" onclick="togG(this)"><span class="type">${TYPES[t].n}</span><span class="cap">${groups[t].length}件</span><span class="grow"></span><span class="cap chev">▾</span></button>
+    <div class="fgrid">${groups[t].map(card).join('')}</div></div>`).join('')||'<div class="empty">該当なし</div>'}
   </div>`;
 }
+function togG(b){const g=b.nextElementSibling;g.hidden=!g.hidden;b.querySelector('.chev').textContent=g.hidden?'▸':'▾'}
 const STORE={type:TYPES,cat:CATS};
 function treeView(kind,rowInner){const st=STORE[kind];
   const node=(k,lv)=>{const kids=Object.keys(st).filter(c=>st[c].p===k);const open=lv<2;
@@ -560,14 +715,17 @@ function vCats(){
   return `<div class="view push">
   ${topbar('家計簿','expense','')}
   ${ptitle('ledger','カテゴリの管理')}
-  <div class="sub">階層 = 何に使ったか(種類の軸)。✦ 非日常 = 特別感の既定値。子は親から継承し、支出ごとに変更できる。</div>
+  ${intro('expense','階層 = 何に使ったか。色・固定/変動・✦非日常(特別感)は既定値で、子は親から引き継ぎ、支出ごとに変えられる。',[['大分類',ROOTS().length],['小分類',Object.keys(CATS).length-ROOTS().length],['固定費',Object.keys(CATS).filter(k=>catFx(k)==='固定').length]])}
   <button class="btn" style="align-self:flex-start;height:44px;background:var(--expense)" onclick="newNode('cat')">＋ カテゴリを作成</button>
-  ${treeView('cat',k=>`<span class="cat">${CATS[k].n}</span>${catSp(k)==='非日常'?`<span class="spc">✦ 非日常${CATS[k].sp?'':'(継承)'}</span>`:''}<span class="grow"></span><span class="cap num">${cnt(k)}件</span>`)}
+  ${treeView('cat',k=>`${catChip(k)}${catFx(k)==='固定'?'<span class="cap" style="font-weight:700;color:#5E6E91">固定</span>':''}${catSp(k)==='非日常'?'<span class="spc">✦</span>':''}<span class="grow"></span><span class="cap num">${cnt(k)}件</span>`)}
   </div>`;
 }
 const descOf=(st,k)=>{const r=[k];Object.keys(st).forEach(c=>{let q=st[c].p;while(q){if(q===k){r.push(c);break}q=st[q].p}});return r};
 function parentSelect(kind,k,cur){const st=STORE[kind];const ban=k?descOf(st,k):[];const anc=kind==='type'?typeAnc:catAnc;
   return `<select id="f-p"><option value="">(なし・いちばん上)</option>${Object.keys(st).filter(c=>!ban.includes(c)).map(c=>`<option value="${c}" ${c===cur?'selected':''}>${anc(c).map(a=>st[a].n).join(' › ')}</option>`).join('')}</select>`}
+function segField(id,label,opts,cur){return `<div class="field"><label>${label}</label><div class="segm" id="${id}">${opts.map(o=>`<button class="${o.includes('非日常')?'sp ':''}${(cur||opts[0])===o.replace('✦ ','')?'on':''}" onclick="pickSp(this)">${o}</button>`).join('')}</div></div>`}
+function colorField(k,cur){const child=k&&CATS[k]&&CATS[k].p;return `<div class="field"><label>色${child?'(親と同じにもできる)':''}</label><div class="swatches" id="f-c">${child||!k?`<button class="sw inh ${!cur?'on':''}" data-c="" onclick="pickSw(this)" title="親と同じ"></button>`:''}${COLORS.map(c=>`<button class="sw ${cur===c?'on':''}" style="background:${c}" data-c="${c}" onclick="pickSw(this)"></button>`).join('')}</div></div>`}
+function pickSw(b){b.parentNode.querySelectorAll('.sw').forEach(x=>x.classList.remove('on'));b.classList.add('on')}
 function spField(cur){return `<div class="field"><label>特別感の既定(支出ごとに変更できる)</label><div class="segm" id="f-sp"><button class="${cur!=='非日常'?'on':''}" onclick="pickSp(this)">日常</button><button class="sp ${cur==='非日常'?'on':''}" onclick="pickSp(this)">✦ 非日常</button></div></div>`}
 function pickSp(b){b.parentNode.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on')}
 function readSp(){const b=document.querySelector('#f-sp button.on');return b&&b.textContent.includes('非日常')?'非日常':undefined}
@@ -575,25 +733,27 @@ function editNode(kind,k){const st=STORE[kind];const t=st[k];const L=kind==='typ
   sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s4)">${L}を編集</div>
   <div class="field"><label>名前</label><input id="f-n" value="${t.n}"></div>
   <div class="field"><label>親</label>${parentSelect(kind,k,t.p)}</div>
-  ${kind==='cat'?spField(t.sp):''}
+  ${kind==='cat'?colorField(k,t.c)+segField('f-fx','固定費・変動費の既定',['変動','固定'],t.fx)+spField(t.sp):''}
   ${kind==='type'?`<div class="field"><label>項目(プロパティ)の定義</label><div class="flat">${propsOf(k).map(([pp,from])=>`<div class="lrow"><span class="grow">${pp}</span><span class="cap">${from!==k?TYPES[from].n+'から継承':'この種類'}</span></div>`).join('')||'<div class="empty">なし</div>'}<button class="disclose" onclick="toast('項目を追加(モック)')" style="border-top:1px solid var(--border)">＋ 項目を追加</button></div></div>`:''}
   <div class="row" style="gap:8px;margin-top:4px"><button class="btn" style="flex:1;height:46px" onclick="saveNode('${kind}','${k}')">保存</button><button class="btn ghost" style="height:46px" onclick="newNode('${kind}','${k}')">＋ 子を追加</button><button class="btn ghost" style="height:46px;color:#B4443A" onclick="delNode('${kind}','${k}')">削除</button></div>`)}
 function newNode(kind,parent=''){const L=kind==='type'?'種類':'カテゴリ';
   sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s4)">${L}を作成</div>
   <div class="field"><label>名前</label><input id="f-n" placeholder="例: ${kind==='type'?'居酒屋':'コンビニ'}"></div>
   <div class="field"><label>親</label>${parentSelect(kind,null,parent)}</div>
-  ${kind==='cat'?spField():''}
+  ${kind==='cat'?colorField(null,'')+segField('f-fx','固定費・変動費の既定',['変動','固定'])+spField():''}
   <button class="btn" style="width:100%;height:46px" onclick="saveNode('${kind}','')">作成</button>`)}
 function saveNode(kind,k){const st=STORE[kind];const n=$('#f-n').value.trim();if(!n){toast('名前を入れてください');return}
-  const pp=$('#f-p').value||undefined;if(!k){k=kind+Date.now();st[k]={}}st[k].n=n;st[k].p=pp;if(kind==='cat')st[k].sp=readSp();
+  const pp=$('#f-p').value||undefined;if(!k){k=kind+Date.now();st[k]={}}st[k].n=n;st[k].p=pp;if(kind==='cat'){st[k].sp=readSp();const fb=document.querySelector('#f-fx button.on');st[k].fx=fb&&fb.textContent==='固定'?'固定':undefined;const cb=document.querySelector('#f-c .sw.on');st[k].c=cb&&cb.dataset.c||undefined}
   closeSheet();render();toast('「'+n+'」を保存しました')}
 function delNode(kind,k){const st=STORE[kind];
   if(Object.keys(st).some(c=>st[c].p===k)){toast('子があるため削除できません');return}
   if(kind==='type'?Object.values(E).some(e=>e.t.includes(k)):Object.values(X).some(x=>x.cat===k)){toast('使用中のため削除できません');return}
   delete st[k];closeSheet();render();toast('削除しました')}
 function vNotes(){
-  return `<div class="view">
-  ${ptitle('note','ノート',`<span class="cap">エンティティに1枚</span>`)}
+  return `<div class="view push">
+  ${topbar('エンティティ','entity','')}
+  ${ptitle('note','ノート')}
+  ${intro('note','エンティティに1枚ずつ付く主観のメモ。最新の印象を書き換え、過去の版は残る。',[['ノート',Object.keys(NOTES).length+'枚'],['最終更新','10/30']])}
   <div class="plist">${Object.entries(NOTES).map(([k,n])=>`<a class="paper" href="#/n/${k}"><b class="ellipsis">${E[k].n}のノート</b><span class="cap ellipsis">${n.body[0][1]}</span><span class="cap pdate">${n.upd.split(' ')[0]}</span></a>`).join('')}</div>
   </div>`;
 }
@@ -663,10 +823,11 @@ function vExpense(id){
     ${topbar('戻る','expense')}
     <a class="ground-ref" href="#/a/${x.pay}"><span class="cap">親</span>${bAct('支払い')}<span class="grow ellipsis">${p.title} · ${shop}</span><span class="cap num">${yen(p.amt)} ›</span></a>
     <div class="row" style="align-items:flex-start;gap:var(--s2);padding-left:4px"><span style="color:var(--expense);font-weight:700;padding-top:4px">└</span>
-      <div class="grow">${heroX(`<span class="meta">自分の負担</span><span class="big num">${yen(x.amt)}</span><div class="row" style="gap:6px;padding-top:4px"><span class="cat ghost">${catName(x.cat)}</span>${xSp(x)==='非日常'?'<span class="spc ghost">✦ 非日常</span>':''}<span class="meta">${dayOf(p).date}</span></div>`)}</div></div>
+      <div class="grow">${heroX(`<span class="meta">自分の負担</span><span class="big num">${yen(x.amt)}</span><div class="row" style="gap:6px;padding-top:4px"><span class="cat ghost">${catName(x.cat)}</span>${xFx(x)==='固定'?'<span class="type ghost" style="clip-path:none;padding-left:8px;border-radius:5px">固定費</span>':''}${xSp(x)==='非日常'?'<span class="spc ghost">✦ 非日常</span>':''}<span class="meta">${dayOf(p).date}</span></div>`)}</div></div>
   </div>
   <div class="stack">${sec('この支出')}
-    <div class="flat"><button class="lrow" style="width:100%;text-align:left" onclick="toast('カテゴリを選ぶ(モック)')"><span class="cap" style="width:56px">カテゴリ</span><span class="grow"><span class="cat">${catPath(x.cat)}</span></span><span class="cap">変更 ›</span></button>
+    <div class="flat"><button class="lrow" style="width:100%;text-align:left" onclick="toast('カテゴリを選ぶ(モック)')"><span class="cap" style="width:56px">カテゴリ</span><span class="grow">${catChip(x.cat,1)}</span><span class="cap">変更 ›</span></button>
+      <div class="lrow"><span class="cap" style="width:56px">固定・変動</span><span class="grow"><span class="segm"><button class="${xFx(x)!=='固定'?'on':''}" onclick="setFx('${id}','変動')">変動</button><button class="${xFx(x)==='固定'?'on':''}" onclick="setFx('${id}','固定')">固定</button></span></span><span class="cap">${x.fx?'この支出だけ':'カテゴリの既定'}</span></div>
       <div class="lrow"><span class="cap" style="width:56px">特別感</span><span class="grow"><span class="segm"><button class="${xSp(x)!=='非日常'?'on':''}" onclick="setSp('${id}','日常')">日常</button><button class="sp ${xSp(x)==='非日常'?'on':''}" onclick="setSp('${id}','非日常')">✦ 非日常</button></span></span><span class="cap">${x.sp?'この支出だけ':'カテゴリの既定'}</span></div>
       <div class="lrow"><span class="cap" style="width:56px">メモ</span><span class="grow">${x.memo||'<span class="cap">なし</span>'}</span></div>
       <div class="lrow"><span class="cap" style="width:56px">日時</span><span class="grow num">${dayOf(p).date} ${p.time}</span><span class="cap">支払いと同じ</span></div></div></div>
@@ -691,8 +852,127 @@ function vNote(id){
   </div>`;
 }
 
+/* ======================= 予定 ======================= */
+let calSel=TODAY,calView='month',calYM=[2026,10];
+function vSchedule(){
+  const todays=evOn(TODAY),next=todays.find(([k,e])=>!e.all&&e.s>'14:46');
+  const week=[0,1,2,3,4,5,6].reduce((a,i)=>a+evOn(addDays(TODAY,i)).length,0);
+  let main='';
+  if(calView==='month'){
+    const [y,m]=calYM;const first=new Date(y,m-1,1).getDay(),dim=new Date(y,m,0).getDate();
+    const cells=[];for(let i=0;i<first;i++)cells.push('<span></span>');
+    for(let n=1;n<=dim;n++){const d=`${y}-${String(m).padStart(2,'0')}-${String(n).padStart(2,'0')}`;const evs=evOn(d);const wd=(first+n-1)%7;
+      const hol=evs.some(([k,e])=>e.hol);
+      cells.push(`<button class="cday ${d===calSel?'sel':''} ${d===TODAY?'today':''} ${wd===0||hol?'sun':wd===6?'sat':''}" onclick="selDay('${d}')"><span class="dn num">${n}</span>${evs.slice(0,2).map(([k,e])=>`<i class="ebar ${e.hol?'hol':e.pay?'pay':''}">${e.t}</i>`).join('')}${evs.length>2?`<i class="emore">+${evs.length-2}</i>`:''}${actsOn(d).length?'<i class="adot"></i>':''}</button>`)}
+    main=`<div class="flat" style="padding:10px 8px 8px">
+      <div class="mswitch" style="margin:-6px 0 4px"><button onclick="moveMonth(-1)">‹</button><b>${y}年${m}月</b><button onclick="moveMonth(1)">›</button></div>
+      <div class="cal">${'日月火水木金土'.split('').map((w,i)=>`<span class="cwd ${i===0?'sun':i===6?'sat':''}">${w}</span>`).join('')}${cells.join('')}</div>
+      <div class="row cap" style="gap:12px;padding:8px 4px 0"><span class="row" style="gap:4px"><i class="ebar" style="width:14px"></i>予定</span><span class="row" style="gap:4px"><i class="ebar pay" style="width:14px"></i>支払い予定</span><span class="row" style="gap:4px"><i class="adot"></i>記録あり</span></div></div>
+    <div class="stack">${sec(mdw(calSel)+(calSel===TODAY?' 今日':''),evOn(calSel).length+'件','＋ 追加')}${agenda(calSel)}</div>`;
+  }else if(calView==='day'){
+    const H0=8,H1=22,ph=48,mins=t=>{const[h,mm]=t.split(':');return +h*60+ +mm};
+    const evs=evOn(calSel);const allday=evs.filter(([k,e])=>e.all);const timed=evs.filter(([k,e])=>!e.all);
+    let g='';for(let h=H0;h<=H1;h++)g+=`<div class="hline" style="top:${(h-H0)*ph}px"></div><div class="hlab num" style="top:${(h-H0)*ph}px">${h}:00</div>`;
+    g+=timed.map(([k,e])=>{const t=(mins(e.s)-H0*60)/60*ph,hh=Math.max((mins(e.e)-mins(e.s))/60*ph,26);return `<a class="blk" href="#/ev/${k}" style="top:${t+1}px;height:${hh-2}px"><b>${e.t}</b>${e.s}–${e.e}${placeOf(e)?' · '+placeOf(e):''}</a>`}).join('');
+    g+=actsOn(calSel).map(([k,a])=>{const t=(mins(a.time)-H0*60)/60*ph;return t>=0?`<a class="ablk" href="#/a/${k}" style="top:${t-13}px">記録 ${a.title}</a>`:''}).join('');
+    if(calSel===TODAY)g+=`<div class="nowl" style="top:${(mins('14:46')-H0*60)/60*ph}px"></div>`;
+    main=`<div class="flat" style="padding:10px 12px">
+      <div class="mswitch" style="margin:-6px 0 6px"><button onclick="selDay(addDays(calSel,-1),1)">‹</button><b>${mdw(calSel)}</b><button onclick="selDay(addDays(calSel,1),1)">›</button></div>
+      ${allday.length?`<div class="stack" style="gap:6px;margin-bottom:10px">${allday.map(([k,e])=>`<a class="ebar ${e.hol?'hol':e.pay?'pay':''}" href="#/ev/${k}" style="height:26px;line-height:26px;font-size:12px;padding:0 10px;border-radius:7px">終日 · ${e.t}</a>`).join('')}</div>`:''}
+      <div class="dgrid" style="height:${(H1-H0)*ph+10}px;margin-top:8px">${g}</div>
+      <div class="row cap" style="gap:12px;padding-top:6px"><span>点線 = 予定</span><span>塗り = 記録(アクティビティ)</span>${calSel===TODAY?'<span style="color:#D2563C">━ 今</span>':''}</div></div>`;
+  }else{
+    const days=[...Array(21)].map((_,i)=>addDays(TODAY,i)).filter(d=>evOn(d).length);
+    main=days.map(d=>`<div class="stack">${sec(mdw(d)+(d===TODAY?' 今日':''),evOn(d).length+'件')}${agenda(d,1)}</div>`).join('');
+  }
+  return `<div class="view">
+  ${ptitle('schedule','予定')}
+  ${intro('schedule','これからの予定。場所・参加者はエンティティ。終わったら記録(アクティビティ)に結び付き、定期の支払い予定は家計簿の固定費になる。',[['今日',todays.length+'件'],['次の予定',next?next[1].s:'—'],['7日間',week+'件']])}
+  <div class="seg">${[['month','月'],['day','日'],['list','リスト']].map(([k,l])=>`<button class="${calView===k?'on':''}" onclick="setCal('${k}')">${l}</button>`).join('')}</div>
+  ${main}
+  </div>`;
+}
+function agenda(d,compact){const evs=evOn(d),acts=actsOn(d);
+  if(!evs.length&&!acts.length)return '<div class="flat empty">予定なし</div>';
+  return `<div class="stack">${evs.map(([k,e])=>`<a class="ev ${e.pay?'pay':''} ${e.hol?'hol':''}" href="#/ev/${k}"><span class="evt">${e.all?'<b>終日</b>':`<b class="num">${e.s}</b><span class="num">${e.e}</span>`}</span>
+    <span class="evb"><b class="ellipsis">${e.t}</b><span class="cap ellipsis">${[placeOf(e),e.who?e.who.map(w=>E[w].n).join('・'):'',e.rep||'',e.pay?yen(e.pay.amt)+' · 固定費':''].filter(Boolean).join(' · ')}</span></span>
+    ${e.rec&&!repOn(e,d)?'<span class="rec">✓ 記録済み</span>':''}${e.todo?`<span class="cap">ToDo ${e.todo.filter(t=>TD[t].done).length}/${e.todo.length}</span>`:''}</a>`).join('')}
+    ${compact?'':acts.map(([k,a])=>`<a class="arow" href="#/a/${k}"><span class="mk-a"></span><span class="cap num" style="width:34px;color:var(--activity);font-weight:600">${a.time}</span>${bAct(a.type)}<span class="grow ellipsis" style="font-size:13px">${a.title}</span><span class="cap">記録</span></a>`).join('')}</div>`}
+function selDay(d,keep){calSel=d;calYM=[+d.slice(0,4),+d.slice(5,7)];const y=$('#scroll').scrollTop;render();if(keep)$('#scroll').scrollTop=y}
+function moveMonth(n){let[y,m]=calYM;m+=n;if(m>12){m=1;y++}if(m<1){m=12;y--}calYM=[y,m];calSel=`${y}-${String(m).padStart(2,'0')}-01`;if(y===2026&&m===10)calSel=TODAY;render()}
+function setCal(v){calView=v;render()}
+function vEvent(id){const e=EV[id];const past=(e.d2||e.d)<TODAY&&!e.rep;
+  return `<div class="view push">
+  ${topbar('予定','schedule')}
+  <div class="obj obj-p"><div class="hero"><div class="row" style="gap:6px"><span class="lbl">${IC.schedule}予定</span>${e.rep?`<span class="type ghost">${e.rep}</span>`:''}</div>
+    <span class="title">${e.t}</span><span class="big num" style="font-size:24px">${e.all?'終日':`${e.s} – ${e.e}`}</span><span class="meta">${mdw(e.d)}${e.d2?' – '+mdw(e.d2):''}${e.rep?' · 次回 '+mdw(nextOn(e)):''}</span></div></div>
+  ${e.pay?`<div class="stack">${sec('支払いの予定')}<div class="flat"><div class="lrow"><span class="cap" style="width:56px">金額</span><b class="grow num">${yen(e.pay.amt)}</b></div><div class="lrow"><span class="cap" style="width:56px">カテゴリ</span><span class="grow">${catChip(e.pay.cat,1)}</span><span class="cap" style="font-weight:700;color:#5E6E91">${catFx(e.pay.cat)}費</span></div></div><div class="cap" style="padding:0 2px">定期の支払いは家計簿の「これからの固定費」に出る</div></div>`:''}
+  <div class="stack">${sec('詳細')}<div class="flat">
+    ${e.place?`<div class="lrow"><span class="cap" style="width:56px">場所</span>${e.place[0]?ref(e.place[0]):`<span class="ref unreg">${e.place[1]}</span>`}</div>`:''}
+    ${e.who?`<div class="lrow"><span class="cap" style="width:56px">参加者</span><span class="row" style="flex-wrap:wrap;gap:6px">${e.who.map(ref).join('')}</span></div>`:''}
+    <div class="lrow"><span class="cap" style="width:56px">繰り返し</span><span class="grow">${e.rep||'なし'}</span></div>
+    <div class="lrow"><span class="cap" style="width:56px">通知</span><span class="grow">${e.alarm||'なし'}</span></div>
+    ${e.memo?`<div class="lrow"><span class="cap" style="width:56px">メモ</span><span class="grow">${e.memo}</span></div>`:''}</div>
+    ${e.place&&!e.place[0]?`<div class="suggest"><span class="grow ellipsis">「${e.place[1]}」は未登録</span><button class="btn" onclick="toast('エンティティに登録(モック)')">＋ 場所として登録</button></div>`:''}</div>
+  ${e.todo?`<div class="stack">${sec('この予定のToDo',e.todo.length,'＋ 追加')}<div class="flat">${e.todo.map(trow).join('')}</div></div>`:''}
+  <div class="stack">${sec('記録')}
+    ${e.rec?`<a class="arow" href="#/a/${e.rec}"><span class="mk-a"></span>${bAct(A[e.rec].type)}<span class="grow ellipsis" style="font-size:13px">${A[e.rec].title} · ${md(A[A[e.rec].parent].date)}</span><span class="rec">✓ 記録済み</span></a>`
+      :`<button class="btn" style="height:46px;background:var(--activity)" onclick="toast('この予定からアクティビティを作成(モック)')">${past||e.d===TODAY?'記録にする(アクティビティを作成)':'終わったら記録にできます'}</button>`}</div>
+  </div>`}
+/* ======================= ToDo ======================= */
+let todoView='today',showDone=false;
+function trow(k){const t=TD[k];const over=t.due&&t.due<TODAY&&!t.done;
+  const due=t.due?`<span class="due ${over?'over':t.due===TODAY?'today':''}">${over?'期限切れ ':''}${t.due===TODAY?'今日':md(t.due)}</span>`:'';
+  const meta=[due,t.rep?`<span>↻ ${t.rep}</span>`:'',todoView.startsWith('list:')?'':`<span>${LISTS[t.list].n}</span>`,
+    t.ent?t.ent.map(e=>`<span class="mini">▣ ${E[e].n}</span>`).join(''):'',t.ev?`<span class="mini ev">${IC.schedule}${EV[t.ev].t}</span>`:'',
+    t.sub?`<span>☑ ${t.sub.filter(x=>x[1]).length}/${t.sub.length}</span>`:'',t.pay?`<span class="mini" style="color:var(--expense)">${IC.expense}${md(A[A[t.pay].parent].date)}に購入</span>`:''].filter(Boolean).join('');
+  return `<div class="task ${t.done?'done':''}"><button class="chk" onclick="togTask('${k}')">${t.done?'✓':''}</button><a class="tbody" href="#/t/${k}"><span class="tt">${t.t}</span>${meta?`<span class="tmeta">${meta}</span>`:''}</a>${t.pri?'<span class="pri">!</span>':''}</div>`}
+function vTodo(){
+  const ks=Object.keys(TD);const open=ks.filter(tdOpen);
+  const nToday=open.filter(k=>TD[k].due===TODAY).length,nOver=open.filter(k=>TD[k].due&&TD[k].due<TODAY).length,nDone=ks.filter(k=>TD[k].done).length;
+  const views=[['today','今日',open.filter(k=>TD[k].due&&TD[k].due<=TODAY).length],['upcoming','予定あり',open.filter(k=>TD[k].due>TODAY).length],['all','すべて',open.length],...Object.entries(LISTS).map(([l,L])=>['list:'+l,L.n,open.filter(k=>TD[k].list===l).length])];
+  let pick;if(todoView==='today')pick=k=>TD[k].due&&TD[k].due<=TODAY||TD[k].done===TODAY;else if(todoView==='upcoming')pick=k=>TD[k].due>TODAY;else if(todoView==='all')pick=()=>true;else pick=k=>TD[k].list===todoView.slice(5);
+  const sel=ks.filter(pick);
+  const secs=[['期限切れ',k=>TD[k].due&&TD[k].due<TODAY,'over'],['今日',k=>TD[k].due===TODAY],['これから',k=>TD[k].due>TODAY],['期限なし',k=>!TD[k].due]];
+  const openSel=sel.filter(tdOpen),doneSel=sel.filter(k=>!tdOpen(k));
+  const shopSug=todoView==='list:shop'||todoView==='all'?open.filter(k=>TD[k].list==='shop'&&k==='t4'):[];
+  return `<div class="view">
+  ${ptitle('todo','ToDo')}
+  ${intro('todo','やること。人・場所(エンティティ)や予定に結び付き、買い物リストは支払いの品目から完了を提案する。',[['今日',nToday+'件','#/todo'],['期限切れ',nOver+'件'],['完了',nDone+'件']])}
+  <div class="chips">${views.map(([k,l,n])=>`<button class="pill todo ${todoView===k?'on':''}" onclick="setTodo('${k}')">${l} <span style="opacity:.7">${n}</span></button>`).join('')}</div>
+  <div class="qadd"><span class="chk" style="border-style:dashed"></span><input id="qa" placeholder="ToDoを追加(例: 明日 牛乳 #買い物)" onkeydown="if(event.key==='Enter')addTask()"><button class="btn" style="background:var(--todo)" onclick="addTask()">追加</button></div>
+  ${shopSug.length?`<div class="suggest todo"><span class="grow ellipsis">10/29 スーパー青葉台の支払いに「牛乳」</span><button class="btn" onclick="doneBy('t4','p2')">完了にする</button></div>`:''}
+  ${secs.map(([l,f,c])=>{const xs=openSel.filter(f);return xs.length?`<div class="stack"><div class="tsec ${c||''}">${l} <span class="cap">${xs.length}</span></div><div class="raised">${xs.map(trow).join('')}</div></div>`:''}).join('')||(openSel.length?'':'<div class="flat empty">すべて完了</div>')}
+  ${doneSel.length?`<div class="stack"><button class="ghead" onclick="showDone=!showDone;render()"><span class="tsec">完了 <span class="cap">${doneSel.length}</span></span><span class="grow"></span><span class="cap">${showDone?'▾':'▸'}</span></button>${showDone?`<div class="flat">${doneSel.map(trow).join('')}</div>`:''}</div>`:''}
+  </div>`}
+function setTodo(v){todoView=v;render()}
+function togTask(k){const t=TD[k];t.done=t.done?undefined:TODAY;const y=$('#scroll').scrollTop;render();$('#scroll').scrollTop=y;if(t.done)toast('「'+t.t+'」を完了')}
+function doneBy(k,pay){TD[k].done='2026-10-29';TD[k].pay=pay;render();toast('支払いの品目から完了にしました')}
+function addTask(){const el=$('#qa');let v=el.value.trim();if(!v)return;let due,list=todoView.startsWith('list:')?todoView.slice(5):'inbox';
+  if(v.includes('今日')){due=TODAY;v=v.replace('今日','').trim()}if(v.includes('明日')){due=addDays(TODAY,1);v=v.replace('明日','').trim()}
+  const m=v.match(/#(\S+)/);if(m){const l=Object.entries(LISTS).find(([k,L])=>L.n===m[1]);if(l)list=l[0];v=v.replace(m[0],'').trim()}
+  TD['n'+Date.now()]={t:v,due,list};render();toast('追加: '+v+(due?' · '+md(due):'')+' · '+LISTS[list].n)}
+function vTask(k){const t=TD[k];
+  return `<div class="view push">
+  ${topbar('ToDo','todo')}
+  <div class="obj obj-t"><div class="hero"><div class="hc"><button class="chk ${t.done?'on':''}" onclick="togTask('${k}')">${t.done?'✓':''}</button></div>
+    <div class="hb"><span class="lbl">${IC.todo}ToDo · ${LISTS[t.list].n}</span><span class="title" style="${t.done?'text-decoration:line-through;opacity:.8':''}">${t.t}</span><span class="meta">${t.done?'完了 '+md(t.done):t.due?'期限 '+mdw(t.due):'期限なし'}${t.pri?' · 優先':''}</span></div></div></div>
+  <div class="stack">${sec('詳細')}<div class="flat">
+    <button class="lrow" style="width:100%;text-align:left" onclick="toast('期限を選ぶ(モック)')"><span class="cap" style="width:56px">期限</span><span class="grow">${t.due?mdw(t.due):'なし'}</span><span class="cap">›</span></button>
+    <button class="lrow" style="width:100%;text-align:left" onclick="toast('繰り返し(モック)')"><span class="cap" style="width:56px">繰り返し</span><span class="grow">${t.rep||'なし'}</span><span class="cap">›</span></button>
+    <div class="lrow"><span class="cap" style="width:56px">優先度</span><span class="grow"><span class="segm"><button class="${t.pri?'':'on'}">通常</button><button class="${t.pri?'on':''}" style="${t.pri?'color:#C4553F':''}">! 優先</button></span></span></div>
+    <div class="lrow"><span class="cap" style="width:56px">リスト</span><span class="grow">${LISTS[t.list].n}</span>${LISTS[t.list].shop?`<span class="cap">買う店 ${E[LISTS[t.list].shop].n}</span>`:''}</div></div></div>
+  <div class="stack">${sec('結び付き','','＋ 追加')}<div class="flat">
+    ${t.ent?t.ent.map(e=>`<div class="lrow"><span class="cap" style="width:56px">対象</span>${ref(e)}</div>`).join(''):''}
+    ${t.ev?`<a class="lrow" href="#/ev/${t.ev}"><span class="cap" style="width:56px">予定</span><span class="b-plan">予定</span><span class="grow ellipsis">${EV[t.ev].t}</span><span class="cap">${md(EV[t.ev].d)} ›</span></a>`:''}
+    ${t.pay?`<a class="lrow" href="#/a/${t.pay}"><span class="cap" style="width:56px">購入</span>${bAct('支払い')}<span class="grow ellipsis">${A[t.pay].title} · ${shopOf(X[A[t.pay].x])}</span><span class="cap">›</span></a>`:''}
+    ${!t.ent&&!t.ev&&!t.pay?'<div class="empty">人・場所・予定・支払いに結び付けられます</div>':''}</div></div>
+  ${t.sub?`<div class="stack">${sec('サブタスク',t.sub.filter(x=>x[1]).length+'/'+t.sub.length,'＋ 追加')}<div class="flat">${t.sub.map((x,i)=>`<div class="task ${x[1]?'done':''}"><button class="chk" onclick="TD['${k}'].sub[${i}][1]=TD['${k}'].sub[${i}][1]?0:1;render()">${x[1]?'✓':''}</button><span class="tbody"><span class="tt">${x[0]}</span></span></div>`).join('')}</div></div>`:''}
+  ${t.memo?`<div class="stack">${sec('メモ')}<div class="flat" style="padding:var(--s4);font-size:14px">${t.memo}</div></div>`:''}
+  </div>`}
+
 /* ======================= router ======================= */
-const TABS=[['activities','アクティビティ','activity','activity'],['entities','エンティティ','entity','entity'],['plus'],['notes','ノート','note','note'],['ledger','家計簿','expense','expense']];
+const TABS=[['activities','アクティビティ','activity','activity'],['schedule','予定','schedule','schedule'],['todo','ToDo','todo','todo'],['entities','エンティティ','entity','entity'],['ledger','家計簿','expense','expense']];
 function render(){
   const h=location.hash.slice(2)||'activities';const [r,id]=h.split('/');
   let html,tab;
@@ -701,15 +981,20 @@ function render(){
     case 'cats':html=vCats();tab='ledger';break;
     case 'entities':html=vEntities(id);tab='entities';break;
     case 'types':html=vTypes();tab='entities';break;
-    case 'notes':html=vNotes();tab='notes';break;
+    case 'notes':html=vNotes();tab='entities';break;
+    case 'schedule':html=vSchedule();tab='schedule';break;
+    case 'ev':html=vEvent(id);tab='schedule';break;
+    case 'todo':html=vTodo();tab='todo';break;
+    case 't':html=vTask(id);tab='todo';break;
     case 'e':html=vEntity(id);tab='entities';break;
     case 'a':html=vActivity(id);tab='activities';break;
     case 'x':html=vExpense(id);tab='ledger';break;
-    case 'n':html=vNote(id);tab='notes';break;
+    case 'n':html=vNote(id);tab='entities';break;
     default:html=vActivities();tab='activities';
   }
   $('#app').innerHTML=html;$('#scroll').scrollTop=0;
-  $('#nav').innerHTML=TABS.map(t=>t[0]==='plus'?`<button class="plus" onclick="openCreate()">＋</button>`:`<a href="#/${t[0]}" class="${t[0]===tab?'on':''}" style="--c:var(--${t[3]})">${IC[t[2]]}${t[1]}</a>`).join('');
+  $('#nav').innerHTML=TABS.map(t=>`<a href="#/${t[0]}" class="${t[0]===tab?'on':''}" style="--c:var(--${t[3]})">${IC[t[2]]}${t[1]}</a>`).join('');
+  curTab=tab;
 }
 function goBack(){history.length>1?history.back():location.hash='#/activities'}
 window.addEventListener('hashchange',render);
@@ -717,8 +1002,12 @@ function tog(id,btn,label){const el=document.getElementById(id);el.hidden=!el.hi
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1600)}
 function sheet(html){$('#sheet').innerHTML='<div class="grab"></div>'+html;$('#dev').classList.add('open')}
 function closeSheet(){$('#dev').classList.remove('open')}
-function openCreate(){sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s3)">新しく記録する</div>
-  <div class="flat">
+let curTab='activities';
+function openCreate(){const first={schedule:`<button class="lrow" style="width:100%" onclick="closeSheet();toast('予定の作成(モック)')">${MK.schedule}<span class="grow" style="text-align:left"><b>予定</b><div class="cap">日時・場所・参加者</div></span></button>`,
+  todo:`<button class="lrow" style="width:100%" onclick="closeSheet();$('#qa')&&$('#qa').focus()">${MK.todo}<span class="grow" style="text-align:left"><b>ToDo</b><div class="cap">期限・リスト・結び付く人や予定</div></span></button>`};
+  const order=curTab==='todo'?['todo','schedule']:['schedule','todo'];
+  sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s3)">新しく作る</div>
+  <div class="flat">${order.map(k=>first[k]).join('')}
    <button class="lrow" style="width:100%" onclick="closeSheet();toast('支払いの入力(モック)')">${MK.activity}<span class="grow" style="text-align:left"><b>支払い</b><div class="cap">レシートを撮る・金額を入れる</div></span></button>
    <button class="lrow" style="width:100%" onclick="closeSheet();toast('出来事の入力(モック)')">${MK.activity}<span class="grow" style="text-align:left"><b>出来事・日記</b><div class="cap">今日の日記の子として追加</div></span></button>
    <button class="lrow" style="width:100%" onclick="closeSheet();toast('エンティティの作成(モック)')">${MK.entity}<span class="grow" style="text-align:left"><b>エンティティ</b><div class="cap">人・場所・物。ノートはここから</div></span></button>
@@ -730,6 +1019,8 @@ function openAbout(){sheet(`<div class="h1" style="font-size:17px">UIモック v
     ${MK.activity}<span><b>アクティビティ</b> = 時間軸に掛かったカプセル(印は丸角正方形)。<b>日記</b>は日めくりカレンダーの1枚</span>
     <span class="mk" style="width:34px;height:34px;display:grid;place-items:center;color:var(--expense);font-size:28px">${IC.expense}</span><span><b>自分の支出</b> = 半券付きのチケット</span>
     ${MK.note}<span><b>ノート</b> = 角を折った紙</span>
+    ${MK.schedule}<span><b>予定</b> = 点線の輪郭(まだ起きていないアクティビティ)。終わると記録に結び付く</span>
+    ${MK.todo}<span><b>ToDo</b> = チェック欄の付いたカード</span>
     ${MK.type}<span><b>種類</b> = 値札(タグ)。エンティティ画面の「種類の管理」から</span>
     <span class="cat" style="justify-self:start">外食</span><span><b>カテゴリ</b>(家計簿) = 帳簿のインデックス。<span class="spc">✦ 非日常</span> は特別感</span>
   </div></div>
