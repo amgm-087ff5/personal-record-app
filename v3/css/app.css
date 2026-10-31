@@ -266,7 +266,7 @@ button.row{width:100%;text-align:left}
 .sheet.on{transform:none}
 .sheet.full{height:96dvh}
 .sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--line-strong);margin:8px auto 0;flex:none}
-.sheet-h{display:flex;align-items:center;gap:4px;padding:4px 4px 4px 4px;min-height:52px;flex:none}
+.sheet-h{display:flex;align-items:center;gap:4px;padding:4px 12px 4px 4px;min-height:52px;flex:none}
 .sheet-h .title{font:var(--t-head);flex:1;text-align:center}
 .sheet-h .btn{height:36px;padding:0 14px;font-size:14px}
 .sheet-h .txtbtn{min-width:64px;height:44px;padding:0 12px;font:500 15px/1 var(--font);color:var(--brand)}
