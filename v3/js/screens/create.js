@@ -9,7 +9,13 @@ if(!document.getElementById('cr-style'))document.head.insertAdjacentHTML('before
 .cr-tile{display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:12px;min-height:132px;padding:16px 14px;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1),var(--hl);text-align:left;font:600 16px/1.3 var(--font);color:var(--ink);cursor:pointer}
 .cr-tile:active{background:var(--sunk)}
 .cr-tile small{font:var(--t-cap);font-weight:400;color:var(--ink-3)}
-.cr-tile svg.i{width:28px;height:28px;color:var(--c-activity)}
+.cr-tile .ico{width:44px;height:44px;border-radius:14px}
+.cr-tile .ico svg.i{width:24px;height:24px}
+.cr-prev{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px var(--gutter) 4px}
+.cr-prev small{font:var(--t-cap);color:var(--ink-3)}
+.cr-tn{display:flex;align-items:center;gap:8px;min-width:0}
+.cr-sug{padding-top:2px}
+#cr-bur .split{margin:12px var(--gutter) 0}
 .cr-th{width:40px;height:40px;flex:none;border-radius:var(--r-xs);object-fit:cover;background:var(--sunk);box-shadow:var(--e1)}
 .cr-head{display:flex;align-items:center;gap:12px;padding:4px var(--gutter) 10px}
 .cr-head .cr-th{width:56px;height:56px}
@@ -37,7 +43,6 @@ if(!document.getElementById('cr-style'))document.head.insertAdjacentHTML('before
 </style>`);
 
 /* ---------- 共通の小部品 ---------- */
-const crDl=(id,list)=>`<datalist id="${id}">${list.map(([k,e])=>`<option value="${esc(e.n)}">`).join('')}</datalist>`;
 const crPeople=()=>Object.entries(E).filter(([k,e])=>k!=='me'&&e.t.some(t=>isUnder(t,'person')));
 const crPlaces=()=>Object.entries(E).filter(([k,e])=>e.t.some(t=>isUnder(t,'place')));
 const crNowHM=()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
@@ -93,11 +98,30 @@ function crPanel(title,body,opt={}){
 }
 
 /* ---------- 登録 ---------- */
-CREATE.push({id:'receipt',label:'レシートで支払い',sub:'撮影・写真から',cls:'activity',icon:'camera',primaryOn:['activities','ledger'],onclick:'openReceipt()'});
-CREATE.push({id:'happening',label:'出来事',sub:'会話・移動など',cls:'activity',icon:'activity',primaryOn:[],onclick:"openNewHappening()"});
-CREATE.push({id:'event',label:'予定',sub:'これからの予定',cls:'schedule',icon:'schedule',primaryOn:['plan'],onclick:'openNewEvent()'});
-CREATE.push({id:'entity',label:'人・場所',sub:'人物・店・会社',cls:'entity',icon:'entity',primaryOn:['entities'],onclick:"openNewEntity()"});
-CREATE.push({id:'diary',label:'今日の日記',sub:'',cls:'activity',icon:'diary',primaryOn:[],onclick:"openDiary(TODAY)"});
+CREATE.push({id:'receipt',label:'レシートで支払い',sub:'撮影・写真から',icon:'camera',color:'var(--c-expense)',primaryOn:['activities','ledger'],onclick:'openReceipt()'});
+CREATE.push({id:'happening',label:'出来事',sub:'会話・移動など',icon:'activity',color:'var(--c-activity)',primaryOn:[],onclick:'openNewHappening()'});
+CREATE.push({id:'event',label:'予定',sub:'これからの予定',icon:'schedule',color:'var(--plan)',primaryOn:['plan'],onclick:'openNewEvent()'});
+CREATE.push({id:'entity',label:'人・場所',sub:'人物・店・会社・物',icon:'people',color:'var(--th-person)',primaryOn:['entities'],onclick:'openNewEntity()'});
+CREATE.push({id:'diary',label:'今日の日記',sub:'',icon:'diary',color:'var(--brand)',primaryOn:[],onclick:'openDiary(TODAY)'});
+
+/* ---------- 人・場所の候補(輪郭つき) ----------
+   入力欄の下にチップで出す。datalist は要素を持てないため使わない */
+function crPlaceSug(q,pick){
+  const s=(q||'').trim();
+  const hits=crPlaces().filter(([k,e])=>e.n!==s&&(!s||e.n.includes(s))).slice(0,8);
+  if(!hits.length)return '';
+  /* mousedown を止めて入力欄の blur(=再描画)より先にクリックを届ける */
+  return `<div class="chips cr-sug" role="group" aria-label="場所の候補">${hits.map(([k,e])=>`<button class="chip" type="button" onmousedown="event.preventDefault()" onclick="${pick}('${k}')">${knot(k,'sm')}${esc(e.n)}</button>`).join('')}</div>`;
+}
+/** 入力のたびに候補の要素だけ差し替える(入力欄の框は保つ) */
+function crSugUpdate(id,q,pick){const el=document.getElementById(id);if(el)el.innerHTML=crPlaceSug(q,pick)}
+/** 人の選択チップ(輪郭つき)。cur: 選択中のid、空なら「分けない」 */
+function crWithChips(cur){
+  return `<div class="chips" role="group" aria-label="誰かと分ける">
+    <button class="chip" type="button" aria-pressed="${!cur}" onclick="crSetWith('')">分けない</button>
+    ${crPeople().map(([k,e])=>`<button class="chip" type="button" aria-pressed="${cur===k}" onclick="crSetWith('${k}')">${knot(k,'sm')}${esc(e.n)}</button>`).join('')}
+  </div>`;
+}
 
 /* ---------- ＋支出(金額だけ) ---------- */
 let CQ={amt:'',shop:'',date:TODAY,root:'food',cat:'eatout'};
@@ -109,16 +133,17 @@ function crQeRender(){
   const body=`<div class="list">
     <div class="field"><label>金額</label><input class="amt num" id="cr-qe-amt" inputmode="numeric" autofocus placeholder="¥0" value="${esc(CQ.amt)}" oninput="CQ.amt=this.value"></div>
     <div class="field"><label>日付</label><input type="date" value="${CQ.date}" oninput="CQ.date=this.value"></div>
-    <div class="field"><label>店</label><input list="cr-dl-qe" value="${esc(CQ.shop)}" placeholder="候補から選ぶか入力" oninput="CQ.shop=this.value"></div>
+    <div class="field"><label>店</label><input value="${esc(CQ.shop)}" placeholder="店名を入力" oninput="CQ.shop=this.value;crSugUpdate('cr-sug-qe',this.value,'crQePick')"></div>
   </div>
+  <div id="cr-sug-qe">${crPlaceSug(CQ.shop,'crQePick')}</div>
   ${sh('カテゴリ')}
   ${chips(ROOTS().map(k=>[k,CATS[k].n]),CQ.root,"crQeRoot('$v')")}
   ${kids.length?`<div class="list">
     <div class="field"><label>小分類</label><select onchange="CQ.cat=this.value">${kids.map(k=>`<option value="${k}" ${CQ.cat===k?'selected':''}>${esc(CATS[k].n)}</option>`).join('')}</select></div></div>`:''}
-  <p class="hint">品目1つの支払いと、自分の支出を作成します</p>
-  ${crDl('cr-dl-qe',crPlaces())}`;
+  <p class="hint">品目1つの支払いと、自分の支出を作成します</p>`;
   crPanel('支出を記録',body,{right:{label:'支出を保存',onclick:'crQeSave()'}});
 }
+function crQePick(k){CQ.shop=E[k].n;crQeRender()}
 function crQeSave(){
   const amt=+String(CQ.amt).replace(/[^\d]/g,'');if(!amt){toast('金額を入れてください');return}
   const cat=CQ.cat;const shop=(CQ.shop||'').trim();
@@ -138,15 +163,16 @@ function crEvRender(){
     <div class="field"><label>日付</label><input type="date" value="${CE.d}" oninput="CE.d=this.value"></div>
     ${CE.all?'':`<div class="field"><label>開始</label><input type="time" value="${CE.s}" oninput="CE.s=this.value"></div>
     <div class="field"><label>終了</label><input type="time" value="${CE.e}" oninput="CE.e=this.value"></div>`}
-    <div class="field"><label>場所</label><input list="cr-dl-ev" value="${esc(CE.place)}" placeholder="候補から選ぶか入力" oninput="CE.place=this.value"></div>
+    <div class="field"><label>場所</label><input value="${esc(CE.place)}" placeholder="場所を入力" oninput="CE.place=this.value;crSugUpdate('cr-sug-ev',this.value,'crEvPick')"></div>
     <div class="field"><label>繰り返し</label><select onchange="CE.rep=this.value">${['なし','毎日','毎週','毎月'].map(r=>`<option ${CE.rep===r?'selected':''}>${r}</option>`).join('')}</select></div>
     <div class="field"><label>通知</label><select onchange="CE.alarm=this.value">${['なし','10分前','30分前','1時間前','前日'].map(r=>`<option ${CE.alarm===r?'selected':''}>${r}</option>`).join('')}</select></div>
   </div>
+  <div id="cr-sug-ev">${crPlaceSug(CE.place,'crEvPick')}</div>
   ${sh('参加者')}
-  <div class="chips" role="group">${crPeople().map(([k,e])=>`<button class="chip" type="button" aria-pressed="${CE.who.includes(k)}" onclick="crEvWho('${k}')">${esc(e.n)}</button>`).join('')}</div>
-  ${crDl('cr-dl-ev',crPlaces())}`;
+  <div class="chips" role="group">${crPeople().map(([k,e])=>`<button class="chip" type="button" aria-pressed="${CE.who.includes(k)}" onclick="crEvWho('${k}')">${knot(k,'sm')}${esc(e.n)}</button>`).join('')}</div>`;
   crPanel('予定を作成',body,{right:{label:'予定を追加',onclick:'crEvSave()'}});
 }
+function crEvPick(k){CE.place=E[k].n;crEvRender()}
 function crEvSave(){
   if(!CE.t.trim()){toast('タイトルを入れてください');return}
   const place=CE.place.trim();const pid=crFindEnt(place);const id=uid('ev');
@@ -167,14 +193,15 @@ function crHpRender(){
   <div class="list">
     <div class="field"><label>タイトル</label><input value="${esc(CH.t)}" placeholder="例: 進路の相談" oninput="CH.t=this.value"></div>
     <div class="field"><label>時刻</label><input type="time" value="${CH.time}" oninput="CH.time=this.value"></div>
-    <div class="field"><label>${mv?'到着した場所':'場所'}</label><input list="cr-dl-hp" value="${esc(CH.place)}" placeholder="候補から選ぶか入力" oninput="CH.place=this.value"></div>
+    <div class="field"><label>${mv?'到着した場所':'場所'}</label><input value="${esc(CH.place)}" placeholder="場所を入力" oninput="CH.place=this.value;crSugUpdate('cr-sug-hp',this.value,'crHpPick')"></div>
   </div>
-  ${mv?'':`${sh('参加者')}<div class="chips" role="group">${crPeople().map(([k,e])=>`<button class="chip" type="button" aria-pressed="${CH.who.includes(k)}" onclick="crHpWho('${k}')">${esc(e.n)}</button>`).join('')}</div>`}
+  <div id="cr-sug-hp">${crPlaceSug(CH.place,'crHpPick')}</div>
+  ${mv?'':`${sh('参加者')}<div class="chips" role="group">${crPeople().map(([k,e])=>`<button class="chip" type="button" aria-pressed="${CH.who.includes(k)}" onclick="crHpWho('${k}')">${knot(k,'sm')}${esc(e.n)}</button>`).join('')}</div>`}
   ${sh('内容')}
-  <div class="list"><div class="field"><textarea rows="3" placeholder="何があったか" oninput="CH.body=this.value">${esc(CH.body)}</textarea></div></div>
-  ${crDl('cr-dl-hp',crPlaces())}`;
+  <div class="list"><div class="field"><textarea rows="3" placeholder="何があったか" oninput="CH.body=this.value">${esc(CH.body)}</textarea></div></div>`;
   crPanel('出来事を記録',body,{right:{label:'出来事を保存',onclick:'crHpSave()'}});
 }
+function crHpPick(k){CH.place=E[k].n;crHpRender()}
 function crHpSave(){
   if(!CH.t.trim()){toast('タイトルを入れてください');return}
   const day=crDay(CH.d);const aid=uid('c');const roles=CH.who.map(w=>['参加',w]);
@@ -197,12 +224,20 @@ function crDiaSave(){const id=crDay(CD.d);A[id].body=CD.body;CD=null;closeSheet(
 /* ---------- エンティティ ---------- */
 let CN=null;
 function openNewEntity(type){CN={t:type||'person',n:'',f:{}};crEntRender()}
+/** 種類の根(人物・場所・会社・物・書類)の輪郭と頭文字。名前の入力のたびにこの要素だけ描き直す */
+const CR_ROOTS=['person','place','company','thing','doc'];
+function crPrev(){
+  const root=typeAnc(CN.t)[0];const ini=(CN.n||'').trim()[0]||'?';
+  return `<span class="kn lg ${ROOT_SHAPE[root]||'thing'}"><b>${esc(ini)}</b></span><small>${esc(ROOT_LABEL[root]||'')}</small>`;
+}
+function crPrevUpdate(){const p=document.getElementById('cr-prev');if(p)p.innerHTML=crPrev()}
 function crEntRender(){
   const isP=isUnder(CN.t,'person');
-  const types=Object.keys(TYPES).map(k=>`<option value="${k}" ${CN.t===k?'selected':''}>${'　'.repeat(typeAnc(k).length-1)}${esc(TYPES[k].n)}</option>`).join('');
+  const types=CR_ROOTS.map(r=>`<optgroup label="${ROOT_LABEL[r]}">${Object.keys(TYPES).filter(k=>typeAnc(k)[0]===r).map(k=>`<option value="${k}" ${CN.t===k?'selected':''}>${'　'.repeat(typeAnc(k).length-1)}${esc(TYPES[k].n)}</option>`).join('')}</optgroup>`).join('');
   const props=propsOf(CN.t).map(([p])=>`<div class="field"><label>${esc(p)}</label><input value="${esc(CN.f[p]||'')}" placeholder="任意" oninput="CN.f['${p}']=this.value"></div>`).join('');
-  const body=`<div class="list">
-    <div class="field"><label>名前</label><input value="${esc(CN.n)}" placeholder="${isP?'例: 鈴木 一郎':'例: 本屋 ひだまり'}" oninput="CN.n=this.value"></div>
+  const body=`<div class="cr-prev" id="cr-prev">${crPrev()}</div>
+  <div class="list">
+    <div class="field"><label>名前</label><input value="${esc(CN.n)}" placeholder="${isP?'例: 鈴木 一郎':'例: 本屋 ひだまり'}" oninput="CN.n=this.value;crPrevUpdate()"></div>
     <div class="field"><label>種類</label><select onchange="CN.t=this.value;crEntRender()">${types}</select></div>
     ${props}
   </div>`;
@@ -244,8 +279,8 @@ let CRS={rc:null,idx:-1,mode:'batch',td:{},open:false};
 function openReceipt(){
   crBT=[];CRS={rc:null,idx:-1,mode:'batch',td:{},open:false};
   crPanel('レシートで支払い',`<div class="cr-tiles">
-    <label class="cr-tile"><input type="file" accept="image/*" capture="environment" hidden onchange="crAddFiles(this.files)">${IC.camera}<span>撮影する</span><small>レシート1枚</small></label>
-    <label class="cr-tile"><input type="file" accept="image/*" multiple hidden onchange="crAddFiles(this.files)">${IC.photo}<span>写真を選ぶ</span><small>最大${CR_MAXR}枚まで</small></label>
+    <label class="cr-tile"><input type="file" accept="image/*" capture="environment" hidden onchange="crAddFiles(this.files)">${ico('camera','var(--c-expense)')}<span>撮影する</span><small>レシート1枚</small></label>
+    <label class="cr-tile"><input type="file" accept="image/*" multiple hidden onchange="crAddFiles(this.files)">${ico('photo','var(--c-expense)')}<span>写真を選ぶ</span><small>最大${CR_MAXR}枚まで</small></label>
   </div>
   <div class="btnrow"><button class="btn ghost block" type="button" onclick="crSamples()">サンプルのレシートで試す</button></div>`,{full:true,footer:''});
 }
@@ -291,8 +326,9 @@ function crRowParts(b,i){
   const rc=b.rc;const [lab,cls]=CR_ST[b.status];
   const total=rc?rc.items.reduce((s,x)=>s+x.price,0):0;
   const openable=rc&&(b.status==='ready'||b.status==='ok'||b.status==='dup');
+  const sid=rc?crFindEnt(rc.shop):null;
   const main=row({lead:`<img class="cr-th" src="${b.img}" alt="">`,
-    t:rc?esc(rc.shop||'店名なし'):'<span class="skel" style="display:inline-block;width:120px;height:14px"></span>',
+    t:rc?`<span class="cr-tn">${sid?knot(sid,'sm'):''}<span class="ell">${esc(rc.shop||'店名なし')}</span></span>`:'<span class="skel" style="display:inline-block;width:120px;height:14px"></span>',
     s:rc?`${fmtMD(rc.date)} ${esc(rc.time)}`:'',
     v:rc?`<span class="num">${yen(total)}</span>`:'',
     onclick:openable?`crOpenItem(${i})`:'',chev:openable});
@@ -309,7 +345,7 @@ function crBatchView(){
   const n=crBT.length,done=crBT.filter(b=>b.status!=='scan').length,ok=crBT.filter(b=>b.status==='ok').length;
   const body=`<div class="cr-prog"><div class="meter"><i style="width:${n?Math.round(done/n*100):0}%;background:var(--brand)"></i></div><span class="num">${done}/${n}枚 読み取り済み</span></div>`
     +list(crBT.flatMap((b,i)=>crRowParts(b,i)),'flat');
-  crPanel('レシートで支払い',body,{full:true,top:true,footer:`<button class="btn block" type="button" ${ok?'':'disabled'} onclick="crBatchSave()">確認済みをまとめて保存 (${ok}件)</button>`});
+  crPanel('レシートで支払い',body,{full:true,top:true,footer:`<button class="btn block" type="button" ${ok?'':'disabled'} onclick="crBatchSave()">${ok?`${ok}件の支払いを保存`:'支払いを保存'}</button>`});
 }
 function crSkip(i){crBT[i].status='skip';crBatchView()}
 function crUnskip(i){crCheckDup(crBT[i]);crBatchView()}
@@ -325,7 +361,9 @@ function crTotHtml(){const rc=CRS.rc,t=crTotal();
 function crBurCalc(){const rc=CRS.rc;const total=crTotal();let mine=0;
   rc.items.forEach(it=>{const p=it.price||0;if(it.b==='相手')return;mine+=it.b==='半分'?Math.floor(p/2):p});
   return {total,mine,adv:total-mine}}
-function crBurHtml(){const c=crBurCalc();return `<div class="cr-sum"><span>自分の負担 <b class="num">${yen(c.mine)}</b></span>${CRS.rc.with?`<span>立替 <b class="num">${yen(c.adv)}</b></span>`:''}</div>`}
+function crBurHtml(){const c=crBurCalc();
+  if(CRS.rc.with)return splitBar([{v:c.mine,cls:'me',label:'自分の支出'},{v:c.adv,cls:'owed',label:'相手の分・立替'}]);
+  return `<div class="cr-sum"><span>自分の負担 <b class="num">${yen(c.mine)}</b></span></div>`}
 /** 金額だけ変わった時は本文を描き直さず、合計と負担だけ更新する */
 function crTotUpdate(){const t=document.getElementById('cr-tot');if(t)t.innerHTML=crTotHtml();const b=document.getElementById('cr-bur');if(b)b.innerHTML=crBurHtml()}
 function crItem(i,k,v){const it=CRS.rc.items[i];if(!it)return;
@@ -338,6 +376,7 @@ function crShopSet(v){CRS.rc.shop=v;CRS.rc.cat=crGuessCat(crFindEnt(v));crReview
 function crToggleReg(){CRS.rc.register=!CRS.rc.register;crReview()}
 function crToggleSec(){CRS.open=!CRS.open;crReview()}
 function crSetWith(v){CRS.rc.with=v||null;if(!v)CRS.rc.items.forEach(i=>i.b='自分');crReview()}
+function crShopPick(k){crShopSet(E[k].n)}
 function crTdToggle(k){CRS.td[k]=!CRS.td[k];crReview()}
 function crSugHtml(){
   const names=CRS.rc.items.map(i=>i.n).filter(Boolean);
@@ -354,10 +393,11 @@ function crReview(top){
     +`<div class="cr-head"><img class="cr-th" src="${rc.img}" alt="レシートの写真"><span class="hint" style="padding:0">読み取り結果。違うところだけ直す</span></div>`
     +(b&&b.dup?banner('warn',`重複の疑い: ${esc(b.dup.msg)}`):'')
     +list([
-      `<div class="field"><label>店</label><input value="${esc(rc.shop)}" list="cr-dl-shop" placeholder="店名" oninput="CRS.rc.shop=this.value" onchange="crShopSet(this.value)"></div>`,
+      `<div class="field"><label>店</label><input value="${esc(rc.shop)}" placeholder="店名" oninput="CRS.rc.shop=this.value;crSugUpdate('cr-sug-shop',this.value,'crShopPick')" onchange="crShopSet(this.value)"></div>`,
       `<div class="field"><label>日付</label><input type="date" value="${rc.date}" oninput="CRS.rc.date=this.value"></div>`,
       `<div class="field"><label>時刻</label><input type="time" value="${rc.time}" oninput="CRS.rc.time=this.value"></div>`,
       `<div class="field"><label>支払い方法</label><select onchange="CRS.rc.pay=this.value">${CR_PAYS.map(p=>`<option ${rc.pay===p?'selected':''}>${esc(p)}</option>`).join('')}</select></div>`])
+    +`<div id="cr-sug-shop">${crPlaceSug(rc.shop,'crShopPick')}</div>`
     +(shopNew?`<div class="suggest"><span class="t">「${esc(rc.shop)}」を店として登録</span>${toggle(rc.register,'crToggleReg()')}</div>`:'')
     +sh('品目',rc.items.length,{label:'品目を追加',icon:'plus',onclick:'crAddItem()'})
     +list(rc.items.map((it,i)=>`<div class="cr-it"><input class="cr-n" value="${esc(it.n)}" placeholder="品名" oninput="crItem(${i},'n',this.value)"><input class="cr-pr num" inputmode="numeric" value="${it.price||''}" placeholder="¥0" oninput="crItem(${i},'price',this.value)"><select class="cr-tx" aria-label="税率" onchange="crItem(${i},'tax',this.value)"><option value="8" ${it.tax===8?'selected':''}>8%</option><option value="10" ${it.tax===10?'selected':''}>10%</option></select><button class="cr-del" type="button" aria-label="品目を削除" onclick="crDelItem(${i})">${IC.close}</button></div>`),'flat')
@@ -365,14 +405,12 @@ function crReview(top){
     +crSugHtml()
     +`<div style="margin-top:12px">${list([row({t:'分け方・カテゴリ',s:crSumText(),chev:true,onclick:'crToggleSec()'})])}</div>`
     +(CRS.open?`<div style="margin-top:8px">`
-      +list([
-        `<div class="field"><label>誰かと分ける</label><select onchange="crSetWith(this.value)"><option value="">分けない</option>${crPeople().map(([k,e])=>`<option value="${k}" ${rc.with===k?'selected':''}>${esc(e.n)}</option>`).join('')}</select></div>`,
-        `<div class="field"><label>カテゴリ</label><select onchange="CRS.rc.cat=this.value">${catOpts}</select></div>`])
+      +sh('誰かと分ける')+crWithChips(rc.with)
+      +list([`<div class="field"><label>カテゴリ</label><select onchange="CRS.rc.cat=this.value">${catOpts}</select></div>`])
       +(rc.with?sh('品目ごとの負担')+list(rc.items.map((it,i)=>`<div class="cr-it"><span class="cr-n ell">${esc(it.n||'品名なし')}</span><span class="cr-bur">${burBtns(i)}</span></div>`),'flat'):'')
-      +`<div id="cr-bur">${crBurHtml()}</div></div>`:'')
-    +crDl('cr-dl-shop',crPlaces());
+      +`<div id="cr-bur">${crBurHtml()}</div></div>`:'');
   const foot=single?`<button class="btn block" type="button" onclick="crSaveSingle()">支払いを保存</button>`
-    :`<button class="btn block" type="button" onclick="crConfirm()">確定</button>`;
+    :`<button class="btn block" type="button" onclick="crConfirm()">確認済みにする</button>`;
   crPanel('レシートで支払い',body,{full:true,top:!!top,footer:foot});
 }
 /** 確定: 一覧の中の1枚を確認済みにして一覧へ戻る */
