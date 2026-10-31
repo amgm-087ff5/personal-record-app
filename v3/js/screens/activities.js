@@ -28,7 +28,7 @@ route('activities',()=>{
   return largeTitle('タイムライン',{actions:[{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"},{icon:'more',label:'このモックについて',onclick:'openAbout()'}]})
     +chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")
     +`<div class="ax">`
-    +(upcoming.length&&actFilter==='all'?`<a href="#/plan">${axEdge(`明日以降の予定 ${upcoming.length}件 ― ${relDay(upcoming[0][1].d)} ${esc(upcoming[0][1].t)}${IC.chev}`)}</a>`:'')
+    +(upcoming.length&&actFilter==='all'?`<a href="#/plan">${axEdge(`明日以降の予定 ${upcoming.length}件、次は${relDay(upcoming[0][1].d)}の${esc(upcoming[0][1].t)}${IC.chev}`)}</a>`:'')
     +dayHead(TODAY,{href:`#/day/${TODAY}`,diary:dayDiary(TODAY),empty:'今日の日記を書く',sum:s?`自分 ${yen(s)}`:''})
     +axDay(TODAY)
     +dates.map(d=>{const sp=daySpent(d);return dayHead(d,{href:`#/day/${d}`,diary:dayDiary(d),sum:sp?`自分 ${yen(sp)}`:''})+axDay(d)}).join('')

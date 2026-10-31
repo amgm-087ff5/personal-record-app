@@ -477,3 +477,4 @@ a.dh:active .c{background:var(--sunk)}
 
 .stats b.knots{display:inline-flex}
 .ax-time b{display:block;font:600 14px/1 var(--font);color:var(--ink)}.ax-time small{display:block;font:var(--t-cap);color:var(--ink-3);margin-top:4px}
+.ax-row.focus .ax-time{padding-right:14px}
