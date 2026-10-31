@@ -73,13 +73,21 @@ function deleteActivity(id){
 function diaryView(id,a){
   const kids=a.kids.map(k=>[k,A[k]]).filter(([k,x])=>x).sort((x,y)=>(x[1].time||'').localeCompare(y[1].time||''));
   const spent=kids.filter(([k,x])=>x.x&&X[x.x]).reduce((s,[k,x])=>s+X[x.x].amt,0);
-  return appbar('日記',{actions:[{icon:'edit',label:'日記を編集',onclick:`openDiary('${a.date}')`}]})
-    +`<section class="hero activity"><div class="kind">${glyph('activity','diary')}日記</div><div style="display:flex;align-items:flex-end;gap:12px;margin-top:10px"><span class="big num" style="margin:0">${+a.date.slice(8)}</span><span style="font:var(--t-head);padding-bottom:5px">${+a.date.slice(5,7)}月 ${wdOf(a.date)}曜日</span></div><div class="sub"><span>出来事 ${kids.length}件</span>${spent?`<span>自分の支出 ${yen(spent)}</span>`:''}${a.photos?`<span>写真 ${a.photos}枚</span>`:''}</div></section>`
-    +sh('本文')+(a.body?`<div class="list"><p style="padding:14px;font:var(--t-body);line-height:1.8">${esc(a.body)}</p>${a.photos?`<div style="display:flex;gap:8px;padding:0 14px 14px">${Array.from({length:a.photos},(_,i)=>`<span style="width:72px;height:72px;border-radius:10px;background:linear-gradient(135deg,var(--sunk),var(--brand-soft))" role="img" aria-label="写真${i+1}"></span>`).join('')}</div>`:''}</div>`:`<div class="list">${row({t:'<span class="muted">まだ書いていません</span>',v:`<span class="btn sm tonal">書く</span>`,onclick:`openDiary('${a.date}')`})}</div>`)
-    +sh('この日の出来事',kids.length,{label:'追加',icon:'plus',onclick:`openNewHappening&&openNewHappening('${a.date}')`})
-    +(kids.length?`<div class="day">${kids.map(([k,x])=>evRow(k,x)).join('')}</div>`:empty('activity','activity','この日の出来事はまだありません'));
+  const photos=a.photos?`<div style="display:flex;gap:8px;padding:0 20px 18px">${Array.from({length:a.photos},(_,i)=>`<span style="width:64px;height:64px;border-radius:8px;background:linear-gradient(135deg,var(--sunk),var(--brand-soft))" role="img" aria-label="写真${i+1}"></span>`).join('')}</div>`:'';
+  /* 日めくりの1枚 → その日の時間軸(子)をぶら下げる */
+  return appbar('',{actions:[{icon:'edit',label:'日記を編集',onclick:`openDiary('${a.date}')`}]})
+    +calSheet(a.date,esc(a.body||''),`<span class="grow"></span><span class="faint" style="font:var(--t-cap);padding-bottom:6px;text-align:right">出来事 ${kids.length}件${spent?`<br>自分の支出 ${yen(spent)}`:''}</span>`).replace('</section>',photos+'</section>')
+    +sh('この日の時間軸',kids.length)
+    +(kids.length?`<div class="day">${kids.map(([k,x])=>evRow(k,x)).join('')}</div>`:empty('activity','activity','この日の出来事はまだありません',{label:'出来事を追加',onclick:`openNewHappening('${a.date}')`}));
 }
-
+/** 主役の前後(同じ日の出来事)を時間軸に並べる */
+function neighbors(id,a){
+  const day=A[a.parent];if(!day)return {before:[],after:[]};
+  const ks=day.kids.filter(k=>A[k]).sort((x,y)=>(A[x].time||'').localeCompare(A[y].time||''));const i=ks.indexOf(id);
+  const m=k=>({time:A[k].time,title:A[k].title,href:'#/a/'+k});
+  return {before:ks.slice(Math.max(0,i-2),i).map(m),after:ks.slice(i+1,i+3).map(m)};
+}
+const actKind=a=>`${IC[ACT_IC[a.type]]||IC.activity}${esc(a.type)}`;
 /** 品目を「同じ名前+同じ値段」でまとめる(表示だけ。データは1行=1個) */
 let showBurden=false;const openGroups=new Set();
 function itemGroups(items){const g=[];items.forEach((it,i)=>{const f=g.find(x=>x.n===it.n&&x.price===it.price);if(f)f.idx.push(i);else g.push({n:it.n,price:it.price,tax:it.tax,idx:[i]})});return g}
@@ -99,11 +107,13 @@ function paymentView(id,a){
   const others=a.roles.filter(r=>r!==shop);
   const unregistered=shop&&!shop[1];
   const att=(EXTRA.attach||{})[id];
+  const nb=neighbors(id,a);
+  /* 主役 = 時間軸に掛かった支払いのカプセル。自分の支出はそこから切り離した半券として └ でぶら下げる */
+  const cur=capsule({kind:actKind(a),title:esc(a.title),big:yen(a.amt),sub:[esc(a.time||''),esc(a.pay||''),shop?esc(shop[1]?E[shop[1]].n:shop[2]):'']})
+    +(x?`<div style="margin-top:8px">${hang(ticket({href:`#/x/${a.x}`,stub:`<span>自分の</span><span>支出</span>`,t:`<b class="num">${yen(x.amt)}</b>`,s:`${catPath(x.cat)}${xSp(x)==='非日常'?'・非日常':''}`,v:IC.chev}))}</div>`:'');
   return appbar('',{actions:[menuAct(id)]})
-    +(day?parentLink(`#/a/${a.parent}`,glyph('activity','diary'),`${fmtMDW(day.date)}の日記`):'')
-    +hero('activity',{kind:`${glyph('activity','pay')}支払い`,title:esc(a.title),big:yen(a.amt),sub:[`${day?fmtMD(day.date):''} ${esc(a.time||'')}`,esc(a.pay||'')]})
-    +(x?list([row({href:`#/x/${a.x}`,lead:glyph('expense'),t:'自分の支出',s:`${catPath(x.cat)}${xSp(x)==='非日常'?' · 非日常':''}`,v:yen(x.amt),amt:1,chev:1})],'mt'):'')
-    +(a.adv?`<div style="margin-top:10px">${banner('warn',`${esc(E[a.adv[0]].n)}さんへの立替 <b class="num">${yen(a.adv[1])}</b> が${esc(a.adv[2])}です`)}</div>`:'')
+    +tlSlice({dayDate:day&&day.date,dayHref:day&&`#/a/${a.parent}`,before:nb.before,after:nb.after,cur})
+    +(a.adv?`<div style="margin-top:12px">${banner('warn',`${esc(E[a.adv[0]].n)}さんへの立替 <b class="num">${yen(a.adv[1])}</b> が${esc(a.adv[2])}です`)}</div>`:'')
     +sh('関わった人・場所',a.roles.length)
     +list([shop?prop('支払先',eref(shop[1],shop[2])):'',...others.map(r=>prop(r[0],eref(r[1],r[2])))])
     +(unregistered?suggest(`「${esc(shop[2])}」はまだ登録されていません`,{label:'店として登録',onclick:`registerShop('${id}')`}):'')
@@ -118,11 +128,12 @@ function registerShop(aid){
 }
 
 function eventView(id,a){
-  const day=A[a.parent];
+  const day=A[a.parent];const nb=neighbors(id,a);
+  const ev=Object.entries(EV).find(([k,e])=>e.rec===id);
+  const cur=capsule({kind:actKind(a),title:esc(a.title),sub:[esc(a.time||''),...(a.roles||[]).filter(r=>['場所','到着'].includes(r[0])).map(r=>esc(r[1]?E[r[1]].n:r[2]))]})
+    +(ev?`<div style="margin-top:8px">${hang(`<a class="cap plan" href="#/ev/${ev[0]}" style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:20px"><span class="kind" style="color:var(--c-schedule)">${IC.schedule}元の予定</span><span class="grow ell">${esc(ev[1].t)}</span>${IC.chev}</a>`)}</div>`:'');
   return appbar('',{actions:[menuAct(id)]})
-    +(day?parentLink(`#/a/${a.parent}`,glyph('activity','diary'),`${fmtMDW(day.date)}の日記`):'')
-    +hero('activity',{kind:`${glyph('activity',ACT_IC[a.type]||'activity')}${esc(a.type)}`,title:esc(a.title),sub:[`${day?fmtMD(day.date):''} ${esc(a.time||'')}`]})
+    +tlSlice({dayDate:day&&day.date,dayHref:day&&`#/a/${a.parent}`,before:nb.before,after:nb.after,cur})
     +((a.roles||[]).length?sh('関わった人・場所',a.roles.length)+list(a.roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
-    +(a.body?sh('内容')+`<div class="list"><p style="padding:14px;line-height:1.8">${esc(a.body)}</p></div>`:'')
-    +(()=>{const ev=Object.entries(EV).find(([k,e])=>e.rec===id);return ev?sh('元の予定')+list([row({href:`#/ev/${ev[0]}`,lead:glyph('schedule'),t:esc(ev[1].t),s:fmtMDW(ev[1].d),chev:1})]):''})();
+    +(a.body?sh('内容')+paper(null,esc(a.body)):'');
 }

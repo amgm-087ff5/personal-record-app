@@ -76,7 +76,7 @@ const row=o=>{const tagN=o.href?'a':o.onclick?'button':'div';const attr=o.href?`
 /** プロパティ行(ラベル | 値) */
 const prop=(k,val,meta)=>`<div class="prop"><span class="k">${esc(k)}</span><span class="val">${val}</span>${meta?`<span class="meta">${meta}</span>`:''}</div>`;
 /** タブ最上部: 大見出し + 右のアイコンボタン群 + 1行の数値 */
-const largeTitle=(title,{actions=[],metrics=[]}={})=>`<header class="lt"><h1>${esc(title)}</h1>${actions.map(a=>`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>${metrics.length?`<nav class="metrics" aria-label="サマリ">${metrics.map(m=>`<a class="metric ${m.alert?'alert':''}" href="${m.href||'javascript:void 0'}" ${m.onclick?`onclick="${m.onclick}"`:''}><span>${esc(m.l)}</span><b class="num">${m.v}</b></a>`).join('')}</nav>`:''}`;
+const largeTitle=(title,{actions=[],metrics=[],mark}={})=>`<header class="lt">${mark?glyph(mark[0],mark[1]||mark[0],'lg'):''}<h1>${esc(title)}</h1>${actions.map(a=>`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>${metrics.length?`<nav class="metrics" aria-label="サマリ">${metrics.map(m=>`<a class="metric ${m.alert?'alert':''}" href="${m.href||'javascript:void 0'}" ${m.onclick?`onclick="${m.onclick}"`:''}><span>${esc(m.l)}</span><b class="num">${m.v}</b></a>`).join('')}</nav>`:''}`;
 /** 詳細画面の上部バー */
 const appbar=(title='',{back=true,actions=[]}={})=>`<header class="appbar">${back?`<button class="iconbtn" type="button" aria-label="戻る" onclick="goBack()">${IC.back}</button>`:''}<div class="title">${esc(title)}</div>${actions.map(a=>`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>`;
 /** セグメント。items:[[value,label]], cur, onclick テンプレート(値は $v) */
@@ -191,3 +191,30 @@ function openAbout(){
 }
 function setTheme(v){if(v)document.documentElement.dataset.theme=v;else delete document.documentElement.dataset.theme;try{localStorage.setItem('prmock-theme',v)}catch(e){}}
 try{const t=localStorage.getItem('prmock-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}
+
+/* =====================================================================
+   形の言語ヘルパー(css の Form language と対)
+   ===================================================================== */
+const calMini=d=>{const w=new Date(d+'T00:00').getDay();return `<span class="cal ${w===0?'sun':w===6?'sat':''}"><i>${WD[w]}</i><b>${+d.slice(8)}</b></span>`};
+/** カプセル(時間に掛かった出来事)。o:{cls:'plan'等, kind, title, big, sub[]} */
+const capsule=o=>`<section class="cap ${o.cls||''}">${o.kind?`<div class="kind">${o.kind}</div>`:''}${o.title?`<h1>${o.title}</h1>`:''}${o.big?`<div class="big">${o.big}</div>`:''}${o.sub&&o.sub.length?`<div class="sub">${o.sub.map(x=>`<span>${x}</span>`).join('')}</div>`:''}</section>`;
+/** TLの切り取り: その日の時間軸の中に主役を置く。前後の出来事を薄く表示し、たどれる。
+    items: [{time,title,href,icon}]、cur: 主役のHTML、dayDate/dayHref: 上端の日付、future: 予定(点線の軸)、now: 現在線を入れる時刻 */
+function tlSlice({dayDate,dayHref,before=[],after=[],cur,future,nodeColor,more}){
+  const it=x=>`<a class="tl-item" href="${x.href}"><span class="node"></span><span class="time">${esc(x.time||'')}</span><span class="t">${esc(x.title)}</span></a>`;
+  return `<div class="tl ${future?'future':''}">${dayDate?`<a class="tl-item tl-day" href="${dayHref||'#'}">${calMini(dayDate)}<span class="t" style="padding-left:0">${fmtMDW(dayDate)}${dayHref?'の日記':''}</span>${dayHref?IC.chev:''}</a>`:''}${before.map(it).join('')}<div class="tl-cur"><span class="node" style="${nodeColor?`--nc:${nodeColor}`:''}"></span>${cur}</div>${after.map(it).join('')}${more?`<div class="tl-item"><span class="t">${more}</span></div>`:''}</div>`;
+}
+/** 子を └ で下にぶら下げる */
+const hang=html=>`<div class="hang">${html}</div>`;
+/** チケット。o:{href, stub(HTML), t, s, v, hero:true, big} */
+const ticket=o=>{const tagN=o.href?'a':'div';return `<${tagN} class="tk ${o.hero?'hero':''}" ${o.href?`href="${o.href}"`:''} ${o.style?`style="${o.style}"`:''}><div class="tk-in"><div class="tk-stub">${o.stub||''}</div><div class="tk-main">${o.hero?`${o.kind?`<div class="s" style="display:flex;gap:6px;align-items:center;color:var(--c-expense)">${o.kind}</div>`:''}<div class="big">${o.big}</div>${o.s?`<div class="s">${o.s}</div>`:''}`:`<span class="grow"><div class="t ell">${o.t}</div>${o.s?`<div class="s ell">${o.s}</div>`:''}</span>${o.v!=null?`<span class="v">${o.v}</span>`:''}`}</div></div></${tagN}>`};
+/** 日めくりの1枚(日記) */
+const calSheet=(d,body,extra='')=>{const w=new Date(d+'T00:00').getDay();return `<section class="cs"><div class="cs-bind">${'<i></i>'.repeat(5)}</div><div class="cs-head"><span class="d ${w===0?'sun':w===6?'sat':''}">${+d.slice(8)}</span><span class="m">${WD[w]}曜日<small>${d.slice(0,4)}年${+d.slice(5,7)}月</small></span>${extra}</div><div class="cs-body ${body?'':'none'}">${body||'まだ書いていません'}</div></section>`};
+/** フォルダ(エンティティ)。tab: タブの中身、body: 中身 */
+const folder=(tab,body,o={})=>{const tagN=o.href?'a':'div';return `<${tagN} class="fd" ${o.href?`href="${o.href}"`:''}><div class="fd-tab">${tab}</div><div class="fd-body">${body}</div></${tagN}>`};
+/** 紙(ノート) */
+const paper=(head,body,o={})=>{const tagN=o.href?'a':'div';return `<div class="pp-wrap"><${tagN} class="pp" ${o.href?`href="${o.href}"`:''}>${head?`<div class="pp-head">${head}</div>`:''}${body!=null?`<div class="pp-body">${body}</div>`:''}</${tagN}></div>`};
+/** チェック欄の帯(ToDo)。o:{done, onclick(チェック), href, body, hero} */
+const strip=o=>{const tagN=o.href?'a':'div';return `<${tagN} class="st ${o.hero?'hero':''} ${o.done?'done':''}" ${o.href?`href="${o.href}"`:''}><span class="st-band">${checkbox(o.done,o.onclick,o.hero)}</span><span class="st-main">${o.body}</span></${tagN}>`};
+/** 値札(種類) */
+const ptag=(label,href)=>href?`<a class="ptag" href="${href}">${esc(label)}</a>`:`<span class="ptag">${esc(label)}</span>`;
