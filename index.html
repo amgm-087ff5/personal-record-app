@@ -18,10 +18,10 @@
   --note:#327F77; --note-t:#E6F2EF;
   --type:#34416B; --type-t:#E3E7F0;
   --expense:#34529E; --expense-t:#ECF0F9;
-  --unknown:#9A6420; --unknown-t:#F8F1E6;
-  --special:#B7791F; --special-t:#FBF2E2;
+  --unknown:#D2602A; --unknown-t:#FDEEE6;
+  --special:#6E55C8; --special-t:#EFEBFA;
   --schedule:#3A7CA5; --schedule-t:#E8F1F7; --g-schedule:linear-gradient(135deg,#7FC0DD 0%,#3A7CA5 100%);
-  --todo:#B0573A; --todo-t:#F8ECE6; --g-todo:linear-gradient(135deg,#D58463 0%,#A54E31 100%);
+  --todo:#C2456E; --todo-t:#FBEAF0; --g-todo:linear-gradient(135deg,#E37C9E 0%,#B83A64 100%);
   --g-entity:linear-gradient(135deg,#5E8BE6 0%,#3B5EBF 100%);
   --g-activity:linear-gradient(135deg,#46AFC6 0%,#2B7C98 100%);
   --g-note:linear-gradient(135deg,#4FAE9D 0%,#2D7A6F 100%);
@@ -40,14 +40,13 @@ a{color:inherit;text-decoration:none}
 svg.i{width:1em;height:1em;flex:none;vertical-align:-.12em}
 
 /* ===== Phone frame ===== */
-.device{position:relative;width:100%;max-width:390px;height:100dvh;margin:0 auto;overflow:hidden;
-  background:radial-gradient(120% 60% at 12% -12%,rgba(255,247,230,.95) 0%,rgba(255,247,230,0) 55%),
-    radial-gradient(90% 50% at 100% 0%,rgba(205,222,255,.75) 0%,rgba(205,222,255,0) 60%),var(--canvas)}
-@media (min-width:500px){
-  body{display:flex;align-items:center;justify-content:center;padding:24px 0}
-  .device{height:min(844px,calc(100dvh - 48px));border-radius:40px;box-shadow:var(--sh-soft),0 0 0 10px #F7F9FC,0 0 0 11px #CDD5E2}
+.device{position:relative;width:100%;height:100dvh;margin:0 auto;overflow:hidden;background:var(--canvas)}
+body{background:var(--canvas)}
+@media (min-width:700px){
+  body{display:flex;align-items:center;justify-content:center;padding:24px 0;background:#DCE3EE}
+  .device{max-width:390px;height:min(844px,calc(100dvh - 48px));border-radius:40px;box-shadow:var(--sh-soft),0 0 0 10px #F7F9FC,0 0 0 11px #CDD5E2}
 }
-.scroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;padding:36px var(--s5) 170px;scrollbar-width:none}
+.scroll{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;padding:36px var(--s5) 120px;scrollbar-width:none}
 .scroll::-webkit-scrollbar{display:none}
 .view{display:flex;flex-direction:column;gap:var(--s6);animation:fade .18s ease-out}
 .view.push{animation:push .22s cubic-bezier(.2,.7,.2,1)}
@@ -201,7 +200,7 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 .nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;flex:1;min-width:0;height:56px;border-radius:14px;white-space:nowrap;letter-spacing:-.02em;font-size:9.5px;font-weight:600;color:var(--muted)}
 .nav a svg{font-size:19px}
 .nav a.on{color:var(--c)}
-.nav .plus{width:50px;height:50px;border-radius:15px;background:var(--g-entity);color:#fff;font-size:24px;display:grid;place-items:center;box-shadow:var(--sh-soft),inset 0 1px 0 rgba(255,255,255,.35)}
+.nav .plus{flex:none;width:58px;height:58px;margin:-30px 4px 0;border-radius:19px;border:4px solid var(--canvas);background:var(--g-entity);color:#fff;font-size:24px;display:grid;place-items:center;box-shadow:var(--sh-soft),inset 0 1px 0 rgba(255,255,255,.35)}
 
 .scrim{position:absolute;inset:0;background:rgba(20,30,55,.28);opacity:0;pointer-events:none;transition:opacity .2s;z-index:8}
 .sheet{position:absolute;left:0;right:0;bottom:0;max-height:78%;overflow:auto;background:var(--surface);border-radius:22px 22px 0 0;padding:var(--s3) var(--s5) calc(var(--s6) + env(safe-area-inset-bottom));
@@ -211,7 +210,7 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 .toast{position:absolute;left:50%;bottom:92px;transform:translate(-50%,10px);opacity:0;transition:.2s;background:#1F2A44;color:#fff;font-size:12px;padding:8px 14px;border-radius:999px;z-index:10;white-space:nowrap;pointer-events:none}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 .mockchip{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;font-size:10px;font-weight:600;color:var(--text2);background:rgba(255,255,255,.75);border:1px solid var(--border);border-radius:999px;padding:2px 8px}
-.photo{width:52px;height:52px;border-radius:10px;flex:none;background:linear-gradient(160deg,#F6E7C8,#C9D8EE)}
+.photo{width:52px;height:52px;border-radius:10px;flex:none;background:linear-gradient(160deg,#E3ECF8,#C9D8EE)}
 .photo:nth-child(2){background:linear-gradient(160deg,#D7E6F7,#9FB8DF)}
 .photo:nth-child(3){background:linear-gradient(160deg,#E9EEF5,#B9C6DB)}
 .empty{padding:var(--s4);font-size:12px;color:var(--muted);text-align:center}
@@ -261,12 +260,12 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 .cat.ghost{background:rgba(255,255,255,.2);color:#fff;border-left-color:#fff}
 /* 特別感: 非日常だけ印を付ける(日常は既定なので出さない) */
 .spc{display:inline-flex;align-items:center;gap:3px;height:20px;padding:0 8px;border-radius:6px;background:var(--special-t);color:var(--special);font-size:10.5px;font-weight:700;white-space:nowrap}
-.spc.ghost{background:rgba(255,236,200,.25);color:#FFE3A8}
+.spc.ghost{background:rgba(255,255,255,.2);color:#E6DEFF}
 .mswitch{display:flex;align-items:center;justify-content:space-between;height:44px;margin:-6px 0}
 .mswitch button{width:48px;height:44px;font-size:20px;color:var(--text2);border-radius:10px}
 .mswitch b{font-size:16px}
 .spl{align-self:stretch;display:flex;gap:2px;height:6px;border-radius:3px;overflow:hidden;margin-top:8px}
-.spl i{display:block;background:rgba(255,255,255,.85)} .spl i.s{background:#F6CC80}
+.spl i{display:block;background:rgba(255,255,255,.85)} .spl i.s{background:#CFC2F7}
 .chartc{padding:14px 14px 10px}
 .chart{width:100%;height:auto;display:block;margin-top:6px}
 .chart .ax{font-size:10px;fill:var(--muted);font-family:var(--font)} .chart .ax.on{fill:var(--text);font-weight:700}
@@ -291,8 +290,18 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 .segm button{height:38px;padding:0 14px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--text2)}
 .segm button.on{background:#fff;color:var(--text);box-shadow:var(--sh-card)} .segm button.on.sp{color:var(--special)}
 /* ===== 各タブ最上部: このページは何か + サマリ ===== */
-.intro{border-radius:14px;padding:12px 14px;background:linear-gradient(180deg,color-mix(in srgb,var(--c) 9%,#fff),#fff);border:1px solid color-mix(in srgb,var(--c) 20%,transparent)}
-.idesc{font-size:12px;line-height:1.6;color:var(--text2);margin-bottom:10px}
+.intro{border-radius:14px;padding:12px 14px;background:#fff;border:1px solid var(--border)}
+.imap{display:flex;flex-direction:column;gap:8px;padding-bottom:12px;margin-bottom:8px;border-bottom:1px dashed var(--border)}
+.imap.solo{padding:0;margin:-8px 0 0;border:0}
+.mrow{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-height:26px}
+.arr{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:13px;line-height:1;min-width:22px}
+.arr small{font-size:9px;font-weight:700;margin-bottom:1px;white-space:nowrap}
+.box{display:inline-flex;align-items:center;gap:4px;padding:3px;border-radius:9px;border:1px dashed color-mix(in srgb,var(--text2) 35%,transparent)}
+.b-todo{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px 0 6px;border-radius:6px;background:var(--todo-t);color:var(--todo);font-size:10.5px;font-weight:600;white-space:nowrap}
+.b-diary{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:5px;background:#fff;color:var(--activity);font-size:10.5px;font-weight:700;box-shadow:inset 0 0 0 1.5px var(--activity),inset 0 5px 0 var(--activity)}
+.vchip{display:inline-flex;align-items:center;gap:3px;height:20px;padding:0 7px;border-radius:6px;background:#EEF1F6;color:var(--text2);font-size:10.5px;font-weight:600}
+.vchip i{width:9px;height:9px;border-radius:3px;display:block}
+.ptitle .h1.off{color:#B8C0CF}
 .istats{display:grid;grid-auto-flow:column;grid-auto-columns:1fr}
 .ist{display:flex;flex-direction:column;justify-content:center;min-height:48px;padding:0 10px;border-left:1px solid color-mix(in srgb,var(--c) 20%,transparent);min-width:0}
 .ist:first-child{padding-left:0;border-left:0}
@@ -378,7 +387,6 @@ a.ist .il::after{content:" ›";color:var(--muted)}
   <button class="mockchip" onclick="openAbout()">モック ⓘ</button>
   <div class="scroll" id="scroll"><div id="app"></div></div>
   <nav class="nav" id="nav"></nav>
-  <button class="fab" onclick="openCreate()">＋</button>
   <div class="scrim" onclick="closeSheet()"></div>
   <div class="sheet" id="sheet"></div>
   <div class="toast" id="toast"></div>
@@ -449,13 +457,13 @@ const DAYS=['d1030','d1029','d1028','d1027'];
 const CATS={
   house:{n:'住居',c:'#5E6E91',fx:'固定'}, rent:{n:'家賃',p:'house'},
   comm:{n:'通信',c:'#3E9AA0',fx:'固定'}, phone:{n:'スマホ',p:'comm'}, sub:{n:'サブスク',p:'comm'},
-  food:{n:'食費',c:'#D9734E'}, cook:{n:'自炊',p:'food'}, eatout:{n:'外食',p:'food'}, cafe:{n:'カフェ・軽食',p:'food'},
-  daily:{n:'日用品',c:'#7FA77F'},
+  food:{n:'食費',c:'#E07A4F'}, cook:{n:'自炊',p:'food'}, eatout:{n:'外食',p:'food'}, cafe:{n:'カフェ・軽食',p:'food'},
+  daily:{n:'日用品',c:'#6FB07A'},
   trans:{n:'交通費',c:'#4C8BC9'}, train:{n:'電車',p:'trans'}, taxi:{n:'タクシー',p:'trans',sp:'非日常'},
-  fun:{n:'娯楽',c:'#9B7AC0'}, hobby:{n:'趣味',p:'fun'}, travel:{n:'旅行',p:'fun',sp:'非日常'},
-  gift:{n:'贈り物',c:'#C98B9A',sp:'非日常'},
+  fun:{n:'娯楽',c:'#E3B341'}, hobby:{n:'趣味',p:'fun'}, travel:{n:'旅行',p:'fun',sp:'非日常'},
+  gift:{n:'贈り物',c:'#D9789B',sp:'非日常'},
 };
-const COLORS=['#5E6E91','#3E9AA0','#D9734E','#7FA77F','#4C8BC9','#9B7AC0','#C98B9A','#C9A23E'];
+const COLORS=['#5E6E91','#3E9AA0','#E07A4F','#6FB07A','#4C8BC9','#E3B341','#D9789B','#8A9BB8'];
 /* 10月のほかの支払い(タイムラインには出さない架空データ) */
 [['d1025','2026-10-25','日','p5','電車','JR 青葉台駅',null,1280,'x5','train'],
  ['d1022','2026-10-22','木','p6','映画','シネマ青葉',null,2000,'x6','hobby'],
@@ -546,7 +554,14 @@ const catChip=(k,path)=>`<span class="cat" style="--cc:${catColor(k)}">${path?ca
 const catFx=k=>{for(const c of catAnc(k).reverse())if(CATS[c].fx)return CATS[c].fx;return '変動'};
 const xFx=x=>x.fx||catFx(x.cat);
 const ROOTS=()=>Object.keys(CATS).filter(k=>!CATS[k].p);
-const intro=(c,desc,stats)=>`<div class="intro" style="--c:var(--${c})"><div class="idesc">${desc}</div><div class="istats">${stats.map(([l,v,href])=>href?`<a class="ist" href="${href}"><span class="iv num">${v}</span><span class="il">${l}</span></a>`:`<div class="ist"><span class="iv num">${v}</span><span class="il">${l}</span></div>`).join('')}</div></div>`;
+const intro=(c,map,stats)=>`<div class="intro" style="--c:var(--${c})"><div class="imap">${map}</div><div class="istats">${stats.map(([l,v,href])=>href?`<a class="ist" href="${href}"><span class="iv num">${v}</span><span class="il">${l}</span></a>`:`<div class="ist"><span class="iv num">${v}</span><span class="il">${l}</span></div>`).join('')}</div></div>`;
+/* 図の部品(クラスと同じ形) */
+const ND={act:l=>`<span class="b-act">${l}</span>`,plan:l=>`<span class="b-plan">${l}</span>`,diary:l=>`<span class="b-diary">${l}</span>`,
+  ent:l=>`<span class="ref" style="height:22px;font-size:11px"><i>${IC.entity}</i>${l}</span>`,note:l=>bNote(l),tag:l=>`<span class="type">${l}</span>`,
+  exp:l=>bExp(l),todo:l=>`<span class="b-todo">${IC.todo}${l}</span>`,cat:(l,c)=>`<span class="cat" style="${c?'--cc:'+c:''}">${l}</span>`};
+const arr=l=>`<span class="arr">${l?`<small>${l}</small>`:''}⟶</span>`;
+const box=h=>`<span class="box">${h}</span>`;
+const mrow=h=>`<div class="mrow">${h}</div>`;
 const mdw=d=>{const dt=new Date(d);return `${dt.getMonth()+1}/${dt.getDate()}(${'日月火水木金土'[dt.getDay()]})`};
 const addDays=(d,n)=>{const dt=new Date(d);dt.setDate(dt.getDate()+n);return dt.toISOString().slice(0,10)};
 const repOn=(e,d)=>e.rep&&d>e.d&&+d.slice(8)===+e.d.slice(8);
@@ -592,7 +607,7 @@ function togTree(btn){const k=btn.closest('.tnode').querySelector(':scope>.tkids
 function vActivities(){
   return `<div class="view">
   ${ptitle('activity','アクティビティ')}
-  ${intro('activity','時間に紐づく出来事の記録。1日の日記の中に支払い・会話・移動がぶら下がる。予定は終わると記録に結び付く。',[['10月の記録',Object.values(A).filter(a=>a.type!=='日記'&&A[a.parent]&&A[a.parent].date.startsWith('2026-10')).length+'件'],['今日の予定',evOn(TODAY).length+'件','#/schedule'],['今日のToDo',Object.values(TD).filter(t=>!t.done&&t.due&&t.due<=TODAY).length+'件','#/todo']])}
+  ${intro('activity',mrow(ND.diary('日記')+arr('中に')+box(ND.act('支払い')+ND.act('会話')+ND.act('移動')))+mrow(ND.plan('予定')+arr('終わると')+ND.act('記録')),[['10月の記録',Object.values(A).filter(a=>a.type!=='日記'&&A[a.parent]&&A[a.parent].date.startsWith('2026-10')).length+'件'],['今日の予定',evOn(TODAY).length+'件','#/schedule'],['今日のToDo',Object.values(TD).filter(t=>!t.done&&t.due&&t.due<=TODAY).length+'件','#/todo']])}
   <div class="day raised">
     <div class="day-h"><span class="dd num"><span>土</span><b>31</b></span><span class="b-act">今日</span><span class="sub grow ellipsis">まだ記録がありません</span><button class="btn" style="height:36px" onclick="toast('今日の日記を書く(モック)')">＋ 書く</button></div>
     <div class="rail">${evOn(TODAY).filter(([k,e])=>!e.all).map(([k,e])=>`<a class="kid plan" href="#/ev/${k}"><span class="t num">${e.s}</span><span class="b-plan">予定</span><span class="ti grow ellipsis">${e.t}<span class="cap"> · ${placeOf(e)}</span></span></a>`).join('')}</div>
@@ -645,7 +660,7 @@ function vLedger(){
   const upcoming=Object.entries(EV).filter(([k,e])=>e.pay).map(([k,e])=>[k,e,nextOn(e)]).filter(([k,e,d])=>d>TODAY).sort((a,b)=>a[2].localeCompare(b[2]));
   return `<div class="view">
   ${ptitle('ledger','家計簿',`<a class="cap hit" href="#/cats" style="color:var(--expense);font-weight:600">カテゴリの管理 ›</a>`)}
-  <div class="cap" style="margin-top:-12px;padding:0 2px;font-size:12px;color:var(--text2)">自分の支出(支払いのうち自分の負担)を月ごとに集計する。</div>
+  <div class="imap solo">${mrow(ND.act('支払い')+arr('自分の負担')+ND.exp('自分の支出')+arr('月ごと')+ND.cat('カテゴリ'))}</div>
   <div class="mswitch"><button onclick="toast('前の月(モック)')">‹</button><b>2026年10月</b><button onclick="toast('次の月(モック)')">›</button></div>
   ${heroX(`<span class="meta">自分の支出の合計</span><span class="big num">${yen(tot)}</span><span class="meta">前月比 ${diff>0?'+':''}${diff}% · 5か月平均 ${yen(avg)}</span>
     <div class="spl">${roots.filter(r=>cur[r]).map(r=>`<i style="flex:${cur[r]};background:${catColor(r)};box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)"></i>`).join('')}</div>
@@ -655,7 +670,6 @@ function vLedger(){
     <div class="flat chartc"><div class="row" style="gap:10px;flex-wrap:wrap">${roots.map(r=>`<span class="lg"><i style="background:${catColor(r)}"></i>${CATS[r].n}</span>`).join('')}</div>${chart}</div></div>
   <div class="stack">${sec('内訳')}
     <div class="seg">${[['cat','カテゴリ'],['fx','固定・変動'],['sp','特別感']].map(([k,l])=>`<button class="${ledgerAxis===k?'on':''}" onclick="setAxis('${k}')">${l}</button>`).join('')}</div>
-    <div class="cap" style="padding:0 2px">${ledgerAxis==='cat'?'▸ で小分類を開く。':''}行をタップで下の一覧を絞り込み</div>
     ${body}</div>
   <div class="stack">${sec('自分の支出',fl.length+'件')}
     ${ledgerFilter?`<div class="filterbar"><span class="cap">絞り込み</span><b class="grow ellipsis" style="color:var(--expense)">${flabel}</b><button class="btn ghost" style="height:36px" onclick="setFilter()">✕ 解除</button></div>`:''}
@@ -682,7 +696,7 @@ function vEntities(f){
     ${n?`<span class="fcount"><span class="mk-a" style="width:8px;height:8px;border-width:2px"></span>${n}</span>`:''}</div></a>`};
   return `<div class="view">
   ${ptitle('entity','エンティティ',`<a class="cap hit" href="#/types" style="color:var(--type);font-weight:600">種類の管理 ›</a>`)}
-  ${intro('entity','人・場所・物など、事実(プロパティ)と関係を持つ対象。種類のラベルで分類し、1つにつき1枚のノートを持てる。',[['人物',rc('person'),'#/entities/person'],['場所',rc('place'),'#/entities/place'],['会社',rc('company'),'#/entities/company'],['ノート',Object.keys(NOTES).length,'#/notes']])}
+  ${intro('entity',mrow(ND.tag('種類')+arr('分類')+ND.ent('エンティティ')+arr('1:1')+ND.note('ノート'))+mrow('<span class="vchip">事実</span><span class="vchip">関係</span>'+arr('登場')+ND.act('アクティビティ')),[['人物',rc('person'),'#/entities/person'],['場所',rc('place'),'#/entities/place'],['会社',rc('company'),'#/entities/company'],['ノート',Object.keys(NOTES).length,'#/notes']])}
   <div class="flat" style="padding:var(--s3) var(--s4);display:flex;flex-direction:column;gap:var(--s2)">
     <div class="row" style="flex-wrap:wrap;gap:6px;min-height:28px"><span class="cap">絞り込み</span>
       ${path.length?path.map((t,i)=>`${i?'<span class="cap">›</span>':''}${tag(t)}`).join(''):'<span class="sub">すべて</span>'}
@@ -705,7 +719,7 @@ function vTypes(){
   return `<div class="view push">
   ${topbar('エンティティ','entity','')}
   ${ptitle('type','種類の管理')}
-  <div class="sub">エンティティに付けるラベル。子は親の項目(プロパティ)を引き継ぎ、親で絞り込むと子も含む。</div>
+  ${intro('type',mrow(ND.tag('場所')+'<span class="cap">›</span>'+ND.tag('店')+'<span class="cap">›</span>'+ND.tag('飲食店'))+mrow('<span class="vchip">項目</span>'+arr('子へ継承')+'<span class="vchip">絞り込み</span>'+arr('子も含む')+ND.ent('エンティティ')),[['種類',Object.keys(TYPES).length],['いちばん上',Object.keys(TYPES).filter(k=>!TYPES[k].p).length]])}
   <button class="btn" style="align-self:flex-start;height:44px" onclick="newNode('type')">＋ 種類を作成</button>
   ${treeView('type',k=>`${tag(k)}<span class="cap">項目${propsOf(k).length}</span><span class="grow"></span><a class="cap num hit" href="#/entities/${k}">${cnt(k)}件 ›</a>`)}
   </div>`;
@@ -715,7 +729,7 @@ function vCats(){
   return `<div class="view push">
   ${topbar('家計簿','expense','')}
   ${ptitle('ledger','カテゴリの管理')}
-  ${intro('expense','階層 = 何に使ったか。色・固定/変動・✦非日常(特別感)は既定値で、子は親から引き継ぎ、支出ごとに変えられる。',[['大分類',ROOTS().length],['小分類',Object.keys(CATS).length-ROOTS().length],['固定費',Object.keys(CATS).filter(k=>catFx(k)==='固定').length]])}
+  ${intro('expense',mrow(ND.cat('大分類','#E07A4F')+'<span class="cap">›</span>'+ND.cat('小分類','#E07A4F')+arr('既定')+box('<span class="vchip"><i style="background:#E07A4F"></i>色</span><span class="vchip">固定・変動</span><span class="spc">✦</span>'))+mrow('<span class="vchip">親</span>'+arr('継承')+'<span class="vchip">子</span>'+arr('上書き')+ND.exp('支出')),[['大分類',ROOTS().length],['小分類',Object.keys(CATS).length-ROOTS().length],['固定費',Object.keys(CATS).filter(k=>catFx(k)==='固定').length]])}
   <button class="btn" style="align-self:flex-start;height:44px;background:var(--expense)" onclick="newNode('cat')">＋ カテゴリを作成</button>
   ${treeView('cat',k=>`${catChip(k)}${catFx(k)==='固定'?'<span class="cap" style="font-weight:700;color:#5E6E91">固定</span>':''}${catSp(k)==='非日常'?'<span class="spc">✦</span>':''}<span class="grow"></span><span class="cap num">${cnt(k)}件</span>`)}
   </div>`;
@@ -753,7 +767,7 @@ function vNotes(){
   return `<div class="view push">
   ${topbar('エンティティ','entity','')}
   ${ptitle('note','ノート')}
-  ${intro('note','エンティティに1枚ずつ付く主観のメモ。最新の印象を書き換え、過去の版は残る。',[['ノート',Object.keys(NOTES).length+'枚'],['最終更新','10/30']])}
+  ${intro('note',mrow(ND.ent('エンティティ')+arr('1:1')+ND.note('ノート')+arr('子')+ND.note('サブページ'))+mrow('<span class="vchip">最新</span>'+arr('書き換え')+'<span class="vchip">版 ⟲</span>'),[['ノート',Object.keys(NOTES).length+'枚'],['最終更新','10/30']])}
   <div class="plist">${Object.entries(NOTES).map(([k,n])=>`<a class="paper" href="#/n/${k}"><b class="ellipsis">${E[k].n}のノート</b><span class="cap ellipsis">${n.body[0][1]}</span><span class="cap pdate">${n.upd.split(' ')[0]}</span></a>`).join('')}</div>
   </div>`;
 }
@@ -886,8 +900,8 @@ function vSchedule(){
     main=days.map(d=>`<div class="stack">${sec(mdw(d)+(d===TODAY?' 今日':''),evOn(d).length+'件')}${agenda(d,1)}</div>`).join('');
   }
   return `<div class="view">
-  ${ptitle('schedule','予定')}
-  ${intro('schedule','これからの予定。場所・参加者はエンティティ。終わったら記録(アクティビティ)に結び付き、定期の支払い予定は家計簿の固定費になる。',[['今日',todays.length+'件'],['次の予定',next?next[1].s:'—'],['7日間',week+'件']])}
+  <div class="ptitle">${MK.schedule}<span class="h1">予定</span><a class="h1 off" href="#/todo">ToDo</a></div>
+  ${intro('schedule',mrow(ND.plan('予定')+arr('場所・参加者')+ND.ent('人・場所')+arr('終わると')+ND.act('記録'))+mrow(ND.plan('定期の支払い')+arr('家計簿')+ND.exp('固定費'))+mrow(ND.plan('予定')+arr('持つ')+ND.todo('ToDo')),[['今日',todays.length+'件'],['次の予定',next?next[1].s:'—'],['7日間',week+'件']])}
   <div class="seg">${[['month','月'],['day','日'],['list','リスト']].map(([k,l])=>`<button class="${calView===k?'on':''}" onclick="setCal('${k}')">${l}</button>`).join('')}</div>
   ${main}
   </div>`;
@@ -906,7 +920,7 @@ function vEvent(id){const e=EV[id];const past=(e.d2||e.d)<TODAY&&!e.rep;
   ${topbar('予定','schedule')}
   <div class="obj obj-p"><div class="hero"><div class="row" style="gap:6px"><span class="lbl">${IC.schedule}予定</span>${e.rep?`<span class="type ghost">${e.rep}</span>`:''}</div>
     <span class="title">${e.t}</span><span class="big num" style="font-size:24px">${e.all?'終日':`${e.s} – ${e.e}`}</span><span class="meta">${mdw(e.d)}${e.d2?' – '+mdw(e.d2):''}${e.rep?' · 次回 '+mdw(nextOn(e)):''}</span></div></div>
-  ${e.pay?`<div class="stack">${sec('支払いの予定')}<div class="flat"><div class="lrow"><span class="cap" style="width:56px">金額</span><b class="grow num">${yen(e.pay.amt)}</b></div><div class="lrow"><span class="cap" style="width:56px">カテゴリ</span><span class="grow">${catChip(e.pay.cat,1)}</span><span class="cap" style="font-weight:700;color:#5E6E91">${catFx(e.pay.cat)}費</span></div></div><div class="cap" style="padding:0 2px">定期の支払いは家計簿の「これからの固定費」に出る</div></div>`:''}
+  ${e.pay?`<div class="stack">${sec('支払いの予定')}<div class="flat"><div class="lrow"><span class="cap" style="width:56px">金額</span><b class="grow num">${yen(e.pay.amt)}</b></div><div class="lrow"><span class="cap" style="width:56px">カテゴリ</span><span class="grow">${catChip(e.pay.cat,1)}</span><span class="cap" style="font-weight:700;color:#5E6E91">${catFx(e.pay.cat)}費</span></div></div><a class="cap hit" href="#/ledger" style="padding:0 2px;font-weight:600;color:var(--expense)">家計簿 › これからの固定費</a></div>`:''}
   <div class="stack">${sec('詳細')}<div class="flat">
     ${e.place?`<div class="lrow"><span class="cap" style="width:56px">場所</span>${e.place[0]?ref(e.place[0]):`<span class="ref unreg">${e.place[1]}</span>`}</div>`:''}
     ${e.who?`<div class="lrow"><span class="cap" style="width:56px">参加者</span><span class="row" style="flex-wrap:wrap;gap:6px">${e.who.map(ref).join('')}</span></div>`:''}
@@ -937,8 +951,8 @@ function vTodo(){
   const openSel=sel.filter(tdOpen),doneSel=sel.filter(k=>!tdOpen(k));
   const shopSug=todoView==='list:shop'||todoView==='all'?open.filter(k=>TD[k].list==='shop'&&k==='t4'):[];
   return `<div class="view">
-  ${ptitle('todo','ToDo')}
-  ${intro('todo','やること。人・場所(エンティティ)や予定に結び付き、買い物リストは支払いの品目から完了を提案する。',[['今日',nToday+'件','#/todo'],['期限切れ',nOver+'件'],['完了',nDone+'件']])}
+  <div class="ptitle">${MK.todo}<a class="h1 off" href="#/schedule">予定</a><span class="h1">ToDo</span></div>
+  ${intro('todo',mrow(ND.todo('ToDo')+arr('結び付く')+box(ND.ent('人・場所')+ND.plan('予定')))+mrow(ND.todo('買い物')+arr('買ったら')+ND.act('支払い')+arr()+'<span class="chk on" style="width:20px;height:20px;font-size:11px;border-radius:6px">✓</span>'),[['今日',nToday+'件','#/todo'],['期限切れ',nOver+'件'],['完了',nDone+'件']])}
   <div class="chips">${views.map(([k,l,n])=>`<button class="pill todo ${todoView===k?'on':''}" onclick="setTodo('${k}')">${l} <span style="opacity:.7">${n}</span></button>`).join('')}</div>
   <div class="qadd"><span class="chk" style="border-style:dashed"></span><input id="qa" placeholder="ToDoを追加(例: 明日 牛乳 #買い物)" onkeydown="if(event.key==='Enter')addTask()"><button class="btn" style="background:var(--todo)" onclick="addTask()">追加</button></div>
   ${shopSug.length?`<div class="suggest todo"><span class="grow ellipsis">10/29 スーパー青葉台の支払いに「牛乳」</span><button class="btn" onclick="doneBy('t4','p2')">完了にする</button></div>`:''}
@@ -972,7 +986,7 @@ function vTask(k){const t=TD[k];
   </div>`}
 
 /* ======================= router ======================= */
-const TABS=[['activities','アクティビティ','activity','activity'],['schedule','予定','schedule','schedule'],['todo','ToDo','todo','todo'],['entities','エンティティ','entity','entity'],['ledger','家計簿','expense','expense']];
+const TABS=[['activities','アクティビティ','activity','activity'],['schedule','予定・ToDo','schedule','schedule','plan'],null,['entities','エンティティ','entity','entity'],['ledger','家計簿','expense','expense']];
 function render(){
   const h=location.hash.slice(2)||'activities';const [r,id]=h.split('/');
   let html,tab;
@@ -982,10 +996,10 @@ function render(){
     case 'entities':html=vEntities(id);tab='entities';break;
     case 'types':html=vTypes();tab='entities';break;
     case 'notes':html=vNotes();tab='entities';break;
-    case 'schedule':html=vSchedule();tab='schedule';break;
-    case 'ev':html=vEvent(id);tab='schedule';break;
-    case 'todo':html=vTodo();tab='todo';break;
-    case 't':html=vTask(id);tab='todo';break;
+    case 'schedule':html=vSchedule();tab='plan';lastPlan='schedule';break;
+    case 'ev':html=vEvent(id);tab='plan';break;
+    case 'todo':html=vTodo();tab='plan';lastPlan='todo';break;
+    case 't':html=vTask(id);tab='plan';break;
     case 'e':html=vEntity(id);tab='entities';break;
     case 'a':html=vActivity(id);tab='activities';break;
     case 'x':html=vExpense(id);tab='ledger';break;
@@ -993,8 +1007,8 @@ function render(){
     default:html=vActivities();tab='activities';
   }
   $('#app').innerHTML=html;$('#scroll').scrollTop=0;
-  $('#nav').innerHTML=TABS.map(t=>`<a href="#/${t[0]}" class="${t[0]===tab?'on':''}" style="--c:var(--${t[3]})">${IC[t[2]]}${t[1]}</a>`).join('');
-  curTab=tab;
+  $('#nav').innerHTML=TABS.map(t=>!t?`<button class="plus" onclick="openCreate()">＋</button>`:`<a href="#/${t[4]?lastPlan:t[0]}" class="${(t[4]||t[0])===tab?'on':''}" style="--c:var(--${t[3]})">${IC[t[2]]}${t[1]}</a>`).join('');
+  curTab=(r==='todo'||r==='t')?'todo':tab;
 }
 function goBack(){history.length>1?history.back():location.hash='#/activities'}
 window.addEventListener('hashchange',render);
@@ -1002,7 +1016,7 @@ function tog(id,btn,label){const el=document.getElementById(id);el.hidden=!el.hi
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1600)}
 function sheet(html){$('#sheet').innerHTML='<div class="grab"></div>'+html;$('#dev').classList.add('open')}
 function closeSheet(){$('#dev').classList.remove('open')}
-let curTab='activities';
+let curTab='activities',lastPlan='schedule';
 function openCreate(){const first={schedule:`<button class="lrow" style="width:100%" onclick="closeSheet();toast('予定の作成(モック)')">${MK.schedule}<span class="grow" style="text-align:left"><b>予定</b><div class="cap">日時・場所・参加者</div></span></button>`,
   todo:`<button class="lrow" style="width:100%" onclick="closeSheet();$('#qa')&&$('#qa').focus()">${MK.todo}<span class="grow" style="text-align:left"><b>ToDo</b><div class="cap">期限・リスト・結び付く人や予定</div></span></button>`};
   const order=curTab==='todo'?['todo','schedule']:['schedule','todo'];
