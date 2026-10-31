@@ -111,7 +111,7 @@ svg.i{width:20px;height:20px;flex:none}
 .lt h1{font:var(--t-display);letter-spacing:.01em;flex:1}
 .lt .iconbtn{margin-right:-10px}
 /* サマリ: 1行の数値。タップで該当画面へ */
-.metrics{display:flex;gap:8px;padding:4px var(--gutter) 12px;overflow-x:auto;scrollbar-width:none}
+.metrics{display:flex;gap:8px;padding:6px var(--gutter) 14px;overflow-x:auto;scrollbar-width:none}
 .metrics::-webkit-scrollbar{display:none}
 .metric{flex:none;display:flex;align-items:baseline;gap:6px;height:36px;padding:0 12px;border-radius:var(--r-pill);background:var(--surface);box-shadow:var(--e1);font:var(--t-label);color:var(--ink-2);white-space:nowrap}
 .metric b{font:600 15px/1 var(--font);color:var(--ink)}
