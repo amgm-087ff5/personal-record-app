@@ -322,6 +322,25 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 .lbig{font-size:30px;font-weight:700;line-height:1.15;color:color-mix(in srgb,var(--c) 85%,#1A2338)}
 .lbar{display:flex;gap:2px;height:8px;border-radius:4px;overflow:hidden}
 .lbar i{display:block}
+.sheet.tall{max-height:94%}
+.camb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:170px;border-radius:18px;border:2px dashed color-mix(in srgb,var(--expense) 45%,transparent);background:var(--expense-t);color:var(--expense);cursor:pointer}
+.scan{position:relative;width:200px;margin:0 auto 10px;border-radius:12px;overflow:hidden;box-shadow:var(--sh-card)}
+.scan img{display:block;width:100%}
+.scan i{position:absolute;left:0;right:0;height:40px;background:linear-gradient(180deg,transparent,rgba(61,99,184,.35),transparent);animation:scan 1s linear infinite}
+@keyframes scan{from{top:-40px}to{top:100%}}
+.rthumb{width:56px;height:72px;object-fit:cover;border-radius:8px;box-shadow:var(--sh-card);background:#fff}
+.rc-item{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border)}
+.rc-item input,.rc-item select{font:inherit;font-size:14px;height:42px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:#fff;color:var(--text);min-width:0}
+.rc-item .n{flex:1}.rc-item .pr{width:74px;text-align:right}.rc-item .tx{width:58px;padding:0 4px}.rc-item .bd{width:64px;padding:0 4px}
+.rc-item .del{width:32px;height:42px;color:var(--muted);flex:none}
+.rctot{display:flex;align-items:center;gap:8px;min-height:48px;padding:0 12px;margin:-4px 0 14px;border-radius:12px;background:var(--expense-t);color:var(--expense)}
+.okb{font-size:11px;font-weight:700;color:var(--note)}.ngb{font-size:11px;font-weight:700;color:var(--unknown)}
+.chkrow{display:flex;align-items:center;gap:8px;min-height:40px;font-size:13px;color:var(--text2)}
+.chkrow input{width:20px;height:20px}
+.field textarea{font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;resize:vertical;color:var(--text)}
+.ref.off,.cat.off{opacity:.45;filter:grayscale(.6)}
+button.ref{height:34px;font-size:13px}
+.rimg{width:100%;max-height:260px;object-fit:contain;border-radius:10px;background:#F6F8FB}
 .istats{display:grid;grid-auto-flow:column;grid-auto-columns:1fr}
 .ist{display:flex;flex-direction:column;justify-content:center;min-height:48px;padding:0 10px;border-left:1px solid color-mix(in srgb,var(--c) 20%,transparent);min-width:0}
 .ist:first-child{padding-left:0;border-left:0}
@@ -601,12 +620,12 @@ const CVAR={ptype:'type'};
 const SWITCH={schedule:`<span class="h1">予定</span><a class="h1 off" href="#/todo">ToDo</a><span class="grow"></span>`,todo:`<a class="h1 off" href="#/schedule">予定</a><span class="h1">ToDo</span><span class="grow"></span>`};
 /* ページ内の主ボタン(このタブで一番多い作成操作) */
 const ACTS={
-  'アクティビティ':[['＋ 支払い',"toast('支払いの入力(モック)')",'activity'],['＋ 出来事',"toast('出来事の入力(モック)')",'activity',1]],
-  '予定':[['＋ 予定',"toast('予定の作成(モック)')",'calendar']],
-  'エンティティ':[['＋ 人物',"toast('人物の作成(モック)')",'entity'],['＋ 場所',"toast('場所の作成(モック)')",'entity',1],['＋ その他',"toast('エンティティの作成(モック)')",'entity',1]],
+  'アクティビティ':[['レシートで支払い',"openReceipt()",'activity'],['＋ 出来事',"openNewHappening()",'activity',1]],
+  '予定':[['＋ 予定',"openNewEvent()",'calendar']],
+  'エンティティ':[['＋ 人物',"openNewEntity('person')",'entity'],['＋ 場所',"openNewEntity('shop')",'entity',1],['＋ その他',"openNewEntity('thing')",'entity',1]],
   '種類の管理':[['＋ 種類を作成',"newNode('type')",'type']],
   'カテゴリの管理':[['＋ カテゴリを作成',"newNode('cat')",'expense']],
-  '家計簿':[['レシートで支払い',"toast('レシートを撮影(モック)')",'expense'],['＋ 支出',"openQuickExpense()",'expense',1]],
+  '家計簿':[['レシートで支払い',"openReceipt()",'expense'],['＋ 支出',"openQuickExpense()",'expense',1]],
 };
 let PH=null;
 const head=(k,t,right,stats,extra='')=>{const a=ACTS[t]||[];
@@ -641,23 +660,27 @@ function togBurden(btn){const c=btn.closest('.items');c.classList.toggle('sb');b
 function togTree(btn){const k=btn.closest('.tnode').querySelector(':scope>.tkids');k.hidden=!k.hidden;btn.textContent=k.hidden?'▸':'▾'}
 
 /* ======================= views ======================= */
+function kidRow(k){const c=A[k];const x=c.x&&X[c.x];return `<a class="kid" href="#/a/${k}">
+      <span class="t num">${c.time}</span>${c.amt?'':bAct(c.type)}
+      <span class="ti grow ellipsis">${c.amt?roleName(c.roles[0]):c.title+(c.roles&&c.roles.length?`<span class="cap"> · ${roleName(c.roles.find(r=>r[0]==='場所'||r[0]==='到着')||c.roles[0])}</span>`:'')}</span>
+      ${c.amt?`<span class="row" style="gap:6px">${x?bExp(yen(x.amt)):''}<span class="amt num">${yen(c.amt)}</span></span>`:''}</a>`}
 function vActivities(){
+  const todayId=Object.keys(A).find(k=>A[k].type==='日記'&&A[k].date===TODAY);const td=todayId?A[todayId]:{kids:[],body:''};
+  const rows=[...td.kids.map(k=>[A[k].time,kidRow(k)]),...evOn(TODAY).filter(([k,e])=>!e.all&&!e.rec).map(([k,e])=>[e.s,`<a class="kid plan" href="#/ev/${k}"><span class="t num">${e.s}</span><span class="b-plan">予定</span><span class="ti grow ellipsis">${e.t}<span class="cap"> · ${placeOf(e)}</span></span></a>`])].sort((p,q)=>p[0].localeCompare(q[0]));
+  const days=Object.entries(A).filter(([k,a])=>a.type==='日記'&&a.date<TODAY&&a.kids.length).sort((p,q)=>q[1].date.localeCompare(p[1].date)).slice(0,10);
   return `<div class="view">
   ${ptitle('activity','アクティビティ')}
-  ${intro('activity',mrow(ND.diary('日記')+arr('中に')+box(ND.act('支払い')+ND.act('会話')+ND.act('移動')))+mrow(ND.plan('予定')+arr('終わると')+ND.act('記録')),[['10月の記録',Object.values(A).filter(a=>a.type!=='日記'&&A[a.parent]&&A[a.parent].date.startsWith('2026-10')).length+'件'],['今日の予定',evOn(TODAY).length+'件','#/schedule'],['今日のToDo',Object.values(TD).filter(t=>!t.done&&t.due&&t.due<=TODAY).length+'件','#/todo']])}
+  ${intro('activity','',[['10月の記録',Object.values(A).filter(a=>a.type!=='日記'&&A[a.parent]&&A[a.parent].date.startsWith('2026-10')).length+'件'],['今日の予定',evOn(TODAY).length+'件','#/schedule'],['今日のToDo',Object.values(TD).filter(t=>!t.done&&t.due&&t.due<=TODAY).length+'件','#/todo']])}
   <div class="day raised">
-    <div class="day-h"><span class="dd num"><span>土</span><b>31</b></span><span class="b-act">今日</span><span class="sub grow ellipsis">まだ記録がありません</span><button class="btn" style="height:36px" onclick="toast('今日の日記を書く(モック)')">＋ 書く</button></div>
-    <div class="rail">${evOn(TODAY).filter(([k,e])=>!e.all).map(([k,e])=>`<a class="kid plan" href="#/ev/${k}"><span class="t num">${e.s}</span><span class="b-plan">予定</span><span class="ti grow ellipsis">${e.t}<span class="cap"> · ${placeOf(e)}</span></span></a>`).join('')}</div>
+    <div class="day-h"><span class="dd num"><span>${dwOf(TODAY)}</span><b>${+TODAY.slice(8)}</b></span><span class="b-act">今日</span><span class="sub grow ellipsis">${td.body||'まだ日記がありません'}</span><button class="btn" style="height:36px" onclick="openDiary()">${td.body?'編集':'＋ 書く'}</button></div>
+    <div class="rail">${rows.map(r=>r[1]).join('')}</div>
   </div>
   <div class="chips"><span class="pill on">すべて</span><span class="pill">日記</span><span class="pill">支払い</span><span class="pill">会話</span><span class="pill">移動</span></div>
-  ${DAYS.map(d=>{const a=A[d];return `<div class="day raised">
+  ${days.map(([d,a])=>`<div class="day raised">
     <a class="day-h" href="#/a/${d}"><span class="dd num"><span>${a.dw}</span><b>${a.dd}</b></span>
       ${bAct('日記')}<span class="sub grow ellipsis">${a.body||'—'}</span>${a.photos?`<span class="cap">写真${a.photos}</span>`:''}</a>
-    <div class="rail">${[...a.kids].sort((p,q)=>A[p].time.localeCompare(A[q].time)).map(k=>{const c=A[k];const x=c.x&&X[c.x];return `<a class="kid" href="#/a/${k}">
-      <span class="t num">${c.time}</span>${c.amt?'':bAct(c.type)}
-      <span class="ti grow ellipsis">${c.amt?(c.roles[0][1]?E[c.roles[0][1]].n:c.roles[0][2]):c.title+`<span class="cap"> · ${E[c.roles[0][1]].n}</span>`}</span>
-      ${c.amt?`<span class="row" style="gap:6px">${bExp(yen(x.amt))}<span class="amt num">${yen(c.amt)}</span></span>`:''}</a>`}).join('')}</div>
-  </div>`}).join('')}
+    <div class="rail">${[...a.kids].sort((p,q)=>A[p].time.localeCompare(A[q].time)).map(kidRow).join('')}</div>
+  </div>`).join('')}
   </div>`;
 }
 let ledgerAxis='cat',ledgerFilter=null;
@@ -838,7 +861,7 @@ function vActivity(id){
     ${heroD(a)}
     <div class="flat" style="padding:var(--s4)"><div style="font-size:14px">${a.body||'<span class="cap">本文なし</span>'}</div>
       ${a.photos?`<div class="row" style="margin-top:var(--s3)"><span class="photo"></span><span class="photo"></span><span class="photo"></span>${a.photos>3?`<span class="cap">＋${a.photos-3}</span>`:''}</div>`:''}</div>
-    <div class="stack">${sec('この日の出来事(子)',a.kids.length,'＋ 追加')}
+    <div class="stack">${sec('この日の出来事(子)',a.kids.length)}
       <div class="flat">${a.kids.map(k=>{const c=A[k];return `<a class="lrow" href="#/a/${k}"><span class="mk-a"></span><span class="cap num" style="width:32px;color:var(--activity);font-weight:600">${c.time}</span>${bAct(c.type)}<span class="grow ellipsis" style="font-size:13px">${c.title}</span>${c.amt?`<span class="num" style="font-weight:600;font-size:13px">${yen(c.amt)}</span>`:''}</a>`}).join('')}</div></div>
   </div>`;
   const p=dayOf(a);const x=a.x&&X[a.x];const unreg=a.roles.find(r=>!r[1]);
@@ -852,6 +875,8 @@ function vActivity(id){
     <div class="flat">${a.roles.map(r=>`<div class="lrow"><span class="cap" style="width:44px">${r[0]}</span>${roleRef(r)}<span class="grow"></span>${r[1]?`<span class="type" style="height:17px;font-size:10px">${TYPES[E[r[1]].t[0]].n}</span>`:''}</div>`).join('')}</div>
     ${unreg?`<div class="suggest"><span class="grow ellipsis">「${unreg[2]}」は未登録</span><button class="btn" onclick="registerShop('${id}')">＋ 店として登録</button></div>`:''}
   </div>
+  ${a.todoSug&&a.todoSug.length?`<div class="suggest todo"><span class="grow ellipsis">買い物リスト: ${a.todoSug.map(k=>'「'+TD[k].t+'」').join('')}</span><button class="btn" onclick="doneSug('${id}')">完了にする</button></div>`:''}
+  ${a.img?`<div class="stack">${sec('添付','1')}<div class="flat" style="padding:10px"><img class="rimg" src="${a.img}"></div></div>`:''}
   ${a.body?`<div class="stack">${sec('内容')}<div class="flat" style="padding:var(--s4);font-size:14px">${a.body}</div></div>`:''}
   ${a.items?`<div class="stack">${sec('品目',a.items.length,'＋ 追加')}
     <div class="flat items">${itemRows(a.items,true)}
@@ -965,7 +990,7 @@ function vEvent(id){const e=EV[id];const past=(e.d2||e.d)<TODAY&&!e.rep;
   ${e.todo?`<div class="stack">${sec('この予定のToDo',e.todo.length,'＋ 追加')}<div class="flat">${e.todo.map(trow).join('')}</div></div>`:''}
   <div class="stack">${sec('記録')}
     ${e.rec?`<a class="arow" href="#/a/${e.rec}"><span class="mk-a"></span>${bAct(A[e.rec].type)}<span class="grow ellipsis" style="font-size:13px">${A[e.rec].title} · ${md(A[A[e.rec].parent].date)}</span><span class="rec">✓ 記録済み</span></a>`
-      :`<button class="btn" style="height:46px;background:var(--activity)" onclick="toast('この予定からアクティビティを作成(モック)')">${past||e.d===TODAY?'記録にする(アクティビティを作成)':'終わったら記録にできます'}</button>`}</div>
+      :`<button class="btn" style="height:46px;background:var(--activity)" onclick="recordEvent('${id}')">${e.pay?'支払いとして記録する':'記録にする(アクティビティを作成)'}</button>`}</div>
   </div>`}
 /* ======================= ToDo ======================= */
 let todoView='today',showDone=false;
@@ -1006,7 +1031,7 @@ function vTask(k){const t=TD[k];
   <div class="obj obj-t"><div class="hero"><div class="hc"><button class="chk ${t.done?'on':''}" onclick="togTask('${k}')">${t.done?'✓':''}</button></div>
     <div class="hb"><span class="lbl">${IC.todo}ToDo · ${LISTS[t.list].n}</span><span class="title" style="${t.done?'text-decoration:line-through;opacity:.8':''}">${t.t}</span><span class="meta">${t.done?'完了 '+md(t.done):t.due?'期限 '+mdw(t.due):'期限なし'}${t.pri?' · 優先':''}</span></div></div></div>
   <div class="stack">${sec('詳細')}<div class="flat">
-    <button class="lrow" style="width:100%;text-align:left" onclick="toast('期限を選ぶ(モック)')"><span class="cap" style="width:56px">期限</span><span class="grow">${t.due?mdw(t.due):'なし'}</span><span class="cap">›</span></button>
+    <label class="lrow"><span class="cap" style="width:56px">期限</span><span class="grow">${t.due?mdw(t.due):'なし'}</span><input type="date" value="${t.due||''}" onchange="TD['${k}'].due=this.value||undefined;render()" style="font:inherit;height:40px;border:1px solid var(--border);border-radius:8px;padding:0 8px"></label>
     <button class="lrow" style="width:100%;text-align:left" onclick="toast('繰り返し(モック)')"><span class="cap" style="width:56px">繰り返し</span><span class="grow">${t.rep||'なし'}</span><span class="cap">›</span></button>
     <div class="lrow"><span class="cap" style="width:56px">優先度</span><span class="grow"><span class="segm"><button class="${t.pri?'':'on'}">通常</button><button class="${t.pri?'on':''}" style="${t.pri?'color:#C4553F':''}">! 優先</button></span></span></div>
     <div class="lrow"><span class="cap" style="width:56px">リスト</span><span class="grow">${LISTS[t.list].n}</span>${LISTS[t.list].shop?`<span class="cap">買う店 ${E[LISTS[t.list].shop].n}</span>`:''}</div></div></div>
@@ -1043,31 +1068,28 @@ function render(){
   $('#app').innerHTML=html;$('#scroll').scrollTop=0;
   $('#nav').innerHTML=TABS.map(t=>!t?`<button class="plus" onclick="openCreate()">＋</button>`:`<a href="#/${t[4]?lastPlan:t[0]}" class="${(t[4]||t[0])===tab?'on':''}" style="--c:var(--${t[3]})">${IC[t[2]]}${t[1]}</a>`).join('');
   curTab=(r==='todo'||r==='t')?'todo':tab;
+  saveState();
 }
 function goBack(){history.length>1?history.back():location.hash='#/activities'}
 window.addEventListener('hashchange',render);
 function tog(id,btn,label){const el=document.getElementById(id);el.hidden=!el.hidden;if(btn)btn.textContent=el.hidden?label+' ▾':'閉じる ▴'}
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1600)}
-function sheet(html){$('#sheet').innerHTML='<div class="grab"></div>'+html;$('#dev').classList.add('open')}
+function sheet(html,cls=''){const sh=$('#sheet');sh.className='sheet '+cls;sh.innerHTML='<div class="grab"></div>'+html;$('#dev').classList.add('open')}
 function closeSheet(){$('#dev').classList.remove('open')}
 let curTab='activities',lastPlan='schedule';
-function openCreate(){const first={schedule:`<button class="lrow" style="width:100%" onclick="closeSheet();toast('予定の作成(モック)')">${MK.schedule}<span class="grow" style="text-align:left"><b>予定</b><div class="cap">日時・場所・参加者</div></span></button>`,
+function openCreate(){const first={schedule:`<button class="lrow" style="width:100%" onclick="openNewEvent()">${MK.schedule}<span class="grow" style="text-align:left"><b>予定</b><div class="cap">日時・場所・参加者</div></span></button>`,
   todo:`<button class="lrow" style="width:100%" onclick="closeSheet();$('#qa')&&$('#qa').focus()">${MK.todo}<span class="grow" style="text-align:left"><b>ToDo</b><div class="cap">期限・リスト・結び付く人や予定</div></span></button>`};
   const order=curTab==='todo'?['todo','schedule']:['schedule','todo'];
   sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s3)">新しく作る</div>
   <div class="flat">${order.map(k=>first[k]).join('')}
-   <button class="lrow" style="width:100%" onclick="closeSheet();toast('支払いの入力(モック)')">${MK.activity}<span class="grow" style="text-align:left"><b>支払い</b><div class="cap">レシートを撮る・金額を入れる</div></span></button>
-   <button class="lrow" style="width:100%" onclick="closeSheet();toast('出来事の入力(モック)')">${MK.activity}<span class="grow" style="text-align:left"><b>出来事・日記</b><div class="cap">今日の日記の子として追加</div></span></button>
-   <button class="lrow" style="width:100%" onclick="closeSheet();toast('エンティティの作成(モック)')">${MK.entity}<span class="grow" style="text-align:left"><b>エンティティ</b><div class="cap">人・場所・物。ノートはここから</div></span></button>
+   <button class="lrow" style="width:100%" onclick="openReceipt()">${MK.ledger}<span class="grow" style="text-align:left"><b>レシートで支払い</b><div class="cap">撮影 → 読み取り → 支払い+自分の支出</div></span></button>
+   <button class="lrow" style="width:100%" onclick="openQuickExpense()">${MK.ledger}<span class="grow" style="text-align:left"><b>支出(金額だけ)</b><div class="cap">金額・カテゴリ・店</div></span></button>
+   <button class="lrow" style="width:100%" onclick="openNewHappening()">${MK.activity}<span class="grow" style="text-align:left"><b>出来事</b><div class="cap">会話・移動など。今日の日記の子</div></span></button>
+   <button class="lrow" style="width:100%" onclick="openDiary()">${MK.activity}<span class="grow" style="text-align:left"><b>今日の日記</b></span></button>
+   <button class="lrow" style="width:100%" onclick="openNewEntity('person')">${MK.entity}<span class="grow" style="text-align:left"><b>エンティティ</b><div class="cap">人・場所・物。ノートはここから</div></span></button>
   </div>`)}
-function openQuickExpense(){sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s4)">支出を記録</div>
-  <div class="field"><label>金額</label><input inputmode="numeric" placeholder="¥0" style="font-size:22px;font-weight:700"></div>
-  <div class="field"><label>カテゴリ</label><div class="row" style="flex-wrap:wrap;gap:8px">${ROOTS().map(k=>`<button class="cat" style="--cc:${catColor(k)};height:34px;font-size:13px">${CATS[k].n}</button>`).join('')}</div></div>
-  <div class="field"><label>店</label><input placeholder="例: スーパー青葉台(候補から選択)"></div>
-  <div class="row cap" style="gap:6px;margin:-4px 0 14px">${bAct('支払い')}<span>と</span>${bExp('自分の支出')}<span>を同時に作成(品目1つ)</span></div>
-  <button class="btn" style="width:100%;height:48px;background:var(--expense)" onclick="closeSheet();toast('支出を記録しました(モック)')">記録</button>`)}
 function openAbout(){sheet(`<div class="h1" style="font-size:17px">UIモック v2 について</div>
-  <div class="sub" style="margin:6px 0 var(--s4)">UIと遷移の確認だけのための簡易モック。データは架空、保存はしません。</div>
+  <div class="sub" style="margin:6px 0 var(--s4)">UI・遷移と主な操作を試すためのモック。データは架空。作ったものはこのブラウザだけに残る。</div>
   <div class="flat" style="padding:var(--s4)"><div class="legend">
     ${MK.entity}<span><b>エンティティ</b> = フォルダのタブ(事実を綴じる)</span>
     ${MK.activity}<span><b>アクティビティ</b> = 時間軸に掛かったカプセル(印は丸角正方形)。<b>日記</b>は日めくりカレンダーの1枚</span>
@@ -1081,10 +1103,168 @@ function openAbout(){sheet(`<div class="h1" style="font-size:17px">UIモック v
   <div class="flat" style="padding:var(--s3) var(--s4);font-size:12px;line-height:1.8;color:var(--text2);margin-top:var(--s3)">
    ・土台: エンティティ/ノート/アクティビティの構想(2026-10-25・<b>未合意</b>)<br>
    ・支払い ⇒ 自分の支出の親子(2026-10-28 決定)<br>
+   ・E2E: レシートで支払い(サンプルあり)→ 支払い+自分の支出 → 家計簿・タイムラインに反映 → 買い物リストの完了提案 / ＋支出 / 予定作成 → 記録にする / 出来事・日記 / エンティティ作成 / ToDo追加・完了・期限<br>
+   <button class="btn ghost" style="height:40px;margin:8px 0" onclick="resetState()">データを初期状態に戻す</button><br>
    ・試せる操作: 各行タップで遷移 / 事実の「版 ⟲」/ 「詳細」の開閉 / 品目「×2」の行で中身を開く(10/30の生ビール・10/29の卵)/ 「負担を表示」/ 10/28の支払いで未登録店の「＋ 店として登録」/ 家計簿タブ: 内訳の軸切替(カテゴリ・特別感・店・同席)と行タップで絞り込み / 自分の支出で特別感を切替 / 「種類の管理」「カテゴリの管理」の ••• で編集、＋ で作成
   </div>`)}
 function registerShop(aid){const a=A[aid];const r=a.roles.find(r=>!r[1]);const id='bakery';
   E[id]={n:r[2],i:r[2][0],t:['bakery'],facts:[]};r[1]=id;render();toast('「'+r[2]+'」をエンティティに登録しました')}
+/* ======================= E2E: 実際に作れる操作 ======================= */
+const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+const nowHM=()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+const dwOf=d=>'日月火水木金土'[new Date(d+'T00:00').getDay()];
+const roleName=r=>r?(r[1]?E[r[1]].n:r[2]):'';
+function ensureDay(date){const f=Object.entries(A).find(([k,a])=>a.type==='日記'&&a.date===date);if(f)return f[0];
+  const id='d'+date.replace(/-/g,'');A[id]={type:'日記',date,dd:String(+date.slice(8)),dw:dwOf(date),body:'',kids:[]};return id}
+const findEnt=n=>{n=(n||'').trim();const f=Object.entries(E).find(([k,e])=>e.n===n);return f?f[0]:null};
+function newEnt(n,t){const id=uid('e');E[id]={n,i:n[0],t,facts:[]};return id}
+function guessCat(eid){if(!eid)return 'food';const t=E[eid].t;
+  if(t.some(x=>isUnder(x,'cafe')))return 'cafe';if(t.some(x=>isUnder(x,'food')))return 'eatout';
+  if(t.some(x=>isUnder(x,'super')))return 'cook';if(t.some(x=>isUnder(x,'drug')))return 'daily';return 'food'}
+const people=()=>Object.entries(E).filter(([k,e])=>k!=='me'&&e.t.some(t=>isUnder(t,'person')));
+const places=()=>Object.entries(E).filter(([k,e])=>e.t.some(t=>isUnder(t,'place')));
+/* 支払い + 自分の支出(子)を作る。品目の負担から自分の分を計算 */
+function createPayment(o){
+  const day=ensureDay(o.date);let shopId=findEnt(o.shop);
+  if(!shopId&&o.register&&o.shop)shopId=newEnt(o.shop.trim(),[o.shopType||'shop']);
+  const roles=[['支払先',shopId,o.shop||'(店なし)'],['支払者','me']];if(o.with)roles.push(['同席',o.with]);
+  const amt=o.items.reduce((s,i)=>s+i.price,0);
+  const aid=uid('p'),xid=uid('x');
+  const mine=o.items.filter(i=>i.b!=='相手').map(i=>({n:i.n,price:i.b==='半分'?Math.floor(i.price/2):i.price,b:i.b==='半分'?'1/2':'全額'}));
+  const xamt=mine.reduce((s,i)=>s+i.price,0);
+  const who=o.with?E[o.with].n.split(' ').pop():'相手';
+  A[aid]={type:'支払い',parent:day,time:o.time,title:o.title||(o.items.length===1?o.items[0].n:'買い物'),pay:o.pay||'現金',amt,roles,
+    items:o.items.map(i=>({n:i.n,price:i.price,tax:i.tax||10,b:i.b==='相手'?who:i.b})),x:xamt?xid:undefined,img:o.img};
+  if(o.with&&amt-xamt>0)A[aid].adv=[o.with,amt-xamt,'未精算'];
+  if(xamt)X[xid]={pay:aid,amt:xamt,cat:o.cat||guessCat(shopId),memo:'',items:mine};
+  A[day].kids.push(aid);
+  const names=o.items.map(i=>i.n);
+  A[aid].todoSug=Object.keys(TD).filter(k=>tdOpen(k)&&TD[k].list==='shop'&&names.some(n=>n.includes(TD[k].t)||TD[k].t.includes(n)));
+  return aid}
+function doneSug(aid){const a=A[aid];(a.todoSug||[]).forEach(k=>{TD[k].done=TODAY;TD[k].pay=aid});const n=(a.todoSug||[]).length;a.todoSug=[];render();toast(`買い物リストの${n}件を完了にしました`)}
+
+/* ---------- レシートで支払い ---------- */
+let RC=null;
+function openReceipt(){sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s4)">レシートで支払いを記録</div>
+  <label class="camb"><input type="file" accept="image/*" capture="environment" hidden onchange="rcFile(this)"><span style="font-size:30px">${IC.expense}</span><b>撮影する・写真を選ぶ</b><span class="cap">レシート全体が入るように</span></label>
+  <button class="btn ghost" style="width:100%;height:46px;margin-top:10px" onclick="rcSample()">サンプルのレシートで試す</button>`,'tall')}
+function rcFile(inp){const f=inp.files&&inp.files[0];if(!f)return;const img=new Image();img.onload=()=>{const c=document.createElement('canvas');const r=Math.min(1,360/img.width);c.width=img.width*r;c.height=img.height*r;c.getContext('2d').drawImage(img,0,0,c.width,c.height);rcScan(c.toDataURL('image/jpeg',.7))};img.src=URL.createObjectURL(f)}
+function rcSample(){const lines=['スーパー青葉台','2026/10/31 16:20','牛乳          ¥238','食器用洗剤    ¥298','バナナ        ¥158','食パン        ¥178','食パン        ¥178','合計         ¥1,050'];
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="240" height="340"><rect width="240" height="340" fill="#fff"/>${lines.map((l,i)=>`<text x="${i<2?120:18}" y="${40+i*34}" font-family="monospace" font-size="${i?14:17}" ${i<2?'text-anchor="middle"':''} fill="#222">${l}</text>`).join('')}</svg>`;
+  rcScan('data:image/svg+xml;utf8,'+encodeURIComponent(svg))}
+function rcScan(img){sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s4)">読み取り中…</div><div class="scan"><img src="${img}"><i></i></div>`,'tall');
+  setTimeout(()=>{RC={img,shop:'スーパー青葉台',date:TODAY,time:'16:20',pay:'現金',printed:1050,split:0,with:null,
+    items:[['牛乳',238,8],['食器用洗剤',298,10],['バナナ',158,8],['食パン',178,8],['食パン',178,8]].map(([n,price,tax])=>({n,price,tax,b:'自分'}))};
+    RC.cat=guessCat(findEnt(RC.shop));rcEdit()},1100)}
+function rcSync(){if(!RC)return;const q=s=>document.querySelector(s);
+  RC.shop=q('#rc-shop').value;RC.date=q('#rc-date').value;RC.time=q('#rc-time').value;
+  document.querySelectorAll('.rc-item').forEach((r,i)=>{const it=RC.items[i];it.n=r.querySelector('.n').value;it.price=+r.querySelector('.pr').value||0;it.tax=+r.querySelector('.tx').value;const b=r.querySelector('.bd');if(b)it.b=b.value});
+  const reg=q('#rc-reg');RC.register=reg?reg.checked:false}
+function rcSet(k,v){rcSync();RC[k]=v;if(k==='split'&&!v)RC.items.forEach(i=>i.b='自分');if(k==='shop'){RC.cat=guessCat(findEnt(v))}rcEdit()}
+function rcAdd(){rcSync();RC.items.push({n:'',price:0,tax:8,b:'自分'});rcEdit();setTimeout(()=>{const ns=document.querySelectorAll('.rc-item .n');ns[ns.length-1].focus()},50)}
+function rcDel(i){rcSync();RC.items.splice(i,1);rcEdit()}
+function rcTotal(){rcSync();const t=RC.items.reduce((s,i)=>s+i.price,0);const el=$('#rc-tot');if(el)el.innerHTML=totHtml(t)}
+const totHtml=t=>`<span class="grow">合計</span><b class="num" style="font-size:18px">${yen(t)}</b>${t===RC.printed?'<span class="okb">印字と一致 ✓</span>':`<span class="ngb">印字 ${yen(RC.printed)} と差 ${yen(Math.abs(RC.printed-t))}</span>`}`;
+function rcEdit(){const eid=findEnt(RC.shop);const t=RC.items.reduce((s,i)=>s+i.price,0);
+  sheet(`<div class="row" style="gap:12px;margin-bottom:14px"><img src="${RC.img}" class="rthumb"><div class="stack" style="gap:2px"><b style="font-size:17px">内容を確認</b><span class="cap">読み取り結果。違うところだけ直す</span></div></div>
+  <div class="field"><label>店</label><input id="rc-shop" list="dl-shop" value="${RC.shop}" onchange="rcSet('shop',this.value)"><datalist id="dl-shop">${places().map(([k,e])=>`<option value="${e.n}">`).join('')}</datalist>
+    ${eid?`<span class="cap">${ref(eid)} 登録済みのエンティティに結び付く</span>`:`<label class="chkrow"><input type="checkbox" id="rc-reg" checked> 「${RC.shop}」をエンティティ(店)として登録</label>`}</div>
+  <div class="row" style="gap:10px"><div class="field grow"><label>日付</label><input type="date" id="rc-date" value="${RC.date}"></div><div class="field" style="width:120px"><label>時刻</label><input type="time" id="rc-time" value="${RC.time}"></div></div>
+  <div class="field"><label>支払い方法</label><div class="segm">${['現金','カード ••1234','電子マネー'].map(p=>`<button class="${RC.pay===p?'on':''}" onclick="rcSet('pay','${p}')">${p.split(' ')[0]}</button>`).join('')}</div></div>
+  <div class="field"><label>負担</label><div class="segm"><button class="${RC.split?'':'on'}" onclick="rcSet('split',0)">全部自分</button><button class="${RC.split?'on':''}" onclick="rcSet('split',1)">誰かと分ける</button></div>
+    ${RC.split?`<div class="row" style="flex-wrap:wrap;gap:6px;margin-top:4px">${people().filter(([k,e])=>e.t.includes('split')||e.t.includes('person')).map(([k,e])=>`<button class="ref ${RC.with===k?'':'off'}" onclick="rcSet('with','${k}')"><i>${e.i}</i>${e.n}</button>`).join('')}</div>`:''}</div>
+  <div class="field"><label>品目 ${RC.items.length}</label><div class="flat">${RC.items.map((it,i)=>`<div class="rc-item"><input class="n" value="${it.n}" placeholder="品名" oninput="rcTotal()"><input class="pr num" inputmode="numeric" value="${it.price||''}" placeholder="¥" oninput="rcTotal()">
+      <select class="tx" onchange="rcSync()"><option ${it.tax===8?'selected':''} value="8">8%</option><option ${it.tax===10?'selected':''} value="10">10%</option></select>
+      ${RC.split?`<select class="bd" onchange="rcSync()">${['自分','半分','相手'].map(b=>`<option ${it.b===b?'selected':''}>${b}</option>`).join('')}</select>`:''}<button class="del" onclick="rcDel(${i})">✕</button></div>`).join('')}
+    <button class="disclose" onclick="rcAdd()">＋ 品目を追加</button></div></div>
+  <div class="rctot" id="rc-tot">${totHtml(t)}</div>
+  <div class="field"><label>自分の支出のカテゴリ</label><div class="row" style="flex-wrap:wrap;gap:6px">${Object.keys(CATS).filter(k=>CATS[k].p).map(k=>`<button class="cat ${RC.cat===k?'':'off'}" style="--cc:${catColor(k)};height:34px;font-size:12.5px" onclick="rcSet('cat','${k}')">${catPath(k)}</button>`).join('')}</div></div>
+  <button class="btn" style="width:100%;height:50px;font-size:15px;background:var(--expense)" onclick="rcSave()">保存(支払い+自分の支出)</button>`,'tall')}
+function rcSave(){rcSync();const items=RC.items.filter(i=>i.n&&i.price);if(!items.length){toast('品目を入れてください');return}
+  if(RC.split&&!RC.with){toast('分ける相手を選んでください');return}
+  const aid=createPayment({date:RC.date,time:RC.time,shop:RC.shop,register:RC.register,items,pay:RC.pay,with:RC.split?RC.with:null,img:RC.img,cat:RC.cat});
+  RC=null;closeSheet();location.hash='#/a/'+aid;toast('支払いと自分の支出を保存しました')}
+
+/* ---------- ＋支出(金額だけ) ---------- */
+let QE={cat:'food'};
+function openQuickExpense(){QE={cat:'eatout'};qeRender()}
+function qeRender(){sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s4)">支出を記録</div>
+  <div class="field"><label>金額</label><input id="qe-amt" inputmode="numeric" placeholder="¥0" value="${QE.amt||''}" style="font-size:24px;font-weight:700"></div>
+  <div class="field"><label>カテゴリ</label><div class="row" style="flex-wrap:wrap;gap:6px">${Object.keys(CATS).filter(k=>CATS[k].p).map(k=>`<button class="cat ${QE.cat===k?'':'off'}" style="--cc:${catColor(k)};height:34px;font-size:12.5px" onclick="QE.amt=$('#qe-amt').value;QE.shop=$('#qe-shop').value;QE.cat='${k}';qeRender()">${catPath(k)}</button>`).join('')}</div></div>
+  <div class="field"><label>店(任意)</label><input id="qe-shop" list="dl-shop2" value="${QE.shop||''}" placeholder="候補から選ぶか入力"><datalist id="dl-shop2">${places().map(([k,e])=>`<option value="${e.n}">`).join('')}</datalist></div>
+  <div class="row cap" style="gap:6px;margin:-4px 0 14px">${bAct('支払い')}<span>+</span>${bExp('自分の支出')}<span>を品目1つで作成</span></div>
+  <button class="btn" style="width:100%;height:50px;font-size:15px;background:var(--expense)" onclick="qeSave()">記録</button>`)}
+function qeSave(){const amt=+String($('#qe-amt').value).replace(/[^\d]/g,'');if(!amt){toast('金額を入れてください');return}
+  const shop=$('#qe-shop').value.trim();
+  const aid=createPayment({date:TODAY,time:nowHM(),shop,register:false,items:[{n:CATS[QE.cat].n,price:amt,tax:10,b:'自分'}],cat:QE.cat,title:CATS[QE.cat].n});
+  closeSheet();location.hash='#/x/'+A[aid].x;toast('支出を記録しました')}
+
+/* ---------- 予定 ---------- */
+let EVF=null;
+function openNewEvent(d){EVF={d:d||(curTab==='plan'?calSel:TODAY),s:'10:00',e:'11:00',who:[]};evRender()}
+function evSync(){const q=s=>document.querySelector(s);EVF.t=q('#ev-t').value;EVF.d=q('#ev-d').value;EVF.s=q('#ev-s').value;EVF.e=q('#ev-e').value;EVF.place=q('#ev-p').value;EVF.rep=q('#ev-r').value;EVF.alarm=q('#ev-a').value;EVF.all=q('#ev-all').checked}
+function evRender(){sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s4)">予定を作成</div>
+  <div class="field"><label>タイトル</label><input id="ev-t" value="${EVF.t||''}" placeholder="例: 花子さんとカフェ"></div>
+  <div class="row" style="gap:10px"><div class="field grow"><label>日付</label><input type="date" id="ev-d" value="${EVF.d}"></div><label class="chkrow" style="margin-top:8px"><input type="checkbox" id="ev-all" ${EVF.all?'checked':''}> 終日</label></div>
+  <div class="row" style="gap:10px"><div class="field grow"><label>開始</label><input type="time" id="ev-s" value="${EVF.s}"></div><div class="field grow"><label>終了</label><input type="time" id="ev-e" value="${EVF.e}"></div></div>
+  <div class="field"><label>場所</label><input id="ev-p" list="dl-pl" value="${EVF.place||''}" placeholder="エンティティから選ぶか入力"><datalist id="dl-pl">${places().map(([k,e])=>`<option value="${e.n}">`).join('')}</datalist></div>
+  <div class="field"><label>参加者</label><div class="row" style="flex-wrap:wrap;gap:6px">${people().map(([k,e])=>`<button class="ref ${EVF.who.includes(k)?'':'off'}" onclick="evSync();EVF.who=EVF.who.includes('${k}')?EVF.who.filter(x=>x!=='${k}'):[...EVF.who,'${k}'];evRender()"><i>${e.i}</i>${e.n}</button>`).join('')}</div></div>
+  <div class="row" style="gap:10px"><div class="field grow"><label>繰り返し</label><select id="ev-r">${['','毎週','毎月'].map(r=>`<option value="${r}" ${EVF.rep===r?'selected':''}>${r||'なし'}</option>`).join('')}</select></div>
+    <div class="field grow"><label>通知</label><select id="ev-a">${['なし','10分前','30分前','1時間前','前日'].map(r=>`<option ${EVF.alarm===r?'selected':''}>${r}</option>`).join('')}</select></div></div>
+  <button class="btn" style="width:100%;height:50px;font-size:15px;background:var(--schedule)" onclick="evSave()">作成</button>`,'tall')}
+function evSave(){evSync();if(!EVF.t){toast('タイトルを入れてください');return}
+  const pid=findEnt(EVF.place);const id=uid('ev');
+  EV[id]={t:EVF.t,d:EVF.d,all:EVF.all?1:undefined,s:EVF.all?undefined:EVF.s,e:EVF.all?undefined:EVF.e,place:EVF.place?[pid,EVF.place]:undefined,who:EVF.who.length?EVF.who:undefined,
+    rep:EVF.rep==='毎月'?`毎月${+EVF.d.slice(8)}日`:EVF.rep==='毎週'?`毎週${dwOf(EVF.d)}曜`:undefined,alarm:EVF.alarm};
+  calSel=EVF.d;calYM=[+EVF.d.slice(0,4),+EVF.d.slice(5,7)];EVF=null;closeSheet();location.hash='#/ev/'+id;toast('予定を作成しました')}
+/* 予定 → 記録(アクティビティ) */
+function recordEvent(id){const e=EV[id];
+  if(e.pay){const d=e.rep?(()=>{let x=nextOn(e);while(x>TODAY){const dt=new Date(x+'T00:00');dt.setMonth(dt.getMonth()-1);x=dt.toISOString().slice(0,10)}return x})():e.d;
+    const aid=createPayment({date:d,time:'09:00',shop:e.t,items:[{n:e.t,price:e.pay.amt,tax:10,b:'自分'}],cat:e.pay.cat,title:e.t});e.rec=aid;location.hash='#/a/'+aid;toast('支払いとして記録しました');return}
+  const day=ensureDay(e.d<=TODAY?e.d:TODAY);const aid=uid('c');
+  const roles=[];if(e.who)e.who.forEach(w=>roles.push(['参加',w]));if(e.place)roles.push(['場所',e.place[0],e.place[1]]);
+  A[aid]={type:e.who?'会話':'出来事',parent:day,time:e.s||nowHM(),title:e.t,roles,body:''};A[day].kids.push(aid);e.rec=aid;
+  location.hash='#/a/'+aid;toast('予定を記録にしました')}
+
+/* ---------- 出来事・日記 ---------- */
+let HP=null;
+function openNewHappening(){HP={type:'会話',time:nowHM(),who:[]};hpRender()}
+function hpSync(){HP.title=$('#hp-t').value;HP.time=$('#hp-time').value;HP.place=$('#hp-p').value;HP.body=$('#hp-b').value}
+function hpRender(){sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s4)">出来事を記録(今日)</div>
+  <div class="field"><label>種類</label><div class="segm">${['会話','移動','出来事'].map(t=>`<button class="${HP.type===t?'on':''}" onclick="hpSync();HP.type='${t}';hpRender()">${t}</button>`).join('')}</div></div>
+  <div class="row" style="gap:10px"><div class="field grow"><label>題名</label><input id="hp-t" value="${HP.title||''}" placeholder="例: 進路の相談"></div><div class="field" style="width:110px"><label>時刻</label><input type="time" id="hp-time" value="${HP.time}"></div></div>
+  <div class="field"><label>${HP.type==='移動'?'到着した場所':'場所'}</label><input id="hp-p" list="dl-pl2" value="${HP.place||''}" placeholder="エンティティから選ぶか入力"><datalist id="dl-pl2">${places().map(([k,e])=>`<option value="${e.n}">`).join('')}</datalist></div>
+  ${HP.type!=='移動'?`<div class="field"><label>参加者</label><div class="row" style="flex-wrap:wrap;gap:6px">${people().map(([k,e])=>`<button class="ref ${HP.who.includes(k)?'':'off'}" onclick="hpSync();HP.who=HP.who.includes('${k}')?HP.who.filter(x=>x!=='${k}'):[...HP.who,'${k}'];hpRender()"><i>${e.i}</i>${e.n}</button>`).join('')}</div></div>`:''}
+  <div class="field"><label>内容</label><textarea id="hp-b" rows="3" placeholder="何があったか">${HP.body||''}</textarea></div>
+  <button class="btn" style="width:100%;height:50px;font-size:15px;background:var(--activity)" onclick="hpSave()">記録</button>`,'tall')}
+function hpSave(){hpSync();if(!HP.title){toast('題名を入れてください');return}
+  const day=ensureDay(TODAY);const aid=uid('c');const roles=HP.who.map(w=>['参加',w]);
+  if(HP.place){const pid=findEnt(HP.place);roles.push([HP.type==='移動'?'到着':'場所',pid,HP.place])}
+  A[aid]={type:HP.type,parent:day,time:HP.time,title:HP.title,roles,body:HP.body};A[day].kids.push(aid);HP=null;closeSheet();location.hash='#/a/'+aid;toast('出来事を記録しました')}
+function openDiary(){const d=A[ensureDay(TODAY)];sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s4)">今日の日記</div>
+  <div class="field"><label>${+TODAY.slice(5,7)}月${+TODAY.slice(8)}日(${dwOf(TODAY)})</label><textarea id="dy" rows="6" placeholder="今日はどんな日だった?">${d.body||''}</textarea></div>
+  <button class="btn" style="width:100%;height:50px;font-size:15px;background:var(--activity)" onclick="A[ensureDay(TODAY)].body=$('#dy').value;closeSheet();render();toast('日記を保存しました')">保存</button>`,'tall')}
+
+/* ---------- エンティティ ---------- */
+let NE=null;
+function openNewEntity(t){NE={t:t||'person'};neRender()}
+function neRender(){const isP=isUnder(NE.t,'person');sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s4)">エンティティを作成</div>
+  <div class="field"><label>名前</label><input id="ne-n" value="${NE.n||''}" placeholder="${isP?'例: 鈴木 一郎':'例: 本屋 ひだまり'}"></div>
+  <div class="field"><label>種類</label><select id="ne-t" onchange="NE.n=$('#ne-n').value;NE.t=this.value;neRender()">${Object.keys(TYPES).map(k=>`<option value="${k}" ${NE.t===k?'selected':''}>${typeAnc(k).map(a=>TYPES[a].n).join(' › ')}</option>`).join('')}</select></div>
+  ${propsOf(NE.t).slice(0,3).map(([pp])=>`<div class="field"><label>${pp}(任意)</label><input class="ne-f" data-k="${pp}"></div>`).join('')}
+  <button class="btn" style="width:100%;height:50px;font-size:15px" onclick="neSave()">作成</button>`,'tall')}
+function neSave(){const n=$('#ne-n').value.trim();if(!n){toast('名前を入れてください');return}
+  const id=newEnt(n,[NE.t]);document.querySelectorAll('.ne-f').forEach(f=>{if(f.value)E[id].facts.push({k:f.dataset.k,v:f.value})});
+  NE=null;closeSheet();location.hash='#/e/'+id;toast('「'+n+'」を作成しました')}
+
+/* ---------- 保存(この端末のブラウザだけ) ---------- */
+const SKEY='prmock-v2';
+function saveState(){try{localStorage.setItem(SKEY,JSON.stringify({A,X,E,EV,TD,NOTES,CATS,TYPES}))}catch(e){}}
+function loadState(){try{const j=JSON.parse(localStorage.getItem(SKEY)||'null');if(!j)return;
+  for(const [k,o] of Object.entries({A,X,E,EV,TD,NOTES,CATS,TYPES})){if(!j[k])continue;Object.keys(o).forEach(x=>delete o[x]);Object.assign(o,j[k])}}catch(e){}}
+function resetState(){try{localStorage.removeItem(SKEY)}catch(e){}location.hash='#/activities';location.reload()}
+loadState();
+
 render();
 </script>
 </body>
