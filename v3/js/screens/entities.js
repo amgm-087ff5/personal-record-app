@@ -79,14 +79,10 @@ route('entities',(id,q)=>{
   enIdx={};
   shown.forEach(([k,e])=>{enIdx[k]=[e.n,...e.t.map(enTypePath)].join(' ').toLowerCase()});
   const rowFor=([k,e])=>{const more=e.t.length-1;const path=enTypePath(e.t[0])+(more>0?` ほか ${more}`:'');
-    return row({cls:'en-tr en-row',href:'#/e/'+k,lead:avatar(k),t:esc(e.n),s:esc(path),v:`<span class="faint">記録 ${actsOf(k).length}</span>`,chev:true})};
+    return row({cls:'en-tr en-row',href:'#/e/'+k,lead:avatar(k),t:esc(e.n),s:esc(path),v:actsOf(k).length?`<span class="faint">記録 ${actsOf(k).length}</span>`:'',chev:true})};
   const items=[['','すべて',all.length],...roots.filter(r=>enCount(r)>0).map(r=>[r,TYPES[r].n,enCount(r)])];
   const body=roots.filter(r=>groups[r]).map(r=>`<div class="en-grp">${sh(TYPES[r].n,groups[r].length)}${list(groups[r].map(rowFor))}</div>`).join('');
-  return largeTitle('人・場所',{actions:[{icon:'type',label:'種類の管理',onclick:"go('#/types')"}],metrics:[
-      {l:'人物',v:enCount('person')+'件',href:'#/entities?type=person'},
-      {l:'場所',v:enCount('place')+'件',href:'#/entities?type=place'},
-      {l:'会社',v:enCount('company')+'件',href:'#/entities?type=company'},
-      {l:'ノート',v:Object.keys(NOTES).length+'件',href:'#/notes'}]})
+  return largeTitle('人・場所',{actions:[{icon:'note',label:'ノート一覧',onclick:"go('#/notes')"},{icon:'type',label:'種類の管理',onclick:"go('#/types')"}]})
     +(qt&&qt!==root?`<div class="chips en-dis" role="group"><button class="chip" type="button" aria-pressed="true" onclick="go('#/entities?type=${root}')">種類: ${esc(TYPES[qt].n)} ×</button></div>`:'')
     +chips(items,root,"go('#/entities?type=$v')")
     +`<div class="en-search">${IC.search}<input class="input" id="en-q" type="search" placeholder="名前や種類で探す" aria-label="名前や種類で探す" oninput="enFilter(this.value)"></div>`
