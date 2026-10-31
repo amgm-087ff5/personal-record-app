@@ -322,6 +322,13 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 .lbig{font-size:30px;font-weight:700;line-height:1.15;color:color-mix(in srgb,var(--c) 85%,#1A2338)}
 .lbar{display:flex;gap:2px;height:8px;border-radius:4px;overflow:hidden}
 .lbar i{display:block}
+.bt{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:14px;background:#fff;border:1px solid var(--border)}
+.bt.dup{border-color:color-mix(in srgb,var(--unknown) 45%,transparent);background:var(--unknown-t)}
+.bt.skip,.bt.saved{opacity:.55}
+.mini-b{height:34px;padding:0 12px;border-radius:9px;background:var(--expense);color:#fff;font-size:12px;font-weight:700;white-space:nowrap}
+.mini-b.sub{background:#fff;color:var(--text2);box-shadow:inset 0 0 0 1px var(--border)}
+.skel{display:block;height:12px;width:80%;border-radius:6px;background:linear-gradient(90deg,#EEF1F6,#F7F9FC,#EEF1F6);background-size:200% 100%;animation:sk 1s linear infinite}
+@keyframes sk{from{background-position:200% 0}to{background-position:0 0}}
 .sheet.tall{max-height:94%}
 .camb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:170px;border-radius:18px;border:2px dashed color-mix(in srgb,var(--expense) 45%,transparent);background:var(--expense-t);color:var(--expense);cursor:pointer}
 .scan{position:relative;width:200px;margin:0 auto 10px;border-radius:12px;overflow:hidden;box-shadow:var(--sh-card)}
@@ -1071,7 +1078,7 @@ function render(){
   saveState();
 }
 function goBack(){history.length>1?history.back():location.hash='#/activities'}
-window.addEventListener('hashchange',render);
+window.addEventListener('hashchange',()=>{closeSheet();render()});
 function tog(id,btn,label){const el=document.getElementById(id);el.hidden=!el.hidden;if(btn)btn.textContent=el.hidden?label+' ▾':'閉じる ▴'}
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1600)}
 function sheet(html,cls=''){const sh=$('#sheet');sh.className='sheet '+cls;sh.innerHTML='<div class="grab"></div>'+html;$('#dev').classList.add('open')}
@@ -1103,7 +1110,7 @@ function openAbout(){sheet(`<div class="h1" style="font-size:17px">UIモック v
   <div class="flat" style="padding:var(--s3) var(--s4);font-size:12px;line-height:1.8;color:var(--text2);margin-top:var(--s3)">
    ・土台: エンティティ/ノート/アクティビティの構想(2026-10-25・<b>未合意</b>)<br>
    ・支払い ⇒ 自分の支出の親子(2026-10-28 決定)<br>
-   ・E2E: レシートで支払い(サンプルあり)→ 支払い+自分の支出 → 家計簿・タイムラインに反映 → 買い物リストの完了提案 / ＋支出 / 予定作成 → 記録にする / 出来事・日記 / エンティティ作成 / ToDo追加・完了・期限<br>
+   ・E2E: レシートで支払い(撮影1枚 / 写真を最大20枚まとめて・サンプル4枚に重複2種)→ 重複判定(同じ写真のハッシュ・同じ日時と金額)→ 支払い+自分の支出 → 家計簿・タイムラインに反映 → 買い物リストの完了提案 / ＋支出 / 予定作成 → 記録にする / 出来事・日記 / エンティティ作成 / ToDo追加・完了・期限<br>
    <button class="btn ghost" style="height:40px;margin:8px 0" onclick="resetState()">データを初期状態に戻す</button><br>
    ・試せる操作: 各行タップで遷移 / 事実の「版 ⟲」/ 「詳細」の開閉 / 品目「×2」の行で中身を開く(10/30の生ビール・10/29の卵)/ 「負担を表示」/ 10/28の支払いで未登録店の「＋ 店として登録」/ 家計簿タブ: 内訳の軸切替(カテゴリ・特別感・店・同席)と行タップで絞り込み / 自分の支出で特別感を切替 / 「種類の管理」「カテゴリの管理」の ••• で編集、＋ で作成
   </div>`)}
@@ -1165,7 +1172,7 @@ function rcAdd(){rcSync();RC.items.push({n:'',price:0,tax:8,b:'自分'});rcEdit(
 function rcDel(i){rcSync();RC.items.splice(i,1);rcEdit()}
 function rcTotal(){rcSync();const t=RC.items.reduce((s,i)=>s+i.price,0);const el=$('#rc-tot');if(el)el.innerHTML=totHtml(t)}
 const totHtml=t=>`<span class="grow">合計</span><b class="num" style="font-size:18px">${yen(t)}</b>${t===RC.printed?'<span class="okb">印字と一致 ✓</span>':`<span class="ngb">印字 ${yen(RC.printed)} と差 ${yen(Math.abs(RC.printed-t))}</span>`}`;
-function rcEdit(){const eid=findEnt(RC.shop);const t=RC.items.reduce((s,i)=>s+i.price,0);
+function _rcEditBase0(){const eid=findEnt(RC.shop);const t=RC.items.reduce((s,i)=>s+i.price,0);
   sheet(`<div class="row" style="gap:12px;margin-bottom:14px"><img src="${RC.img}" class="rthumb"><div class="stack" style="gap:2px"><b style="font-size:17px">内容を確認</b><span class="cap">読み取り結果。違うところだけ直す</span></div></div>
   <div class="field"><label>店</label><input id="rc-shop" list="dl-shop" value="${RC.shop}" onchange="rcSet('shop',this.value)"><datalist id="dl-shop">${places().map(([k,e])=>`<option value="${e.n}">`).join('')}</datalist>
     ${eid?`<span class="cap">${ref(eid)} 登録済みのエンティティに結び付く</span>`:`<label class="chkrow"><input type="checkbox" id="rc-reg" checked> 「${RC.shop}」をエンティティ(店)として登録</label>`}</div>
@@ -1264,6 +1271,88 @@ function loadState(){try{const j=JSON.parse(localStorage.getItem(SKEY)||'null');
   for(const [k,o] of Object.entries({A,X,E,EV,TD,NOTES,CATS,TYPES})){if(!j[k])continue;Object.keys(o).forEach(x=>delete o[x]);Object.assign(o,j[k])}}catch(e){}}
 function resetState(){try{localStorage.removeItem(SKEY)}catch(e){}location.hash='#/activities';location.reload()}
 loadState();
+
+/* ======================= レシートの複数枚アップロード・解析・重複判定 ======================= */
+const MAXR=20;
+/* モックの読み取り結果(実際の画像は読まない) */
+const POOL={
+  super:{shop:'スーパー青葉台',date:TODAY,time:'16:20',items:[['牛乳',238,8],['食器用洗剤',298,10],['バナナ',158,8],['食パン',178,8],['食パン',178,8]]},
+  drug:{shop:'ドラッグ桜',date:'2026-10-27',time:'20:05',items:[['洗剤',680,10],['歯ブラシ',600,10]]},
+  cafe:{shop:'カフェ ミナト',date:TODAY,time:'11:10',items:[['カフェラテ',520,10],['クッキー',120,8]]},
+  bakery:{shop:'ベーカリー木漏れ日',date:'2026-10-30',time:'08:05',items:[['クロワッサン',280,8],['メロンパン',220,8]]},
+  conv:{shop:'コンビニ青葉台',date:TODAY,time:'13:02',items:[['おにぎり',160,8],['お茶',140,8]]},
+};
+const POOLK=Object.keys(POOL);
+const ptotal=k=>POOL[k].items.reduce((s,i)=>s+i[1],0);
+function sampleSvg(k){const r=POOL[k];const lines=[r.shop,r.date.replace(/-/g,'/')+' '+r.time,...r.items.map(i=>`${i[0]}  ¥${i[1]}`),`合計  ${yen(ptotal(k))}`];
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="${80+lines.length*32}"><rect width="100%" height="100%" fill="#fff"/>${lines.map((l,i)=>`<text x="${i<2?120:18}" y="${40+i*32}" font-family="monospace" font-size="${i?14:17}" ${i<2?'text-anchor="middle"':''} fill="#222">${l}</text>`).join('')}</svg>`}
+const svgUrl=s=>'data:image/svg+xml;utf8,'+encodeURIComponent(s);
+async function sha256(buf){try{const h=await crypto.subtle.digest('SHA-256',buf);return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join('')}
+  catch(e){let h=2166136261;const u=new Uint8Array(buf);for(const b of u){h^=b;h=Math.imul(h,16777619)>>>0}return 'fnv'+h.toString(16)}}
+const toRC=k=>{const r=POOL[k];const rc={shop:r.shop,date:r.date,time:r.time,pay:'現金',printed:ptotal(k),split:0,with:null,register:true,
+  items:r.items.map(([n,price,tax])=>({n,price,tax,b:'自分'}))};rc.cat=guessCat(findEnt(rc.shop));return rc};
+let BT=[];
+function openReceipt(){sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s4)">レシートで支払いを記録</div>
+  <div class="row" style="gap:10px">
+    <label class="camb grow"><input type="file" accept="image/*" capture="environment" hidden onchange="addFiles(this.files)"><span style="font-size:30px">${IC.expense}</span><b>撮影する</b><span class="cap">1枚</span></label>
+    <label class="camb grow"><input type="file" accept="image/*" multiple hidden onchange="addFiles(this.files)"><span style="font-size:30px">▤</span><b>写真を選ぶ</b><span class="cap">最大${MAXR}枚まとめて</span></label></div>
+  <button class="btn ghost" style="width:100%;height:46px;margin-top:10px" onclick="addSamples()">サンプル4枚で試す(重複を含む)</button>`,'tall')}
+async function addFiles(fl){let files=[...fl];if(!files.length)return;
+  if(files.length>MAXR){toast(`最大${MAXR}枚まで。先頭の${MAXR}枚を読み込みます`);files=files.slice(0,MAXR)}
+  BT=[];const items=await Promise.all(files.map(async(f,i)=>{const buf=await f.arrayBuffer();const hash=await sha256(buf);const img=await thumb(f);return {img,hash,pool:POOLK[i%POOLK.length]}}));
+  startBatch(items)}
+function thumb(f){return new Promise(res=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');const r=Math.min(1,360/im.width);c.width=im.width*r;c.height=im.height*r;c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.7))};im.src=URL.createObjectURL(f)})}
+async function addSamples(){const keys=['super','drug','cafe','super'];
+  const items=await Promise.all(keys.map(async k=>{const s=sampleSvg(k);return {img:svgUrl(s),hash:await sha256(new TextEncoder().encode(s)),pool:k}}));startBatch(items)}
+function startBatch(items){CUR_BI=0;BT=items.map((it,i)=>({...it,id:i,status:'scan'}));batchView();
+  BT.forEach((b,i)=>setTimeout(()=>{b.rc=toRC(b.pool);b.rc.img=b.img;checkDup(b);batchView()},500+i*350))}
+/* 重複判定: ①同じ写真(画像のハッシュ) ②同じ日時かつ同じ金額の支払い */
+function checkDup(b){b.status='ready';b.dup=null;
+  const savedSame=Object.entries(A).find(([k,a])=>a.hash&&a.hash===b.hash);
+  const batchSame=BT.find(x=>x!==b&&x.id<b.id&&x.hash===b.hash&&x.status!=='skip');
+  if(savedSame){b.status='dup';b.dup={kind:'hash',aid:savedSame[0],msg:'この写真は保存済み'}}
+  else if(batchSame){b.status='dup';b.dup={kind:'hash',msg:`同じ写真(${batchSame.id+1}枚目と同じ)`}}
+  else{const t=b.rc.items.reduce((s,i)=>s+i.price,0);
+    const same=Object.entries(A).find(([k,a])=>a.type==='支払い'&&a.amt===t&&a.time===b.rc.time&&A[a.parent].date===b.rc.date);
+    if(same){b.status='dup';b.dup={kind:'time',aid:same[0],msg:'同じ日時・金額の支払いあり'}}}}
+const ST={scan:['読み取り中','var(--muted)'],ready:['確認待ち','var(--expense)'],ok:['確認済み','var(--note)'],dup:['重複の疑い','var(--unknown)'],skip:['スキップ','var(--muted)'],saved:['保存済み','var(--note)']};
+function batchView(){const n=BT.length,scanning=BT.filter(b=>b.status==='scan').length;
+  const savable=BT.filter(b=>b.status==='ready'||b.status==='ok');
+  if(n===1&&BT[0].status==='ready'){RC=BT[0].rc;rcEdit(0);return}
+  sheet(`<div class="row" style="margin-bottom:12px"><b class="grow" style="font-size:17px">レシート ${n}枚</b><span class="cap">${scanning?`読み取り中 ${n-scanning}/${n}`:'読み取り完了'}</span></div>
+  <div class="lbar" style="margin-bottom:12px"><i style="flex:${n-scanning};background:var(--expense)"></i><i style="flex:${scanning};background:#E2E7EF"></i></div>
+  <div class="stack" style="gap:8px">${BT.map((b,i)=>{const t=b.rc?b.rc.items.reduce((s,x)=>s+x.price,0):0;const [lab,col]=ST[b.status];
+    return `<div class="bt ${b.status}"><img src="${b.img}" class="rthumb" style="width:44px;height:58px">
+      <div class="grow" style="min-width:0;display:flex;flex-direction:column;gap:2px">${b.rc?`<b class="ellipsis" style="font-size:14px">${b.rc.shop}</b><span class="cap num">${md(b.rc.date)} ${b.rc.time} · ${yen(t)}</span>`:'<span class="skel"></span><span class="skel" style="width:60%"></span>'}
+        <span style="font-size:11px;font-weight:700;color:${col}">${lab}${b.dup&&b.status==='dup'?' · '+b.dup.msg:''}${b.dup&&b.dup.aid&&b.status==='dup'?` <a href="#/a/${b.dup.aid}" onclick="closeSheet()" style="text-decoration:underline">既存を見る</a>`:''}</span></div>
+      ${b.status==='scan'||b.status==='saved'?'':b.status==='dup'?`<div class="stack" style="gap:4px"><button class="mini-b" onclick="bOverride(${i})">別の支払い</button><button class="mini-b sub" onclick="bSkip(${i})">スキップ</button></div>`
+        :b.status==='skip'?`<button class="mini-b sub" onclick="bUnskip(${i})">戻す</button>`:`<div class="stack" style="gap:4px"><button class="mini-b" onclick="bEdit(${i})">確認</button><button class="mini-b sub" onclick="bSkip(${i})">スキップ</button></div>`}</div>`}).join('')}</div>
+  <button class="btn" style="width:100%;height:50px;font-size:15px;background:var(--expense);margin-top:14px" ${savable.length&&!scanning?'':'disabled style="opacity:.5"'} onclick="bSaveAll()">${savable.length}件をまとめて保存(支払い+自分の支出)</button>
+  <div class="cap" style="text-align:center;margin-top:6px">重複の疑い・スキップは保存しない</div>`,'tall')}
+function bEdit(i){RC=BT[i].rc;rcEdit(i)}
+function bSkip(i){BT[i].status='skip';batchView()}
+function bUnskip(i){checkDup(BT[i]);batchView()}
+function bOverride(i){BT[i].status='ready';BT[i].dup=null;batchView()}
+function bSaveAll(){const list=BT.filter(b=>b.status==='ready'||b.status==='ok');let n=0,last;
+  list.forEach(b=>{const items=b.rc.items.filter(x=>x.n&&x.price);if(!items.length)return;
+    last=createPayment({date:b.rc.date,time:b.rc.time,shop:b.rc.shop,register:b.rc.register,items,pay:b.rc.pay,with:b.rc.split?b.rc.with:null,img:b.img,cat:b.rc.cat});A[last].hash=b.hash;b.status='saved';n++});
+  closeSheet();location.hash=n===1?'#/a/'+last:'#/activities';render();toast(`${n}件の支払いを保存しました`)}
+/* 1枚の確認画面: まとめの中から開いた場合は「確定して一覧へ」 */
+let CUR_BI=0;
+function rcEdit(bi){if(bi!==undefined)CUR_BI=bi;_rcEditInner(CUR_BI)}
+function _rcEditInner(bi){const b=BT[bi];
+  _rcEditBase0();
+  const sh=$('#sheet');const btn=[...sh.querySelectorAll('.btn')].pop();
+  if(BT.length>1){btn.textContent='確定して一覧へ';btn.setAttribute('onclick',`rcConfirm(${bi})`);
+    sh.querySelector('.row').insertAdjacentHTML('beforebegin',`<button class="back" style="--c:var(--expense);height:40px;font-weight:600" onclick="rcSync();batchView()">‹ ${BT.length}枚の一覧</button>`)}
+  if(b&&b.dup&&b.status==='dup')sh.querySelector('.row').insertAdjacentHTML('afterend',`<div class="suggest" style="background:var(--unknown-t);color:var(--unknown);margin-bottom:12px"><span class="grow">重複の疑い: ${b.dup.msg}</span></div>`)}
+function rcConfirm(i){rcSync();const b=BT[i];b.rc=RC;b.status=b.status==='dup'?'dup':'ok';checkDup(b);if(b.status==='ready')b.status='ok';batchView()}
+function rcSave(){rcSync();const items=RC.items.filter(i=>i.n&&i.price);if(!items.length){toast('品目を入れてください');return}
+  if(RC.split&&!RC.with){toast('分ける相手を選んでください');return}
+  const b=BT[0];if(b&&b.status==='dup'&&!confirmDup){confirmDup=1;toast('重複の疑いがあります。もう一度押すと保存');return}confirmDup=0;
+  const aid=createPayment({date:RC.date,time:RC.time,shop:RC.shop,register:RC.register,items,pay:RC.pay,with:RC.split?RC.with:null,img:RC.img,cat:RC.cat});
+  if(b)A[aid].hash=b.hash;BT=[];RC=null;closeSheet();location.hash='#/a/'+aid;toast('支払いと自分の支出を保存しました')}
+let confirmDup=0;
 
 render();
 </script>
