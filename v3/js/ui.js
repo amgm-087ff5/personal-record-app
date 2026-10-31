@@ -6,6 +6,7 @@
 /* ---------- アイコン(24グリッド、線2px。AndroidのVectorDrawableへ移せる) ---------- */
 const sv=(d,fill)=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true" fill="${fill?'currentColor':'none'}" stroke="${fill?'none':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const IC={
+  axis:sv('<path d="M6 2.5v19"/><rect x="3.5" y="4.5" width="5" height="5" rx="1.6" fill="currentColor"/><circle cx="6" cy="16" r="2.4"/><path d="M11.5 7h9M11.5 16h7"/>'),
   activity:sv('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
   schedule:sv('<rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'),
   todo:sv('<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="m8 12.5 3 3 5-6"/>'),
@@ -52,42 +53,81 @@ const fmtMDW=d=>`${fmtMD(d)}(${wdOf(d)})`;
 const relDay=d=>{const diff=Math.round((new Date(d+'T00:00')-new Date(TODAY+'T00:00'))/864e5);return {0:'今日',1:'明日','-1':'昨日',2:'明後日'}[diff]||fmtMDW(d)};
 
 /* ---------- 部品(HTML文字列を返す) ---------- */
-/** クラスの形の印。cls: activity|schedule|todo|entity|note|type|expense, icon: IC のキー */
-const glyph=(cls,icon=cls,size='')=>`<span class="g ${cls} ${size}">${IC[icon]||''}</span>`;
-/** エンティティのアバター(頭文字) */
-const avatar=(id,size='')=>{const e=E[id];return `<span class="av ${size}">${esc(e?e.i:'?')}</span>`};
-/** エンティティ参照。id があれば詳細へ、無ければ未登録(点線) */
-const eref=(id,name)=>id&&E[id]?`<a class="ref" href="#/e/${id}">${avatar(id)}${esc(E[id].n)}</a>`:`<span class="ref unreg">${esc(name||'未登録')}</span>`;
-/** アクティビティ参照 */
-const aref=id=>`<a class="ref act" href="#/a/${id}">${IC[ACT_IC[A[id].type]]||IC.activity}${esc(A[id].title||fmtMD(A[id].date))}</a>`;
-/** 種類・カテゴリなどの小さいタグ。opts:{color,cls,href} */
+const NOW='13:20'; /* モックの「いま」(2026-10-31 13:20) */
+/** 小さいアイコンの台。c: 色(CSS値) */
+const ico=(icon,c='var(--ink-2)')=>`<span class="ico" style="--ic:${c}">${IC[icon]||''}</span>`;
+
+/* ---- 縁(エンティティ) ---- */
+const ROOT_SHAPE={person:'person',place:'place',company:'org',thing:'thing',doc:'doc'};
+const ROOT_LABEL={person:'人物',place:'場所',company:'会社',thing:'物',doc:'書類'};
+const rootOf=id=>{const e=E[id];return e&&e.t&&e.t[0]?typeAnc(e.t[0])[0]:'thing'};
+const shapeOf=id=>ROOT_SHAPE[rootOf(id)]||'thing';
+const threadColor=id=>`var(--th-${shapeOf(id)})`;
+/** 縁の輪郭。人物=円 / 場所=ピン / 会社=建物 / 物=六角 / 書類=紙 */
+const knot=(id,size='')=>{const e=E[id];return `<span class="kn ${shapeOf(id)} ${id==='me'?'me':''} ${size}" title="${esc(e?e.n:'')}"><b>${esc(e?e.i:'?')}</b></span>`};
+const knots=ids=>ids.length?`<span class="knots">${ids.map(i=>knot(i,'sm')).join('')}</span>`:'';
+/** 名前つき参照。未登録は斜線 */
+const eref=(id,name)=>id&&E[id]?`<a class="ref" href="#/e/${id}">${knot(id)}${esc(E[id].n)}</a>`:`<span class="ref unreg">${esc(name||'未登録')}</span>`;
+const aref=id=>`<a class="ref" href="#/a/${id}" style="padding-left:10px">${IC[ACT_IC[A[id].type]]||IC.activity}${esc(A[id].title||fmtMD(A[id].date))}</a>`;
+/** 12週の出会い(週ごとの登場数) */
+function encStrip(id){
+  const end=new Date(TODAY+'T00:00');const c=Array(12).fill(0);
+  actsOf(id).forEach(([k,a])=>{const d=a.parent&&A[a.parent]?A[a.parent].date:a.date;if(!d)return;const w=Math.floor((end-new Date(d+'T00:00'))/(7*864e5));if(w>=0&&w<12)c[11-w]++});
+  return `<span class="enc" style="--kc:${threadColor(id)}" aria-label="最近12週の登場">${c.map(n=>`<i class="${n>=3?'h3':n==2?'h2':n==1?'h1':''}"></i>`).join('')}</span>`;
+}
+function lastMet(id){const ds=actsOf(id).map(([k,a])=>a.parent&&A[a.parent]?A[a.parent].date:a.date).filter(Boolean).sort();return ds.length?ds[ds.length-1]:null}
+const agoLabel=d=>{if(!d)return 'まだなし';const n=Math.round((new Date(TODAY+'T00:00')-new Date(d+'T00:00'))/864e5);return n===0?'今日':n===1?'昨日':n<7?`${n}日前`:n<35?`${Math.round(n/7)}週間前`:`${Math.round(n/30)}か月前`};
+
+/* ---- 時間軸 ---- */
+const AX_NODE={'支払い':['pay','pay'],'会話':['','talk'],'移動':['','move'],'出来事':['','activity'],'日記':['','diary']};
+/** 軸の1行。o:{href,time,node:{cls,icon},t,m,amt,cls,future} */
+const axRow=o=>{const tagN=o.href?'a':'div';return `<${tagN} class="ax-row ${o.cls||''} ${o.future?'future':''}" ${o.href?`href="${o.href}"`:''}><span class="ax-time">${o.time&&typeof o.time==='object'?`<b>${o.time.d}日</b><small>${esc(o.time.t||'')}</small>`:esc(o.time??'')}</span><span class="ax-node ${o.node&&o.node.cls||''}">${o.node&&IC[o.node.icon]||''}</span><span class="ax-c"><span class="main"><div class="t">${o.t}</div>${o.m?`<div class="m">${o.m}</div>`:''}</span>${o.amt?`<span class="amt">${o.amt}</span>`:''}${o.right||''}</span></${tagN}>`};
+const placeName=r=>r?(r[1]&&E[r[1]]?E[r[1]].n:r[2]):'';
+/** 記録(アクティビティ)の1行 */
+function momentRow(k,o={}){
+  const a=A[k];const [ncls,icon]=AX_NODE[a.type]||['','activity'];
+  const pl=(a.roles||[]).find(r=>['支払先','場所','到着'].includes(r[0]));
+  const ppl=(a.roles||[]).filter(r=>r[1]&&E[r[1]]&&r[1]!=='me'&&r[1]!==o.exclude&&!['支払先','場所','到着','出発'].includes(r[0])).map(r=>r[1]);
+  const x=a.x&&X[a.x];
+  const dd=a.parent&&A[a.parent]?A[a.parent].date:'';
+  return axRow({href:`#/a/${k}`,time:o.showDate&&dd?{d:+dd.slice(8),t:a.time}:a.time,node:{cls:ncls,icon},cls:o.cls,future:o.future,
+    t:esc(a.title),m:`${pl?`<span class="ell">${esc(placeName(pl))}</span>`:''}${knots(ppl)}`,
+    amt:a.amt!=null?`<b>${yen(a.amt)}</b>${x&&x.amt!==a.amt?`<small>自分 ${yen(x.amt)}</small>`:''}`:''});
+}
+/** 予定の1行(中抜き・点線)。late: いまより前で未記録 */
+function planRowAx(k,o={}){
+  const e=EV[k];const late=o.late;
+  return axRow({href:`#/ev/${k}`,time:e.all?'終日':e.s,node:{cls:'plan'+(late?' late':''),icon:'schedule'},cls:'plan',future:o.future,
+    t:esc(e.t),m:`${placeOf(e)?`<span class="ell">${esc(placeOf(e))}</span>`:''}${knots((e.who||[]).filter(i=>E[i]))}${late?'<span class="tag warn">記録にする?</span>':''}`,
+    amt:e.pay?`<b>${yen(e.pay.amt)}</b><small>支払い予定</small>`:''});
+}
+/** 日の区切り */
+function dayHead(d,o={}){
+  const w=new Date(d+'T00:00').getDay();const tagN=o.href?'a':'div';
+  return `<${tagN} class="dh" ${o.href?`href="${o.href}"`:''} ${o.future?'style="--rail-c:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)"':''}><span class="d ${w===0?'sun':w===6?'sat':''}"><b>${+d.slice(8)}</b><i>${d===TODAY?'今日':WD[w]+'曜'}</i></span><span class="tick ${d===TODAY?'today':''}"></span><span class="c"><span class="diary ${o.diary?'':'none'}">${o.diary?esc(o.diary):(o.empty||'日記なし')}</span>${o.sum?`<span class="sum">${o.sum}</span>`:''}</span></${tagN}>`;
+}
+const nowLine=()=>`<div class="now" aria-label="いま ${NOW}"><span class="tm">${NOW}</span><span class="dot"></span><span class="ln"><span>いま</span></span></div>`;
+const axEdge=(html,past)=>`<div class="ax-edge ${past?'past':''}"><span class="c">${html}</span></div>`;
+/** 詳細の主役: 軸上の点を大きくし、カードを掛ける */
+const focusRow=({time,node,card,plan})=>`<div class="ax-row focus ${plan?'plan future':''}"><span class="ax-time" style="padding-top:28px">${esc(time||'')}</span><span class="ax-node ${node.cls||''}">${IC[node.icon]||''}</span><div class="focus-card"><div class="mo-card">${card}</div></div></div>`;
+/** 割合の棒。segs:[{v,cls,label,href}] total */
+function splitBar(segs,total){
+  return `<div class="split"><div class="bar">${segs.map(s=>`<i class="${s.cls}" style="flex:${s.v}"></i>`).join('')}</div><div class="lg">${segs.map(s=>{const c={me:'var(--brand)',other:'var(--th-person)',owed:'var(--warn)',dim:'var(--axis)'}[s.cls];const inner=`${esc(s.label)} <b>${yen(s.v)}</b>`;return s.href?`<a class="lgl" href="${s.href}"><span style="--c:${c}">${inner}</span></a>`:`<span style="--c:${c}">${inner}</span>`}).join('')}</div></div>`;
+}
+
+/* ---- 汎用 ---- */
 const tag=(label,o={})=>{const inner=`${o.color?`<span class="dot" style="--cc:${o.color}"></span>`:''}${esc(label)}`;return o.href?`<a class="tag ${o.cls||''}" href="${o.href}">${inner}</a>`:`<span class="tag ${o.cls||''}">${inner}</span>`};
 const catTag=k=>tag(catPath(k),{color:catColor(k)});
-const typeTag=t=>tag(TYPES[t].n,{href:`#/entities?type=${t}`});
-/** セクション見出し。act: {label, href|onclick} */
 const sh=(title,n,act)=>`<div class="sh"><h2>${esc(title)}</h2>${n!=null&&n!==''?`<span class="n">${n}</span>`:''}${act?`<a class="act" ${act.href?`href="${act.href}"`:`href="javascript:void 0" onclick="${act.onclick}"`}>${act.icon?IC[act.icon]:''}${esc(act.label)}</a>`:''}</div>`;
-/** 角丸グループの一覧。rows は row()/prop() の配列 */
 const list=(rows,cls='')=>`<div class="list ${cls}">${rows.join('')}</div>`;
-/**
- * 行。o: {href|onclick, lead(HTML), t, s, v(右の値HTML), amt:true, chev:true, time}
- */
 const row=o=>{const tagN=o.href?'a':o.onclick?'button':'div';const attr=o.href?`href="${o.href}"`:o.onclick?`type="button" onclick="${o.onclick}"`:'';
   return `<${tagN} class="row ${o.cls||''}" ${attr}>${o.time!=null?`<span class="time num">${esc(o.time)}</span>`:''}${o.lead||''}<span class="grow"><div class="t ${o.wrap?'':'ell'}">${o.t}</div>${o.s?`<div class="s ell">${o.s}</div>`:''}</span>${o.v!=null?`<span class="v ${o.amt?'amt num':''}">${o.v}</span>`:''}${o.chev?`<span class="chev">${IC.chev}</span>`:''}</${tagN}>`};
-/** プロパティ行(ラベル | 値) */
 const prop=(k,val,meta)=>`<div class="prop"><span class="k">${esc(k)}</span><span class="val">${val}</span>${meta?`<span class="meta">${meta}</span>`:''}</div>`;
-/** タブ最上部: 大見出し + 右のアイコンボタン群 + 1行の数値 */
-const largeTitle=(title,{actions=[],metrics=[],mark}={})=>`<header class="lt">${mark?glyph(mark[0],mark[1]||mark[0],'lg'):''}<h1>${esc(title)}</h1>${actions.map(a=>`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>${metrics.length?`<nav class="metrics" aria-label="サマリ">${metrics.map(m=>`<a class="metric ${m.alert?'alert':''}" href="${m.href||'javascript:void 0'}" ${m.onclick?`onclick="${m.onclick}"`:''}><span>${esc(m.l)}</span><b class="num">${m.v}</b></a>`).join('')}</nav>`:''}`;
-/** 詳細画面の上部バー */
+const largeTitle=(title,{actions=[],metrics=[]}={})=>`<header class="lt"><h1>${esc(title)}</h1>${actions.map(a=>`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>${metrics.length?`<nav class="metrics" aria-label="サマリ">${metrics.map(m=>`<a class="metric ${m.alert?'alert':''}" href="${m.href||'javascript:void 0'}" ${m.onclick?`onclick="${m.onclick}"`:''}><span>${esc(m.l)}</span><b class="num">${m.v}</b></a>`).join('')}</nav>`:''}`;
 const appbar=(title='',{back=true,actions=[]}={})=>`<header class="appbar">${back?`<button class="iconbtn" type="button" aria-label="戻る" onclick="goBack()">${IC.back}</button>`:''}<div class="title">${esc(title)}</div>${actions.map(a=>`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>`;
-/** セグメント。items:[[value,label]], cur, onclick テンプレート(値は $v) */
 const seg=(items,cur,on)=>`<div class="seg" role="group">${items.map(([v,l])=>`<button type="button" aria-pressed="${v===cur}" onclick="${on.replace('$v',v)}">${esc(l)}</button>`).join('')}</div>`;
-/** チップ列。items:[[value,label,count]] */
 const chips=(items,cur,on)=>`<div class="chips" role="group">${items.map(([v,l,n])=>`<button class="chip" type="button" aria-pressed="${v===cur}" onclick="${on.replace('$v',v)}">${esc(l)}${n!=null?`<span class="n">${n}</span>`:''}</button>`).join('')}</div>`;
-/** 主役カード。cls はクラス名、kind は印+分類名 */
-const hero=(cls,{kind,title,big,sub=[]})=>`<section class="hero ${cls}"><div class="kind">${kind||''}</div>${title?`<h1>${title}</h1>`:''}${big?`<div class="big">${big}</div>`:''}${sub.length?`<div class="sub">${sub.map(s=>`<span>${s}</span>`).join('')}</div>`:''}</section>`;
-/** 親への参照(主役の上) */
-const parentLink=(href,label,name)=>`<a class="parent" href="${href}">${label} <b class="grow ell">${name}</b>${IC.chev}</a>`;
-const empty=(cls,icon,text,btn)=>`<div class="empty">${glyph(cls,icon,'lg')}<div>${text}</div>${btn?`<button class="btn sm tonal" type="button" onclick="${btn.onclick}">${esc(btn.label)}</button>`:''}</div>`;
+const empty=(icon,text,btn)=>`<div class="empty">${ico(icon)}<div>${text}</div>${btn?`<button class="btn sm tonal" type="button" onclick="${btn.onclick}">${esc(btn.label)}</button>`:''}</div>`;
 const banner=(kind,html)=>`<div class="banner ${kind}">${IC[kind==='warn'?'warn':'info']}<div class="grow">${html}</div></div>`;
 const suggest=(text,btn)=>`<div class="suggest"><span class="t">${text}</span><button class="btn sm" type="button" onclick="${btn.onclick}">${esc(btn.label)}</button></div>`;
 const toggle=(on,onclick)=>`<button class="toggle" type="button" role="switch" aria-checked="${!!on}" onclick="${onclick}"></button>`;
@@ -120,10 +160,10 @@ addEventListener('scroll',()=>{const b=document.querySelector('.appbar');if(b)b.
 
 /* ---------- 下部ナビ ---------- */
 const TABS=[
-  ['activities','記録','activity'],
+  ['activities','タイムライン','axis'],
   ['plan','予定','schedule'],
   null,
-  ['entities','人・場所','entity'],
+  ['entities','人・場所','people'],
   ['ledger','家計簿','ledger'],
 ];
 const navBadge=k=>k==='plan'?(typeof overdueCount==='function'?overdueCount():0):0;
@@ -166,7 +206,7 @@ function openCreate(){
   const tab=lastTab;
   const items=[...CREATE].sort((a,b)=>(b.primaryOn||[]).includes(tab)-(a.primaryOn||[]).includes(tab));
   const [first,...rest]=items;
-  const act=(c,primary)=>`<button class="action ${primary?'primary':''}" type="button" onclick="closeSheet();setTimeout(()=>{${c.onclick}},120)">${glyph(c.cls,c.icon)}<span class="grow"><div class="t">${esc(c.label)}</div>${c.sub?`<div class="s">${esc(c.sub)}</div>`:''}</span></button>`;
+  const act=(c,primary)=>`<button class="action ${primary?'primary':''}" type="button" onclick="closeSheet();setTimeout(()=>{${c.onclick}},120)">${ico(c.icon,c.color||'var(--brand)')}<span class="grow"><div class="t">${esc(c.label)}</div>${c.sub?`<div class="s">${esc(c.sub)}</div>`:''}</span></button>`;
   openSheet({title:'作成',body:`<div class="actions">${first?act(first,true):''}${rest.map(c=>act(c)).join('')}</div>`});
 }
 
@@ -192,29 +232,3 @@ function openAbout(){
 function setTheme(v){if(v)document.documentElement.dataset.theme=v;else delete document.documentElement.dataset.theme;try{localStorage.setItem('prmock-theme',v)}catch(e){}}
 try{const t=localStorage.getItem('prmock-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}
 
-/* =====================================================================
-   形の言語ヘルパー(css の Form language と対)
-   ===================================================================== */
-const calMini=d=>{const w=new Date(d+'T00:00').getDay();return `<span class="cal ${w===0?'sun':w===6?'sat':''}"><i>${WD[w]}</i><b>${+d.slice(8)}</b></span>`};
-/** カプセル(時間に掛かった出来事)。o:{cls:'plan'等, kind, title, big, sub[]} */
-const capsule=o=>`<section class="cap ${o.cls||''}">${o.kind?`<div class="kind">${o.kind}</div>`:''}${o.title?`<h1>${o.title}</h1>`:''}${o.big?`<div class="big">${o.big}</div>`:''}${o.sub&&o.sub.length?`<div class="sub">${o.sub.map(x=>`<span>${x}</span>`).join('')}</div>`:''}</section>`;
-/** TLの切り取り: その日の時間軸の中に主役を置く。前後の出来事を薄く表示し、たどれる。
-    items: [{time,title,href,icon}]、cur: 主役のHTML、dayDate/dayHref: 上端の日付、future: 予定(点線の軸)、now: 現在線を入れる時刻 */
-function tlSlice({dayDate,dayHref,before=[],after=[],cur,future,nodeColor,more}){
-  const it=x=>`<a class="tl-item" href="${x.href}"><span class="node"></span><span class="time">${esc(x.time||'')}</span><span class="t">${esc(x.title)}</span></a>`;
-  return `<div class="tl ${future?'future':''}">${dayDate?`<a class="tl-item tl-day" href="${dayHref||'#'}">${calMini(dayDate)}<span class="t" style="padding-left:0">${fmtMDW(dayDate)}${dayHref?'の日記':''}</span>${dayHref?IC.chev:''}</a>`:''}${before.map(it).join('')}<div class="tl-cur"><span class="node" style="${nodeColor?`--nc:${nodeColor}`:''}"></span>${cur}</div>${after.map(it).join('')}${more?`<div class="tl-item"><span class="t">${more}</span></div>`:''}</div>`;
-}
-/** 子を └ で下にぶら下げる */
-const hang=html=>`<div class="hang">${html}</div>`;
-/** チケット。o:{href, stub(HTML), t, s, v, hero:true, big} */
-const ticket=o=>{const tagN=o.href?'a':'div';return `<${tagN} class="tk ${o.hero?'hero':''}" ${o.href?`href="${o.href}"`:''} ${o.style?`style="${o.style}"`:''}><div class="tk-in"><div class="tk-stub">${o.stub||''}</div><div class="tk-main">${o.hero?`${o.kind?`<div class="s" style="display:flex;gap:6px;align-items:center;color:var(--c-expense)">${o.kind}</div>`:''}<div class="big">${o.big}</div>${o.s?`<div class="s">${o.s}</div>`:''}`:`<span class="grow"><div class="t ell">${o.t}</div>${o.s?`<div class="s ell">${o.s}</div>`:''}</span>${o.v!=null?`<span class="v">${o.v}</span>`:''}`}</div></div></${tagN}>`};
-/** 日めくりの1枚(日記) */
-const calSheet=(d,body,extra='')=>{const w=new Date(d+'T00:00').getDay();return `<section class="cs"><div class="cs-bind">${'<i></i>'.repeat(5)}</div><div class="cs-head"><span class="d ${w===0?'sun':w===6?'sat':''}">${+d.slice(8)}</span><span class="m">${WD[w]}曜日<small>${d.slice(0,4)}年${+d.slice(5,7)}月</small></span>${extra}</div><div class="cs-body ${body?'':'none'}">${body||'まだ書いていません'}</div></section>`};
-/** フォルダ(エンティティ)。tab: タブの中身、body: 中身 */
-const folder=(tab,body,o={})=>{const tagN=o.href?'a':'div';return `<${tagN} class="fd" ${o.href?`href="${o.href}"`:''}><div class="fd-tab">${tab}</div><div class="fd-body">${body}</div></${tagN}>`};
-/** 紙(ノート) */
-const paper=(head,body,o={})=>{const tagN=o.href?'a':'div';return `<div class="pp-wrap"><${tagN} class="pp" ${o.href?`href="${o.href}"`:''}>${head?`<div class="pp-head">${head}</div>`:''}${body!=null?`<div class="pp-body">${body}</div>`:''}</${tagN}></div>`};
-/** チェック欄の帯(ToDo)。o:{done, onclick(チェック), href, body, hero} */
-const strip=o=>{const tagN=o.href?'a':'div';return `<${tagN} class="st ${o.hero?'hero':''} ${o.done?'done':''}" ${o.href?`href="${o.href}"`:''}><span class="st-band">${checkbox(o.done,o.onclick,o.hero)}</span><span class="st-main">${o.body}</span></${tagN}>`};
-/** 値札(種類) */
-const ptag=(label,href)=>href?`<a class="ptag" href="${href}">${esc(label)}</a>`:`<span class="ptag">${esc(label)}</span>`;

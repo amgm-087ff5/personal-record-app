@@ -1,215 +1,157 @@
 /* =====================================================================
-   人・場所タブ — 一覧・詳細・ノート・種類の管理
-   ルート: #/entities(?type=) , #/e/{id} , #/n/{id} , #/notes , #/types
+   人・場所(縁) — 時間をまたいで続くもの。
+   一覧 = 最近いつ交わったか / 詳細 = その縁の糸で切り取った時間軸
+   ルート: #/entities , #/e/{id} , #/n/{id}(メモ) , #/types(種類)
    ===================================================================== */
+document.head.insertAdjacentHTML('beforeend',`<style>
+.en-search{margin:0 var(--gutter) 12px;position:relative}
+.en-search svg.i{position:absolute;left:12px;top:14px;color:var(--ink-3)}
+.en-search input{padding-left:40px}
+.en-row .r{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none}
+.en-row .r small{font:var(--t-cap);color:var(--ink-3)}
+.en-memo{margin:12px var(--gutter) 0;padding:14px 16px 14px 18px;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1),var(--hl);position:relative;display:block}
+.en-memo::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:var(--tc)}
+.en-memo .h{display:flex;align-items:center;gap:6px;font:var(--t-label);color:var(--ink-2)}
+.en-memo .h svg.i{width:16px;height:16px}
+.en-memo p{margin-top:6px;font:var(--t-body);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.en-doc{margin:4px var(--gutter) 0;padding:20px 20px 24px 22px;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e2),var(--hl);position:relative}
+.en-doc::before{content:"";position:absolute;left:0;top:20px;bottom:20px;width:3px;border-radius:0 3px 3px 0;background:var(--tc)}
+.en-doc h1{font:var(--t-title)} .en-doc .meta{font:var(--t-cap);color:var(--ink-3);margin-top:4px}
+.en-doc h3{font:600 14px/1.4 var(--font);color:var(--ink-2);margin-top:22px}
+.en-doc p{font:400 16px/1.9 var(--font);margin-top:6px}
+.en-doc .ref{vertical-align:middle;margin:0 2px}
+.en-tree .row{padding-left:calc(10px + var(--d,0)*22px)}
+.en-tree .row .lv{position:absolute;left:calc(10px + (var(--d,0) - 1)*22px + 13px);top:0;bottom:0;width:2px;background:var(--line)}
+.en-tree .row+.row::before{left:calc(10px + var(--d,0)*22px)}
+.en-tg{width:28px;height:28px;display:grid;place-items:center;color:var(--ink-3);flex:none}
+.en-tg svg.i{width:16px;height:16px}
+.en-dot{width:10px;height:10px;border-radius:3px;background:var(--line-strong);flex:none;margin:0 6px}
+</style>`);
 
-(function(){
-  if(document.getElementById('en-style'))return;
-  document.head.insertAdjacentHTML('beforeend',`<style id="en-style">
-  .en-search{position:relative;margin:0 var(--gutter) 12px}
-  .en-search svg.i{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--ink-3);pointer-events:none}
-  .en-search .input{padding-left:42px}
-  .en-dis{padding-bottom:8px}
-  .en-hrow{display:flex;align-items:center;gap:14px;min-width:0}
-  .en-hname{min-width:0;overflow-wrap:anywhere}
-  .en-fx{position:relative}
-  .en-fx::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--line)}
-  .list>.en-fx:first-child::before{display:none}
-  .en-hbtn{min-height:44px;margin-right:-6px;padding:0 6px;font:var(--t-cap);color:var(--brand);white-space:nowrap}
-  .en-hist{padding:0 14px 12px 110px;font:var(--t-cap);color:var(--ink-3)}
-  .en-hist>div{display:flex;justify-content:space-between;gap:12px;padding:2px 0}
-  .en-hist>div>span:first-child{color:var(--ink-2)}
-  .en-p{padding:14px;font:var(--t-body);line-height:1.8}
-  .en-tr{min-height:0;padding-top:6px;padding-bottom:6px}
-  .en-tr+.en-tr::before{left:14px}
-  .en-tr.en-first::before{display:none}
-  .en-lead{display:flex;align-items:center;align-self:stretch;margin:-6px 0}
-  .en-ind{align-self:stretch;flex:none;width:calc(var(--d,0)*20px);background:repeating-linear-gradient(to right,transparent 0 9px,var(--line-strong) 9px 10px,transparent 10px 20px)}
-  .en-ph{width:44px;height:44px;flex:none}
-  </style>`);
-})();
-
-let enIdx={};
-const enFlipped=new Set();
 const enRoots=()=>Object.keys(TYPES).filter(k=>!TYPES[k].p);
 const enAll=()=>Object.entries(E).filter(([k])=>k!=='me');
 const enCount=t=>enAll().filter(([k,e])=>e.t.some(x=>isUnder(x,t))).length;
 const enTypePath=t=>typeAnc(t).map(a=>TYPES[a].n).join(' › ');
-/** k と、その下にある種類すべて */
 const enDesc=k=>{const r=[k];let grew=true;while(grew){grew=false;Object.keys(TYPES).forEach(c=>{if(!r.includes(c)&&r.includes(TYPES[c].p)){r.push(c);grew=true}})}return r};
-const enEmptyList=text=>list([row({t:`<span class="muted">${text}</span>`})]);
+let enKind='all';
 
-/* ---------- 検索(再描画せず表示を切り替える) ---------- */
-function enFilter(v){
-  const q=v.trim().toLowerCase();let total=0;
-  document.querySelectorAll('.en-grp').forEach(g=>{
-    let first=true,n=0;
-    g.querySelectorAll('.en-row').forEach(el=>{
-      const id=el.getAttribute('href').slice(4);
-      const hit=!q||(enIdx[id]||'').includes(q);
-      el.style.display=hit?'':'none';
-      el.classList.toggle('en-first',hit&&first);
-      if(hit){first=false;n++}
-    });
-    g.style.display=n?'':'none';
-    const c=g.querySelector('.sh .n');if(c)c.textContent=n;
-    total+=n;
-  });
-  const none=document.getElementById('en-none');if(none)none.hidden=total>0;
-}
+/** 種類のパンくず(1番目の種類の祖先)+ほかの種類 */
+const crumb=id=>{const e=E[id];const [t,...rest]=e.t;return typeAnc(t).map(a=>`<a href="#/types">${esc(TYPES[a].n)}</a>`).join('<span class="sep">›</span>')+(rest.length?`<span class="also">ほか ${rest.map(r=>esc(TYPES[r].n)).join('・')}</span>`:'')};
 
-/* ---------- 詳細の折りたたみ ---------- */
-function enHist(b){const h=b.closest('.en-fx').querySelector('.en-hist');h.hidden=!h.hidden;b.setAttribute('aria-expanded',String(!h.hidden))}
-function enMore(b){const r=b.previousElementSibling;r.hidden=!r.hidden;b.textContent=r.hidden?`その他 ${b.dataset.n}件`:'閉じる'}
-function enMenu(){
-  openSheet({title:'操作',body:list([
-    row({lead:glyph('type'),t:'種類の管理',onclick:"closeSheet();go('#/types')",chev:true}),
-    row({lead:glyph('entity','edit'),t:'名前や事実を編集',onclick:"closeSheet();toast('編集はモックでは未対応です')"})])});
-}
-
-/* ---------- 一覧 ---------- */
-route('entities',(id,q)=>{
+/* ---------- 一覧: 最近いつ交わったか ---------- */
+route('entities',()=>{
   const all=enAll();
-  const qt=q.type&&TYPES[q.type]?q.type:'';
-  const root=qt?typeAnc(qt)[0]:'';
-  const roots=enRoots();
-  const shown=qt?all.filter(([k,e])=>e.t.some(x=>isUnder(x,qt))):all;
-  const groups={};
-  shown.forEach(([k,e])=>{const r=typeAnc(e.t[0])[0];(groups[r]=groups[r]||[]).push([k,e])});
-  enIdx={};
-  shown.forEach(([k,e])=>{enIdx[k]=[e.n,...e.t.map(enTypePath)].join(' ').toLowerCase()});
-  const rowFor=([k,e])=>{const more=e.t.length-1;const path=enTypePath(e.t[0])+(more>0?` ほか ${more}`:'');
-    return row({cls:'en-tr en-row',href:'#/e/'+k,lead:avatar(k),t:esc(e.n),s:esc(path),v:actsOf(k).length?`<span class="faint">記録 ${actsOf(k).length}</span>`:'',chev:true})};
-  const items=[['','すべて',all.length],...roots.filter(r=>enCount(r)>0).map(r=>[r,TYPES[r].n,enCount(r)])];
-  const body=roots.filter(r=>groups[r]).map(r=>`<div class="en-grp">${sh(TYPES[r].n,groups[r].length)}${list(groups[r].map(rowFor))}</div>`).join('');
-  return largeTitle('人・場所',{actions:[{icon:'note',label:'ノート一覧',onclick:"go('#/notes')"},{icon:'type',label:'種類の管理',onclick:"go('#/types')"}]})
-    +(qt&&qt!==root?`<div class="chips en-dis" role="group"><button class="chip" type="button" aria-pressed="true" onclick="go('#/entities?type=${root}')">種類: ${esc(TYPES[qt].n)} ×</button></div>`:'')
-    +chips(items,root,"go('#/entities?type=$v')")
-    +`<div class="en-search">${IC.search}<input class="input" id="en-q" type="search" placeholder="名前や種類で探す" aria-label="名前や種類で探す" oninput="enFilter(this.value)"></div>`
-    +body
-    +`<div class="hint" id="en-none" ${shown.length?'hidden':''} style="text-align:center;padding:24px 0">該当する人・場所はありません</div>`;
+  const kinds=[['all','すべて',all.length],...enRoots().map(r=>[r,ROOT_LABEL[r]||TYPES[r].n,enCount(r)]).filter(k=>k[2])];
+  const shown=all.filter(([k,e])=>enKind==='all'||e.t.some(t=>isUnder(t,enKind)))
+    .map(([k,e])=>[k,e,lastMet(k)]).sort((a,b)=>(b[2]||'').localeCompare(a[2]||'')||a[1].n.localeCompare(b[1].n));
+  const age=d=>{if(!d)return 3;const n=(new Date(TODAY+'T00:00')-new Date(d+'T00:00'))/864e5;return n<=7?0:n<=31?1:2};
+  const groups=[['この1週間に交わった',0],['この1か月',1],['それより前',2],['まだ記録なし',3]];
+  const rowOf=([k,e,d])=>row({href:'#/e/'+k,cls:'en-row',lead:knot(k),t:esc(e.n),s:esc(enTypePath(e.t[0])),
+    v:`<span class="r">${encStrip(k)}<small>${agoLabel(d)}</small></span>`});
+  return largeTitle('人・場所',{actions:[{icon:'type',label:'種類',onclick:"go('#/types')"}]})
+    +`<div class="en-search">${IC.search}<input class="input" type="search" placeholder="名前で探す" aria-label="名前で探す" oninput="enFilter(this.value)"></div>`
+    +chips(kinds,enKind,"enKind='$v';rerender()")
+    +`<div id="en-groups">${groups.map(([label,g])=>{const rs=shown.filter(x=>age(x[2])===g);return rs.length?`<div class="en-g">${sh(label,rs.length)}${list(rs.map(rowOf))}</div>`:''}).join('')}</div>`;
 },{tab:'entities'});
+function enFilter(v){
+  v=v.trim();document.querySelectorAll('#en-groups .en-g').forEach(g=>{let n=0;g.querySelectorAll('.row').forEach(r=>{const hit=!v||r.querySelector('.t').textContent.includes(v);r.hidden=!hit;if(hit)n++});g.hidden=!n});
+}
 
-/* ---------- 詳細 ---------- */
+/* ---------- 詳細: その縁の糸 ---------- */
+/** 事実・関係の変化を時間軸上の点にする */
+function factEvents(id){
+  const e=E[id];const out=[];
+  const since=s=>{const m=(s||'').match(/(\d{4}-\d{2})〜/);return m?m[1]:null};
+  (e.facts||[]).forEach(f=>{if(!f.hist)return;
+    const chain=[[f.v,since(f.ver)],...f.hist.map(h=>[h[0],since(h[1])])];
+    for(let i=0;i<chain.length-1;i++){const [nv,when]=chain[i];const [ov]=chain[i+1];const reason=f.hist[i]&&f.hist[i][2];
+      if(when)out.push({ym:when,t:`${esc(f.k)}が変わった`,m:`<span class="ell">${esc(ov)} → ${esc(nv)}${reason?`(${esc(reason)})`:''}</span>`})}
+  });
+  relsOf(id).forEach(([rel,other,period])=>{const m=(period||'').match(/(\d{4}-\d{2})/);if(m)out.push({ym:m[1],t:`${esc(rel)}: ${esc(E[other].n)}`,m:`${knot(other,'sm')}<span class="ell">関係が始まった</span>`})});
+  return out;
+}
+function monthHead(ym){return `<div class="dh"><span class="d"><b>${+ym.slice(5)}<small style="font-size:12px;font-weight:600">月</small></b><i>${ym.slice(0,4)}</i></span><span class="tick" style="background:var(--axis-past)"></span><span class="c"></span></div>`}
 route('e',id=>{
-  const e=E[id];if(!e)return appbar('')+empty('entity','entity','この人・場所は見つかりません');
+  const e=E[id];if(!e)return appbar('')+empty('people','この人・場所は見つかりません');
+  const tc=threadColor(id);
+  const acts=actsOf(id).map(([k,a,role])=>({k,a,role,d:a.parent&&A[a.parent]?A[a.parent].date:null})).filter(x=>x.d).sort((x,y)=>(y.d+y.a.time).localeCompare(x.d+x.a.time));
+  const plans=Object.entries(EV).filter(([k,ev])=>!ev.rec&&!ev.hol&&ev.d>=TODAY&&((ev.who||[]).includes(id)||(ev.place&&ev.place[0]===id))).sort((a,b)=>b[1].d.localeCompare(a[1].d));
+  const yearN=acts.filter(x=>x.d.startsWith(TODAY.slice(0,4))).length;
+  const money=acts.filter(x=>x.a.type==='支払い').reduce((s,x)=>s+(x.a.x&&X[x.a.x]?X[x.a.x].amt:0),0);
+  const owed=Object.values(A).filter(a=>a.adv&&a.adv[0]===id&&a.adv[2]==='未精算').reduce((s,a)=>s+a.adv[1],0);
+  const facts=(e.facts||[]).filter(f=>!f.rare),rare=(e.facts||[]).filter(f=>f.rare);
+  const since=f=>{const m=(f.ver||'').match(/(\d{4})-(\d{2})〜/);return m?`${m[1]}年${+m[2]}月から`:''};
+  const dl=facts.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}${since(f)?`<span class="since">${since(f)}</span>`:''}</dd>`).join('')
+    +relsOf(id).map(([rel,other,period])=>`<dt>${esc(rel)}</dt><dd>${eref(other)}${period?`<span class="since">${esc(period.replace(/(\d{4})-(\d{2})〜/,(m,y,mo)=>`${y}年${+mo}月から`))}</span>`:''}</dd>`).join('');
+  /* 糸の時間軸: 予定(点線) → いま → 出会い・事実の変化を新しい順に。月ごとに区切る */
+  const evs=[...acts.map(x=>({key:x.d+' '+(x.a.time||''),ym:x.d.slice(0,7),html:momentRow(x.k,{exclude:id,showDate:true})})),
+    ...factEvents(id).map(f=>({key:f.ym+'-00',ym:f.ym,html:axRow({time:'',node:{cls:'fact'},t:f.t,m:f.m})}))].sort((a,b)=>b.key.localeCompare(a.key));
+  let lastYm='';const body=evs.map(ev=>{let h='';if(ev.ym!==lastYm){lastYm=ev.ym;h=monthHead(ev.ym)}return h+ev.html}).join('');
   const note=NOTES[id];
-  const facts=e.facts||[];
-  const fact=f=>{const hist=f.hist||[];
-    return `<div class="en-fx">${prop(f.k,esc(f.v),hist.length?`<button class="en-hbtn" type="button" aria-expanded="false" onclick="enHist(this)">履歴 ${hist.length}</button>`:'')}${hist.length?`<div class="en-hist" hidden>${hist.map(h=>`<div><span>${esc(h[0])}</span><span>${esc(h[1])}${h[2]?` · ${esc(h[2])}`:''}</span></div>`).join('')}</div>`:''}</div>`};
-  const main=facts.filter(f=>!f.rare),rare=facts.filter(f=>f.rare);
-  const factRows=main.map(fact).join('')+(rare.length?`<div class="en-rare" hidden>${rare.map(fact).join('')}</div><button class="more" type="button" data-n="${rare.length}" onclick="enMore(this)">その他 ${rare.length}件</button>`:'');
-  const rels=relsOf(id);
-  const actKey=a=>(A[a.parent]?A[a.parent].date:'')+' '+(a.time||'');
-  const acts=actsOf(id).sort((x,y)=>actKey(y[1]).localeCompare(actKey(x[1])));
-  const evs=Object.entries(EV).filter(([k,ev])=>(ev.who||[]).includes(id)||(ev.place&&ev.place[0]===id)).sort((x,y)=>x[1].d.localeCompare(y[1].d));
-  const tds=Object.entries(TD).filter(([k,t])=>(t.ent||[]).includes(id));
-  const noteRow=note
-    ?row({href:'#/n/'+id,lead:glyph('note'),t:esc(note.body[0]?note.body[0][0]:'ノート'),s:`更新 ${esc(note.upd)}`,chev:true})
-    :row({onclick:`enNewNote('${id}')`,lead:glyph('note'),t:'ノートを書く',s:'まだ書いていません',chev:true});
-  const actRows=acts.map(([k,a,role])=>{const d=A[a.parent]?A[a.parent].date:'';
-    return row({href:'#/a/'+k,lead:glyph('activity',ACT_IC[a.type]||'activity'),t:esc(a.title),s:`${d?fmtMD(d)+' ':''}${esc(role)}`,v:a.type==='支払い'&&a.amt!=null?yen(a.amt):undefined,amt:true,chev:true})});
-  const evRows=evs.map(([k,ev])=>row({href:'#/ev/'+k,lead:glyph('schedule'),t:esc(ev.t),s:`${fmtMDW(ev.d)}${ev.all?' 終日':' '+esc(ev.s)}`,chev:true}));
-  const todoRows=tds.map(([k,t])=>row({lead:checkbox(!!t.done,`if(typeof toggleTask==='function')toggleTask('${k}')`),t:esc(t.t),s:t.due?fmtMDW(t.due):''}));
-  return appbar('',{actions:[{icon:'more',label:'その他の操作',onclick:'enMenu()'}]})
-    +hero('entity',{kind:`${glyph('entity')}エンティティ`,title:`<span class="en-hrow">${avatar(id,'xl')}<span class="en-hname">${esc(e.n)}</span></span>`,sub:e.t.map(t=>typeTag(t))})
-    +sh('事実',facts.length)+list([factRows||row({t:'<span class="muted">まだありません</span>'})])
-    +sh('関係',rels.length)+(rels.length?list(rels.map(r=>prop(r[0],eref(r[1]),esc(r[2])))):enEmptyList('関係はまだありません'))
-    +sh('ノート')+list([noteRow])
-    +sh('登場する記録',acts.length)+(acts.length?list(actRows):enEmptyList('まだありません'))
-    +sh('予定',evs.length)+(evs.length?list(evRows):enEmptyList('予定はありません'))
-    +sh('ToDo',tds.length)+(tds.length?list(todoRows):enEmptyList('ToDoはありません'));
+  return appbar('',{actions:[{icon:'more',label:'その他の操作',onclick:"toast('編集はモックでは未対応です')"}]})
+    +`<section class="eh">${knot(id,'lg')}<div class="grow" style="min-width:0"><h1>${esc(e.n)}</h1><div class="crumb">${crumb(id)}</div></div></section>`
+    +`<div class="stats"><div><b>${agoLabel(lastMet(id))}</b><span>最後に交わった</span></div><div><b>${yearN}回</b><span>今年</span></div>${money?`<div><b>${yen(money)}</b><span>${rootOf(id)==='person'?'一緒の時の自分の支出':'ここでの自分の支出'}</span></div>`:''}${owed?`<div><b style="color:var(--warn)">${yen(owed)}</b><span>立替・未精算</span></div>`:''}</div>`
+    +(dl?`<dl class="facts">${dl}</dl>`:'')
+    +(rare.length?`<details class="list mt" style="overflow:hidden"><summary class="more" style="border:0;list-style:none;cursor:pointer">ほかの情報 ${rare.length}件</summary><dl class="facts" style="margin:0;box-shadow:none;border-radius:0;border-top:1px solid var(--line)">${rare.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}</dd>`).join('')}</dl></details>`:'')
+    +(note?`<a class="en-memo" href="#/n/${id}" style="--tc:${tc}"><span class="h">${IC.note}メモ<span class="grow"></span><span class="faint">更新 ${esc(note.upd)}</span></span><p>${esc((note.body[0]?note.body[0][1]:'').replace(/\{[ea]:\w+\}/g,''))}</p></a>`
+      :`<a class="en-memo" href="javascript:void 0" onclick="enNewNote('${id}')" style="--tc:${tc}"><span class="h">${IC.note}メモを書く</span></a>`)
+    +sh('この縁の時間軸',acts.length?`交わった ${acts.length}回`:'')
+    +`<div class="ax thread" style="--tc:${tc}">`
+    +(plans.length?plans.map(([k])=>planRowAx(k,{future:true})).join('')+nowLine():'')
+    +(body||axEdge('まだ記録はありません',true))
+    +(body?axEdge('これより前の記録はありません',true):'')
+    +`</div>`;
 },{tab:'entities'});
 
-/* ---------- ノート ---------- */
-function enNewNote(id){
-  const d=new Date();
-  NOTES[id]={upd:`${TODAY.slice(5).replace('-','/')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`,ver:1,body:[],subs:[]};
-  save();go('#/n/'+id);
-}
+/* ---------- メモ: 縁に綴じた文章 ---------- */
+function enNewNote(id){NOTES[id]={upd:`${+TODAY.slice(5,7)}/${+TODAY.slice(8)} ${NOW}`,ver:1,body:[],subs:[]};save();go('#/n/'+id)}
 route('n',id=>{
-  const e=E[id];if(!e)return appbar('')+empty('note','note','このノートは見つかりません');
+  const e=E[id];if(!e)return appbar('')+empty('note','このメモは見つかりません');
   const note=NOTES[id];
-  if(!note)return appbar('')+parentLink('#/e/'+id,avatar(id,'sm'),esc(e.n))+empty('note','note','まだノートはありません',{label:'ノートを書く',onclick:`enNewNote('${id}')`});
   const rich=s=>esc(s).replace(/\{e:(\w+)\}/g,(_,k)=>eref(k)).replace(/\{a:(\w+)\}/g,(_,k)=>aref(k));
-  const bodyHtml=note.body.length
-    ?note.body.map(([h,s])=>sh(h)+list([`<p class="en-p">${rich(s)}</p>`])).join('')
-    :enEmptyList('本文はまだありません');
-  return appbar('')
-    +parentLink('#/e/'+id,avatar(id,'sm'),esc(e.n))
-    +hero('note',{kind:`${glyph('note')}ノート`,title:`${esc(e.n)}のノート`,sub:[`更新 ${esc(note.upd)}`,`版 ${note.ver}`]})
-    +bodyHtml
-    +sh('サブページ',note.subs.length)
-    +(note.subs.length?list(note.subs.map(([s,m])=>row({lead:glyph('note'),t:esc(s),v:`<span class="faint">${esc(m)}</span>`}))):enEmptyList('サブページはありません'));
+  return appbar('',{actions:[{icon:'edit',label:'メモを編集',onclick:"toast('編集はモックでは未対応です')"}]})
+    +`<a class="parent" href="#/e/${id}">${knot(id,'sm')}<b class="grow ell">${esc(e.n)}</b>${IC.chev}</a>`
+    +`<article class="en-doc" style="--tc:${threadColor(id)}"><h1>${esc(e.n)}のメモ</h1><div class="meta">${note?`更新 ${esc(note.upd)}、${note.ver}版目`:'まだ書いていません'}</div>`
+    +(note&&note.body.length?note.body.map(([h,s])=>`<h3>${esc(h)}</h3><p>${rich(s)}</p>`).join(''):`<p class="faint">本文はまだありません</p>`)
+    +`</article>`
+    +(note&&note.subs.length?sh('サブページ',note.subs.length)+list(note.subs.map(([s,m])=>row({lead:ico('note'),t:esc(s),v:`<span class="faint">${esc(m)}</span>`,chev:1}))):'');
 },{tab:'entities'});
 
-route('notes',()=>{
-  const ids=Object.keys(NOTES);
-  return appbar('ノート')
-    +(ids.length
-      ?list(ids.map(k=>row({href:'#/n/'+k,lead:glyph('note'),t:esc(E[k]?E[k].n:k),s:esc(NOTES[k].body[0]?NOTES[k].body[0][1]:'本文はまだありません'),chev:true})))
-      :empty('note','note','ノートはまだありません'));
-},{tab:'entities'});
-
-/* ---------- 種類の管理 ---------- */
-function enParentSelect(k,cur){
-  const ban=k?enDesc(k):[];
-  return `<select id="en-p"><option value="">(なし・いちばん上)</option>${Object.keys(TYPES).filter(c=>!ban.includes(c)).map(c=>`<option value="${c}" ${c===cur?'selected':''}>${enTypePath(c)}</option>`).join('')}</select>`;
-}
+/* ---------- 種類: 縁の分類(木)。根の種類が輪郭を決める ---------- */
+const enFlipped=new Set();
 function enTreeRows(){
   const out=[];
   const walk=(k,d)=>{
     const kids=Object.keys(TYPES).filter(c=>TYPES[c].p===k);
     const open=(d<2)!==enFlipped.has(k);
     const props=propsOf(k).map(p=>p[0]).join('・')||'なし';
-    const toggle=kids.length
-      ?`<span class="iconbtn en-tg" role="button" aria-label="${open?'閉じる':'開く'}" onclick="event.stopPropagation();enToggle('${k}')">${open?IC.down:IC.chev}</span>`
-      :'<span class="en-ph"></span>';
-    out.push(row({cls:'en-tr',onclick:`enEditType('${k}')`,lead:`<span class="en-lead" style="--d:${d}"><span class="en-ind"></span>${toggle}${glyph('type')}</span>`,t:esc(TYPES[k].n),s:`項目: ${esc(props)}`,v:`${enCount(k)}件`}));
+    const root=typeAnc(k)[0];
+    const lead=`${d?'<span class="lv"></span>':''}${kids.length?`<span class="en-tg" role="button" aria-label="${open?'閉じる':'開く'}" onclick="event.stopPropagation();enToggle('${k}')">${open?IC.down:IC.chev}</span>`:'<span class="en-tg"></span>'}${d===0?`<span class="kn sm ${ROOT_SHAPE[root]||'thing'}"><b>${esc(TYPES[k].n[0])}</b></span>`:'<span class="en-dot"></span>'}`;
+    out.push(`<button type="button" class="row" style="--d:${d}" onclick="enEditType('${k}')">${lead}<span class="grow"><div class="t ell">${esc(TYPES[k].n)}</div><div class="s ell">項目 ${esc(props)}</div></span><span class="v faint">${enCount(k)}</span></button>`);
     if(open)kids.forEach(c=>walk(c,d+1));
   };
   enRoots().forEach(r=>walk(r,0));
   return out;
 }
 function enToggle(k){enFlipped.has(k)?enFlipped.delete(k):enFlipped.add(k);rerender()}
-
-route('types',()=>
-  appbar('種類',{actions:[{icon:'plus',label:'種類を作成',onclick:'enNewType()'}]})
-  +sh('種類',Object.keys(TYPES).length)
-  +list(enTreeRows()),
-{tab:'entities'});
-
+route('types',()=>appbar('種類',{actions:[{icon:'plus',label:'種類を作成',onclick:'enNewType()'}]})+list(enTreeRows(),'en-tree mt'),{tab:'entities'});
+function enParentSelect(k,cur){const ban=k?enDesc(k):[];return `<select id="en-p"><option value="">いちばん上(輪郭を決める)</option>${Object.keys(TYPES).filter(c=>!ban.includes(c)).map(c=>`<option value="${c}" ${c===cur?'selected':''}>${esc(enTypePath(c))}</option>`).join('')}</select>`}
 function enEditType(k){
-  const t=TYPES[k];const own=TYPE_PROPS[k]||[];
-  const inh=propsOf(k).filter(([p,from])=>from!==k);
-  const hasKids=Object.values(TYPES).some(x=>x.p===k);
-  const used=enCount(k);
+  const t=TYPES[k];const own=TYPE_PROPS[k]||[];const inh=propsOf(k).filter(([p,from])=>from!==k);
+  const hasKids=Object.values(TYPES).some(x=>x.p===k);const used=enCount(k);
   const blocked=hasKids?'子の種類があるため削除できません':used?`${used}件で使われているため削除できません`:'';
-  const propRows=[...own.map(p=>row({t:esc(p),v:'<span class="faint">この種類</span>'})),...inh.map(([p,from])=>row({t:`<span class="faint">${esc(p)}</span>`,v:`<span class="faint">${esc(TYPES[from].n)}から継承</span>`}))];
+  const propRows=[...own.map(p=>row({t:esc(p),v:'<span class="faint">この種類</span>'})),...inh.map(([p,from])=>row({t:`<span class="faint">${esc(p)}</span>`,v:`<span class="faint">${esc(TYPES[from].n)}から</span>`}))];
   openSheet({title:'種類を編集',right:{label:'保存',onclick:`enSaveType('${k}')`},
     body:`<div class="list"><div class="field"><label>名前</label><input id="en-n" value="${esc(t.n)}"></div><div class="field"><label>親</label>${enParentSelect(k,t.p)}</div></div>`
-      +sh('項目',propRows.length)+(propRows.length?list(propRows):enEmptyList('項目はありません'))
+      +sh('項目',propRows.length)+(propRows.length?list(propRows):list([row({t:'<span class="faint">項目はありません</span>'})]))
       +(blocked?`<p class="hint">${blocked}</p>`:''),
-    footer:`<button class="btn ghost" type="button" onclick="enNewType('${k}')">子の種類を追加</button><button class="btn danger" type="button" ${blocked?'disabled':''} onclick="enDeleteType('${k}')">削除</button>`});
+    footer:`<button class="btn tonal" type="button" onclick="enNewType('${k}')">子の種類を追加</button><button class="btn danger" type="button" ${blocked?'disabled':''} onclick="enDeleteType('${k}')">削除</button>`});
 }
-function enNewType(parent=''){
-  openSheet({title:'種類を作成',right:{label:'作成',onclick:'enCreateType()'},
-    body:`<div class="list"><div class="field"><label>名前</label><input id="en-n" placeholder="例: 居酒屋"></div><div class="field"><label>親</label>${enParentSelect('',parent)}</div></div>`});
-}
-function enCreateType(){
-  const n=$('#en-n').value.trim();if(!n){toast('名前を入れてください');return}
-  const p=$('#en-p').value||undefined;
-  TYPES[uid('t')]={n,p};save();closeSheet();rerender();toast(`「${n}」を作成しました`);
-}
-function enSaveType(k){
-  const n=$('#en-n').value.trim();if(!n){toast('名前を入れてください');return}
-  TYPES[k].n=n;TYPES[k].p=$('#en-p').value||undefined;
-  save();closeSheet();rerender();toast(`「${n}」を保存しました`);
-}
+function enNewType(parent=''){openSheet({title:'種類を作成',right:{label:'作成',onclick:'enCreateType()'},body:`<div class="list mt"><div class="field"><label>名前</label><input id="en-n" placeholder="例: 居酒屋"></div><div class="field"><label>親</label>${enParentSelect('',parent)}</div></div>`})}
+function enCreateType(){const n=document.getElementById('en-n').value.trim();if(!n){toast('名前を入れてください');return}TYPES[uid('t')]={n,p:document.getElementById('en-p').value||undefined};save();closeSheet();rerender();toast(`「${n}」を作成しました`)}
+function enSaveType(k){const n=document.getElementById('en-n').value.trim();if(!n){toast('名前を入れてください');return}TYPES[k].n=n;TYPES[k].p=document.getElementById('en-p').value||undefined;save();closeSheet();rerender();toast(`「${n}」を保存しました`)}
 function enDeleteType(k){
   if(Object.values(TYPES).some(x=>x.p===k)||enCount(k)){toast('使用中・子ありのため削除できません');return}
-  const snap=TYPES[k],props=TYPE_PROPS[k];
-  delete TYPES[k];if(props)delete TYPE_PROPS[k];
-  closeSheet();save();rerender();
-  toast(`「${snap.n}」を削除しました`,()=>{TYPES[k]=snap;if(props)TYPE_PROPS[k]=props});
+  const snap=TYPES[k],props=TYPE_PROPS[k];delete TYPES[k];if(props)delete TYPE_PROPS[k];
+  closeSheet();save();rerender();toast(`「${snap.n}」を削除しました`,()=>{TYPES[k]=snap;if(props)TYPE_PROPS[k]=props});
 }
