@@ -302,6 +302,26 @@ a.lrow:active,button.lrow:active{background:#F6F8FB}
 .vchip{display:inline-flex;align-items:center;gap:3px;height:20px;padding:0 7px;border-radius:6px;background:#EEF1F6;color:var(--text2);font-size:10.5px;font-weight:600}
 .vchip i{width:9px;height:9px;border-radius:3px;display:block}
 .ptitle .h1.off{color:#B8C0CF}
+.phead{--t:color-mix(in srgb,var(--c) 7%,#fff);position:relative;display:flex;flex-direction:column;gap:12px;padding:14px;background:var(--t);border:1px solid color-mix(in srgb,var(--c) 22%,transparent);border-radius:16px}
+.phead .istats{margin-top:-2px}
+.phead.activity{border-radius:28px;padding:16px 18px}
+.phead.schedule{border:1.5px dashed color-mix(in srgb,var(--c) 60%,transparent);border-radius:24px}
+.phead.todo{border-left:7px solid var(--c);border-radius:10px 16px 16px 10px}
+.phead.entity{border-radius:0 16px 16px 16px;margin-top:14px}
+.phead.entity::before{content:"";position:absolute;left:-1px;top:-15px;width:96px;height:15px;background:var(--t);border:1px solid color-mix(in srgb,var(--c) 22%,transparent);border-bottom:0;border-radius:12px 12px 0 0}
+.phead.note{border-radius:16px;-webkit-mask:linear-gradient(225deg,#0000 18px,#000 18.5px);mask:linear-gradient(225deg,#0000 18px,#000 18.5px)}
+.phead.ptype{border-radius:0 16px 16px 0;padding-left:30px;clip-path:polygon(18px 0,100% 0,100% 100%,18px 100%,0 50%)}
+.phead.expense{--st:0px;border-radius:16px;
+  -webkit-mask:radial-gradient(circle 10px at 0 50%,#0000 97%,#000) left/51% 100% no-repeat,radial-gradient(circle 10px at 100% 50%,#0000 97%,#000) right/51% 100% no-repeat;
+          mask:radial-gradient(circle 10px at 0 50%,#0000 97%,#000) left/51% 100% no-repeat,radial-gradient(circle 10px at 100% 50%,#0000 97%,#000) right/51% 100% no-repeat}
+.phead .ptitle{gap:10px}
+.pacts{display:flex;gap:8px}
+.pbtn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;padding:0 10px;border-radius:13px;background:var(--c);color:#fff;font-size:13px;font-weight:700;white-space:nowrap;box-shadow:0 6px 14px -8px color-mix(in srgb,var(--c) 80%,transparent)}
+.pbtn.sub{background:#fff;color:var(--c);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--c) 35%,transparent)}
+.pbtn svg{font-size:16px}
+.lbig{font-size:30px;font-weight:700;line-height:1.15;color:color-mix(in srgb,var(--c) 85%,#1A2338)}
+.lbar{display:flex;gap:2px;height:8px;border-radius:4px;overflow:hidden}
+.lbar i{display:block}
 .istats{display:grid;grid-auto-flow:column;grid-auto-columns:1fr}
 .ist{display:flex;flex-direction:column;justify-content:center;min-height:48px;padding:0 10px;border-left:1px solid color-mix(in srgb,var(--c) 20%,transparent);min-width:0}
 .ist:first-child{padding-left:0;border-left:0}
@@ -554,7 +574,7 @@ const catChip=(k,path)=>`<span class="cat" style="--cc:${catColor(k)}">${path?ca
 const catFx=k=>{for(const c of catAnc(k).reverse())if(CATS[c].fx)return CATS[c].fx;return '変動'};
 const xFx=x=>x.fx||catFx(x.cat);
 const ROOTS=()=>Object.keys(CATS).filter(k=>!CATS[k].p);
-const intro=(c,map,stats)=>`<div class="intro" style="--c:var(--${c})"><div class="imap">${map}</div><div class="istats">${stats.map(([l,v,href])=>href?`<a class="ist" href="${href}"><span class="iv num">${v}</span><span class="il">${l}</span></a>`:`<div class="ist"><span class="iv num">${v}</span><span class="il">${l}</span></div>`).join('')}</div></div>`;
+const intro=(c,map,stats)=>{const h=head(PH[0],PH[1],PH[2],stats);PH=null;return h};
 /* 図の部品(クラスと同じ形) */
 const ND={act:l=>`<span class="b-act">${l}</span>`,plan:l=>`<span class="b-plan">${l}</span>`,diary:l=>`<span class="b-diary">${l}</span>`,
   ent:l=>`<span class="ref" style="height:22px;font-size:11px"><i>${IC.entity}</i>${l}</span>`,note:l=>bNote(l),tag:l=>`<span class="type">${l}</span>`,
@@ -576,7 +596,24 @@ const shopOf=x=>{const r=A[x.pay].roles[0];return r[1]?E[r[1]].n:r[2]};
 const whoOf=x=>{const w=A[x.pay].roles.filter(r=>r[1]&&!['支払先','支払者'].includes(r[0])).map(r=>E[r[1]].n);return w.length?w:['ひとり']};
 const xDate=x=>dayOf(A[x.pay]).date;
 const propsOf=k=>typeAnc(k).flatMap(t=>(TYPE_PROPS[t]||[]).map(p=>[p,t]));
-const ptitle=(k,t,right='')=>`<div class="ptitle">${MK[k]}<span class="h1 grow">${t}</span>${right}</div>`;
+const CLS={activity:'activity',schedule:'schedule',todo:'todo',entity:'entity',note:'note',type:'ptype',ledger:'expense'};
+const CVAR={ptype:'type'};
+const SWITCH={schedule:`<span class="h1">予定</span><a class="h1 off" href="#/todo">ToDo</a><span class="grow"></span>`,todo:`<a class="h1 off" href="#/schedule">予定</a><span class="h1">ToDo</span><span class="grow"></span>`};
+/* ページ内の主ボタン(このタブで一番多い作成操作) */
+const ACTS={
+  'アクティビティ':[['＋ 支払い',"toast('支払いの入力(モック)')",'activity'],['＋ 出来事',"toast('出来事の入力(モック)')",'activity',1]],
+  '予定':[['＋ 予定',"toast('予定の作成(モック)')",'calendar']],
+  'エンティティ':[['＋ 人物',"toast('人物の作成(モック)')",'entity'],['＋ 場所',"toast('場所の作成(モック)')",'entity',1],['＋ その他',"toast('エンティティの作成(モック)')",'entity',1]],
+  '種類の管理':[['＋ 種類を作成',"newNode('type')",'type']],
+  'カテゴリの管理':[['＋ カテゴリを作成',"newNode('cat')",'expense']],
+  '家計簿':[['レシートで支払い',"toast('レシートを撮影(モック)')",'expense'],['＋ 支出',"openQuickExpense()",'expense',1]],
+};
+let PH=null;
+const head=(k,t,right,stats,extra='')=>{const a=ACTS[t]||[];
+  return `<div class="phead ${CLS[k]}" style="--c:var(--${CVAR[CLS[k]]||CLS[k]})"><div class="ptitle">${MK[k]}${SWITCH[k]||`<span class="h1 grow">${t}</span>`}${right||''}</div>
+  ${extra}${stats&&stats.length?`<div class="istats">${stats.map(([l,v,href])=>href?`<a class="ist" href="${href}"><span class="iv num">${v}</span><span class="il">${l}</span></a>`:`<div class="ist"><span class="iv num">${v}</span><span class="il">${l}</span></div>`).join('')}</div>`:''}
+  ${a.length?`<div class="pacts">${a.map(([l,fn,ic,sub])=>`<button class="pbtn ${sub?'sub':''}" onclick="${fn}">${l}</button>`).join('')}</div>`:''}</div>`};
+const ptitle=(k,t,right='')=>{PH=[k,t,right];return ''};
 
 /* ======================= hero builders ======================= */
 const heroE=(inner)=>`<div class="obj obj-e"><div class="tab">${IC.entity}エンティティ</div><div class="hero">${inner}</div></div>`;
@@ -659,12 +696,11 @@ function vLedger(){
   const flabel=ledgerFilter?(ledgerFilter[0]==='cat'?catPath(ledgerFilter[1]):ledgerFilter[1]):'';
   const upcoming=Object.entries(EV).filter(([k,e])=>e.pay).map(([k,e])=>[k,e,nextOn(e)]).filter(([k,e,d])=>d>TODAY).sort((a,b)=>a[2].localeCompare(b[2]));
   return `<div class="view">
-  ${ptitle('ledger','家計簿',`<a class="cap hit" href="#/cats" style="color:var(--expense);font-weight:600">カテゴリの管理 ›</a>`)}
-  <div class="imap solo">${mrow(ND.act('支払い')+arr('自分の負担')+ND.exp('自分の支出')+arr('月ごと')+ND.cat('カテゴリ'))}</div>
-  <div class="mswitch"><button onclick="toast('前の月(モック)')">‹</button><b>2026年10月</b><button onclick="toast('次の月(モック)')">›</button></div>
-  ${heroX(`<span class="meta">自分の支出の合計</span><span class="big num">${yen(tot)}</span><span class="meta">前月比 ${diff>0?'+':''}${diff}% · 5か月平均 ${yen(avg)}</span>
-    <div class="spl">${roots.filter(r=>cur[r]).map(r=>`<i style="flex:${cur[r]};background:${catColor(r)};box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)"></i>`).join('')}</div>
-    <span class="meta">固定費 ${yen(fx)} · 変動費 ${yen(tot-fx)} · ✦ 非日常 ${yen(sp)}</span>`)}
+  ${head('ledger','家計簿',`<a class="cap hit" href="#/cats" style="color:var(--expense);font-weight:600">カテゴリ ›</a>`,
+    [['固定費',yen(fx)],['変動費',yen(tot-fx)],['✦ 非日常',yen(sp)]],
+    `<div class="mswitch" style="margin:-8px -6px -4px"><button onclick="toast('前の月(モック)')">‹</button><b>2026年10月</b><button onclick="toast('次の月(モック)')">›</button></div>
+    <div class="row" style="align-items:baseline;gap:10px"><span class="lbig num">${yen(tot)}</span><span class="cap">前月比 ${diff>0?'+':''}${diff}%</span></div>
+    <div class="lbar">${roots.filter(r=>cur[r]).map(r=>`<i style="flex:${cur[r]};background:${catColor(r)}"></i>`).join('')}</div>`)}
   ${upcoming.length?`<div class="stack">${sec('これからの固定費',upcoming.length+'件','')}<div class="flat">${upcoming.map(([k,e,d])=>`<a class="lrow" href="#/ev/${k}"><span class="cap num" style="width:52px;color:var(--schedule);font-weight:600">${mdw(d)}</span><span class="grow ellipsis" style="font-size:13px">${e.t}</span>${catChip(e.pay.cat)}<span class="num" style="font-weight:600;font-size:13px">${yen(e.pay.amt)}</span></a>`).join('')}</div></div>`:''}
   <div class="stack">${sec('月々の推移','6か月')}
     <div class="flat chartc"><div class="row" style="gap:10px;flex-wrap:wrap">${roots.map(r=>`<span class="lg"><i style="background:${catColor(r)}"></i>${CATS[r].n}</span>`).join('')}</div>${chart}</div></div>
@@ -720,7 +756,6 @@ function vTypes(){
   ${topbar('エンティティ','entity','')}
   ${ptitle('type','種類の管理')}
   ${intro('type',mrow(ND.tag('場所')+'<span class="cap">›</span>'+ND.tag('店')+'<span class="cap">›</span>'+ND.tag('飲食店'))+mrow('<span class="vchip">項目</span>'+arr('子へ継承')+'<span class="vchip">絞り込み</span>'+arr('子も含む')+ND.ent('エンティティ')),[['種類',Object.keys(TYPES).length],['いちばん上',Object.keys(TYPES).filter(k=>!TYPES[k].p).length]])}
-  <button class="btn" style="align-self:flex-start;height:44px" onclick="newNode('type')">＋ 種類を作成</button>
   ${treeView('type',k=>`${tag(k)}<span class="cap">項目${propsOf(k).length}</span><span class="grow"></span><a class="cap num hit" href="#/entities/${k}">${cnt(k)}件 ›</a>`)}
   </div>`;
 }
@@ -730,7 +765,6 @@ function vCats(){
   ${topbar('家計簿','expense','')}
   ${ptitle('ledger','カテゴリの管理')}
   ${intro('expense',mrow(ND.cat('大分類','#E07A4F')+'<span class="cap">›</span>'+ND.cat('小分類','#E07A4F')+arr('既定')+box('<span class="vchip"><i style="background:#E07A4F"></i>色</span><span class="vchip">固定・変動</span><span class="spc">✦</span>'))+mrow('<span class="vchip">親</span>'+arr('継承')+'<span class="vchip">子</span>'+arr('上書き')+ND.exp('支出')),[['大分類',ROOTS().length],['小分類',Object.keys(CATS).length-ROOTS().length],['固定費',Object.keys(CATS).filter(k=>catFx(k)==='固定').length]])}
-  <button class="btn" style="align-self:flex-start;height:44px;background:var(--expense)" onclick="newNode('cat')">＋ カテゴリを作成</button>
   ${treeView('cat',k=>`${catChip(k)}${catFx(k)==='固定'?'<span class="cap" style="font-weight:700;color:#5E6E91">固定</span>':''}${catSp(k)==='非日常'?'<span class="spc">✦</span>':''}<span class="grow"></span><span class="cap num">${cnt(k)}件</span>`)}
   </div>`;
 }
@@ -900,7 +934,7 @@ function vSchedule(){
     main=days.map(d=>`<div class="stack">${sec(mdw(d)+(d===TODAY?' 今日':''),evOn(d).length+'件')}${agenda(d,1)}</div>`).join('');
   }
   return `<div class="view">
-  <div class="ptitle">${MK.schedule}<span class="h1">予定</span><a class="h1 off" href="#/todo">ToDo</a></div>
+  ${ptitle('schedule','予定')}
   ${intro('schedule',mrow(ND.plan('予定')+arr('場所・参加者')+ND.ent('人・場所')+arr('終わると')+ND.act('記録'))+mrow(ND.plan('定期の支払い')+arr('家計簿')+ND.exp('固定費'))+mrow(ND.plan('予定')+arr('持つ')+ND.todo('ToDo')),[['今日',todays.length+'件'],['次の予定',next?next[1].s:'—'],['7日間',week+'件']])}
   <div class="seg">${[['month','月'],['day','日'],['list','リスト']].map(([k,l])=>`<button class="${calView===k?'on':''}" onclick="setCal('${k}')">${l}</button>`).join('')}</div>
   ${main}
@@ -951,7 +985,7 @@ function vTodo(){
   const openSel=sel.filter(tdOpen),doneSel=sel.filter(k=>!tdOpen(k));
   const shopSug=todoView==='list:shop'||todoView==='all'?open.filter(k=>TD[k].list==='shop'&&k==='t4'):[];
   return `<div class="view">
-  <div class="ptitle">${MK.todo}<a class="h1 off" href="#/schedule">予定</a><span class="h1">ToDo</span></div>
+  ${ptitle('todo','ToDo')}
   ${intro('todo',mrow(ND.todo('ToDo')+arr('結び付く')+box(ND.ent('人・場所')+ND.plan('予定')))+mrow(ND.todo('買い物')+arr('買ったら')+ND.act('支払い')+arr()+'<span class="chk on" style="width:20px;height:20px;font-size:11px;border-radius:6px">✓</span>'),[['今日',nToday+'件','#/todo'],['期限切れ',nOver+'件'],['完了',nDone+'件']])}
   <div class="chips">${views.map(([k,l,n])=>`<button class="pill todo ${todoView===k?'on':''}" onclick="setTodo('${k}')">${l} <span style="opacity:.7">${n}</span></button>`).join('')}</div>
   <div class="qadd"><span class="chk" style="border-style:dashed"></span><input id="qa" placeholder="ToDoを追加(例: 明日 牛乳 #買い物)" onkeydown="if(event.key==='Enter')addTask()"><button class="btn" style="background:var(--todo)" onclick="addTask()">追加</button></div>
@@ -1026,6 +1060,12 @@ function openCreate(){const first={schedule:`<button class="lrow" style="width:1
    <button class="lrow" style="width:100%" onclick="closeSheet();toast('出来事の入力(モック)')">${MK.activity}<span class="grow" style="text-align:left"><b>出来事・日記</b><div class="cap">今日の日記の子として追加</div></span></button>
    <button class="lrow" style="width:100%" onclick="closeSheet();toast('エンティティの作成(モック)')">${MK.entity}<span class="grow" style="text-align:left"><b>エンティティ</b><div class="cap">人・場所・物。ノートはここから</div></span></button>
   </div>`)}
+function openQuickExpense(){sheet(`<div class="h1" style="font-size:17px;margin-bottom:var(--s4)">支出を記録</div>
+  <div class="field"><label>金額</label><input inputmode="numeric" placeholder="¥0" style="font-size:22px;font-weight:700"></div>
+  <div class="field"><label>カテゴリ</label><div class="row" style="flex-wrap:wrap;gap:8px">${ROOTS().map(k=>`<button class="cat" style="--cc:${catColor(k)};height:34px;font-size:13px">${CATS[k].n}</button>`).join('')}</div></div>
+  <div class="field"><label>店</label><input placeholder="例: スーパー青葉台(候補から選択)"></div>
+  <div class="row cap" style="gap:6px;margin:-4px 0 14px">${bAct('支払い')}<span>と</span>${bExp('自分の支出')}<span>を同時に作成(品目1つ)</span></div>
+  <button class="btn" style="width:100%;height:48px;background:var(--expense)" onclick="closeSheet();toast('支出を記録しました(モック)')">記録</button>`)}
 function openAbout(){sheet(`<div class="h1" style="font-size:17px">UIモック v2 について</div>
   <div class="sub" style="margin:6px 0 var(--s4)">UIと遷移の確認だけのための簡易モック。データは架空、保存はしません。</div>
   <div class="flat" style="padding:var(--s4)"><div class="legend">
