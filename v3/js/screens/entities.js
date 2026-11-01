@@ -51,7 +51,7 @@ route('entities',()=>{
   return largeTitle('人・場所',{actions:[{icon:'type',label:'種類',onclick:"go('#/types')"}]})
     +`<div class="en-search">${IC.search}<input class="input" type="search" placeholder="名前で探す" aria-label="名前で探す" oninput="enFilter(this.value)"></div>`
     +chips(kinds,enKind,"enKind='$v';rerender()")
-    +`<div id="en-groups">${groups.map(([label,g])=>{const rs=shown.filter(x=>age(x[2])===g);return rs.length?`<div class="en-g">${sh(label,rs.length)}${list(rs.map(rowOf))}</div>`:''}).join('')}</div>`;
+    +`<div id="en-groups">${groups.map(([label,g])=>{const rs=shown.filter(x=>age(x[2])===g);return rs.length?`<div class="en-g">${sh(label,rs.length)}${objs(rs.map(rowOf))}</div>`:''}).join('')}</div>`;
 },{tab:'entities'});
 function enFilter(v){
   v=v.trim();document.querySelectorAll('#en-groups .en-g').forEach(g=>{let n=0;g.querySelectorAll('.row').forEach(r=>{const hit=!v||r.querySelector('.t').textContent.includes(v);r.hidden=!hit;if(hit)n++});g.hidden=!n});
@@ -114,7 +114,7 @@ route('n',id=>{
     +`<article class="en-doc" style="--tc:${threadColor(id)}"><h1>${esc(e.n)}のメモ</h1><div class="meta">${note?`更新 ${esc(note.upd)}、${note.ver}版目`:'まだ書いていません'}</div>`
     +(note&&note.body.length?note.body.map(([h,s])=>`<h3>${esc(h)}</h3><p>${rich(s)}</p>`).join(''):`<p class="faint">本文はまだありません</p>`)
     +`</article>`
-    +(note&&note.subs.length?sh('サブページ',note.subs.length)+list(note.subs.map(([s,m])=>row({lead:ico('note'),t:esc(s),v:`<span class="faint">${esc(m)}</span>`,chev:1}))):'');
+    +(note&&note.subs.length?sh('サブページ',note.subs.length)+objs(note.subs.map(([s,m])=>row({lead:ico('note'),t:esc(s),v:`<span class="faint">${esc(m)}</span>`,chev:1}))):'');
 },{tab:'entities'});
 
 /* ---------- 種類: 縁の分類(木)。根の種類が輪郭を決める ---------- */
@@ -126,15 +126,15 @@ function enTreeRows(){
     const open=(d<2)!==enFlipped.has(k);
     const props=propsOf(k).map(p=>p[0]).join('・')||'なし';
     const root=typeAnc(k)[0];
-    const lead=`${d?'<span class="lv"></span>':''}${kids.length?`<span class="en-tg" role="button" aria-label="${open?'閉じる':'開く'}" onclick="event.stopPropagation();enToggle('${k}')">${open?IC.down:IC.chev}</span>`:'<span class="en-tg"></span>'}${d===0?`<span class="kn sm ${ROOT_SHAPE[root]||'thing'}"><b>${esc(TYPES[k].n[0])}</b></span>`:'<span class="en-dot"></span>'}`;
-    out.push(`<button type="button" class="row" style="--d:${d}" onclick="enEditType('${k}')">${lead}<span class="grow"><div class="t ell">${esc(TYPES[k].n)}</div><div class="s ell">項目 ${esc(props)}</div></span><span class="v faint">${enCount(k)}</span></button>`);
+    const lead=`${kids.length?`<span class="en-tg" role="button" aria-label="${open?'閉じる':'開く'}" onclick="event.stopPropagation();enToggle('${k}')">${open?IC.down:IC.chev}</span>`:'<span class="en-tg"></span>'}${d===0?`<span class="kn sm ${ROOT_SHAPE[root]||'thing'}"><b>${esc(TYPES[k].n[0])}</b></span>`:'<span class="en-dot"></span>'}`;
+    out.push(`<button type="button" class="row ${d?'ind':''}" style="--d:${d}" onclick="enEditType('${k}')">${lead}<span class="grow"><div class="t ell">${esc(TYPES[k].n)}</div><div class="s ell">項目 ${esc(props)}</div></span><span class="v faint">${enCount(k)}</span></button>`);
     if(open)kids.forEach(c=>walk(c,d+1));
   };
   enRoots().forEach(r=>walk(r,0));
   return out;
 }
 function enToggle(k){enFlipped.has(k)?enFlipped.delete(k):enFlipped.add(k);rerender()}
-route('types',()=>appbar('種類',{actions:[{icon:'plus',label:'種類を作成',onclick:'enNewType()'}]})+list(enTreeRows(),'en-tree mt'),{tab:'entities'});
+route('types',()=>appbar('種類',{actions:[{icon:'plus',label:'種類を作成',onclick:'enNewType()'}]})+`<div class="mt"></div>`+objs(enTreeRows()),{tab:'entities'});
 function enParentSelect(k,cur){const ban=k?enDesc(k):[];return `<select id="en-p"><option value="">いちばん上(輪郭を決める)</option>${Object.keys(TYPES).filter(c=>!ban.includes(c)).map(c=>`<option value="${c}" ${c===cur?'selected':''}>${esc(enTypePath(c))}</option>`).join('')}</select>`}
 function enEditType(k){
   const t=TYPES[k];const own=TYPE_PROPS[k]||[];const inh=propsOf(k).filter(([p,from])=>from!==k);

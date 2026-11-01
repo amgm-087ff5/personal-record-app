@@ -8,8 +8,8 @@
 :root{
   /* neutral */
   --bg:#F3F5F9; --surface:#FFFFFF; --surface-2:#F7F8FB; --sunk:#EBEEF4;
-  --line:#E2E6EE; --line-strong:#CBD2DE;
-  --ink:#18202E; --ink-2:#4E5869; --ink-3:#7B8496; --ink-inv:#FFFFFF;
+  --line:#DCE1EA; --line-strong:#B9C2D0;
+  --ink:#141B28; --ink-2:#384254; --ink-3:#5B6576; --ink-inv:#FFFFFF;
   /* brand */
   --brand:#2D59B8; --brand-ink:#FFFFFF; --brand-soft:#E7EDF9; --brand-press:#244A9A;
   /* classes (data model) — 色は印と細い帯だけに使う */
@@ -27,7 +27,7 @@
   --th-thing:#3B8656;  --th-thing-s:#E2F2E8;
   --th-doc:#7A8394;    --th-doc-s:#EDEFF3;
   /* 時間軸 */
-  --axis:#C5CDD9; --axis-past:#9AA6B8; --now:#E0483E; --plan:#3C7BD0;
+  --axis:#B5BFCD; --axis-past:#7E8BA0; --now:#E0483E; --plan:#3C7BD0;
   /* status */
   --warn:#C76A12; --warn-soft:#FCEFDF;
   --danger:#C23B3B; --danger-soft:#FBE7E7;
@@ -56,7 +56,7 @@
 @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
   --bg:#0F131A; --surface:#171C25; --surface-2:#1C222D; --sunk:#0B0E13;
   --line:#262D3A; --line-strong:#364053;
-  --ink:#E9EDF4; --ink-2:#AEB6C4; --ink-3:#7E8798;
+  --ink:#EEF1F6; --ink-2:#C2C9D5; --ink-3:#98A1B1;
   --brand:#7FA2EC; --brand-ink:#0F131A; --brand-soft:#1E2A44; --brand-press:#9BB7F2;
   --c-activity:#5BC0D0; --c-activity-soft:#14313A;
   --c-schedule:#7FAEEB; --c-schedule-soft:#18283F;
@@ -76,7 +76,7 @@
 :root[data-theme="dark"]{
   --bg:#0F131A; --surface:#171C25; --surface-2:#1C222D; --sunk:#0B0E13;
   --line:#262D3A; --line-strong:#364053;
-  --ink:#E9EDF4; --ink-2:#AEB6C4; --ink-3:#7E8798;
+  --ink:#EEF1F6; --ink-2:#C2C9D5; --ink-3:#98A1B1;
   --brand:#7FA2EC; --brand-ink:#0F131A; --brand-soft:#1E2A44; --brand-press:#9BB7F2;
   --c-activity:#5BC0D0; --c-activity-soft:#14313A; --c-schedule:#7FAEEB; --c-schedule-soft:#18283F;
   --c-todo:#EB7AA2; --c-todo-soft:#3A1C28; --c-entity:#7FA2EC; --c-entity-soft:#1E2A44;
@@ -478,3 +478,107 @@ a.dh:active .c{background:var(--sunk)}
 .stats b.knots{display:inline-flex}
 .ax-time b{display:block;font:600 14px/1 var(--font);color:var(--ink)}.ax-time small{display:block;font:var(--t-cap);color:var(--ink-3);margin-top:4px}
 .ax-row.focus .ax-time{padding-right:14px}
+
+/* =====================================================================
+   改訂(11/01): 塗りとコントラスト / 1つの面=1つのオブジェクト / 詳細の最上部
+   ===================================================================== */
+/* 縁の輪郭は塗りつぶし(誰・どこが一目で分かる) */
+.kn{background:var(--kc);color:#fff}
+.kn.me{--kc:var(--ink-2)}
+.ref .kn{box-shadow:none}
+/* 記録の節は塗り。予定は中抜き(まだ起きていない) */
+.ax-node{background:var(--c-activity);box-shadow:none;color:#fff}
+.ax-node.pay{background:var(--c-expense)}
+.ax-node.plan{background:var(--surface);outline:2.5px dashed var(--plan);color:var(--plan)}
+.ax-node.plan.late{outline-color:var(--warn);color:var(--warn)}
+.ax-node.fact{background:var(--surface);box-shadow:inset 0 0 0 2.5px var(--tc,var(--axis-past))}
+.ax-row.dim .ax-node{opacity:.55}
+.dh .tick{background:var(--ink)}
+.ax-c .m{color:var(--ink-2)}
+.chip{border-color:var(--line-strong);color:var(--ink)}
+.row .s,.prop .meta{color:var(--ink-3)}
+
+/* 1つの面 = 1つのオブジェクト。独立したものは別々の面に */
+.objs{display:flex;flex-direction:column;gap:8px;margin:0 var(--gutter)}
+.objs>.row{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--e1),var(--hl)}
+.objs>.row::before{display:none}
+.objs>.row.ind{margin-left:calc(var(--d,0)*20px);position:relative}
+.objs>.row.ind::after{content:"";position:absolute;left:-12px;top:-8px;height:calc(50% + 8px);width:9px;border-left:2px solid var(--line-strong);border-bottom:2px solid var(--line-strong);border-bottom-left-radius:6px}
+
+/* ---------- 出来事の詳細: 細い軸に掛かったカプセル(時刻列なし) ---------- */
+.pin{position:relative;margin:4px var(--gutter) 0;padding-left:30px}
+.pin::before{content:"";position:absolute;left:9px;top:0;bottom:0;width:2px;background:var(--axis-past);
+  -webkit-mask:linear-gradient(#0000,#000 24px,#000 calc(100% - 24px),#0000);mask:linear-gradient(#0000,#000 24px,#000 calc(100% - 24px),#0000)}
+.pin.future::before{background:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
+.pin-n{position:relative;display:flex;align-items:center;gap:8px;min-height:40px;font:var(--t-label);color:var(--ink-2)}
+.pin-n::before{content:"";position:absolute;left:-25px;width:10px;height:10px;border-radius:3px;background:var(--axis-past)}
+.pin-n.plan::before{background:var(--surface);outline:2px dashed var(--plan);outline-offset:-2px}
+.pin-n .tm{font-variant-numeric:tabular-nums;color:var(--ink-3);width:38px;flex:none}
+.pin-n .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pin-n svg.i{width:16px;height:16px;color:var(--ink-3)}
+a.pin-n:active{color:var(--ink)}
+.pin-d{position:relative;display:flex;align-items:center;gap:8px;min-height:36px;font:600 13px/1 var(--font);color:var(--ink)}
+.pin-d::before{content:"";position:absolute;left:-27px;width:14px;height:14px;border-radius:4px;background:var(--ink);box-shadow:0 0 0 3px var(--bg)}
+.pin-d .faint{font-weight:400}
+.pin-cur{position:relative;padding:8px 0}
+.pin-cur>.node{position:absolute;left:-30px;top:34px;width:20px;height:20px;border-radius:6px;background:var(--cap,var(--c-activity));box-shadow:0 0 0 4px var(--bg);z-index:1}
+.pin-cur>.node::after{content:"";position:absolute;left:20px;top:9px;width:10px;height:2px;background:var(--cap,var(--c-activity))}
+/* カプセル: 時間に掛かった出来事。塗りつぶし、光は左上から */
+.cap{--cap:var(--c-activity);position:relative;padding:18px 22px 20px;border-radius:30px;color:#fff;
+  background:radial-gradient(130% 120% at 0% 0%,rgba(255,255,255,.22),rgba(255,255,255,0) 55%),var(--cap);
+  box-shadow:0 10px 26px -10px color-mix(in srgb,var(--cap) 70%,transparent),0 2px 4px rgba(0,0,0,.08),inset 0 1px 0 rgba(255,255,255,.35)}
+.cap .kind{display:flex;align-items:center;gap:8px;font:600 13px/1 var(--font);opacity:.92}
+.cap .kind svg.i{width:16px;height:16px}
+.cap .kind .tm{margin-left:auto;font:600 15px/1 var(--font);font-variant-numeric:tabular-nums;opacity:1}
+.cap h1{font:var(--t-title);margin-top:10px}
+.cap .big{font:700 36px/1.1 var(--font);margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.cap .meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font:var(--t-label);opacity:.92}
+.cap .meta span{display:inline-flex;align-items:center;gap:5px}
+.cap .meta svg.i{width:15px;height:15px}
+.cap .split .bar{background:rgba(255,255,255,.18);height:12px}
+.cap .split .bar i.me{background:#fff}
+.cap .split .bar i.other{background:rgba(255,255,255,.45)}
+.cap .split .lg{color:rgba(255,255,255,.9)} .cap .split .lg b{color:#fff}
+.cap .split .lg span::before{box-shadow:0 0 0 1px rgba(255,255,255,.5)}
+.cap.plan{--cap:var(--plan);color:var(--ink);background:var(--surface);box-shadow:none;outline:2.5px dashed var(--plan);outline-offset:-2.5px}
+.cap.plan .kind{color:var(--plan);opacity:1}
+.cap .cd{display:inline-flex;margin-top:8px;padding:4px 10px;border-radius:var(--r-pill);background:var(--plan);color:#fff;font:600 13px/1.2 var(--font)}
+/* 子を └ でぶら下げる(支払い → 自分の支出) */
+.hang{position:relative;margin:10px 0 0 26px}
+.hang::before{content:"";position:absolute;left:-16px;top:-10px;height:calc(50% + 10px);width:12px;border-left:2.5px solid var(--line-strong);border-bottom:2.5px solid var(--line-strong);border-bottom-left-radius:8px}
+.child{display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 12px 10px 14px;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e2),var(--hl)}
+.child:active{background:var(--sunk)}
+.child .lbl{font:var(--t-cap);color:var(--ink-3)}
+.child .amt{font:700 20px/1.2 var(--font);font-variant-numeric:tabular-nums;color:var(--brand)}
+.child .chev{color:var(--ink-3)}
+.child .ico{--ic:var(--brand)}
+
+/* ---------- 自分の支出の詳細: 支払いの棒から自分の区間を拡大する ---------- */
+.zm{margin:4px var(--gutter) 0}
+.zm-parent{display:flex;align-items:center;gap:10px;min-height:52px;padding:8px 12px;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1),var(--hl)}
+.zm-parent .t{font:500 15px/1.35 var(--font)} .zm-parent .s{font:var(--t-cap);color:var(--ink-3);margin-top:2px}
+.zm-parent .v{margin-left:auto;font:600 15px/1 var(--font);font-variant-numeric:tabular-nums;white-space:nowrap}
+.zm-bar{display:flex;height:14px;margin:12px 4px 0;border-radius:7px;overflow:hidden;gap:2px;background:var(--sunk)}
+.zm-bar i{display:block;height:100%}
+.zm-bar i.me{background:var(--brand)} .zm-bar i.other{background:var(--axis)}
+.zm-bar i.owed{background:repeating-linear-gradient(135deg,var(--warn) 0 4px,color-mix(in srgb,var(--warn) 45%,transparent) 4px 8px)}
+.zm-lens{display:block;width:calc(100% - 8px);height:30px;margin:0 4px}
+.zm-card{padding:18px 20px 20px;border-radius:var(--r-lg);color:#fff;
+  background:radial-gradient(130% 120% at 0% 0%,rgba(255,255,255,.2),rgba(255,255,255,0) 55%),var(--brand);
+  box-shadow:0 12px 28px -12px color-mix(in srgb,var(--brand) 80%,transparent),inset 0 1px 0 rgba(255,255,255,.3)}
+.zm-card .kind{display:flex;align-items:center;gap:8px;font:600 13px/1 var(--font);opacity:.92}
+.zm-card .kind svg.i{width:16px;height:16px}
+.zm-card .big{font:700 40px/1.1 var(--font);margin-top:8px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.zm-card .pct{font:var(--t-label);opacity:.9;margin-top:4px}
+.zm-card .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.zm-card .tags span{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:8px;background:rgba(255,255,255,.18);font:500 13px/1 var(--font)}
+.zm-card .tags span i{width:9px;height:9px;border-radius:3px;background:var(--cc);box-shadow:0 0 0 1.5px #fff}
+.objs>.row.ind{width:auto}
+/* 塗りの面(白文字を載せる)は、ダークでも十分に濃い色を使う */
+:root{--fill-act:#1F7F91;--fill-pay:#33437A;--fill-brand:#2D59B8;--fill-plan:#3C7BD0}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--fill-act:#1D6B7A;--fill-pay:#3A4A85;--fill-brand:#3760C0;--fill-plan:#3C74C4}}
+:root[data-theme="dark"]{--fill-act:#1D6B7A;--fill-pay:#3A4A85;--fill-brand:#3760C0;--fill-plan:#3C74C4}
+.cap{--cap:var(--fill-act)}
+.zm-card{background:radial-gradient(130% 120% at 0% 0%,rgba(255,255,255,.2),rgba(255,255,255,0) 55%),var(--fill-brand)}
+.ax-node{background:var(--fill-act)} .ax-node.pay{background:var(--fill-pay)}
+.cap .cd{background:var(--fill-plan)}

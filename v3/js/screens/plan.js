@@ -177,14 +177,11 @@ function plTodoPane(){
   let body='';
   for(const [title,f] of secs){
     const xs=openSel.filter(f);
-    if(xs.length)body+=sh(title,xs.length)+list(xs.map(plTodoRow));
+    if(xs.length)body+=sh(title,xs.length)+objs(xs.map(plTodoRow));
   }
   if(!openSel.length&&!doneSel.length)body+=empty('todo','ToDoはありません');
   if(doneSel.length){
-    body+=`<div class="pl-gap">${list([
-      row({onclick:'plToggleDone()',t:`完了 ${doneSel.length}`,v:plShowDone?'閉じる':'表示'}),
-      ...(plShowDone?doneSel.map(plDoneRow):[]),
-    ])}</div>`;
+    body+=sh('完了',doneSel.length,{label:plShowDone?'閉じる':'表示',onclick:'plToggleDone()'})+(plShowDone?objs(doneSel.map(plDoneRow)):'');
   }
   return quick+chips(items,plTodoView,"plTodoView='$v';rerender()")+body;
 }
@@ -262,12 +259,12 @@ route('ev',id=>{
     const n=Math.round((new Date(od+'T00:00')-new Date(TODAY+'T00:00'))/864e5);
     cd=n===1?'明日':`${n}日後`;
   }
-  const card=`<div class="kind">${IC.schedule}予定</div><h1>${esc(e.t)}</h1><div class="big">${e.all?'終日':`${e.s}–${e.e}`}</div>${cd?`<div class="pl-cd">${cd}</div>`:''}<div class="meta"><span>${IC.schedule}${fmtMDW(e.d)}${e.d2?' – '+fmtMDW(e.d2):''}</span>${placeOf(e)?`<span>${IC.place}${esc(placeOf(e))}</span>`:''}${e.pay?`<span>${IC.pay}${yen(e.pay.amt)} 支払い予定</span>`:''}</div>`;
-  const isTodayFuture=e.d===TODAY&&!e.all&&e.s>NOW;
-  const axis=`<div class="ax">${dayHead(e.d,{href:'#/day/'+e.d,diary:dayDiary(e.d),future:e.d>=TODAY})}`
-    +focusRow({time:e.all?'終日':e.s,node:{cls:'plan',icon:'schedule'},plan:true,card})
-    +(isTodayFuture?nowLine():'')
-    +`</div>`;
+  const cap=`<section class="cap plan"><div class="kind">${IC.schedule}予定<span class="tm">${e.all?'終日':esc(e.s)}</span></div><h1>${esc(e.t)}</h1><div class="big">${e.all?'終日':`${e.s}–${e.e}`}</div>${cd?`<span class="cd">${cd}</span>`:''}<div class="meta"><span>${IC.schedule}${fmtMDW(od)}${e.d2?' – '+fmtMDW(e.d2):''}</span>${placeOf(e)?`<span>${IC.place}${esc(placeOf(e))}</span>`:''}${e.pay?`<span>${IC.pay}${yen(e.pay.amt)} 支払い予定</span>`:''}</div></section>`;
+  /* 同じ日のほかの予定・記録を前後に並べる(未来側の軸) */
+  const same=[...evOn(od).filter(([k,x])=>k!==id&&!x.hol).map(([k,x])=>({time:x.all?'終日':x.s,title:x.t,href:'#/ev/'+k,plan:!x.rec,sort:x.all?'00:00':x.s})),
+    ...(typeof kidsOf==='function'?kidsOf(od):[]).map(([k,x])=>({time:x.time,title:x.title,href:'#/a/'+k,sort:x.time||''}))].sort((p,q)=>q.sort.localeCompare(p.sort));
+  const me=e.all?'00:00':e.s;
+  const axis=pinView({future:true,later:[{day:od},...same.filter(x=>x.sort>me)],earlier:same.filter(x=>x.sort<=me),cap,capColor:'var(--plan)'});
   const props=[
     e.place?prop('場所',eref(e.place[0],e.place[1])):'',
     e.who?prop('参加者',e.who.filter(w=>E[w]).map(w=>eref(w)).join('')):'',
@@ -279,7 +276,7 @@ route('ev',id=>{
     +axis
     +sh('詳細')+list([props])
     +(unreg?suggest(`「${esc(e.place[1])}」はまだ登録されていません`,{label:'場所として登録',onclick:`plRegisterPlace('${id}')`}):'')
-    +(tasks.length?sh('この予定のToDo',tasks.length)+list(tasks.map(plEvTaskRow)):'')
+    +(tasks.length?sh('この予定のToDo',tasks.length)+objs(tasks.map(plEvTaskRow)):'')
     +sh('記録')
     +(rec
       ?list([row({href:'#/a/'+e.rec,lead:`<span class="ax-node" style="margin:0">${IC.activity}</span>`,t:esc(rec.title),s:'記録済み',chev:1})])
