@@ -44,8 +44,8 @@ route('entities',()=>{
     .map(([k,e])=>[k,e,lastMet(k)]).sort((a,b)=>(b[2]||'').localeCompare(a[2]||'')||a[1].n.localeCompare(b[1].n));
   const age=d=>{if(!d)return 3;const n=(new Date(TODAY+'T00:00')-new Date(d+'T00:00'))/864e5;return n<=7?0:n<=31?1:2};
   const groups=[['この1週間に交わった',0],['この1か月',1],['それより前',2],['まだ記録なし',3]];
-  const rowOf=([k,e,d])=>{const yn=enYearN(k);return row({href:'#/e/'+k,cls:'en-row',lead:knot(k),t:esc(e.n),s:esc(enTypePath(e.t[0]))+(yn?` 今年${yn}回`:''),
-    v:`<span class="faint">${agoLabel(d)}</span>`})};
+  const rowOf=([k,e,d])=>{const yn=enYearN(k);return row({href:'#/e/'+k,cls:'en-row',lead:knot(k),t:esc(e.n),s:esc(enTypePath(e.t[0])),
+    v:`<span class="en-ago">${agoLabel(d)}${yn?`<small>今年${yn}回</small>`:''}</span>`})};
   return largeTitle('人・場所',{actions:[{text:'メモ',icon:'lines',onclick:"go('#/notes')"},{text:'種類',icon:'type',onclick:"go('#/types')"}]})
     +`<div class="en-search">${IC.search}<input class="input" type="search" placeholder="名前で探す" aria-label="名前で探す" oninput="enFilter(this.value)"></div>`
     +chips(kinds,enKind,"enKind='$v';rerender()")
@@ -84,7 +84,9 @@ route('e',id=>{
   /* 糸の時間軸: 予定(点線) → いま → 出会い・事実の変化を新しい順に。月ごとに区切る */
   const evs=[...acts.map(x=>({key:x.d+' '+(x.a.time||''),ym:x.d.slice(0,7),html:momentRow(x.k,{exclude:id,showDate:true})})),
     ...factEvents(id).map(f=>({key:f.ym+'-00',ym:f.ym,html:axRow({time:'',node:{cls:'fact'},t:f.t,m:f.m})}))].sort((a,b)=>b.key.localeCompare(a.key));
-  let lastYm='';const body=evs.map(ev=>{let h='';if(ev.ym!==lastYm){lastYm=ev.ym;h=monthHead(ev.ym)}return h+ev.html}).join('');
+  let lastYm='';
+  const fut=plans.map(([k,ev])=>{const ym=(ev.rep?nextOn(ev):ev.d).slice(0,7);let h='';if(ym!==lastYm){lastYm=ym;h=monthHeadAx(ym,true)}return h+planRowAx(k,{future:true,showDate:true,exclude:id})}).join('');
+  const body=evs.map(ev=>{let h='';if(ev.ym!==lastYm){lastYm=ev.ym;h=monthHead(ev.ym)}return h+ev.html}).join('');
   const note=NOTES[id];
   return appbar('',{actions:[{icon:'more',label:'その他の操作',onclick:"toast('編集はモックでは未対応です')"}]})
     +`<section class="eh">${knot(id,'lg')}<div class="grow" style="min-width:0"><h1>${esc(e.n)}</h1><div class="crumb">${crumb(id)}</div></div></section>`
@@ -95,7 +97,7 @@ route('e',id=>{
       :`<a class="en-memo" href="javascript:void 0" onclick="enNewNote('${id}')"><span class="h">${IC.lines}メモを書く</span></a>`)
     +sh('この縁の時間軸',acts.length?`交わった ${acts.length}回`:'')
     +`<div class="ax thread" style="--tc:${tc}">`
-    +(plans.length?plans.map(([k])=>planRowAx(k,{future:true,showDate:true,exclude:id})).join('')+nowLine():'')
+    +(plans.length?fut+nowLine():'')
     +(body||axEdge('まだ記録はありません',true))
     +(body?axEdge('これより前の記録はありません',true):'')
     +`</div>`;

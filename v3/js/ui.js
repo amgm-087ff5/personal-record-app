@@ -15,12 +15,12 @@ const IC={
   share:sv('<rect x="2.5" y="6.5" width="19" height="7" rx="1.5"/><rect x="2.5" y="6.5" width="8.5" height="7" rx="1.5" fill="currentColor"/><path d="M2.5 17v2.5h8.5V17"/>'),
   axis:sv('<path d="M6 2.5v19"/><rect x="3.5" y="4.5" width="5" height="5" rx="1.6" fill="currentColor"/><circle cx="6" cy="16" r="2.4"/><path d="M11.5 7h9M11.5 16h7"/>'),
   activity:sv('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
-  schedule:sv('<rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'),
+  schedule:sv('<rect x="3" y="7" width="18" height="10" rx="5" stroke-dasharray="2.6 2"/>'),
   todo:sv('<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="m8 12.5 3 3 5-6"/>'),
   entity:sv('<path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4.2l2 2.5h6.8A2.5 2.5 0 0 1 21 9v9.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 18.5Z"/>'),
   note:sv('<path d="M6 3h8.5L20 8.5V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>'),
   type:sv('<path d="M3 12 10 4.5h9.5A1.5 1.5 0 0 1 21 6v12a1.5 1.5 0 0 1-1.5 1.5H10Z"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/>'),
-  expense:sv('<path d="M4 5h16a1 1 0 0 1 1 1v3a3 3 0 0 0 0 6v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a3 3 0 0 0 0-6V6a1 1 0 0 1 1-1Z"/><path d="M9 6v12" stroke-dasharray="1.5 2.5"/>'),
+  expense:sv('<rect x="2.5" y="8.5" width="19" height="7" rx="1.5"/><rect x="2.5" y="8.5" width="8.5" height="7" rx="1.5" fill="currentColor"/>'),
   ledger:sv('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
   pay:sv('<rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M2.5 10h19M6.5 15h4"/>'),
   talk:sv('<path d="M4 5h16v11H9l-5 4Z"/>'),
@@ -100,8 +100,11 @@ function momentRow(k,o={}){
   const dd=a.parent&&A[a.parent]?A[a.parent].date:'';
   return axRow({href:`#/a/${k}`,time:o.showDate&&dd?{d:+dd.slice(8),t:a.time}:a.time,node:{cls:ncls,icon},cls:o.cls,future:o.future,
     t:esc(a.title),m:`${pl&&pl[1]!==o.exclude?`<span class="ell">${esc(placeName(pl))}</span>`:''}${knots(ppl)}`,
-    amt:a.amt!=null?`<b>${yen(a.amt)}</b>${x&&x.amt!==a.amt?`<small>自分 ${yen(x.amt)}</small>`:''}`:''});
+    amt:a.amt!=null?`<b>${yen(a.amt)}</b>${x&&x.amt!==a.amt?`${payBar(a,x)}<small>自分 ${yen(x.amt)}</small>`:''}`:''});
 }
+/** 1つの支払いの棒: 自分(青) / ほかの人(灰) / 立替・未精算(琥珀の斜線) */
+function payBar(a,x){const rest=a.amt-x.amt;const owed=a.adv&&a.adv[2]==='未精算';
+  return `<span class="pbar" aria-label="支払い ${yen(a.amt)} のうち自分 ${yen(x.amt)}"><i class="me" style="flex:${x.amt}"></i>${rest>0?`<i class="${owed?'owed':'other'}" style="flex:${rest}"></i>`:''}</span>`}
 /** 予定の1行(中抜き・点線)。late: いまより前で未記録 */
 function planRowAx(k,o={}){
   const e=EV[k];const late=o.late;
@@ -114,10 +117,10 @@ function planRowAx(k,o={}){
 function dayHead(d,o={}){
   const w=new Date(d+'T00:00').getDay();const tagN=o.href?'a':'div';
   const txt=o.diary?esc(o.diary):(o.empty||'');
-  return `<${tagN} class="dh2 ${d===TODAY?'today':''} ${o.future?'future':''}" ${o.href?`href="${o.href}"`:''}><span class="rule"></span><span class="dt"><b>${+d.slice(5,7)}月${+d.slice(8)}日</b><span class="wd">${WD[w]}曜</span>${d===TODAY?'<span class="td">今日</span>':''}<span class="grow"></span>${o.sum?`<span class="sum">${o.sum}</span>`:''}</span>${txt?`<span class="dd ${o.diary?'':'none'}">${txt}</span>`:''}</${tagN}>`;
+  return `<${tagN} class="dh2 ${d===TODAY?'today':''} ${o.future?'future':''} ${o.noax?'noax':''}" ${o.href?`href="${o.href}"`:''}><span class="rule"></span><span class="dt"><b>${+d.slice(5,7)}月${+d.slice(8)}日</b><span class="wd">${WD[w]}曜</span>${d===TODAY?'<span class="td">今日</span>':''}<span class="grow"></span>${o.sum?`<span class="sum">${o.sum}</span>`:''}</span>${txt?`<span class="dd ${o.diary?'':'none'}">${txt}</span>`:''}</${tagN}>`;
 }
 /** 月の区切り(縁の時間軸) */
-const monthHeadAx=ym=>`<div class="dh2 month"><span class="rule"></span><span class="dt"><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b></span></div>`;
+const monthHeadAx=(ym,future)=>`<div class="dh2 month ${future?'future':''}"><span class="rule"></span><span class="dt"><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b></span></div>`;
 const nowLine=()=>`<div class="now" aria-label="いま ${NOW}"><span class="tm">${NOW}</span><span class="dot"></span><span class="ln"><span>いま</span></span></div>`;
 const axEdge=(html,past)=>`<div class="ax-edge ${past?'past':''}"><span class="c">${html}</span></div>`;
 /** 詳細の主役: 軸上の点を大きくし、カードを掛ける */
@@ -129,11 +132,13 @@ function splitBar(segs,total){
 
 /** 独立したオブジェクトの並び(1件=1つの面) */
 const objs=rows=>`<div class="objs">${rows.join('')}</div>`;
-/** 出来事の詳細の最上部: 細い軸に掛かったカプセル。later/earlier: [{day}|{time,title,href,icon,plan}] */
-function pinView({later=[],earlier=[],cap,future,capColor}){
-  const n=x=>x.day?`<div class="pin-d">${fmtMDW(x.day)}${x.day===TODAY?'<span class="faint">今日</span>':''}</div>`
-    :`<a class="pin-n ${x.plan?'plan':''}" href="${x.href}"><span class="pn">${x.icon?IC[x.icon]:''}</span><span class="tm">${esc(x.time||'')}</span><span class="t">${esc(x.title)}</span></a>`;
-  return `<div class="pin ${future?'future':''}">${later.map(n).join('')}<div class="pin-cur" style="${capColor?`--cap:${capColor}`:''}"><span class="node"></span>${cap}</div>${earlier.map(n).join('')}</div>`;
+/** 詳細の最上部: 細い軸に掛かったカプセル。
+    later/earlier の要素: {day} 日の区切り | {now} いまの線 | {time,title,href,icon,plan,late,fut} 前後の点。fut=いまより未来 */
+function pinView({later=[],earlier=[],cap,future,plan,late}){
+  const n=x=>x.now?`<div class="pin-now fut-b" aria-label="いま ${NOW}"><span>いま ${NOW}</span></div>`
+    :x.day?dayHead(x.day,{href:'#/day/'+x.day,future:x.fut})
+    :`<a class="pin-n ${x.plan?'plan':''} ${x.late?'late':''} ${x.fut?'fut':''}" href="${x.href}"><span class="pn">${x.icon&&!x.plan?IC[x.icon]:''}</span><span class="tm">${esc(x.time||'')}</span><span class="t">${esc(x.title)}</span></a>`;
+  return `<div class="pin">${later.map(n).join('')}<div class="pin-cur ${future?'fut':''} ${plan?'plan':''} ${late?'late':''}"><span class="node"></span>${cap}</div>${earlier.map(n).join('')}</div>`;
 }
 /* ---- 汎用 ---- */
 const tag=(label,o={})=>{const inner=`${o.color?`<span class="dot" style="--cc:${o.color}"></span>`:''}${esc(label)}`;return o.href?`<a class="tag ${o.cls||''}" href="${o.href}">${inner}</a>`:`<span class="tag ${o.cls||''}">${inner}</span>`};
@@ -168,12 +173,12 @@ function render(keepScroll){
   const y=scrollY;
   const safe=(fn,id,q)=>{try{return fn(id,q)}catch(e){console.error(e);return appbar('表示できません')+banner('warn',`この画面を表示できませんでした。<br><small>${esc(e.message)}</small>`)}};
   const ROOT={activities:'activities',plan:'plan',entities:'entities',ledger:'ledger'};
-  const wide=innerWidth>=1100;const rootName=ROOT[r.tab]||'activities';
+  const wide=innerWidth>=1100;const rootName=ROOT[r.tab||lastTab]||'activities';
   const app=document.getElementById('app');
   if(wide){
     const isRoot=CUR.name===rootName;const ly=app.querySelector('.pane-l')?.scrollTop||0;const sameRoot=app.dataset.root===rootName;
     const left=safe(ROUTES[rootName].fn,null,isRoot?CUR.q:{});
-    const right=isRoot?`<div class="empty">${ico(TABS.find(t=>t&&t[0]===rootName)[2])}<div>左から選ぶと、ここに開きます</div></div>`:safe(r.fn,CUR.id,CUR.q);
+    const right=isRoot?'':safe(r.fn,CUR.id,CUR.q);
     app.innerHTML=`<section class="pane-l">${left}</section><main class="pane-r screen" id="screen">${right}</main>`;app.dataset.root=rootName;
     if(sameRoot)app.querySelector('.pane-l').scrollTop=ly;
     app.querySelectorAll(`.pane-l a[href="${location.hash}"]`).forEach(a=>a.classList.add('sel'));
@@ -238,7 +243,7 @@ function openCreate(){
   const tab=lastTab;
   const items=[...CREATE].sort((a,b)=>(b.primaryOn||[]).includes(tab)-(a.primaryOn||[]).includes(tab));
   const [first,...rest]=items;
-  const act=(c,primary)=>`<button class="action ${primary?'primary':''}" type="button" onclick="closeSheet();setTimeout(()=>{${c.onclick}},120)">${ico(c.icon,c.color||'var(--brand)')}<span class="grow"><div class="t">${esc(c.label)}</div>${c.sub?`<div class="s">${esc(c.sub)}</div>`:''}</span></button>`;
+  const act=(c,primary)=>`<button class="action ${primary?'primary':''}" type="button" onclick="closeSheet();setTimeout(()=>{${c.onclick}},120)">${ico(c.icon,c.color||'var(--brand)')}<span class="grow"><div class="t">${esc(c.label)}</div></span></button>`;
   openSheet({title:'作成',body:`<div class="actions">${first?act(first,true):''}${rest.map(c=>act(c)).join('')}</div>`});
 }
 
@@ -256,7 +261,7 @@ const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 /* ---------- このモックについて ---------- */
 function openAbout(){
   openSheet({title:'このモックについて',body:`
-    ${sh('概要')}${list([prop('版','UI v3(プロダクト品質の再設計)'),prop('データ','架空。操作はこのブラウザに保存'),prop('今日','2026年10月31日(土) として表示')])}
+    ${sh('概要')}${list([prop('版','UI v5(意味表との照合)'),prop('データ','架空。操作はこのブラウザに保存'),prop('今日','2026年10月31日(土) として表示')])}
     ${sh('表示')}${list([row({t:'テーマ',v:`<select class="input" style="height:36px;width:auto" onchange="setTheme(this.value)"><option value="">端末に合わせる</option><option value="light">ライト</option><option value="dark">ダーク</option></select>`})])}
     ${sh('データ')}<div class="btnrow"><button class="btn danger" type="button" onclick="resetData()">${IC.trash}データを初期状態に戻す</button></div>
     <p class="hint">旧版(UI v2)は別のURLに残しています。<a href="../" style="color:var(--brand)">UI v2 を開く</a></p>`});
