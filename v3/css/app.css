@@ -732,3 +732,81 @@ a.dh2:active .dt b{text-decoration:underline}
 .nav .badge{color:var(--on-late)}
 .cap .cd{color:var(--on-late)}
 .action.primary{color:var(--on-me)} .action.primary .ico{color:var(--on-me)}
+
+/* =====================================================================
+   v5(11/01): 意味表との照合で見つかった不一致の修正(以前の定義より優先)
+   ===================================================================== */
+/* 日の区切り = 1つの部品(dh2)。タイムライン・詳細の前後・家計簿で同じ見た目 */
+.pin .dh2{--tcol:0px;--rail:20px;position:relative;top:auto;margin-left:-30px;padding:22px 0 6px 30px;background:none;backdrop-filter:none}
+.pin .dh2 .rule{left:0;right:0}
+.dh2.noax{position:relative;top:auto;padding:22px var(--gutter) 8px;background:none;backdrop-filter:none}
+.dh2.noax::before{display:none}
+.dh2.noax .rule{left:var(--gutter);right:var(--gutter)}
+.dh2 .dt .grow{flex:1}
+/* 詳細の前後の軸: 区間ごとに過去=実線 / 未来=点線 */
+.pin::before{display:none}
+.pin>*{position:relative}
+.pin>.pin-n::after,.pin>.pin-cur::after,.pin>.pin-now::after{content:"";position:absolute;left:-21px;top:0;bottom:0;width:2px;background:var(--axis-past);z-index:0}
+.pin>.fut::after{background:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
+.pin>.pin-now::after{top:50%;}
+.pin>.pin-now::before{content:"";position:absolute;left:-21px;top:0;height:50%;width:2px;background:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
+.pin-cur>.node,.pin-n .pn{z-index:1}
+.pin-now{display:flex;align-items:center;height:32px}
+.pin-now span{position:relative;z-index:1;margin-left:-30px;display:flex;align-items:center;gap:8px;width:calc(100% + 30px);font:600 12px/1 var(--font);color:var(--late);font-variant-numeric:tabular-nums}
+.pin-now span::before{content:"";width:22px;height:3px;border-radius:2px;background:var(--late);flex:none}
+.pin-now span::after{content:"";flex:1;height:3px;border-radius:2px;background:linear-gradient(90deg,var(--late),color-mix(in srgb,var(--late) 0%,transparent))}
+.pin-n.late .pn{outline-color:var(--late)}
+.pin-cur.fut>.node{background:var(--bg);outline:2px dashed var(--plan);outline-offset:-2px}
+.pin-cur.fut>.node::after{background:var(--plan)}
+.cap.plan.late{outline-color:var(--late)}
+/* 予定の残り時間: データの文字(ピルでも赤でもない) */
+.cap .cd{display:block;margin-top:6px;padding:0;border-radius:0;background:none;color:var(--ink-2);font:600 15px/1.3 var(--font)}
+/* 1つの支払いの棒(一覧の行・精算) */
+.pbar{display:flex;width:64px;height:6px;margin:4px 0 0 auto;border-radius:3px;overflow:hidden;gap:1px;background:var(--sunk)}
+.pbar i{display:block;height:100%;min-width:0}
+.pbar i.me{background:var(--me)} .pbar i.other{background:var(--axis)}
+.pbar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 2px,color-mix(in srgb,var(--owe) 40%,transparent) 2px 4px)}
+.pbar.lg{width:28px;height:10px;margin:0;border-radius:3px}
+.pbar.lg i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 3px,color-mix(in srgb,var(--owe) 40%,transparent) 3px 6px)}
+/* 貸し借り(立替・未精算) = 琥珀 */
+.suggest.owe{background:var(--owe-soft)}
+/* 縁の参照 = 輪郭+名前。囲みを付けない(ピルは操作だけ) */
+.ref,.ref.unreg{min-height:32px;padding:0;border-radius:0;background:none;box-shadow:none;border:0;color:var(--ink);font:500 15px/1.3 var(--font)}
+.ref.unreg{color:var(--ink-2)}
+a.ref:active{background:none;text-decoration:underline}
+.dp-kin{gap:4px 16px}
+/* 切替(操作) = ピル */
+.seg{background:none;padding:0;gap:8px;overflow-x:auto;scrollbar-width:none}
+.seg button{flex:none;height:36px;padding:0 14px;border-radius:var(--r-pill);border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font:var(--t-label)}
+.seg button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg);box-shadow:none;font-weight:600}
+.ld-mini{background:none;padding:0;gap:6px;border-radius:0}
+.ld-mini button{height:36px;border-radius:var(--r-pill);border:1px solid var(--line-strong);background:var(--surface);color:var(--ink)}
+.ld-mini button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg);box-shadow:none}
+.ld-seg .seg button{height:36px}
+/* 縁の事実が変わった点 = 塗りのひし形(確定した事実) */
+.ax-node.fact{background:var(--kin);box-shadow:0 0 0 3px var(--bg)}
+/* 2列: 右に開いているもの = 自分が選んだ(薄い青の面)。左の線は使わない */
+.pane-l .sel{box-shadow:none;background:var(--me-soft)}
+/* 作成: 操作の一覧。面(オブジェクト)にしない。主ボタンだけ青の塗り */
+.actions{grid-template-columns:1fr;gap:0;padding:4px var(--gutter)}
+.action{flex-direction:row;align-items:center;gap:14px;min-height:56px;padding:6px 4px;border-radius:0;background:none;box-shadow:none;border-top:1px solid var(--line)}
+.action.primary{min-height:56px;margin-bottom:8px;padding:6px 14px;border-radius:var(--r-sm);border-top:0;background:var(--me)}
+.action.primary+.action{border-top:0}
+.action .t{font:500 15px/1.3 var(--font)}
+/* 家計簿の推移: 月ごとの自分の支出の棒 */
+.ld-chart{gap:10px}
+.ld-tr{display:grid;grid-template-columns:32px 1fr auto;align-items:center;gap:10px;font:var(--t-cap);color:var(--ink-2)}
+.ld-tr .tb{min-width:0}
+.ld-tr .ld-bar{height:12px;border-radius:3px}
+.ld-tr .v{font:500 13px/1 var(--font);color:var(--ink-2);min-width:72px;text-align:right}
+.ld-tr.on .mo,.ld-tr.on .v{color:var(--ink);font-weight:700}
+.ld-tr.on .ld-bar{height:16px}
+/* 人・場所の一覧: 最後に交わった日と回数は右の列 */
+.en-ago{display:flex;flex-direction:column;align-items:flex-end;gap:3px;font:var(--t-label);color:var(--ink-2);white-space:nowrap}
+.en-ago small{font:var(--t-cap);color:var(--ink-3)}
+.pin-cur.plan>.node{background:var(--bg);outline:2px dashed var(--plan);outline-offset:-2px}
+.pin-cur.plan>.node::after{background:var(--plan)}
+.pin-cur.plan.late>.node{outline-color:var(--late)}
+.pin-cur.plan.late>.node::after{background:var(--late)}
+.prop .ld-mini button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg);box-shadow:none;font-weight:600}
+.ld-seg .seg button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}

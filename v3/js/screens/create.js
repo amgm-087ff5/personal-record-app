@@ -109,7 +109,7 @@ function crPanel(title,body,opt={}){
 
 /* ---------- 登録 ---------- */
 CREATE.push({id:'receipt',label:'レシートで支払い',sub:'撮影・写真から',icon:'pay',color:'var(--cap-ink)',primaryOn:['activities','ledger'],onclick:'openReceipt()'});
-CREATE.push({id:'happening',label:'出来事',sub:'会話・移動など',icon:'moment',color:'var(--cap-ink)',primaryOn:[],onclick:'openNewHappening()'});
+CREATE.push({id:'happening',label:'出来事',sub:'会話・移動など',icon:'spark',color:'var(--cap-ink)',primaryOn:[],onclick:'openNewHappening()'});
 CREATE.push({id:'event',label:'予定',sub:'これからの予定',icon:'future',color:'var(--plan)',primaryOn:['plan'],onclick:'openNewEvent()'});
 CREATE.push({id:'entity',label:'人・場所',sub:'人物・店・会社・物',icon:'kin',color:'var(--kin)',primaryOn:['entities'],onclick:'openNewEntity()'});
 CREATE.push({id:'diary',label:'今日の日記',sub:'',icon:'diary',color:'var(--cap-ink)',primaryOn:[],onclick:'openDiary(TODAY)'});

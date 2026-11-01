@@ -94,29 +94,14 @@ function ldAxisSet(a){ldAxis=a;ldFilter=null;rerender()}
 function ldClear(){ldFilter=null;rerender()}
 function ldStep(d){ldM=Math.min(ldMonths().length-1,Math.max(0,ldM+d));ldFilter=null;rerender()}
 
-/** 推移の積み上げ棒(SVG)。最後の棒が10月(今月は枠線で示す) */
-const ldBarPath=(x,y,w,h,r)=>r?`M${x} ${y+h}V${y+r}Q${x} ${y} ${x+r} ${y}H${x+w-r}Q${x+w} ${y} ${x+w} ${y+r}V${y+h}Z`:`M${x} ${y}h${w}v${h}h${-w}Z`;
+/** 推移: 月ごとの「自分の支出の棒」を縦に並べる(最上部の棒と同じ形。区間=カテゴリ)。上=新しい月 */
 function ldChart(months){
-  const roots=ROOTS(),W=340,H=112,n=months.length,bw=34,gap=(W-bw*n)/(n-1);
-  const tots=months.map(m=>ldTotal(m[2]));
-  const past=tots.slice(0,-1),avg=Math.round(past.reduce((a,b)=>a+b,0)/past.length);
-  const max=Math.max(...tots)*1.2,Y=v=>H-v/max*H;
-  let g='';
-  months.forEach((m,i)=>{
-    const x=i*(bw+gap),cur=i===n-1;
-    const segs=roots.filter(r=>m[2][r]>0);
-    let base=H;
-    segs.forEach((r,j)=>{
-      const h=Math.max(m[2][r]/max*H,1),y=base-h,top=j===segs.length-1;
-      g+=`<path d="${ldBarPath(x,y,bw,h,top?Math.min(4,h/2):0)}" fill="${catColor(r)}"/>`;
-      base=y;
-    });
-    if(cur)g+=`<rect class="cur" x="${x-2}" y="${Y(tots[i])-2}" width="${bw+4}" height="${H-Y(tots[i])+4}"/>`;
-    g+=`<text class="${cur?'on':''}" x="${x+bw/2}" y="${H+18}" text-anchor="middle">${m[1]}</text>`;
-    if(cur)g+=`<text class="vl" x="${x+bw}" y="${Y(tots[i])-6}" text-anchor="end">${yen(tots[i])}</text>`;
-  });
-  g+=`<line x1="0" x2="${W}" y1="${Y(avg)}" y2="${Y(avg)}"/><text class="avg" x="0" y="${Y(avg)-6}">平均 ${yen(avg)}</text>`;
-  return `<svg class="ld-svg" viewBox="0 -20 ${W} ${H+42}" role="img" aria-label="月ごとの支出の推移">${g}</svg>`;
+  const roots=ROOTS(),tots=months.map(m=>ldTotal(m[2])),max=Math.max(...tots);
+  return months.map((m,i)=>[m,i]).reverse().map(([m,i])=>{
+    const cur=i===months.length-1;
+    const segs=roots.filter(r=>m[2][r]>0).sort((a,b)=>m[2][b]-m[2][a]);
+    return `<div class="ld-tr ${cur?'on':''}"><span class="mo">${m[1]}</span><span class="tb"><span class="ld-bar" style="width:${(tots[i]/max*100).toFixed(1)}%">${segs.map(r=>`<i style="flex:${m[2][r]} 1 0;background:${catColor(r)}"></i>`).join('')}</span></span><span class="v num">${yen(tots[i])}</span></div>`;
+  }).join('');
 }
 
 /** 内訳の行(軸は ldAxis)。今月だけ */
@@ -172,8 +157,7 @@ route('ledger',()=>{
   const figs=isNow?`<div class="ld-fig">${figBtn('固定費','fx','固定',fixed)}${figBtn('変動費','fx','変動',tot-fixed)}${figBtn('✦ 非日常','sp','非日常',nonDaily,'ink')}</div>`:'';
   const summary=list([`<div class="ld-sum"><div class="ld-lbl">自分の支出</div><div class="ld-r"><span class="ld-big num">${yen(tot)}</span>${diff!=null?tag(`前月比 ${diff>0?'+':''}${diff}%`):''}</div>${bar}${legend}</div>${figs}`]);
 
-  const chartLegend=roots.filter(r=>months.some(m=>m[2][r]>0)).map(r=>`<span style="--cc:${catColor(r)}"><i></i>${esc(CATS[r].n)}</span>`).join('');
-  const chart=list([`<div class="ld-chart"><div class="ld-legend">${chartLegend}</div>${ldChart(months)}</div>`]);
+  const chart=list([`<div class="ld-chart">${ldChart(months)}</div>`]);
 
   let breakdown='',upcoming='',spend='';
   if(isNow){
@@ -187,7 +171,7 @@ route('ledger',()=>{
     const body=Object.keys(byDay).sort().reverse().map(d=>{
       const items=byDay[d].sort((a,b)=>(A[b[1].pay].time||'').localeCompare(A[a[1].pay].time||''));
       const sum=items.reduce((s,e)=>s+e[1].amt,0);
-      return sh(fmtMDW(d),items.length>=2?yen(sum):'')+objs(items.map(([k,x])=>ldExpRow(k,x)));
+      return dayHead(d,{noax:true,href:'#/day/'+d,sum:items.length>=2?`自分 ${yen(sum)}`:''})+objs(items.map(([k,x])=>ldExpRow(k,x)));
     }).join('');
     const clear=ldFilter?`<div class="ld-clear">${chips([['x',`${AX_NAME[ldFilter.ax]}: ${ldFilterName()} ×`]],'x','ldClear()')}</div>`:'';
     spend=sh('支出',`${fl.length}件`)+clear+(fl.length?body:empty('expense','該当する支出はありません'));
@@ -222,10 +206,10 @@ route('x',id=>{
   const f=Math.max(0.04,Math.min(1,x.amt/p.amt));
   const owed=p.adv&&p.adv[2]==='未精算';
   const pr=(p.roles||[]).filter(r=>r[1]&&E[r[1]]&&r[1]!=='me'&&!['支払先','支払者'].includes(r[0])).map(r=>r[1]);
-  const top=`<section class="zm"><a class="zm-parent" href="#/a/${x.pay}">${ico('pay','var(--cap-ink)')}<span class="grow"><div class="t ell">${esc(p.title)}<span class="faint" style="font-weight:400">、${esc(shopOf(x))}</span></div><div class="s">支払い ${fmtMD(date)} ${esc(p.time||'')}</div></span><span class="v">${yen(p.amt)}</span>${IC.chev}</a>`
+  const top=`<section class="zm"><a class="zm-parent" href="#/a/${x.pay}">${ico('pay','var(--ink)')}<span class="grow"><div class="t ell">${esc(p.title)}<span class="faint" style="font-weight:400">、${esc(shopOf(x))}</span></div><div class="s">支払い ${fmtMD(date)} ${esc(p.time||'')}</div></span><span class="v">${yen(p.amt)}</span>${IC.chev}</a>`
     +`<div class="zm-bar" aria-label="支払い ${yen(p.amt)} のうち自分 ${yen(x.amt)}"><i class="me" style="flex:${x.amt}"></i>${rest>0?`<i class="${owed?'owed':'other'}" style="flex:${rest}"></i>`:''}</div>`
     +`<svg class="zm-lens" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,0 ${(f*100).toFixed(1)},0 100,30 0,30" fill="var(--me)" opacity=".16"/><line x1="${(f*100).toFixed(1)}" y1="0" x2="100" y2="30" stroke="var(--me)" stroke-width="1" vector-effect="non-scaling-stroke" opacity=".5"/></svg>`
-    +`<div class="zm-card ld-zcard"><div class="big">${yen(x.amt)}</div><div class="pct">支払いの ${Math.round(x.amt/p.amt*100)}%${rest>0?`、ほか ${yen(rest)}${pr.length?`は${pr.map(i=>esc(E[i].n.split(' ').pop())+'さん').join('、')}の分`:''}`:''}</div></div></section>`;
+    +`<div class="zm-card ld-zcard"><div class="big">${yen(x.amt)}</div><div class="pct">支払い ${yen(p.amt)} の ${Math.round(x.amt/p.amt*100)}%</div></div></section>`;
   const over=tag('この支出だけ',{cls:'brand'});
   return appbar('',{actions:[{icon:'more',label:'その他の操作',onclick:`ldMenu('${id}')`}]})
     +top

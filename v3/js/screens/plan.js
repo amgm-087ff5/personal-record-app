@@ -122,7 +122,7 @@ function plCalPane(){
   const head=`<div class="pl-mh"><button class="pl-nav" type="button" onclick="plMove(-1)">前の月</button><b class="num">${y}年${m}月</b><button class="pl-nav" type="button" onclick="plMove(1)">次の月</button></div>`;
   const wd=`<div class="pl-wd">${WD.split('').map((w,i)=>`<span class="${i===0?'sun':i===6?'sat':''}">${w}</span>`).join('')}</div>`;
   const legend=`<div class="pl-legend"><span><i class="pl-bar plan pl-key"></i>予定</span><span><i class="pl-bar rec pl-key"></i>記録</span></div>`;
-  return `<div class="list pl-cal">${head}${wd}<div class="pl-grid">${cells}</div>${legend}</div>`
+  return `<div class="list pl-cal">${head}${wd}<div class="pl-grid">${cells}</div></div>`
     +plDayAx(plSel);
 }
 function plSelect(d){plSel=d;rerender()}
@@ -329,23 +329,26 @@ route('ev',id=>{
     const n=Math.round((new Date(od+'T00:00')-new Date(TODAY+'T00:00'))/864e5);
     cd=n===1?'明日':`${n}日後`;
   }
-  const cap=`<section class="cap plan"><div class="kind">${IC.schedule}予定</div><h1>${esc(e.t)}</h1><div class="big">${e.all?'終日':`${e.s}–${e.e}`}</div>${cd?`<span class="cd">${cd}</span>`:''}<div class="meta"><span>${IC.schedule}${fmtMDW(od)}${e.d2?' – '+fmtMDW(e.d2):''}</span>${placeOf(e)?`<span>${IC.place}${esc(placeOf(e))}</span>`:''}${e.pay?`<span>${IC.pay}${yen(e.pay.amt)} 支払い予定</span>`:''}</div></section>`;
-  /* 同じ日のほかの予定・記録を前後に並べる(未来側の軸) */
-  const same=[...evOn(od).filter(([k,x])=>k!==id&&!x.hol).map(([k,x])=>({time:x.all?'終日':x.s,title:x.t,href:'#/ev/'+k,plan:!x.rec,sort:x.all?'00:00':x.s})),
-    ...(typeof kidsOf==='function'?kidsOf(od):[]).map(([k,x])=>({time:x.time,title:x.title,href:'#/a/'+k,sort:x.time||''}))].sort((p,q)=>q.sort.localeCompare(p.sort));
+  const late=!rec&&(od<TODAY||(od===TODAY&&!e.all&&e.s<NOW));
+  const cap=`<section class="cap plan ${late?'late':''}"><div class="kind">${IC.schedule}予定</div><h1>${esc(e.t)}</h1><div class="big">${e.all?'終日':`${e.s}–${e.e}`}</div>${cd?`<span class="cd">${cd}</span>`:''}<div class="meta"><span>${fmtMDW(od)}${e.d2?' – '+fmtMDW(e.d2):''}</span>${e.pay?`<span>${IC.pay}${yen(e.pay.amt)} 支払い予定</span>`:''}</div></section>`;
+  /* 同じ日のほかの予定・記録を前後に並べる。今日なら「いま」の線を挟み、いまより上は点線(未来) */
+  const isToday=od===TODAY,fut=t=>od>TODAY||(isToday&&t>NOW);
+  const same=[...evOn(od).filter(([k,x])=>k!==id&&!x.hol).map(([k,x])=>{const t=x.all?'00:00':x.s;return {time:x.all?'終日':x.s,title:x.t,href:'#/ev/'+k,plan:!x.rec,late:!x.rec&&!fut(t)&&!x.all,fut:fut(t),sort:t}}),
+    ...(typeof kidsOf==='function'?kidsOf(od):[]).map(([k,x])=>({time:x.time,title:x.title,href:'#/a/'+k,icon:(AX_NODE[x.type]||[])[1],sort:x.time||''}))].sort((p,q)=>q.sort.localeCompare(p.sort));
   const me=e.all?'00:00':e.s;
-  const axis=pinView({future:true,later:[{day:od},...same.filter(x=>x.sort>me)],earlier:same.filter(x=>x.sort<=me),cap,capColor:'var(--plan)'});
+  const later=same.filter(x=>x.sort>me),earlier=same.filter(x=>x.sort<=me);
+  if(isToday){const now={now:1};if(me>NOW){const i=earlier.findIndex(x=>x.sort<=NOW);earlier.splice(i<0?earlier.length:i,0,now)}else{const i=later.findIndex(x=>x.sort<=NOW);later.splice(i<0?later.length:i,0,now)}}
+  const axis=pinView({future:fut(me),later:[{day:od,fut:od>=TODAY&&(od>TODAY||later.some(x=>x.fut)||fut(me))},...later],earlier,cap,plan:true,late});
+  const kin=[e.place?prop('場所',eref(e.place[0],e.place[1],'place')):'',e.who?prop('参加者',e.who.filter(w=>E[w]).map(w=>eref(w)).join('')):''].filter(Boolean);
   const props=[
-    e.place?prop('場所',eref(e.place[0],e.place[1])):'',
-    e.who?prop('参加者',e.who.filter(w=>E[w]).map(w=>eref(w)).join('')):'',
     prop('繰り返し',esc(e.rep||'なし')),
     prop('通知',esc(e.alarm||'なし')),
     e.memo?prop('メモ',esc(e.memo)):'',
   ].join('');
   return '<div class="pl-root">'+appbar('',{actions:[{icon:'more',label:'操作',onclick:"toast('編集はモックでは未対応です')"}]})
     +axis
-    +sh('詳細')+list([props])
-    +(unreg?suggest(`「${esc(e.place[1])}」はまだ登録されていません`,{label:'場所として登録',onclick:`plRegisterPlace('${id}')`}):'')
+    +(kin.length?sh('会う人・場所',kin.length,unreg?{label:'場所として登録',onclick:`plRegisterPlace('${id}')`}:null)+list(kin):'')
+    +`<div class="mt"></div>`+list([props])
     +(tasks.length?sh('この予定のToDo',tasks.length)+objs(tasks.map(plEvTaskRow)):'')
     +sh('記録')
     +(rec
@@ -397,14 +400,14 @@ route('task',id=>{
   const subs=t.sub||[];
   const listOpts=Object.entries(LISTS).map(([k,L])=>`<option value="${k}" ${k===t.list?'selected':''}>${esc(L.n)}</option>`).join('');
   const links=[
-    ev?row({href:'#/ev/'+t.ev,lead:`<span class="ax-node plan" style="margin:0">${IC.schedule}</span>`,t:esc(ev.t),s:fmtMDW(ev.d),chev:1}):'',
+    ev?row({href:'#/ev/'+t.ev,lead:`<span class="ax-node plan" style="margin:0"></span>`,t:esc(ev.t),s:fmtMDW(ev.d),chev:1}):'',
     ...(t.ent||[]).filter(x=>E[x]).map(x=>row({t:eref(x)})),
     t.pay&&A[t.pay]?row({t:aref(t.pay)}):'',
   ].filter(Boolean);
   const sub=[t.due?'期限 '+fmtMDW(t.due):'期限なし',t.done?'完了 '+fmtMD(t.done):''].filter(Boolean);
   return '<div class="pl-root">'+appbar('ToDo')
     +`<div class="pl-card"><div class="pl-tk">${checkbox(!!t.done,`toggleTask('${id}')`,true)}<h1 class="${t.done?'pl-done-t':''}">${esc(t.t)}</h1></div>${sub.length?`<div class="meta">${sub.map(x=>`<span>${x}</span>`).join('')}</div>`:''}</div>`
-    +sh('詳細')+list([
+    +`<div class="mt"></div>`+list([
       prop('期限',`<input class="input" type="date" aria-label="期限" value="${t.due||''}" onchange="plSetDue('${id}',this.value)">`),
       prop('リスト',`<select class="input" aria-label="リスト" onchange="plSetList('${id}',this.value)">${listOpts}</select>`),
       prop('繰り返し',esc(t.rep||'なし')),
