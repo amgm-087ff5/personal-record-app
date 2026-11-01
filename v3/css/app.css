@@ -700,3 +700,4 @@ a.pin-n:active{color:var(--ink)}
 .lt .btn.ghost{height:40px;padding:0 10px;color:var(--me)}
 .dp-ph{width:88px;height:88px;flex:none;border-radius:12px;display:block}
 .dp-kin{display:flex;flex-wrap:wrap;gap:8px;margin:0 var(--gutter)}
+.cr-b{position:relative}.cr-b::before{content:"";position:absolute;inset:-6px 0}

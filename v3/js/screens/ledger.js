@@ -162,7 +162,7 @@ route('ledger',()=>{
   const roots=ROOTS(),ranked=roots.filter(r=>cur[r]>0).sort((a,b)=>cur[b]-cur[a]);
   const fixed=ldSum(x=>xFx(x)==='固定'),nonDaily=ldSum(x=>xSp(x)==='非日常');
 
-  const nav=`<div class="ld-month"><button class="iconbtn" type="button" aria-label="前の月" onclick="ldStep(-1)" ${ldM===0?'disabled':''}>${IC.back}</button><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b><button class="iconbtn" type="button" aria-label="次の月" onclick="ldStep(1)" ${isNow?'disabled':''}>${IC.chev}</button></div>`;
+  const nav=`<div class="ld-month"><button class="btn sm ghost" type="button" onclick="ldStep(-1)" ${ldM===0?'disabled':''}>前の月</button><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b><button class="btn sm ghost" type="button" onclick="ldStep(1)" ${isNow?'disabled':''}>次の月</button></div>`;
   const note=isNow?'':banner('info','この月の明細は10月だけ表示しています。');
 
   const bar=`<div class="ld-bar" role="img" aria-label="大分類の割合">${ranked.map(r=>`<i style="flex:${cur[r]} 1 0;background:${catColor(r)}"></i>`).join('')}</div>`;
@@ -222,7 +222,7 @@ route('x',id=>{
   const f=Math.max(0.04,Math.min(1,x.amt/p.amt));
   const owed=p.adv&&p.adv[2]==='未精算';
   const pr=(p.roles||[]).filter(r=>r[1]&&E[r[1]]&&r[1]!=='me'&&!['支払先','支払者'].includes(r[0])).map(r=>r[1]);
-  const top=`<section class="zm"><a class="zm-parent" href="#/a/${x.pay}">${ico('pay','var(--c-expense)')}<span class="grow"><div class="t ell">${esc(p.title)}<span class="faint" style="font-weight:400">、${esc(shopOf(x))}</span></div><div class="s">支払い ${fmtMD(date)} ${esc(p.time||'')}</div></span><span class="v">${yen(p.amt)}</span>${IC.chev}</a>`
+  const top=`<section class="zm"><a class="zm-parent" href="#/a/${x.pay}">${ico('pay','var(--cap-ink)')}<span class="grow"><div class="t ell">${esc(p.title)}<span class="faint" style="font-weight:400">、${esc(shopOf(x))}</span></div><div class="s">支払い ${fmtMD(date)} ${esc(p.time||'')}</div></span><span class="v">${yen(p.amt)}</span>${IC.chev}</a>`
     +`<div class="zm-bar" aria-label="支払い ${yen(p.amt)} のうち自分 ${yen(x.amt)}"><i class="me" style="flex:${x.amt}"></i>${rest>0?`<i class="${owed?'owed':'other'}" style="flex:${rest}"></i>`:''}</div>`
     +`<svg class="zm-lens" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,0 ${(f*100).toFixed(1)},0 100,30 0,30" fill="var(--me)" opacity=".16"/><line x1="${(f*100).toFixed(1)}" y1="0" x2="100" y2="30" stroke="var(--me)" stroke-width="1" vector-effect="non-scaling-stroke" opacity=".5"/></svg>`
     +`<div class="zm-card ld-zcard"><div class="big">${yen(x.amt)}</div><div class="pct">支払いの ${Math.round(x.amt/p.amt*100)}%${rest>0?`、ほか ${yen(rest)}${pr.length?`は${pr.map(i=>esc(E[i].n.split(' ').pop())+'さん').join('、')}の分`:''}`:''}</div></div></section>`;

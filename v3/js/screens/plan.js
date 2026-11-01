@@ -6,8 +6,11 @@
 document.head.insertAdjacentHTML('beforeend','<style>'+`
 .pl-root .seg button{height:44px}
 .pl-root .chip{height:44px}
-.pl-root .sh .act{min-height:44px}
+.pl-root .sh .act{min-height:44px;min-width:44px;justify-content:center}
 .pl-root .btn.sm{height:44px}
+.pl-root .pin-n{min-height:44px}
+.pl-root .ref{position:relative}
+.pl-root a.ref::after{content:"";position:absolute;inset:-6px -2px}
 .pl-nav{height:44px;padding:0 12px;border-radius:var(--r-pill);font:var(--t-label);color:var(--me);white-space:nowrap}
 .pl-nav:active{background:var(--sunk)}
 .pl-cal{padding:8px 8px 10px}
@@ -172,7 +175,7 @@ function plDayView(){
   timed.forEach(b=>{let i=lanesEnd.findIndex(en=>en<=b.s);if(i<0){i=lanesEnd.length;lanesEnd.push(0)}lanesEnd[i]=b.e;b.i=i});
   const N=Math.max(1,lanesEnd.length);
   const blocks=timed.map(({x,s,e,i})=>{
-    const top=(s-H0*60)/60*PH, h=Math.max((e-s)/60*PH,28);
+    const top=(s-H0*60)/60*PH, h=Math.max((e-s)/60*PH,44);
     const isRec=x.kind==='rec';
     const href=isRec?'#/a/'+x.k:'#/ev/'+x.k;
     const tm=x.end?`${x.time}–${x.end}`:x.time;
@@ -189,27 +192,27 @@ function plDayView(){
 
 /* ---------- 3週間(今日から21日の時間軸) ---------- */
 function plListAx(){
+  /* タイムラインの未来側と同じ向き: 上=遠い未来、下=いま(DESIGN.md §4) */
   let html='', n=0;
-  for(let i=0;i<21;i++){
+  for(let i=20;i>=0;i--){
     const d=addDays(TODAY,i);
-    const its=plItemsOn(d);
+    const its=plItemsOn(d).slice().sort((a,b)=>b.time.localeCompare(a.time));
     if(!its.length&&d!==TODAY)continue;
     n+=its.length;
     const hol=evOn(d).find(([k,e])=>e.hol);
-    html+=dayHead(d,{href:'#/day/'+d,future:d>TODAY,empty:hol?hol[1].t:' '});
-    let nowDone=d!==TODAY;
+    let body='',nowDone=d!==TODAY;
     for(const x of its){
-      if(!nowDone&&!x.all&&x.time>NOW){html+=nowLine();nowDone=true}
-      if(x.kind==='rec'){html+=momentRow(x.k);continue}
-      const e=EV[x.k];
-      const fut=d>TODAY||(!e.all&&e.s>NOW);
-      html+=planRowAx(x.k,{future:fut,late:!fut&&!e.all});
+      if(!nowDone&&(x.all||x.time<=NOW)){body+=nowLine();nowDone=true}
+      if(x.kind==='rec'){body+=momentRow(x.k);continue}
+      const e=EV[x.k];const fut=d>TODAY||(!e.all&&e.s>NOW);
+      body+=planRowAx(x.k,{future:fut,late:!fut});
     }
-    if(!nowDone)html+=nowLine();
+    if(!nowDone)body+=nowLine();
+    html+=dayHead(d,{href:'#/day/'+d,future:d>TODAY,empty:hol?hol[1].t:''})+body;
   }
   return n
-    ?sh('今日から3週間',n)+`<div class="ax">${html}</div>`
-    :sh('今日から3週間')+empty('schedule','3週間の予定はありません');
+    ?sh('いまから3週間',n)+`<div class="ax">${axEdge('3週間より先は月で見る')}${html}</div>`
+    :sh('いまから3週間')+empty('schedule','3週間の予定はありません');
 }
 
 /* ---------- ToDo ---------- */
@@ -339,7 +342,7 @@ route('ev',id=>{
     prop('通知',esc(e.alarm||'なし')),
     e.memo?prop('メモ',esc(e.memo)):'',
   ].join('');
-  return appbar('',{actions:[{icon:'more',label:'操作',onclick:"toast('編集はモックでは未対応です')"}]})
+  return '<div class="pl-root">'+appbar('',{actions:[{icon:'more',label:'操作',onclick:"toast('編集はモックでは未対応です')"}]})
     +axis
     +sh('詳細')+list([props])
     +(unreg?suggest(`「${esc(e.place[1])}」はまだ登録されていません`,{label:'場所として登録',onclick:`plRegisterPlace('${id}')`}):'')
@@ -347,7 +350,7 @@ route('ev',id=>{
     +sh('記録')
     +(rec
       ?`<div class="ax">${momentRow(e.rec)}</div>`
-      :`<div class="btnrow"><button class="btn block" type="button" onclick="recordEvent('${id}')">${IC.check}記録にする</button></div>`);
+      :`<div class="btnrow"><button class="btn block" type="button" onclick="recordEvent('${id}')">${IC.check}記録にする</button></div>`)+'</div>';
 },{tab:'plan'});
 function plEvTaskRow(k){
   const t=TD[k];
@@ -399,7 +402,7 @@ route('task',id=>{
     t.pay&&A[t.pay]?row({t:aref(t.pay)}):'',
   ].filter(Boolean);
   const sub=[t.due?'期限 '+fmtMDW(t.due):'期限なし',t.done?'完了 '+fmtMD(t.done):''].filter(Boolean);
-  return appbar('ToDo')
+  return '<div class="pl-root">'+appbar('ToDo')
     +`<div class="pl-card"><div class="pl-tk">${checkbox(!!t.done,`toggleTask('${id}')`,true)}<h1 class="${t.done?'pl-done-t':''}">${esc(t.t)}</h1></div>${sub.length?`<div class="meta">${sub.map(x=>`<span>${x}</span>`).join('')}</div>`:''}</div>`
     +sh('詳細')+list([
       prop('期限',`<input class="input" type="date" aria-label="期限" value="${t.due||''}" onchange="plSetDue('${id}',this.value)">`),
@@ -409,7 +412,7 @@ route('task',id=>{
     ])
     +(links.length?sh('結び付き')+list(links):'')
     +(subs.length?sh('サブタスク',subs.filter(x=>x[1]).length+'/'+subs.length)+list(subs.map((x,i)=>row({cls:'plain',lead:checkbox(x[1],`plSubToggle('${id}',${i})`),t:`<span class="${x[1]?'pl-done-t':''}">${esc(x[0])}</span>`}))):'')
-    +(t.memo?sh('メモ')+list([row({cls:'plain',wrap:true,t:esc(t.memo)})]):'');
+    +(t.memo?sh('メモ')+list([row({cls:'plain',wrap:true,t:esc(t.memo)})]):'')+'</div>';
 },{tab:'plan'});
 function plSetDue(k,v){if(v)TD[k].due=v;else delete TD[k].due;save();rerender()}
 function plSetList(k,v){TD[k].list=v;save();rerender()}
