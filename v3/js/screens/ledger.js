@@ -8,44 +8,44 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 .ld-month b{font:600 17px/1.4 var(--font);min-width:132px;text-align:center;font-variant-numeric:tabular-nums}
 .ld-month .iconbtn[disabled]{opacity:.3;pointer-events:none}
 .ld-sum{padding:16px 16px 14px;display:flex;flex-direction:column;gap:12px}
-.ld-lbl{font:var(--t-label);color:var(--ink-2)}
+.ld-lbl{font:var(--t-label);color:var(--tx-2)}
 .ld-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .ld-big{font:700 36px/1.1 var(--font);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
 .ld-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;gap:2px;background:var(--sunk)}
 .ld-bar i{display:block;height:100%;min-width:0}
-.ld-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font:var(--t-cap);color:var(--ink-2);font-variant-numeric:tabular-nums}
+.ld-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font:var(--t-cap);color:var(--tx-2);font-variant-numeric:tabular-nums}
 .ld-legend span{display:inline-flex;align-items:center;gap:6px}
 .ld-legend i{width:14px;height:6px;border-radius:3px;background:var(--cc)}
 .ld-fig{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
 .ld-fig button{display:flex;flex-direction:column;gap:4px;align-items:flex-start;padding:12px 14px;min-height:60px;text-align:left}
 .ld-fig button+button{border-left:1px solid var(--line)}
 .ld-fig button.on{background:var(--brand-soft)}
-.ld-fig .k{font:var(--t-cap);color:var(--ink-3)}
-.ld-fig .k.ink{color:var(--ink)}
+.ld-fig .k{font:var(--t-cap);color:var(--tx-3)}
+.ld-fig .k.strong{color:var(--tx)}
 .ld-fig .v{font:600 15px/1.3 var(--font);font-variant-numeric:tabular-nums}
 .ld-chart{padding:14px 16px 12px;display:flex;flex-direction:column;gap:12px}
 .ld-svg{width:100%;height:auto;display:block;overflow:visible}
-.ld-svg text{font:500 12px var(--font);fill:var(--ink-3)}
-.ld-svg .on{fill:var(--ink);font-weight:700}
-.ld-svg .vl{fill:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
-.ld-svg .avg{fill:var(--ink-2);paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round}
-.ld-svg line{stroke:var(--ink-3);stroke-width:1}
-.ld-svg .cur{fill:none;stroke:var(--ink);stroke-width:2}
+.ld-svg text{font:500 12px var(--font);fill:var(--tx-3)}
+.ld-svg .on{fill:var(--tx);font-weight:700}
+.ld-svg .vl{fill:var(--tx);font-weight:600;font-variant-numeric:tabular-nums}
+.ld-svg .avg{fill:var(--tx-2);paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round}
+.ld-svg line{stroke:var(--tx-3);stroke-width:1}
+.ld-svg .cur{fill:none;stroke:var(--tx);stroke-width:2}
 .ld-seg .seg{margin-bottom:12px}
 .ld-seg .seg button{height:44px}
 .ld-row.on{background:var(--brand-soft)}
 .ld-row .ld-m{display:block;margin-top:6px}
-.ld-pct{color:var(--ink-3);font-weight:400;font-size:12px;margin-left:6px}
+.ld-pct{color:var(--tx-3);font-weight:400;font-size:12px;margin-left:6px}
 .ld-kid{padding-left:36px;background:linear-gradient(var(--line-strong),var(--line-strong)) 19px 0/2px 100% no-repeat}
 .ld-kid2{padding-left:58px;background:linear-gradient(var(--line-strong),var(--line-strong)) 19px 0/2px 100% no-repeat,linear-gradient(var(--line-strong),var(--line-strong)) 41px 0/2px 100% no-repeat}
 .ld-clear{padding:0 0 12px}
 .ld-clear .chip{height:44px}
 .ld-mini{display:inline-flex;padding:2px;background:var(--sunk);border-radius:10px;gap:2px}
-.ld-mini button{height:40px;padding:0 14px;border-radius:8px;font:var(--t-label);color:var(--ink-2)}
-.ld-mini button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--e1);font-weight:600}
+.ld-mini button{height:40px;padding:0 14px;border-radius:8px;font:var(--t-label);color:var(--tx-2)}
+.ld-mini button[aria-pressed="true"]{background:var(--surface);color:var(--tx);box-shadow:var(--e1);font-weight:600}
 .ld-tap{width:100%;text-align:left}
-.ld-in{flex:1;min-width:0;height:44px;font:var(--t-body);color:var(--ink);outline:none}
-.ld-in::placeholder{color:var(--ink-3)}
+.ld-in{flex:1;min-width:0;height:44px;font:var(--t-body);color:var(--tx);outline:none}
+.ld-in::placeholder{color:var(--tx-3)}
 .ld-ref{min-height:44px;height:auto;margin-top:12px;padding:0 14px}
 .ld-chk{color:var(--brand);display:grid;place-items:center}
 .ld-sw{display:flex;flex-wrap:wrap;padding:0}
@@ -58,7 +58,7 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 .ld-pbar i.me{background:var(--me)}
 .ld-pbar i.rest{background:var(--axis)}
 .ld-pbar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 2px,color-mix(in srgb,var(--owe) 40%,transparent) 2px 4px)}
-.ld-exp .v small{display:block;font:var(--t-cap);color:var(--ink-3);font-weight:400;text-align:right}
+.ld-exp .v small{display:block;font:var(--t-cap);color:var(--tx-3);font-weight:400;text-align:right}
 /* 自分の支出の詳細の帯: 平らな青(グラデーション・影なし) */
 .ld-zcard{background:var(--me);box-shadow:none}
 </style>`);
@@ -123,9 +123,9 @@ function ldRows(tot,fixed,nonDaily){
         childrenOf(r).filter(c=>sumOf(c)>0).sort(byAmt).forEach(c=>out.push(brow(CATS[c].n,sumOf(c),'cat',c,catColor(c),'ld-kid')));
     });
   }else if(ldAxis==='fx'){
-    out.push(brow('固定',fixed,'fx','固定','var(--ink-2)'),brow('変動',tot-fixed,'fx','変動','var(--axis)'));
+    out.push(brow('固定',fixed,'fx','固定','var(--tx-2)'),brow('変動',tot-fixed,'fx','変動','var(--axis)'));
   }else{
-    out.push(brow('日常',tot-nonDaily,'sp','日常','var(--axis)'),brow('非日常',nonDaily,'sp','非日常','var(--ink)'));
+    out.push(brow('日常',tot-nonDaily,'sp','日常','var(--axis)'),brow('非日常',nonDaily,'sp','非日常','var(--tx)'));
   }
   return out;
 }
@@ -154,7 +154,7 @@ route('ledger',()=>{
   const top=ranked.slice(0,4),restV=ranked.slice(4).reduce((a,r)=>a+cur[r],0);
   const legend=`<div class="ld-legend">${top.map(r=>`<span style="--cc:${catColor(r)}"><i></i>${esc(CATS[r].n)} ${ldPc(cur[r],tot)}%</span>`).join('')}${restV?`<span style="--cc:var(--axis)"><i></i>ほか ${ldPc(restV,tot)}%</span>`:''}</div>`;
   const figBtn=(l,ax,k,v,cls='')=>`<button type="button" class="${ldFilter&&ldFilter.ax===ax&&ldFilter.k===k?'on':''}" onclick="ldPick('${ax}','${k}',1)"><span class="k ${cls}">${l}</span><span class="v num">${yen(v)}</span></button>`;
-  const figs=isNow?`<div class="ld-fig">${figBtn('固定費','fx','固定',fixed)}${figBtn('変動費','fx','変動',tot-fixed)}${figBtn('✦ 非日常','sp','非日常',nonDaily,'ink')}</div>`:'';
+  const figs=isNow?`<div class="ld-fig">${figBtn('固定費','fx','固定',fixed)}${figBtn('変動費','fx','変動',tot-fixed)}${figBtn('✦ 非日常','sp','非日常',nonDaily,'strong')}</div>`:'';
   const summary=list([`<div class="ld-sum"><div class="ld-lbl">自分の支出</div><div class="ld-r"><span class="ld-big num">${yen(tot)}</span>${diff!=null?tag(`前月比 ${diff>0?'+':''}${diff}%`):''}</div>${bar}${legend}</div>${figs}`]);
 
   const chart=list([`<div class="ld-chart">${ldChart(months)}</div>`]);
@@ -206,7 +206,7 @@ route('x',id=>{
   const f=Math.max(0.04,Math.min(1,x.amt/p.amt));
   const owed=p.adv&&p.adv[2]==='未精算';
   const pr=(p.roles||[]).filter(r=>r[1]&&E[r[1]]&&r[1]!=='me'&&!['支払先','支払者'].includes(r[0])).map(r=>r[1]);
-  const top=`<section class="zm"><a class="zm-parent" href="#/a/${x.pay}">${ico('pay','var(--ink)')}<span class="grow"><div class="t ell">${esc(p.title)}<span class="faint" style="font-weight:400">、${esc(shopOf(x))}</span></div><div class="s">支払い ${fmtMD(date)} ${esc(p.time||'')}</div></span><span class="v">${yen(p.amt)}</span>${IC.chev}</a>`
+  const top=`<section class="zm"><a class="zm-parent" href="#/a/${x.pay}">${ico('pay','var(--tx)')}<span class="grow"><div class="t ell">${esc(p.title)}<span class="faint" style="font-weight:400">、${esc(shopOf(x))}</span></div><div class="s">支払い ${fmtMD(date)} ${esc(p.time||'')}</div></span><span class="v">${yen(p.amt)}</span>${IC.chev}</a>`
     +`<div class="zm-bar" aria-label="支払い ${yen(p.amt)} のうち自分 ${yen(x.amt)}"><i class="me" style="flex:${x.amt}"></i>${rest>0?`<i class="${owed?'owed':'other'}" style="flex:${rest}"></i>`:''}</div>`
     +`<svg class="zm-lens" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,0 ${(f*100).toFixed(1)},0 100,30 0,30" fill="var(--me)" opacity=".16"/><line x1="${(f*100).toFixed(1)}" y1="0" x2="100" y2="30" stroke="var(--me)" stroke-width="1" vector-effect="non-scaling-stroke" opacity=".5"/></svg>`
     +`<div class="zm-card ld-zcard"><div class="big">${yen(x.amt)}</div><div class="pct">支払い ${yen(p.amt)} の ${Math.round(x.amt/p.amt*100)}%</div></div></section>`;

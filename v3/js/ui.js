@@ -63,7 +63,7 @@ const relDay=d=>{const diff=Math.round((new Date(d+'T00:00')-new Date(TODAY+'T00
 /* ---------- 部品(HTML文字列を返す) ---------- */
 const NOW='13:20'; /* モックの「いま」(2026-10-31 13:20) */
 /** 小さいアイコンの台。c: 色(CSS値) */
-const ico=(icon,c='var(--ink-2)')=>`<span class="ico" style="--ic:${c}">${IC[icon]||''}</span>`;
+const ico=(icon,c='var(--tx-2)')=>`<span class="ico" style="--ic:${c}">${IC[icon]||''}</span>`;
 
 /* ---- 縁(エンティティ) ---- */
 const ROOT_SHAPE={person:'person',place:'place',company:'org',thing:'thing',doc:'doc'};

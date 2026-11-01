@@ -5,20 +5,20 @@
    ===================================================================== */
 document.head.insertAdjacentHTML('beforeend',`<style>
 .en-search{margin:0 var(--gutter) 12px;position:relative}
-.en-search svg.i{position:absolute;left:12px;top:14px;color:var(--ink-3)}
+.en-search svg.i{position:absolute;left:12px;top:14px;color:var(--tx-3)}
 .en-search input{padding-left:40px}
 .en-memo{margin:12px var(--gutter) 0;padding:14px 16px 14px 18px;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1),var(--hl);position:relative;display:block}
 .en-memo::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:var(--kin)}
-.en-memo .h{display:flex;align-items:center;gap:6px;font:var(--t-label);color:var(--ink-2)}
+.en-memo .h{display:flex;align-items:center;gap:6px;font:var(--t-label);color:var(--tx-2)}
 .en-memo .h svg.i{width:16px;height:16px}
 .en-memo p{margin-top:6px;font:var(--t-body);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .en-doc{margin:4px var(--gutter) 0;padding:20px 20px 24px 22px;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e2),var(--hl);position:relative}
 .en-doc::before{content:"";position:absolute;left:0;top:20px;bottom:20px;width:3px;border-radius:0 3px 3px 0;background:var(--kin)}
-.en-doc h1{font:var(--t-title)} .en-doc .meta{font:var(--t-cap);color:var(--ink-3);margin-top:4px}
-.en-doc h3{font:600 14px/1.4 var(--font);color:var(--ink-2);margin-top:22px}
+.en-doc h1{font:var(--t-title)} .en-doc .meta{font:var(--t-cap);color:var(--tx-3);margin-top:4px}
+.en-doc h3{font:600 14px/1.4 var(--font);color:var(--tx-2);margin-top:22px}
 .en-doc p{font:400 16px/1.9 var(--font);margin-top:6px}
 .en-doc .ref{vertical-align:middle;margin:0 2px}
-.en-tg{width:44px;height:44px;margin:-8px 0 -8px -8px;display:grid;place-items:center;color:var(--ink-3);flex:none}
+.en-tg{width:44px;height:44px;margin:-8px 0 -8px -8px;display:grid;place-items:center;color:var(--tx-3);flex:none}
 .en-tg svg.i{width:16px;height:16px}
 /* 種類の階層: 子は字下げ+縦のガイド線だけ(└も小さい四角も使わない) */
 .objs>.row.ind::after{border-bottom:0;border-bottom-left-radius:0;width:0}
