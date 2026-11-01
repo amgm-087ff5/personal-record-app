@@ -17,8 +17,8 @@ document.head.insertAdjacentHTML('beforeend','<style>'+`
 .pl-mh{display:flex;align-items:center;gap:4px;height:44px}
 .pl-mh b{flex:1;text-align:center;font:var(--t-head)}
 .pl-wd,.pl-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
-.pl-wd span{font:500 12px/24px var(--font);text-align:center;color:var(--ink-3)}
-.pl-wd .sun{color:var(--ink)}
+.pl-wd span{font:500 12px/24px var(--font);text-align:center;color:var(--tx-3)}
+.pl-wd .sun{color:var(--tx)}
 .pl-cell{min-width:0;min-height:76px;display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:4px 2px;border-radius:var(--r-sm);overflow:hidden}
 .pl-cell:active{background:var(--sunk)}
 .pl-cell.sel{background:var(--me-soft)}
@@ -26,12 +26,12 @@ document.head.insertAdjacentHTML('beforeend','<style>'+`
 .pl-cell.sun{background:var(--sunk)} .pl-dn.sun{font-weight:700}
 .pl-cell.today .pl-dn{background:var(--me);color:var(--brand-ink)}
 .pl-bars{display:flex;flex-direction:column;gap:2px;min-width:0}
-.pl-bar{display:block;width:100%;height:18px;padding:0 4px;border-radius:4px;box-sizing:border-box;font:500 12px/16px var(--font);color:var(--ink-2);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-bar{display:block;width:100%;height:18px;padding:0 4px;border-radius:4px;box-sizing:border-box;font:500 12px/16px var(--font);color:var(--tx-2);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pl-bar.plan{outline:1.5px dashed var(--plan);outline-offset:-1.5px;background:transparent}
 .pl-bar.rec{background:var(--ev);color:var(--on-cap)}
-.pl-cat{display:inline-block;width:8px;height:4px;border-radius:2px;background:var(--cc,var(--ink-3));margin-right:3px;vertical-align:middle}
-.pl-more{font:500 12px/16px var(--font);color:var(--ink-3);padding-left:4px}
-.pl-legend{display:flex;justify-content:center;gap:14px;padding:6px 0 0;font:var(--t-cap);color:var(--ink-3)}
+.pl-cat{display:inline-block;width:8px;height:4px;border-radius:2px;background:var(--cc,var(--tx-3));margin-right:3px;vertical-align:middle}
+.pl-more{font:500 12px/16px var(--font);color:var(--tx-3);padding-left:4px}
+.pl-legend{display:flex;justify-content:center;gap:14px;padding:6px 0 0;font:var(--t-cap);color:var(--tx-3)}
 .pl-legend span{display:flex;align-items:center;gap:6px}
 .pl-key{display:inline-block;width:20px;height:12px;padding:0}
 .pl-dnav{display:flex;align-items:center;gap:4px;height:44px;margin:0 var(--gutter)}
@@ -39,9 +39,9 @@ document.head.insertAdjacentHTML('beforeend','<style>'+`
 .pl-allday{margin:0 var(--gutter) 8px;display:flex;flex-direction:column;gap:6px}
 .pl-allday .pl-bar{height:44px;line-height:42px;font-size:14px;padding:0 12px}
 .pl-tg{position:relative;margin:12px var(--gutter) 0}
-.pl-hl{position:absolute;left:0;width:44px;transform:translateY(-8px);font:500 12px/16px var(--font);color:var(--ink-3);text-align:right;padding-right:8px;font-variant-numeric:tabular-nums}
+.pl-hl{position:absolute;left:0;width:44px;transform:translateY(-8px);font:500 12px/16px var(--font);color:var(--tx-3);text-align:right;padding-right:8px;font-variant-numeric:tabular-nums}
 .pl-hr{position:absolute;left:52px;right:0;height:1px;background:var(--line)}
-.pl-blk{position:absolute;z-index:1;box-sizing:border-box;padding:4px 8px;border-radius:var(--r-xs);overflow:hidden;font:500 12px/1.3 var(--font);color:var(--ink-2)}
+.pl-blk{position:absolute;z-index:1;box-sizing:border-box;padding:4px 8px;border-radius:var(--r-xs);overflow:hidden;font:500 12px/1.3 var(--font);color:var(--tx-2)}
 .pl-blk b{display:block;font:600 13px/1.3 var(--font);color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pl-blk span{display:block}
 .pl-blk.plan{outline:2px dashed var(--plan);outline-offset:-2px;background:var(--surface)}
@@ -49,7 +49,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+`
 .pl-now{position:absolute;left:52px;right:0;height:2px;background:var(--late);z-index:2}
 .pl-now span{position:absolute;right:0;top:-20px;font:600 12px/16px var(--font);color:var(--late)}
 .pl-card{margin:4px var(--gutter) 0;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e2),var(--hl);padding:16px 18px}
-.pl-card .meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font:var(--t-label);color:var(--ink-2)}
+.pl-card .meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font:var(--t-label);color:var(--tx-2)}
 .pl-tk{display:flex;align-items:flex-start;gap:12px}
 .pl-tk h1{flex:1;min-width:0;font:var(--t-title);line-height:1.3}
 .pl-tk .check,.row .check{position:relative}
@@ -57,7 +57,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+`
 .pl-s span+span{margin-left:8px}
 .pl-s .tag{height:20px;padding:0 6px}
 .pl-pri{color:var(--late);font-weight:700;margin-left:4px}
-.pl-done-t{text-decoration:line-through;color:var(--ink-3)}
+.pl-done-t{text-decoration:line-through;color:var(--tx-3)}
 `+'</style>');
 
 /* ---------- 状態(画面をまたいで残す) ---------- */
@@ -297,7 +297,7 @@ function toggleTask(k){
 }
 
 /* ---------- 新規ToDo ---------- */
-CREATE.push({id:'task',label:'ToDo',sub:'やること・買う物',icon:'todo',color:'var(--ink-2)',primaryOn:['plan'],onclick:'openNewTask()'});
+CREATE.push({id:'task',label:'ToDo',sub:'やること・買う物',icon:'todo',color:'var(--tx-2)',primaryOn:['plan'],onclick:'openNewTask()'});
 function openNewTask(){
   openSheet({title:'ToDoを追加',body:`<div class="list">
     <div class="field"><label for="pl-nt-t">タイトル</label><input id="pl-nt-t" placeholder="例: 牛乳を買う"></div>
