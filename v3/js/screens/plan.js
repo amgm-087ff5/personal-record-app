@@ -335,14 +335,8 @@ route('ev',id=>{
   const meta=[placeOf(e)?`<span>${IC.place}${esc(placeOf(e))}</span>`:'',ppl.length?`<span>${knots(ppl)}${ppl.map(p=>esc(E[p].n.split(' ').pop())).join('、')}</span>`:'',cd?`<span>${esc(cd)}</span>`:''].join('');
   const tm=e.all?(e.d2?`〜${fmtMD(e.d2)}`:'終日'):`${e.s}–${e.e}`;
   const cap=`<section class="cap plan ${late?'late':''}"><div class="kind">${IC.schedule}予定${e.pay?`・支払い`:''}<span class="tm">${esc(tm)}</span></div><h1>${esc(e.t)}</h1>${e.pay?`<div class="big">${yen(e.pay.amt)}</div>`:''}${meta?`<div class="meta">${meta}</div>`:''}</section>`;
-  /* 同じ日のほかの予定・記録を前後に並べる。今日なら「いま」の線を挟み、いまより上は点線(未来) */
-  const isToday=od===TODAY,fut=t=>od>TODAY||(isToday&&t>NOW);
-  const same=[...evOn(od).filter(([k,x])=>k!==id&&!x.hol).map(([k,x])=>{const t=x.all?'00:00':x.s;return {time:x.all?'終日':x.s,title:x.t,href:'#/ev/'+k,plan:!x.rec,late:!x.rec&&!fut(t)&&!x.all,fut:fut(t),sort:t}}),
-    ...(typeof kidsOf==='function'?kidsOf(od):[]).map(([k,x])=>({time:x.time,title:x.title,href:'#/a/'+k,icon:(AX_NODE[x.type]||[])[1],sort:x.time||''}))].sort((p,q)=>q.sort.localeCompare(p.sort));
-  const me=e.all?'00:00':e.s;
-  const later=same.filter(x=>x.sort>me),earlier=same.filter(x=>x.sort<=me);
-  if(isToday){const now={now:1};if(me>NOW){const i=earlier.findIndex(x=>x.sort<=NOW);earlier.splice(i<0?earlier.length:i,0,now)}else{const i=later.findIndex(x=>x.sort<=NOW);later.splice(i<0?later.length:i,0,now)}}
-  const axis=pinView({future:fut(me),later:[{day:od,fut:od>=TODAY&&(od>TODAY||later.some(x=>x.fut)||fut(me))},...later],earlier,cap,plan:true,late});
+  /* 予定の詳細: 記録の詳細と同じ。上に日のカード、点線の軸の切れ端に掛かった中抜きのカプセル。前後の出来事は出さない */
+  const axis=pinView({later:[{day:od,fut:od>=TODAY}],earlier:[],cap,future:!late,plan:true,late});
   const kin=[e.place?prop('場所',eref(e.place[0],e.place[1],'place')):'',e.who?prop('参加者',e.who.filter(w=>E[w]).map(w=>eref(w)).join('')):''].filter(Boolean);
   const props=[
     prop('繰り返し',esc(e.rep||'なし')),

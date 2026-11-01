@@ -919,3 +919,7 @@ div.pl-grid .pl-cell.sun .pl-dn{background:color-mix(in srgb,var(--tx) 9%,transp
 /* 日のカードは独立した面。中の文字は面の端から普通の余白で始める(時刻列・軸の幅に合わせない) */
 .dh2 .dcard,.dh2.noax .dcard,.pin .dh2 .dcard{padding:10px 16px}
 .dh2.month .dcard{padding:8px 16px}
+/* 詳細の軸の切れ端: 主役の上下で薄れて消える(時間上の1点であることだけを示す。前後の出来事は出さない) */
+.pin>.pin-cur::after{top:-6px;bottom:-28px;-webkit-mask:linear-gradient(#000 0,#000 55%,#0000);mask:linear-gradient(#000 0,#000 55%,#0000)}
+.pin{padding-bottom:20px}
+.pin .dh2::before{-webkit-mask:linear-gradient(#0000,#000 70%);mask:linear-gradient(#0000,#000 70%)}

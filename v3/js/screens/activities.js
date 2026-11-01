@@ -94,19 +94,6 @@ function paySplit(a){
   if(rest>0){const who=a.adv?E[a.adv[0]].n.split(' ').pop()+'さん':'ほかの人';segs.push({v:rest,cls:a.adv&&a.adv[2]==='未精算'?'owed':'other',label:a.adv?`${who}の分・${a.adv[2]}`:'ほかの人の分'})}
   return splitBar(segs,a.amt);
 }
-/** 全ての記録を時刻の新しい順に(日をまたいで前後をたどるため) */
-function allMoments(){return Object.entries(A).filter(([k,a])=>a.type!=='日記'&&a.parent&&A[a.parent]).map(([k,a])=>({k,d:A[a.parent].date,time:a.time||''})).sort((x,y)=>(y.d+y.time).localeCompare(x.d+x.time))}
-/** 前後2件ずつ。日が変わる所に日付を挟む */
-function neighborsOf(id){
-  const all=allMoments();const i=all.findIndex(m=>m.k===id);if(i<0)return {later:[],earlier:[]};
-  const me=all[i];const pick=m=>({time:m.time,title:A[m.k].title,href:'#/a/'+m.k,icon:(AX_NODE[A[m.k].type]||[])[1]});
-  const later=all.slice(Math.max(0,i-2),i);const earlier=all.slice(i+1,i+3);
-  const L=[],R=[];let cur=null;
-  later.forEach(m=>{if(m.d!==cur){L.push({day:m.d});cur=m.d}L.push(pick(m))});
-  if(me.d!==cur)L.push({day:me.d});
-  cur=me.d;earlier.forEach(m=>{if(m.d!==cur){R.push({day:m.d});cur=m.d}R.push(pick(m))});
-  return {later:L,earlier:R};
-}
 function momentView(id,a){
   const day=A[a.parent];const d=day?day.date:TODAY;
   const [,icon]=AX_NODE[a.type]||['','activity'];
@@ -118,12 +105,11 @@ function momentView(id,a){
   const x=a.x&&X[a.x];
   /* 子: 支払い → 自分の支出 を └ でぶら下げる */
   const child=x?`<div class="hang"><a class="child" href="#/x/${a.x}">${ico('expense','var(--me)')}<span class="grow"><div class="lbl">自分の支出</div><div class="amt">${yen(x.amt)}</div></span>${catTag(x.cat)}<span class="chev">${IC.chev}</span></a></div>`:'';
-  const nb=neighborsOf(id);
   const shop=(a.roles||[]).find(r=>r[0]==='支払先');
   const ev=Object.entries(EV).find(([k,e])=>e.rec===id);
   const att=(EXTRA.attach||{})[id];
   return appbar('',{actions:[menuAct(id)]})
-    +pinView({later:nb.later,earlier:nb.earlier,cap:cap+child})
+    +pinView({later:[{day:d}],earlier:[],cap:cap+child})
     +(a.adv&&a.adv[2]==='未精算'?`<div class="suggest owe"><span class="pbar lg" aria-hidden="true"><i class="owed" style="flex:1"></i></span><span class="t">${esc(E[a.adv[0]].n.split(' ').pop())}さんの分 <b class="num">${yen(a.adv[1])}</b> 未精算</span><button class="btn sm" type="button" onclick="settle('${id}')">精算済みにする</button></div>`:'')
     +((a.roles||[]).length?sh('交わった人・場所',a.roles.length,shop&&!shop[1]?{label:'支払先を店として登録',onclick:`registerShop('${id}')`}:null)+list(a.roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
     +(a.items?sh('品目',itemGroups(a.items).length,{label:showBurden?'誰の分かを隠す':'誰の分か表示',onclick:'showBurden=!showBurden;rerender()'})+list([...itemsList(id,a.items),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(a.items.reduce((s,i)=>s+i.price,0))}</b>`})],'flat'):'')
