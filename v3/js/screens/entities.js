@@ -68,7 +68,7 @@ function factEvents(id){
   relsOf(id).forEach(([rel,other,period])=>{const m=(period||'').match(/(\d{4}-\d{2})/);if(m)out.push({ym:m[1],t:`${esc(rel)}: ${esc(E[other].n)}`,m:`${knot(other,'sm')}<span class="ell">関係が始まった</span>`})});
   return out;
 }
-function monthHead(ym){return `<div class="dh"><span class="d"><b>${+ym.slice(5)}<small style="font-size:12px;font-weight:600">月</small></b><i>${ym.slice(0,4)}</i></span><span class="tick" style="background:var(--axis-past)"></span><span class="c"></span></div>`}
+function monthHead(ym){return monthHeadAx(ym)}
 route('e',id=>{
   const e=E[id];if(!e)return appbar('')+empty('people','この人・場所は見つかりません');
   const tc=threadColor(id);

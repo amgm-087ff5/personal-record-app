@@ -701,3 +701,34 @@ a.pin-n:active{color:var(--ink)}
 .dp-ph{width:88px;height:88px;flex:none;border-radius:12px;display:block}
 .dp-kin{display:flex;flex-wrap:wrap;gap:8px;margin:0 var(--gutter)}
 .cr-b{position:relative}.cr-b::before{content:"";position:absolute;inset:-6px 0}
+/* ---- 日の区切り(11/01改): 軸から右端まで横切る線 + 「10月30日 金曜」 ---- */
+.dh2{display:block;position:relative;padding:22px var(--gutter) 6px calc(var(--tcol) + var(--rail) + 6px);position:sticky;top:0;z-index:5;
+  background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(10px)}
+.dh2::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:0;bottom:0;width:2px;background:var(--axis-past)}
+.dh2.future::before{background:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
+.dh2 .rule{position:absolute;left:8px;right:var(--gutter);top:10px;height:3px;border-radius:2px;background:var(--ink)}
+.dh2.today .rule{background:var(--me)}
+.dh2 .dt{display:flex;align-items:baseline;gap:8px;position:relative}
+.dh2 .dt b{font:700 19px/1.3 var(--font);font-variant-numeric:tabular-nums;color:var(--ink)}
+.dh2 .dt .wd{font:500 13px/1 var(--font);color:var(--ink-2)}
+.dh2 .dt .td{font:600 12px/1 var(--font);color:var(--on-me);background:var(--me);padding:4px 8px;border-radius:6px}
+.dh2 .dt .sum{font:500 13px/1 var(--font);color:var(--ink-2);font-variant-numeric:tabular-nums}
+.dh2 .dd{display:block;margin-top:4px;font:var(--t-label);color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dh2 .dd.none{color:var(--ink-3)}
+a.dh2:active .dt b{text-decoration:underline}
+.dh2.month .dt b{font-size:15px}
+.ax.thread .dh2::before{background:var(--kin);width:3px}
+/* ---- ダーク: 塗りの上の文字色をトークンにする ---- */
+:root{--on-me:#fff;--on-kin:#fff;--on-late:#fff;--on-cap:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--cap-ink:#3A475F;--on-cap:#EEF1F6;--on-me:#0F131A;--on-kin:#0F131A;--on-late:#0F131A;--me-on-ink:#7FA3F0}}
+:root[data-theme="dark"]{--cap-ink:#3A475F;--on-cap:#EEF1F6;--on-me:#0F131A;--on-kin:#0F131A;--on-late:#0F131A;--me-on-ink:#7FA3F0}
+.kn{color:var(--on-kin)} .kn.me{color:var(--on-me)} .kn.unreg{color:var(--kin)}
+.ax-node,.pin-n .pn,.cap{color:var(--on-cap)}
+.ax-node.plan,.pin-n.plan .pn{color:var(--plan)}
+.cap.plan{color:var(--ink)}
+.check[aria-checked="true"]{color:var(--bg)}
+.zm-card{color:var(--on-me)}
+.btn{color:var(--on-me)} .btn.tonal,.btn.ghost{color:var(--me)} .btn.danger{color:var(--late)}
+.nav .badge{color:var(--on-late)}
+.cap .cd{color:var(--on-late)}
+.action.primary{color:var(--on-me)} .action.primary .ico{color:var(--on-me)}

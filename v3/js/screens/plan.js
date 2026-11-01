@@ -18,12 +18,12 @@ document.head.insertAdjacentHTML('beforeend','<style>'+`
 .pl-mh b{flex:1;text-align:center;font:var(--t-head)}
 .pl-wd,.pl-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .pl-wd span{font:500 12px/24px var(--font);text-align:center;color:var(--ink-3)}
-.pl-wd .sun{color:var(--danger)} .pl-wd .sat{color:var(--plan)}
+.pl-wd .sun{color:var(--ink)}
 .pl-cell{min-width:0;min-height:76px;display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:4px 2px;border-radius:var(--r-sm);overflow:hidden}
 .pl-cell:active{background:var(--sunk)}
 .pl-cell.sel{background:var(--me-soft)}
 .pl-dn{align-self:center;display:grid;place-items:center;min-width:28px;height:28px;padding:0 4px;border-radius:6px;font:500 15px/1 var(--font);font-variant-numeric:tabular-nums}
-.pl-dn.sun{color:var(--danger)} .pl-dn.sat{color:var(--plan)}
+.pl-cell.sun{background:var(--sunk)} .pl-dn.sun{font-weight:700}
 .pl-cell.today .pl-dn{background:var(--me);color:var(--brand-ink)}
 .pl-bars{display:flex;flex-direction:column;gap:2px;min-width:0}
 .pl-bar{display:block;width:100%;height:18px;padding:0 4px;border-radius:4px;box-sizing:border-box;font:500 12px/16px var(--font);color:var(--ink-2);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -115,9 +115,9 @@ function plCalPane(){
     const wd=(first+n-1)%7;
     const its=plItemsOn(d);
     const hol=evOn(d).some(([k,e])=>e.hol);
-    const cls=hol||wd===0?'sun':wd===6?'sat':'';
+    const cls=hol||wd===0?'sun':'';
     const bars=its.slice(0,2).map(plBar).join('')+(its.length>2?`<span class="pl-more">+${its.length-2}</span>`:'');
-    cells+=`<button class="pl-cell${d===plSel?' sel':''}${d===TODAY?' today':''}" type="button" aria-label="${fmtMDW(d)}${its.length?' '+its.length+'件':''}" aria-pressed="${d===plSel}" onclick="plSelect('${d}')"><span class="pl-dn num ${cls}">${n}</span><span class="pl-bars">${bars}</span></button>`;
+    cells+=`<button class="pl-cell${cls==='sun'?' sun':''}${d===plSel?' sel':''}${d===TODAY?' today':''}" type="button" aria-label="${fmtMDW(d)}${its.length?' '+its.length+'件':''}" aria-pressed="${d===plSel}" onclick="plSelect('${d}')"><span class="pl-dn num ${cls}">${n}</span><span class="pl-bars">${bars}</span></button>`;
   }
   const head=`<div class="pl-mh"><button class="pl-nav" type="button" onclick="plMove(-1)">前の月</button><b class="num">${y}年${m}月</b><button class="pl-nav" type="button" onclick="plMove(1)">次の月</button></div>`;
   const wd=`<div class="pl-wd">${WD.split('').map((w,i)=>`<span class="${i===0?'sun':i===6?'sat':''}">${w}</span>`).join('')}</div>`;
