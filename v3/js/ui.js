@@ -6,7 +6,11 @@
 /* ---------- アイコン(24グリッド、線2px。AndroidのVectorDrawableへ移せる) ---------- */
 const sv=(d,fill)=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true" fill="${fill?'currentColor':'none'}" stroke="${fill?'none':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const IC={
-  future:sv('<path d="M6 2.5v3M6 12.5v9" /><path d="M6 2.5v19" stroke-dasharray="2 2.6"/><rect x="3" y="5.5" width="6" height="6" rx="1.8" fill="var(--bg,#fff)" stroke-dasharray="2.2 1.6"/><path d="M12.5 8.5h8.5M12.5 15h6"/>'),
+  future:sv('<path d="M5 2.5v19" stroke-dasharray="2 2.6"/><rect x="8.5" y="8" width="13" height="8" rx="4" stroke-dasharray="2.4 1.8"/>'),
+  moment:sv('<path d="M5 2.5v19"/><rect x="8.5" y="8" width="13" height="8" rx="4" fill="currentColor"/>'),
+  lines:sv('<path d="M5 7h14M5 12h14M5 17h9"/>'),
+  cats:sv('<rect x="3" y="5" width="8" height="4" rx="2" fill="currentColor"/><rect x="3" y="11" width="13" height="4" rx="2"/><rect x="3" y="17" width="18" height="4" rx="2"/>'),
+  spark:sv('<path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.5 6.5l2.5 2.5M15 15l2.5 2.5M17.5 6.5 15 9M9 15l-2.5 2.5"/>'),
   kin:sv('<circle cx="8" cy="9.5" r="4.5"/><path d="M16.5 21.5s-5-4.3-5-8.2a5 5 0 0 1 10 0c0 3.9-5 8.2-5 8.2Z"/><circle cx="16.5" cy="13.3" r="1.6" fill="currentColor"/>'),
   share:sv('<rect x="2.5" y="6.5" width="19" height="7" rx="1.5"/><rect x="2.5" y="6.5" width="8.5" height="7" rx="1.5" fill="currentColor"/><path d="M2.5 17v2.5h8.5V17"/>'),
   axis:sv('<path d="M6 2.5v19"/><rect x="3.5" y="4.5" width="5" height="5" rx="1.6" fill="currentColor"/><circle cx="6" cy="16" r="2.4"/><path d="M11.5 7h9M11.5 16h7"/>'),
@@ -28,6 +32,7 @@ const IC={
   back:sv('<path d="M15 5l-7 7 7 7"/>'),
   close:sv('<path d="M6 6l12 12M18 6 6 18"/>'),
   chev:sv('<path d="m9 6 6 6-6 6"/>'),
+  up:sv('<path d="m6 15 6-6 6 6"/>'),
   down:sv('<path d="m6 9 6 6 6-6"/>'),
   more:sv('<circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>'),
   search:sv('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>'),
@@ -70,7 +75,7 @@ const threadColor=id=>`var(--th-${shapeOf(id)})`;
 const knot=(id,size='')=>{const e=E[id];return `<span class="kn ${shapeOf(id)} ${id==='me'?'me':''} ${size}" title="${esc(e?e.n:'')}"><b>${esc(e?e.i:'?')}</b></span>`};
 const knots=ids=>ids.length?`<span class="knots">${ids.map(i=>knot(i,'sm')).join('')}</span>`:'';
 /** 名前つき参照。未登録は斜線 */
-const eref=(id,name)=>id&&E[id]?`<a class="ref" href="#/e/${id}">${knot(id)}${esc(E[id].n)}</a>`:`<span class="ref unreg">${esc(name||'未登録')}</span>`;
+const eref=(id,name,shape='place')=>id&&E[id]?`<a class="ref" href="#/e/${id}">${knot(id)}${esc(E[id].n)}</a>`:`<span class="ref unreg"><span class="kn ${shape} unreg"><b>${esc((name||'?')[0])}</b></span>${esc(name||'未登録')}</span>`;
 const aref=id=>`<a class="ref" href="#/a/${id}" style="padding-left:10px">${IC[ACT_IC[A[id].type]]||IC.activity}${esc(A[id].title||fmtMD(A[id].date))}</a>`;
 /** 12週の出会い(週ごとの登場数) */
 function encStrip(id){
@@ -82,7 +87,7 @@ function lastMet(id){const ds=actsOf(id).map(([k,a])=>a.parent&&A[a.parent]?A[a.
 const agoLabel=d=>{if(!d)return 'まだなし';const n=Math.round((new Date(TODAY+'T00:00')-new Date(d+'T00:00'))/864e5);return n===0?'今日':n===1?'昨日':n<7?`${n}日前`:n<35?`${Math.round(n/7)}週間前`:`${Math.round(n/30)}か月前`};
 
 /* ---- 時間軸 ---- */
-const AX_NODE={'支払い':['pay','pay'],'会話':['','talk'],'移動':['','move'],'出来事':['','activity'],'日記':['','diary']};
+const AX_NODE={'支払い':['pay','pay'],'会話':['','talk'],'移動':['','move'],'出来事':['','spark'],'日記':['','diary']};
 /** 軸の1行。o:{href,time,node:{cls,icon},t,m,amt,cls,future} */
 const axRow=o=>{const tagN=o.href?'a':'div';return `<${tagN} class="ax-row ${o.cls||''} ${o.future?'future':''}" ${o.href?`href="${o.href}"`:''}><span class="ax-time">${o.time&&typeof o.time==='object'?`<b>${o.time.d}日</b><small>${esc(o.time.t||'')}</small>`:esc(o.time??'')}</span><span class="ax-node ${o.node&&o.node.cls||''}">${o.node&&IC[o.node.icon]||''}</span><span class="ax-c"><span class="main"><div class="t">${o.t}</div>${o.m?`<div class="m">${o.m}</div>`:''}</span>${o.amt?`<span class="amt">${o.amt}</span>`:''}${o.right||''}</span></${tagN}>`};
 const placeName=r=>r?(r[1]&&E[r[1]]?E[r[1]].n:r[2]):'';
@@ -94,14 +99,15 @@ function momentRow(k,o={}){
   const x=a.x&&X[a.x];
   const dd=a.parent&&A[a.parent]?A[a.parent].date:'';
   return axRow({href:`#/a/${k}`,time:o.showDate&&dd?{d:+dd.slice(8),t:a.time}:a.time,node:{cls:ncls,icon},cls:o.cls,future:o.future,
-    t:esc(a.title),m:`${pl?`<span class="ell">${esc(placeName(pl))}</span>`:''}${knots(ppl)}`,
+    t:esc(a.title),m:`${pl&&pl[1]!==o.exclude?`<span class="ell">${esc(placeName(pl))}</span>`:''}${knots(ppl)}`,
     amt:a.amt!=null?`<b>${yen(a.amt)}</b>${x&&x.amt!==a.amt?`<small>自分 ${yen(x.amt)}</small>`:''}`:''});
 }
 /** 予定の1行(中抜き・点線)。late: いまより前で未記録 */
 function planRowAx(k,o={}){
   const e=EV[k];const late=o.late;
-  return axRow({href:`#/ev/${k}`,time:e.all?'終日':e.s,node:{cls:'plan'+(late?' late':''),icon:'schedule'},cls:'plan',future:o.future,
-    t:esc(e.t),m:`${placeOf(e)?`<span class="ell">${esc(placeOf(e))}</span>`:''}${knots((e.who||[]).filter(i=>E[i]))}${late?'<span class="tag warn">記録にする?</span>':''}`,
+  const od=e.rep?nextOn(e):e.d;const tm=e.all?'終日':e.s;
+  return axRow({href:`#/ev/${k}`,time:o.showDate?{d:+od.slice(8),t:tm}:tm,node:{cls:'plan'+(late?' late':''),icon:''},cls:'plan',future:o.future,
+    t:esc(e.t),m:`${placeOf(e)&&!(e.place&&e.place[0]===o.exclude)?`<span class="ell">${esc(placeOf(e))}</span>`:''}${knots((e.who||[]).filter(i=>E[i]&&i!==o.exclude))}${late?'<span class="tag late">記録にする?</span>':''}`,
     amt:e.pay?`<b>${yen(e.pay.amt)}</b><small>支払い予定</small>`:''});
 }
 /** 日の区切り */
@@ -115,7 +121,7 @@ const axEdge=(html,past)=>`<div class="ax-edge ${past?'past':''}"><span class="c
 const focusRow=({time,node,card,plan})=>`<div class="ax-row focus ${plan?'plan future':''}"><span class="ax-time" style="padding-top:28px">${esc(time||'')}</span><span class="ax-node ${node.cls||''}">${IC[node.icon]||''}</span><div class="focus-card"><div class="mo-card">${card}</div></div></div>`;
 /** 割合の棒。segs:[{v,cls,label,href}] total */
 function splitBar(segs,total){
-  return `<div class="split"><div class="bar">${segs.map(s=>`<i class="${s.cls}" style="flex:${s.v}"></i>`).join('')}</div><div class="lg">${segs.map(s=>{const c={me:'var(--brand)',other:'var(--th-person)',owed:'var(--warn)',dim:'var(--axis)'}[s.cls];const inner=`${esc(s.label)} <b>${yen(s.v)}</b>`;return s.href?`<a class="lgl" href="${s.href}"><span style="--c:${c}">${inner}</span></a>`:`<span style="--c:${c}">${inner}</span>`}).join('')}</div></div>`;
+  return `<div class="split"><div class="bar">${segs.map(s=>`<i class="${s.cls}" style="flex:${s.v}"></i>`).join('')}</div><div class="lg">${segs.map(s=>{const c={me:'var(--me)',other:'var(--axis)',owed:'var(--owe)',dim:'var(--axis)'}[s.cls];const inner=`${esc(s.label)}${s.noAmt?'':` <b>${yen(s.v)}</b>`}`;return s.href?`<a class="lgl" href="${s.href}"><span style="--c:${c}">${inner}</span></a>`:`<span style="--c:${c}">${inner}</span>`}).join('')}</div></div>`;
 }
 
 /** 独立したオブジェクトの並び(1件=1つの面) */
@@ -123,7 +129,7 @@ const objs=rows=>`<div class="objs">${rows.join('')}</div>`;
 /** 出来事の詳細の最上部: 細い軸に掛かったカプセル。later/earlier: [{day}|{time,title,href,icon,plan}] */
 function pinView({later=[],earlier=[],cap,future,capColor}){
   const n=x=>x.day?`<div class="pin-d">${fmtMDW(x.day)}${x.day===TODAY?'<span class="faint">今日</span>':''}</div>`
-    :`<a class="pin-n ${x.plan?'plan':''}" href="${x.href}"><span class="tm">${esc(x.time||'')}</span><span class="t">${esc(x.title)}</span>${x.icon?IC[x.icon]:''}</a>`;
+    :`<a class="pin-n ${x.plan?'plan':''}" href="${x.href}"><span class="pn">${x.icon?IC[x.icon]:''}</span><span class="tm">${esc(x.time||'')}</span><span class="t">${esc(x.title)}</span></a>`;
   return `<div class="pin ${future?'future':''}">${later.map(n).join('')}<div class="pin-cur" style="${capColor?`--cap:${capColor}`:''}"><span class="node"></span>${cap}</div>${earlier.map(n).join('')}</div>`;
 }
 /* ---- 汎用 ---- */
@@ -134,7 +140,7 @@ const list=(rows,cls='')=>`<div class="list ${cls}">${rows.join('')}</div>`;
 const row=o=>{const tagN=o.href?'a':o.onclick?'button':'div';const attr=o.href?`href="${o.href}"`:o.onclick?`type="button" onclick="${o.onclick}"`:'';
   return `<${tagN} class="row ${o.cls||''}" ${attr}>${o.time!=null?`<span class="time num">${esc(o.time)}</span>`:''}${o.lead||''}<span class="grow"><div class="t ${o.wrap?'':'ell'}">${o.t}</div>${o.s?`<div class="s ell">${o.s}</div>`:''}</span>${o.v!=null?`<span class="v ${o.amt?'amt num':''}">${o.v}</span>`:''}${o.chev?`<span class="chev">${IC.chev}</span>`:''}</${tagN}>`};
 const prop=(k,val,meta)=>`<div class="prop"><span class="k">${esc(k)}</span><span class="val">${val}</span>${meta?`<span class="meta">${meta}</span>`:''}</div>`;
-const largeTitle=(title,{actions=[],metrics=[]}={})=>`<header class="lt"><h1>${esc(title)}</h1>${actions.map(a=>`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>${metrics.length?`<nav class="metrics" aria-label="サマリ">${metrics.map(m=>`<a class="metric ${m.alert?'alert':''}" href="${m.href||'javascript:void 0'}" ${m.onclick?`onclick="${m.onclick}"`:''}><span>${esc(m.l)}</span><b class="num">${m.v}</b></a>`).join('')}</nav>`:''}`;
+const largeTitle=(title,{actions=[],metrics=[]}={})=>`<header class="lt"><h1>${esc(title)}</h1>${actions.map(a=>a.text?`<button class="btn sm ghost" type="button" onclick="${a.onclick}">${a.icon?IC[a.icon]:''}${esc(a.text)}</button>`:`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>`;
 const appbar=(title='',{back=true,actions=[]}={})=>`<header class="appbar">${back?`<button class="iconbtn" type="button" aria-label="戻る" onclick="goBack()">${IC.back}</button>`:''}<div class="title">${esc(title)}</div>${actions.map(a=>`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>`;
 const seg=(items,cur,on)=>`<div class="seg" role="group">${items.map(([v,l])=>`<button type="button" aria-pressed="${v===cur}" onclick="${on.replace('$v',v)}">${esc(l)}</button>`).join('')}</div>`;
 const chips=(items,cur,on)=>`<div class="chips" role="group">${items.map(([v,l,n])=>`<button class="chip" type="button" aria-pressed="${v===cur}" onclick="${on.replace('$v',v)}">${esc(l)}${n!=null?`<span class="n">${n}</span>`:''}</button>`).join('')}</div>`;
@@ -157,8 +163,20 @@ let lastTab='activities';
 function render(keepScroll){
   CUR=parseHash();const r=ROUTES[CUR.name]||ROUTES.activities;
   const y=scrollY;
-  let html;try{html=r.fn(CUR.id,CUR.q)}catch(e){console.error(e);html=appbar('表示できません')+banner('warn',`この画面を表示できませんでした。<br><small>${esc(e.message)}</small>`)}
-  document.getElementById('app').innerHTML=`<main class="screen" id="screen">${html}</main>`;
+  const safe=(fn,id,q)=>{try{return fn(id,q)}catch(e){console.error(e);return appbar('表示できません')+banner('warn',`この画面を表示できませんでした。<br><small>${esc(e.message)}</small>`)}};
+  const ROOT={activities:'activities',plan:'plan',entities:'entities',ledger:'ledger'};
+  const wide=innerWidth>=1100;const rootName=ROOT[r.tab]||'activities';
+  const app=document.getElementById('app');
+  if(wide){
+    const isRoot=CUR.name===rootName;const ly=app.querySelector('.pane-l')?.scrollTop||0;const sameRoot=app.dataset.root===rootName;
+    const left=safe(ROUTES[rootName].fn,null,isRoot?CUR.q:{});
+    const right=isRoot?`<div class="empty">${ico(TABS.find(t=>t&&t[0]===rootName)[2])}<div>左から選ぶと、ここに開きます</div></div>`:safe(r.fn,CUR.id,CUR.q);
+    app.innerHTML=`<section class="pane-l">${left}</section><main class="pane-r screen" id="screen">${right}</main>`;app.dataset.root=rootName;
+    if(sameRoot)app.querySelector('.pane-l').scrollTop=ly;
+    app.querySelectorAll(`.pane-l a[href="${location.hash}"]`).forEach(a=>a.classList.add('sel'));
+  }else{
+    app.innerHTML=`<main class="screen" id="screen">${safe(r.fn,CUR.id,CUR.q)}</main>`;delete app.dataset.root;
+  }
   if(r.tab)lastTab=r.tab;
   renderNav(r.tab||lastTab);
   if(keepScroll)scrollTo(0,y);else scrollTo(0,0);
@@ -243,3 +261,5 @@ function openAbout(){
 function setTheme(v){if(v)document.documentElement.dataset.theme=v;else delete document.documentElement.dataset.theme;try{localStorage.setItem('prmock-theme',v)}catch(e){}}
 try{const t=localStorage.getItem('prmock-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}
 
+
+addEventListener('resize',()=>{const w=innerWidth>=1100;if(w!==(document.getElementById('app').dataset.root!=null))render(true)});
