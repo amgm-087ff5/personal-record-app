@@ -150,14 +150,14 @@ function crQeRender(){
   ${chips(ROOTS().map(k=>[k,CATS[k].n]),CQ.root,"crQeRoot('$v')")}
   ${kids.length?`<div class="list">
     <div class="field"><label>小分類</label><select onchange="CQ.cat=this.value">${kids.map(k=>`<option value="${k}" ${CQ.cat===k?'selected':''}>${esc(CATS[k].n)}</option>`).join('')}</select></div></div>`:''}`;
-  crPanel('支出を記録',body,{right:{label:'支出を保存',onclick:'crQeSave()'}});
+  crPanel('金額だけで支払い',body,{right:{label:'支払いを保存',onclick:'crQeSave()'}});
 }
 function crQePick(k){CQ.shop=E[k].n;crQeRender()}
 function crQeSave(){
   const amt=+String(CQ.amt).replace(/[^\d]/g,'');if(!amt){toast('金額を入れてください');return}
   const cat=CQ.cat;const shop=(CQ.shop||'').trim();
   const aid=crPayment({date:CQ.date||TODAY,time:crNowHM(),shop,register:false,items:[{n:CATS[cat].n,price:amt,tax:10,b:'自分'}],cat,title:CATS[cat].n});
-  closeSheet();save();go('#/x/'+A[aid].x);toast('支出を保存しました');
+  closeSheet();save();go('#/a/'+aid);toast('支払いを保存しました(自分の支出=全額)');
 }
 
 /* ---------- 予定 ---------- */

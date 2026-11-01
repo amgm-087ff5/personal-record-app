@@ -20,7 +20,9 @@ function dayItems(d){
 }
 const isFuturePlan=it=>it.kind==='plan'&&!EV[it.k].all&&EV[it.k].d===TODAY&&EV[it.k].s>NOW;
 const itemHtml=(it,o={})=>it.kind==='rec'?momentRow(it.k,o):planRowAx(it.k,{...o,late:!o.future&&!isFuturePlan(it)});
-function recordDates(){return [...new Set(Object.values(A).filter(a=>a.type==='日記'&&a.date<TODAY&&a.kids&&a.kids.some(k=>A[k]&&passFilter(A[k]))).map(a=>a.date))].sort().reverse()}
+function recordDates(){const ds=new Set(Object.values(A).filter(a=>a.type==='日記'&&a.date<TODAY&&a.kids&&a.kids.some(k=>A[k]&&passFilter(A[k]))).map(a=>a.date));
+  if(planVisible())Object.values(EV).forEach(e=>{if(!e.rec&&!e.hol&&e.d<TODAY&&e.d>=TODAY.slice(0,8)+'01')ds.add(e.d)});
+  return [...ds].sort().reverse()}
 const axDay=(d,o={})=>{const items=dayItems(d);return d===TODAY?items.filter(isFuturePlan).map(it=>itemHtml(it,{future:true})).join('')+nowLine()+items.filter(it=>!isFuturePlan(it)).map(it=>itemHtml(it)).join(''):items.map(it=>itemHtml(it)).join('')};
 
 route('activities',()=>{
@@ -42,7 +44,7 @@ route('activities',()=>{
 /* ---------- 日のページ: 1日=1ページの日記と、その日の軸 ---------- */
 route('day',d=>{
   const day=dayOfDate(d);const a=day&&day[1];const w=new Date(d+'T00:00').getDay();
-  const items=dayItems(d);const sp=daySpentAll(d);
+  const items=dayItems(d);const sp=daySpent(d);
   const people=new Set(items.flatMap(i=>i.kind==='rec'?(A[i.k].roles||[]).map(r=>r[1]).filter(x=>x&&x!=='me'):[]));
   const dl=[...new Set([...Object.values(A).filter(x=>x.type==='日記').map(x=>x.date),TODAY])].sort();const pi=dl.indexOf(d);const prev=dl.filter(x=>x<d).pop(),next=dl.find(x=>x>d);
   return appbar('',{actions:[...(next?[{icon:'up',label:'次の日(未来へ)',onclick:`go('#/day/${next}')`}]:[]),...(prev?[{icon:'down',label:'前の日(過去へ)',onclick:`go('#/day/${prev}')`}]:[]),{icon:'edit',label:'日記を書く',onclick:`openDiary('${d}')`}]})
@@ -66,7 +68,7 @@ const menuAct=id=>({icon:'more',label:'その他の操作',onclick:`actMenu('${i
 function actMenu(id){
   openSheet({title:'操作',body:list([
     row({lead:ico('edit'),t:'編集',onclick:`closeSheet();toast('編集はモックでは未対応です')`}),
-    row({lead:ico('trash','var(--danger)'),t:'<span style="color:var(--danger)">削除</span>',onclick:`deleteActivity('${id}')`})])});
+    row({lead:ico('trash'),t:'削除',onclick:`deleteActivity('${id}')`})])});
 }
 function deleteActivity(id){
   const a=A[id],p=a.parent&&A[a.parent];const snap=JSON.stringify({a,x:a.x?X[a.x]:null});
@@ -104,13 +106,15 @@ function momentView(id,a){
   const cap=`<section class="cap"><div class="kind">${IC[icon]}${esc(a.type)}<span class="tm">${esc(a.time||'')}</span></div><h1>${esc(a.title)}</h1>${a.amt!=null?`<div class="big">${yen(a.amt)}</div>`:''}${meta?`<div class="meta">${meta}</div>`:''}${isPay?paySplit(a):''}</section>`;
   const x=a.x&&X[a.x];
   /* 子: 支払い → 自分の支出 を └ でぶら下げる */
-  const child=x?`<div class="hang"><a class="child" href="#/x/${a.x}">${ico('expense','var(--me)')}<span class="grow"><div class="lbl">自分の支出</div><div class="amt">${yen(x.amt)}</div></span>${catTag(x.cat)}<span class="chev">${IC.chev}</span></a></div>`:'';
+  /* 子: 自分の支出 = 自分の支出の詳細の最上部と同じ「帯」(同じもの=同じ見た目) */
+  const child=x?`<div class="hang"><a class="child band" href="#/x/${a.x}"><span class="grow"><div class="lbl">${IC.expense}自分の支出</div><div class="amt">${yen(x.amt)}</div></span><span class="cat-on">${esc(catPath(x.cat))}</span><span class="chev">${IC.chev}</span></a></div>`:'';
   const shop=(a.roles||[]).find(r=>r[0]==='支払先');
   const ev=Object.entries(EV).find(([k,e])=>e.rec===id);
   const att=(EXTRA.attach||{})[id];
   return appbar('',{actions:[menuAct(id)]})
     +pinView({later:[{day:d}],earlier:[],cap:cap+child})
     +(a.adv&&a.adv[2]==='未精算'?`<div class="suggest owe"><span class="pbar lg" aria-hidden="true"><i class="owed" style="flex:1"></i></span><span class="t">${esc(E[a.adv[0]].n.split(' ').pop())}さんの分 <b class="num">${yen(a.adv[1])}</b> 未精算</span><button class="btn sm" type="button" onclick="settle('${id}')">精算済みにする</button></div>`:'')
+    +shopTodoSug(id,a)
     +((a.roles||[]).length?sh('交わった人・場所',a.roles.length,shop&&!shop[1]?{label:'支払先を店として登録',onclick:`registerShop('${id}')`}:null)+list(a.roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
     +(a.items?sh('品目',itemGroups(a.items).length,{label:showBurden?'誰の分かを隠す':'誰の分か表示',onclick:'showBurden=!showBurden;rerender()'})+list([...itemsList(id,a.items),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(a.items.reduce((s,i)=>s+i.price,0))}</b>`})],'flat'):'')
     +(a.body?sh('内容')+`<div class="list"><p style="padding:14px 16px;line-height:1.85">${esc(a.body)}</p></div>`:'')
@@ -122,6 +126,15 @@ function registerShop(aid){
   const id=uid('e');E[id]={n,i:n[0],t:['shop'],facts:[]};r[1]=id;save();rerender();
   toast(`「${n}」を店として登録しました`,()=>{delete E[id];r[1]=null});
 }
+/** 買い物リストのToDoが、この支払いの品目にあれば完了を提案する(サジェスト+ボタン1つ) */
+function shopTodoSug(id,a){
+  if(a.type!=='支払い'||!a.items)return '';
+  const shop=(a.roles||[]).find(r=>r[0]==='支払先');const names=new Set(a.items.map(i=>i.n));
+  const ks=Object.keys(TD).filter(k=>!TD[k].done&&names.has(TD[k].t)&&LISTS[TD[k].list]&&(!LISTS[TD[k].list].shop||(shop&&LISTS[TD[k].list].shop===shop[1])));
+  if(!ks.length)return '';
+  return `<div class="suggest"><span class="t">買い物リストの ${ks.map(k=>'「'+esc(TD[k].t)+'」').join('')} がこの支払いにあります</span><button class="btn sm" type="button" onclick="doneByPay(['${ks.join("','")}'],'${id}')">完了にする</button></div>`;
+}
+function doneByPay(ks,pay){const d=dayOf(A[pay]).date;ks.forEach(k=>{TD[k].done=d;TD[k].pay=pay});save();rerender();toast('支払いの品目から完了にしました',()=>ks.forEach(k=>{delete TD[k].done;delete TD[k].pay}))}
 function settle(id){const a=A[id];a.adv[2]='精算済み';save();rerender();toast('精算済みにしました',()=>{a.adv[2]='未精算'})}
 
 /** 写真のサムネイル(モックでは日付から決まる風景の絵) */

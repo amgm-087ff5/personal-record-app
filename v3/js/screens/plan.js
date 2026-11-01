@@ -4,8 +4,6 @@
    ===================================================================== */
 
 document.head.insertAdjacentHTML('beforeend','<style>'+`
-.pl-root .seg button{height:44px}
-.pl-root .chip{height:44px}
 .pl-root .sh .act{min-height:44px;min-width:44px;justify-content:center}
 .pl-root .btn.sm{height:44px}
 .pl-root .pin-n{min-height:44px}
@@ -56,7 +54,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+`
 .pl-tk .check::before,.row .check::before{content:"";position:absolute;inset:-10px}
 .pl-s span+span{margin-left:8px}
 .pl-s .tag{height:20px;padding:0 6px}
-.pl-pri{color:var(--late);font-weight:700;margin-left:4px}
+.pl-pri{color:var(--me);font-weight:700;margin-left:4px}
 .pl-done-t{text-decoration:line-through;color:var(--tx-3)}
 `+'</style>');
 
@@ -117,7 +115,7 @@ function plCalPane(){
     const hol=evOn(d).some(([k,e])=>e.hol);
     const cls=hol||wd===0?'sun':'';
     /* 月のマスは「その日に何件あるか」だけ。小さいカプセル(塗り=記録、点線=予定)を最大4つ。文字は下の日の一覧で読む */
-    const bars=its.slice(0,4).map(it=>`<i class="pl-dot ${it.kind==='rec'?'rec':'plan'}"></i>`).join('');
+    const bars=its.slice(0,4).map(it=>`<i class="pl-dot ${it.kind==='rec'?'rec':'plan'}${it.cat?' pay':''}"></i>`).join('');
     cells+=`<button class="pl-cell${cls==='sun'?' sun':''}${d===plSel?' sel':''}${d===TODAY?' today':''}" type="button" aria-label="${fmtMDW(d)}${its.length?' '+its.length+'件':''}" aria-pressed="${d===plSel}" onclick="plSelect('${d}')"><span class="pl-dn num ${cls}">${n}</span><span class="pl-bars">${bars}</span></button>`;
   }
   const head=`<div class="pl-mh"><button class="pl-nav" type="button" onclick="plMove(-1)">前の月</button><b class="num">${y}年${m}月</b><button class="pl-nav" type="button" onclick="plMove(1)">次の月</button></div>`;
@@ -184,7 +182,7 @@ function plDayView(){
   }).join('');
   let grid='';
   for(let h=H0;h<=H1;h++){const y=(h-H0)*PH;grid+=`<span class="pl-hl num" style="top:${y}px">${h}:00</span><i class="pl-hr" style="top:${y}px"></i>`}
-  const nowHtml=isToday?`<div class="pl-now" style="top:${(minOf(NOW)-H0*60)/60*PH}px"><span>いま ${NOW}</span></div>`:'';
+  const nowHtml=isToday?`<div class="pl-now" style="top:${(minOf(NOW)-H0*60)/60*PH}px"><span>${NOW}</span></div>`:'';
   const alld=allday.map(x=>`<a class="pl-bar ${x.kind==='rec'?'rec':'plan'}" href="${x.kind==='rec'?'#/a/'+x.k:'#/ev/'+x.k}">${plCatMark(x.cat)}${esc(x.t)}</a>`).join('');
   return `<div class="pl-dnav"><button class="pl-nav" type="button" onclick="plStepDay(-1)">前の日</button><b class="num">${fmtMDW(d)}${hol?' '+esc(hol[1].t):''}${isToday?' 今日':''}</b><button class="pl-nav" type="button" onclick="plStepDay(1)">次の日</button></div>`
     +(alld?`<div class="pl-allday">${alld}</div>`:'')
@@ -332,7 +330,7 @@ route('ev',id=>{
   }
   const late=!rec&&(od<TODAY||(od===TODAY&&!e.all&&e.s<NOW));
   const ppl=(e.who||[]).filter(w=>E[w]);
-  const meta=[placeOf(e)?`<span>${IC.place}${esc(placeOf(e))}</span>`:'',ppl.length?`<span>${knots(ppl)}${ppl.map(p=>esc(E[p].n.split(' ').pop())).join('、')}</span>`:'',cd?`<span>${esc(cd)}</span>`:''].join('');
+  const meta=[placeOf(e)?`<span>${IC.place}${esc(placeOf(e))}</span>`:'',ppl.length?`<span>${knots(ppl)}${ppl.map(p=>esc(E[p].n.split(' ').pop())).join('、')}</span>`:'',cd?`<span class="cd">${esc(cd)}</span>`:'',e.rep?`<span>${IC.repeat}次回 ${fmtMDW(nextOn(e))}</span>`:''].join('');
   const tm=e.all?(e.d2?`〜${fmtMD(e.d2)}`:'終日'):`${e.s}–${e.e}`;
   const cap=`<section class="cap plan ${late?'late':''}"><div class="kind">${IC.schedule}予定${e.pay?`・支払い`:''}<span class="tm">${esc(tm)}</span></div><h1>${esc(e.t)}</h1>${e.pay?`<div class="big">${yen(e.pay.amt)}</div>`:''}${meta?`<div class="meta">${meta}</div>`:''}</section>`;
   /* 予定の詳細: 記録の詳細と同じ。上に日のカード、点線の軸の切れ端に掛かった中抜きのカプセル。前後の出来事は出さない */
@@ -340,6 +338,7 @@ route('ev',id=>{
   const kin=[e.place?prop('場所',eref(e.place[0],e.place[1],'place')):'',e.who?prop('参加者',e.who.filter(w=>E[w]).map(w=>eref(w)).join('')):''].filter(Boolean);
   const props=[
     prop('繰り返し',esc(e.rep||'なし')),
+    e.pay?`<a class="prop" href="#/ledger"><span class="k">支払い</span><span class="val">${catTag(e.pay.cat)}<span>${esc(catFx(e.pay.cat))}費</span></span><span class="meta">家計簿 ${IC.chev}</span></a>`:'',
     prop('通知',esc(e.alarm||'なし')),
     e.memo?prop('メモ',esc(e.memo)):'',
   ].join('');
@@ -348,10 +347,10 @@ route('ev',id=>{
     +(kin.length?sh('会う人・場所',kin.length,unreg?{label:'場所として登録',onclick:`plRegisterPlace('${id}')`}:null)+list(kin):'')
     +`<div class="mt"></div>`+list([props])
     +(tasks.length?sh('この予定のToDo',tasks.length)+objs(tasks.map(plEvTaskRow)):'')
-    +sh('記録')
+    +sh(e.rep&&rec?'前回の記録':'記録')
     +(rec
       ?`<div class="ax">${momentRow(e.rec)}</div>`
-      :`<div class="btnrow"><button class="btn block" type="button" onclick="recordEvent('${id}')">${IC.check}記録にする</button></div>`)+'</div>';
+      :`<div class="btnrow"><button class="btn block" type="button" onclick="recordEvent('${id}')">${IC.check}${e.pay?'支払いとして記録する':'記録にする'}</button></div>`)+'</div>';
 },{tab:'plan'});
 function plEvTaskRow(k){
   const t=TD[k];

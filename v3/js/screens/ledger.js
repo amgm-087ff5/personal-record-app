@@ -39,10 +39,8 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 .ld-kid{padding-left:36px;background:linear-gradient(var(--line-strong),var(--line-strong)) 19px 0/2px 100% no-repeat}
 .ld-kid2{padding-left:58px;background:linear-gradient(var(--line-strong),var(--line-strong)) 19px 0/2px 100% no-repeat,linear-gradient(var(--line-strong),var(--line-strong)) 41px 0/2px 100% no-repeat}
 .ld-clear{padding:0 0 12px}
-.ld-clear .chip{height:44px}
-.ld-mini{display:inline-flex;padding:2px;background:var(--sunk);border-radius:10px;gap:2px}
-.ld-mini button{height:40px;padding:0 14px;border-radius:8px;font:var(--t-label);color:var(--tx-2)}
-.ld-mini button[aria-pressed="true"]{background:var(--surface);color:var(--tx);box-shadow:var(--e1);font-weight:600}
+.ld-clear .chip{height:32px}
+.ld-mini{display:inline-flex;gap:6px}
 .ld-tap{width:100%;text-align:left}
 .ld-in{flex:1;min-width:0;height:44px;font:var(--t-body);color:var(--tx);outline:none}
 .ld-in::placeholder{color:var(--tx-3)}
@@ -59,8 +57,6 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 .ld-pbar i.rest{background:var(--axis)}
 .ld-pbar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 2px,color-mix(in srgb,var(--owe) 40%,transparent) 2px 4px)}
 .ld-exp .v small{display:block;font:var(--t-cap);color:var(--tx-3);font-weight:400;text-align:right}
-/* 自分の支出の詳細の帯: 平らな青(グラデーション・影なし) */
-.ld-zcard{background:var(--me);box-shadow:none}
 </style>`);
 
 /* ---------- 状態 ---------- */
@@ -96,12 +92,12 @@ function ldStep(d){ldM=Math.min(ldMonths().length-1,Math.max(0,ldM+d));ldFilter=
 
 /** 推移: 月ごとの「自分の支出の棒」を縦に並べる(最上部の棒と同じ形。区間=カテゴリ)。上=新しい月 */
 function ldChart(months){
-  const roots=ROOTS(),tots=months.map(m=>ldTotal(m[2])),max=Math.max(...tots);
+  const roots=ROOTS(),tots=months.map(m=>ldTotal(m[2])),max=Math.max(...tots),past=tots.slice(0,-1),avg=Math.round(past.reduce((x,y)=>x+y,0)/past.length);
   return months.map((m,i)=>[m,i]).reverse().map(([m,i])=>{
     const cur=i===months.length-1;
     const segs=roots.filter(r=>m[2][r]>0).sort((a,b)=>m[2][b]-m[2][a]);
-    return `<div class="ld-tr ${cur?'on':''}"><span class="mo">${m[1]}</span><span class="tb"><span class="ld-bar" style="width:${(tots[i]/max*100).toFixed(1)}%">${segs.map(r=>`<i style="flex:${m[2][r]} 1 0;background:${catColor(r)}"></i>`).join('')}</span></span><span class="v num">${yen(tots[i])}</span></div>`;
-  }).join('');
+    return `<div class="ld-tr ${cur?'on':''}"><span class="mo">${m[1]}</span><span class="tb"><i class="ld-avg" style="left:${(avg/max*100).toFixed(1)}%"></i><span class="ld-bar" style="width:${(tots[i]/max*100).toFixed(1)}%">${segs.map(r=>`<i style="flex:${m[2][r]} 1 0;background:${catColor(r)}"></i>`).join('')}</span></span><span class="v num">${yen(tots[i])}</span></div>`;
+  }).join('')+`<div class="ld-tr ld-avgl"><span></span><span class="tb"><span style="margin-left:${(avg/max*100).toFixed(1)}%">${past.length}か月平均 ${yen(avg)} ┆</span></span><span></span></div>`;
 }
 
 /** 内訳の行(軸は ldAxis)。今月だけ */
@@ -155,7 +151,7 @@ route('ledger',()=>{
   const legend=`<div class="ld-legend">${top.map(r=>`<span style="--cc:${catColor(r)}"><i></i>${esc(CATS[r].n)} ${ldPc(cur[r],tot)}%</span>`).join('')}${restV?`<span style="--cc:var(--axis)"><i></i>ほか ${ldPc(restV,tot)}%</span>`:''}</div>`;
   const figBtn=(l,ax,k,v,cls='')=>`<button type="button" class="${ldFilter&&ldFilter.ax===ax&&ldFilter.k===k?'on':''}" onclick="ldPick('${ax}','${k}',1)"><span class="k ${cls}">${l}</span><span class="v num">${yen(v)}</span></button>`;
   const figs=isNow?`<div class="ld-fig">${figBtn('固定費','fx','固定',fixed)}${figBtn('変動費','fx','変動',tot-fixed)}${figBtn('✦ 非日常','sp','非日常',nonDaily,'strong')}</div>`:'';
-  const summary=list([`<div class="ld-sum"><div class="ld-lbl">自分の支出</div><div class="ld-r"><span class="ld-big num">${yen(tot)}</span>${diff!=null?tag(`前月比 ${diff>0?'+':''}${diff}%`):''}</div>${bar}${legend}</div>${figs}`]);
+  const summary=list([`<div class="ld-sum"><div class="ld-lbl">自分の支出</div><div class="ld-r"><span class="ld-big num">${yen(tot)}</span>${diff!=null?tag(`前月比 ${diff>0?'+':''}${diff}%`):''}</div>${bar}</div>${figs}`]);
 
   const chart=list([`<div class="ld-chart">${ldChart(months)}</div>`]);
 
@@ -221,7 +217,8 @@ route('x',id=>{
       prop('メモ',`<input class="ld-in" value="${esc(x.memo||'')}" placeholder="メモを書く" oninput="ldMemo('${id}',this.value)">`)
     ])
     +sh('品目',x.items.length)
-    +list(x.items.map(it=>row({t:`${esc(it.n)}${it.memo?` <span class="faint">${esc(it.memo)}</span>`:''}`,s:`${esc(it.b)}${it.unk?` ${tag('内訳不明',{cls:'warn'})}`:''}`,v:yen(it.price),amt:true})));
+    +list([...x.items.map(it=>row({t:`${esc(it.n)}${it.memo?` <span class="faint">${esc(it.memo)}</span>`:''}`,s:`${esc(it.b)}${it.unk?` ${tag('内訳不明',{cls:'warn'})}`:''}`,v:yen(it.price),amt:true})),
+      row({cls:'plain',t:'<b>品目の合計 = 自分の支出</b>',v:`<b class="num" style="color:var(--me)">${yen(x.items.reduce((s,i)=>s+i.price,0))}</b>`})]);
 },{tab:'ledger'});
 
 /* ---------- カテゴリの管理 ---------- */
@@ -289,4 +286,4 @@ route('cats',()=>{
     +sh('すべて',Object.keys(CATS).length)+objs(rows);
 },{tab:'ledger'});
 
-CREATE.push({id:'expense',label:'支出だけ記録',sub:'金額とカテゴリだけ',icon:'expense',color:'var(--c-expense)',primaryOn:[],onclick:'openQuickExpense()'});
+CREATE.push({id:'expense',label:'金額だけで支払い',sub:'金額とカテゴリだけ',icon:'pay',color:'var(--ev)',primaryOn:[],onclick:'openQuickExpense()'});
