@@ -923,3 +923,54 @@ div.pl-grid .pl-cell.sun .pl-dn{background:color-mix(in srgb,var(--tx) 9%,transp
 .pin>.pin-cur::after{top:-6px;bottom:-28px;-webkit-mask:linear-gradient(#000 0,#000 55%,#0000);mask:linear-gradient(#000 0,#000 55%,#0000)}
 .pin{padding-bottom:20px}
 .pin .dh2::before{-webkit-mask:linear-gradient(#0000,#000 70%);mask:linear-gradient(#0000,#000 70%)}
+
+/* =====================================================================
+   v6(11/02): 光(窓辺)/ 塗りの面は全て同じ光、違いは形
+   嗜好: 自然光・間接照明・さりげない影。光は左上の窓から。影は右下に青く落ちる
+   ===================================================================== */
+/* 塗りの光(全ての塗りの面で共通): 左上からの柔らかい光+上端のハイライト+色を帯びた影 */
+:root{--light:radial-gradient(130% 120% at 0% 0%,rgba(255,255,255,.24),rgba(255,255,255,0) 55%);--hl-fill:inset 0 1px 0 rgba(255,255,255,.35)}
+.cap:not(.plan){background:var(--light),var(--ev);box-shadow:0 10px 26px -12px color-mix(in srgb,var(--ev) 75%,transparent),var(--hl-fill)}
+.zm-card,.child.band{background:var(--light),var(--me-fill);color:#fff;box-shadow:0 10px 24px -12px color-mix(in srgb,var(--me-fill) 80%,transparent),var(--hl-fill)}
+.btn:not(.tonal):not(.ghost):not(.danger),.fab,.action.primary{background:var(--light),var(--me-fill);box-shadow:0 6px 16px -8px color-mix(in srgb,var(--me-fill) 80%,transparent),var(--hl-fill)}
+.kn:not(.unreg){background:var(--light),var(--kin-fill)} .kn.me{background:var(--light),var(--me-fill)}
+.ax-node:not(.plan):not(.fact),.pin-cur:not(.plan):not(.fut)>.node,.pin-n:not(.plan) .pn{background:var(--light),var(--ev)}
+.pl-blk.rec{background:var(--light),var(--ev)}
+/* 形 = 種類。出来事=カプセル(丸み30) / 自分の支出=帯(棒の区間なので角は小さい10) / 縁=輪郭 / 操作=角丸10のボタン・＋は角丸の正方形 */
+.child.band{display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 14px;border-radius:10px}
+.child.band .lbl{display:flex;align-items:center;gap:6px;font:600 12px/1 var(--font);color:rgba(255,255,255,.88)}
+.child.band .lbl svg.i{width:16px;height:16px}
+.child.band .amt{margin-top:4px;font:700 22px/1.1 var(--font);color:#fff;font-variant-numeric:tabular-nums}
+.child.band .cat-on{font:500 12px/1 var(--font);color:rgba(255,255,255,.9);padding:6px 8px;border-radius:6px;background:rgba(255,255,255,.16);white-space:nowrap}
+.child.band .chev{color:rgba(255,255,255,.85)}
+.child.band:active{filter:brightness(.95)}
+
+/* 窓辺の背景(ライト): 左上に暖かい日差し、右下に青い陰。どちらも気づく程度に弱く */
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) body{background:
+  radial-gradient(90% 60% at 0% 0%,rgba(255,226,180,.32),rgba(255,226,180,0) 70%),
+  radial-gradient(80% 60% at 100% 100%,rgba(150,178,230,.20),rgba(150,178,230,0) 70%),var(--bg);background-attachment:fixed}}
+:root[data-theme="light"] body{background:
+  radial-gradient(90% 60% at 0% 0%,rgba(255,226,180,.32),rgba(255,226,180,0) 70%),
+  radial-gradient(80% 60% at 100% 100%,rgba(150,178,230,.20),rgba(150,178,230,0) 70%),var(--bg);background-attachment:fixed}
+/* 夜(ダーク): 夜の空。下から街の明かりが弱く照らす */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) body{background:
+  radial-gradient(100% 50% at 50% 110%,rgba(120,150,220,.16),rgba(120,150,220,0) 70%),var(--bg);background-attachment:fixed}}
+:root[data-theme="dark"] body{background:radial-gradient(100% 50% at 50% 110%,rgba(120,150,220,.16),rgba(120,150,220,0) 70%),var(--bg);background-attachment:fixed}
+/* 背景に光を入れたので、上部バー・日のカードは背景を透かす */
+.appbar{background:color-mix(in srgb,var(--bg) 70%,transparent)}
+/* すりガラスは弱く: 後ろを通る軸がうっすら透ける */
+.dh2 .dcard{background:color-mix(in srgb,var(--surface) 58%,transparent);-webkit-backdrop-filter:blur(5px) saturate(1.4);backdrop-filter:blur(5px) saturate(1.4)}
+.ax-row::before,.dh2::before{opacity:.8}
+/* v6: v2から戻したもの・取り残しの整理 */
+.rel-dir{color:var(--tx-3);font:500 14px/1 var(--font);margin-right:2px}
+.ax-c .m .role{font:600 12px/1 var(--font);color:var(--tx-2);margin-right:2px}
+.cap .meta .cd{font:600 15px/1.2 var(--font);color:var(--tx-2)}
+.pl-dot.pay{border-radius:1px;width:14px}
+.dp-date b.sun{color:inherit}
+.eh h1{font-size:22px}
+.ld-tr .tb{position:relative}
+.ld-avg{position:absolute;top:-4px;bottom:-4px;width:0;border-left:1.5px dashed var(--tx-3);z-index:1}
+.ld-avgl{font:var(--t-cap);color:var(--tx-3)}
+.ld-avgl .tb span{display:block;white-space:nowrap;transform:translateX(calc(-100% + 4px));width:max-content}
+.zm-card{border-radius:10px}
+.prop .meta svg.i{width:14px;height:14px;vertical-align:middle}

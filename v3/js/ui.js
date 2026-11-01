@@ -76,7 +76,7 @@ const knot=(id,size='')=>{const e=E[id];return `<span class="kn ${shapeOf(id)} $
 const knots=ids=>ids.length?`<span class="knots">${ids.map(i=>knot(i,'sm')).join('')}</span>`:'';
 /** 名前つき参照。未登録は斜線 */
 const eref=(id,name,shape='place')=>id&&E[id]?`<a class="ref" href="#/e/${id}">${knot(id)}${esc(E[id].n)}</a>`:`<span class="ref unreg"><span class="kn ${shape} unreg"><b>${esc((name||'?')[0])}</b></span>${esc(name||'未登録')}</span>`;
-const aref=id=>`<a class="ref" href="#/a/${id}" style="padding-left:10px">${IC[ACT_IC[A[id].type]]||IC.activity}${esc(A[id].title||fmtMD(A[id].date))}</a>`;
+const aref=id=>`<a class="ref" href="#/a/${id}">${IC[ACT_IC[A[id].type]]||IC.activity}${esc(A[id].title||fmtMD(A[id].date))}</a>`;
 /** 12週の出会い(週ごとの登場数) */
 function encStrip(id){
   const end=new Date(TODAY+'T00:00');const c=Array(12).fill(0);
@@ -99,7 +99,7 @@ function momentRow(k,o={}){
   const x=a.x&&X[a.x];
   const dd=a.parent&&A[a.parent]?A[a.parent].date:'';
   return axRow({href:`#/a/${k}`,time:o.showDate&&dd?{d:+dd.slice(8),t:a.time}:a.time,node:{cls:ncls,icon},cls:o.cls,future:o.future,
-    t:esc(a.title),m:`${pl&&pl[1]!==o.exclude?`<span class="ell">${esc(placeName(pl))}</span>`:''}${knots(ppl)}`,
+    t:esc(a.title),m:`${o.role?`<span class="role">${esc(o.role)}</span>`:''}${pl&&pl[1]!==o.exclude?`<span class="ell">${esc(placeName(pl))}</span>`:''}${knots(ppl)}`,
     amt:a.amt!=null?`<b>${yen(a.amt)}</b>${x&&x.amt!==a.amt?payBar(a,x):''}`:''});
 }
 /** 1つの支払いの棒: 自分(青) / ほかの人(灰) / 立替・未精算(琥珀の斜線) */

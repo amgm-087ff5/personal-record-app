@@ -45,7 +45,7 @@ route('entities',()=>{
   const age=d=>{if(!d)return 3;const n=(new Date(TODAY+'T00:00')-new Date(d+'T00:00'))/864e5;return n<=7?0:n<=31?1:2};
   const groups=[['この1週間に交わった',0],['この1か月',1],['それより前',2],['まだ記録なし',3]];
   const rowOf=([k,e,d])=>{const yn=enYearN(k);return row({href:'#/e/'+k,cls:'en-row',lead:knot(k),t:esc(e.n),s:esc(enTypePath(e.t[0])),
-    v:`<span class="en-ago">${agoLabel(d)}${yn?`<small>今年${yn}回</small>`:''}</span>`})};
+    v:`<span class="en-ago">${agoLabel(d)}${encStrip(k)}</span>`})};
   return largeTitle('人・場所',{actions:[{text:'メモ',icon:'lines',onclick:"go('#/notes')"},{text:'種類',icon:'type',onclick:"go('#/types')"}]})
     +`<div class="en-search">${IC.search}<input class="input" type="search" placeholder="名前で探す" aria-label="名前で探す" oninput="enFilter(this.value)"></div>`
     +chips(kinds,enKind,"enKind='$v';rerender()")
@@ -80,9 +80,9 @@ route('e',id=>{
   const facts=(e.facts||[]).filter(f=>!f.rare),rare=(e.facts||[]).filter(f=>f.rare);
   const since=f=>{const m=(f.ver||'').match(/(\d{4})-(\d{2})〜/);return m?`${m[1]}年${+m[2]}月から`:''};
   const dl=facts.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}${since(f)?`<span class="since">${since(f)}</span>`:''}</dd>`).join('')
-    +relsOf(id).map(([rel,other,period])=>`<dt>${esc(rel)}</dt><dd>${eref(other)}${period?`<span class="since">${esc(period.replace(/(\d{4})-(\d{2})〜/,(m,y,mo)=>`${y}年${+mo}月から`))}</span>`:''}</dd>`).join('');
+    +relsOf(id).map(([rel,other,period,sym])=>`<dt>${esc(rel)}</dt><dd><span class="rel-dir" title="${sym?'お互い':'一方向'}">${sym?'⟷':'→'}</span>${eref(other)}${period?`<span class="since">${esc(period.replace(/(\d{4})-(\d{2})〜/,(m,y,mo)=>`${y}年${+mo}月から`))}</span>`:''}</dd>`).join('');
   /* 糸の時間軸: 予定(点線) → いま → 出会い・事実の変化を新しい順に。月ごとに区切る */
-  const evs=[...acts.map(x=>({key:x.d+' '+(x.a.time||''),ym:x.d.slice(0,7),html:momentRow(x.k,{exclude:id,showDate:true})})),
+  const evs=[...acts.map(x=>({key:x.d+' '+(x.a.time||''),ym:x.d.slice(0,7),html:momentRow(x.k,{exclude:id,showDate:true,role:x.role})})),
     ...factEvents(id).map(f=>({key:f.ym+'-00',ym:f.ym,html:axRow({time:'',node:{cls:'fact'},t:f.t,m:f.m})}))].sort((a,b)=>b.key.localeCompare(a.key));
   let lastYm='';
   const fut=plans.map(([k,ev])=>{const ym=(ev.rep?nextOn(ev):ev.d).slice(0,7);let h='';if(ym!==lastYm){lastYm=ym;h=monthHeadAx(ym,true)}return h+planRowAx(k,{future:true,showDate:true,exclude:id})}).join('');
@@ -95,7 +95,7 @@ route('e',id=>{
     +(rare.length?`<details class="list mt" style="overflow:hidden"><summary class="more" style="border:0;list-style:none;cursor:pointer">ほかの情報 ${rare.length}件</summary><dl class="facts" style="margin:0;box-shadow:none;border-radius:0;border-top:1px solid var(--line)">${rare.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}</dd>`).join('')}</dl></details>`:'')
     +(note?`<a class="en-memo" href="#/n/${id}"><span class="h">${IC.lines}メモ<span class="grow"></span><span class="faint">更新 ${esc(note.upd)}</span></span><p>${esc((note.body[0]?note.body[0][1]:'').replace(/\{[ea]:\w+\}/g,''))}</p></a>`
       :`<a class="en-memo" href="javascript:void 0" onclick="enNewNote('${id}')"><span class="h">${IC.lines}メモを書く</span></a>`)
-    +sh('この縁の時間軸',acts.length?`交わった ${acts.length}回`:'')
+    +sh('この縁の時間軸')
     +`<div class="ax thread" style="--tc:${tc}">`
     +(plans.length?fut+nowLine():'')
     +(body||axEdge('まだ記録はありません',true))
@@ -111,7 +111,7 @@ route('n',id=>{
   const rich=s=>esc(s).replace(/\{e:(\w+)\}/g,(_,k)=>eref(k)).replace(/\{a:(\w+)\}/g,(_,k)=>aref(k));
   return appbar('',{actions:[{icon:'edit',label:'メモを編集',onclick:"toast('編集はモックでは未対応です')"}]})
     +`<a class="parent" href="#/e/${id}">${knot(id,'sm')}<b class="grow ell">${esc(e.n)}</b>${IC.chev}</a>`
-    +`<article class="en-doc"><h1>${esc(e.n)}のメモ</h1><div class="meta">${note?`更新 ${esc(note.upd)}、${note.ver}版目`:'まだ書いていません'}</div>`
+    +`<article class="en-doc"><h1>${esc(e.n)}のメモ</h1><div class="meta">${note?`主観・最新、更新 ${esc(note.upd)}、${note.ver}版目`:'まだ書いていません'}</div>`
     +(note&&note.body.length?note.body.map(([h,s])=>`<h3>${esc(h)}</h3><p>${rich(s)}</p>`).join(''):`<p class="faint">本文はまだありません</p>`)
     +`</article>`
     +(note&&note.subs.length?sh('サブページ',note.subs.length)+objs(note.subs.map(([s,m])=>row({lead:ico('lines'),t:esc(s),v:`<span class="faint">${esc(m)}</span>`,chev:1}))):'');
