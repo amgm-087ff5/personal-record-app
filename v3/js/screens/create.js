@@ -108,11 +108,11 @@ function crPanel(title,body,opt={}){
 }
 
 /* ---------- 登録 ---------- */
-CREATE.push({id:'receipt',label:'レシートで支払い',sub:'撮影・写真から',icon:'pay',color:'var(--cap-ink)',primaryOn:['activities','ledger'],onclick:'openReceipt()'});
-CREATE.push({id:'happening',label:'出来事',sub:'会話・移動など',icon:'spark',color:'var(--cap-ink)',primaryOn:[],onclick:'openNewHappening()'});
+CREATE.push({id:'receipt',label:'レシートで支払い',sub:'撮影・写真から',icon:'pay',color:'var(--ev)',primaryOn:['activities','ledger'],onclick:'openReceipt()'});
+CREATE.push({id:'happening',label:'出来事',sub:'会話・移動など',icon:'spark',color:'var(--ev)',primaryOn:[],onclick:'openNewHappening()'});
 CREATE.push({id:'event',label:'予定',sub:'これからの予定',icon:'future',color:'var(--plan)',primaryOn:['plan'],onclick:'openNewEvent()'});
 CREATE.push({id:'entity',label:'人・場所',sub:'人物・店・会社・物',icon:'kin',color:'var(--kin)',primaryOn:['entities'],onclick:'openNewEntity()'});
-CREATE.push({id:'diary',label:'今日の日記',sub:'',icon:'diary',color:'var(--cap-ink)',primaryOn:[],onclick:'openDiary(TODAY)'});
+CREATE.push({id:'diary',label:'今日の日記',sub:'',icon:'diary',color:'var(--ev)',primaryOn:[],onclick:'openDiary(TODAY)'});
 
 /* ---------- 人・場所の候補(輪郭つき) ----------
    入力欄の下にチップで出す。datalist は要素を持てないため使わない */
@@ -288,8 +288,8 @@ let CRS={rc:null,idx:-1,mode:'batch',td:{},open:false};
 function openReceipt(){
   crBT=[];CRS={rc:null,idx:-1,mode:'batch',td:{},open:false};
   crPanel('レシートで支払い',`<div class="cr-tiles">
-    <label class="cr-tile"><input type="file" accept="image/*" capture="environment" hidden onchange="crAddFiles(this.files)">${ico('camera','var(--cap-ink)')}<span>撮影する</span><small>レシート1枚</small></label>
-    <label class="cr-tile"><input type="file" accept="image/*" multiple hidden onchange="crAddFiles(this.files)">${ico('photo','var(--cap-ink)')}<span>写真を選ぶ</span><small>最大${CR_MAXR}枚まで</small></label>
+    <label class="cr-tile"><input type="file" accept="image/*" capture="environment" hidden onchange="crAddFiles(this.files)">${ico('camera','var(--ev)')}<span>撮影する</span><small>レシート1枚</small></label>
+    <label class="cr-tile"><input type="file" accept="image/*" multiple hidden onchange="crAddFiles(this.files)">${ico('photo','var(--ev)')}<span>写真を選ぶ</span><small>最大${CR_MAXR}枚まで</small></label>
   </div>
   <div class="btnrow"><button class="btn ghost block" type="button" onclick="crSamples()">サンプルのレシートで試す</button></div>`,{full:true,footer:''});
 }

@@ -117,10 +117,10 @@ function planRowAx(k,o={}){
 function dayHead(d,o={}){
   const w=new Date(d+'T00:00').getDay();const tagN=o.href?'a':'div';
   const txt=o.diary?esc(o.diary):(o.empty||'');
-  return `<${tagN} class="dh2 ${d===TODAY?'today':''} ${o.future?'future':''} ${o.noax?'noax':''}" ${o.href?`href="${o.href}"`:''}><span class="rule"></span><span class="dt"><b>${+d.slice(5,7)}月${+d.slice(8)}日</b><span class="wd">${WD[w]}曜</span>${d===TODAY?'<span class="td">今日</span>':''}<span class="grow"></span>${o.sum?`<span class="sum">${o.sum}</span>`:''}</span>${txt?`<span class="dd ${o.diary?'':'none'}">${txt}</span>`:''}</${tagN}>`;
+  return `<${tagN} class="dh2 ${d===TODAY?'today':''} ${o.future?'future':''} ${o.noax?'noax':''}" ${o.href?`href="${o.href}"`:''}><span class="dcard"><span class="dt"><b>${+d.slice(5,7)}月${+d.slice(8)}日</b><span class="wd">${WD[w]}曜</span>${d===TODAY?'<span class="td">今日</span>':''}<span class="grow"></span>${o.sum?`<span class="sum">${o.sum}</span>`:''}</span>${txt?`<span class="dd ${o.diary?'':'none'}">${txt}</span>`:''}</span></${tagN}>`;
 }
 /** 月の区切り(縁の時間軸) */
-const monthHeadAx=(ym,future)=>`<div class="dh2 month ${future?'future':''}"><span class="rule"></span><span class="dt"><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b></span></div>`;
+const monthHeadAx=(ym,future)=>`<div class="dh2 month ${future?'future':''}"><span class="dcard"><span class="dt"><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b></span></span></div>`;
 const nowLine=()=>`<div class="now" aria-label="いま ${NOW}"><span class="tm">${NOW}</span><span class="dot"></span><span class="ln"></span></div>`;
 const axEdge=(html,past)=>`<div class="ax-edge ${past?'past':''}"><span class="c">${html}</span></div>`;
 /** 詳細の主役: 軸上の点を大きくし、カードを掛ける */

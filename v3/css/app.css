@@ -846,3 +846,50 @@ a.ref:active{background:none;text-decoration:underline}
 div.pl-root .seg button,div.pl-root .chip,div.ld-seg .seg button{height:32px}
 div.pl-grid .pl-cell.sun{background:none}
 .pl-dot.rec{background:var(--ink-2)}
+
+/* =====================================================================
+   v5.2(11/01): 出来事の色 / 日のカード / 予定と記録のカードを同じ骨格に
+   ===================================================================== */
+/* 出来事の色 = 時間軸の色(青灰)を濃くしたもの。軸の上の点だから軸と同じ系統。黒(墨)は文字だけに使う */
+:root{--ev:#4D5F80;--ev-soft:#E6EAF1;--cap-ink:var(--ev);--on-cap:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ev:#5B6E94;--ev-soft:#232B3A;--cap-ink:var(--ev);--on-cap:#fff}}
+:root[data-theme="dark"]{--ev:#5B6E94;--ev-soft:#232B3A;--cap-ink:var(--ev);--on-cap:#fff}
+.cap{--cap:var(--ev);color:var(--on-cap)}
+.ax-node,.ax-node.pay,.pin-n .pn,.pin-cur>.node,.pin-cur>.node::after,.pl-dot.rec{background:var(--ev);color:var(--on-cap)}
+.ax-node.plan,.pin-n.plan .pn{background:var(--bg);color:var(--plan)}
+.pin-cur.plan>.node,.pin-cur.fut>.node{background:var(--bg)}
+.pin-cur.plan>.node::after{background:var(--plan)}
+.pin-cur.plan.late>.node::after{background:var(--late)}
+.cap .split .bar i.me{background:#fff}
+.cap .split .bar i.other{background:rgba(255,255,255,.4)}
+.cap .split .bar{background:rgba(255,255,255,.18)}
+.cap .split .lg span::before{box-shadow:0 0 0 1px rgba(255,255,255,.6)}
+/* 完了したToDo = 起きたこと(出来事の色の塗り) */
+.check[aria-checked="true"]{background:var(--ev);border-color:var(--ev);color:var(--on-cap)}
+/* 選択中の操作(ピル) = 自分が選んだ(薄い青+青の文字)。ナビ・2列の選択と同じ */
+.chip[aria-pressed="true"],.seg button[aria-pressed="true"],.prop .ld-mini button[aria-pressed="true"],.ld-seg .seg button[aria-pressed="true"],div.pl-root .seg button[aria-pressed="true"]{background:var(--me-soft);color:var(--me);font-weight:600}
+/* トースト = 浮いた面(白)+影 */
+.toast{background:var(--surface);color:var(--ink);box-shadow:var(--e3),0 0 0 1px var(--line)}
+.toast button{color:var(--me)}
+/* 予定のカード: 記録と同じ骨格。点線の中抜き(まだ起きていない)。光だけ同じ */
+.cap.plan{color:var(--ink);background:radial-gradient(130% 120% at 0% 0%,color-mix(in srgb,var(--ev) 8%,transparent),transparent 55%),var(--surface);outline:2.5px dashed var(--plan);outline-offset:-2.5px;box-shadow:none}
+.cap.plan .kind{color:var(--ink-2);opacity:1}
+.cap.plan .meta{color:var(--ink-2);opacity:1}
+.cap.plan .meta svg.i{color:var(--ink-3)}
+
+/* 日のカード: 軸を超えて横いっぱい。すりガラス。軸はカードの後ろを通る */
+.dh2,.dh2.noax,.pin .dh2{padding:6px 8px;background:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+.dh2 .rule{display:none}
+.dh2::before{z-index:0}
+.dh2 .dcard{display:block;position:relative;z-index:1;border-radius:var(--r-md);padding:10px 14px 10px calc(var(--tcol) + var(--rail) - 2px);
+  background:color-mix(in srgb,var(--surface) 62%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.6);backdrop-filter:blur(14px) saturate(1.6);
+  box-shadow:var(--e1),var(--hl),0 0 0 1px color-mix(in srgb,var(--line) 70%,transparent)}
+.dh2.today .dcard{box-shadow:var(--e1),var(--hl),0 0 0 1.5px var(--me)}
+.dh2.noax .dcard{padding-left:14px}
+.dh2.noax{padding:16px 8px 8px}
+.pin .dh2{margin-left:-30px;padding:6px 0}
+.pin .dh2 .dcard{padding-left:30px}
+.dh2.month .dcard{padding-top:8px;padding-bottom:8px}
+a.dh2:active .dcard{background:color-mix(in srgb,var(--sunk) 80%,transparent)}
+/* 軸は後面: 線を細く・薄く */
+.ax-row::before,.dh2::before{opacity:.7}
