@@ -9,7 +9,8 @@ const dayOfDate=d=>Object.entries(A).find(([k,a])=>a.type==='日記'&&a.date===d
 const kidsOf=d=>{const day=dayOfDate(d);return day?day[1].kids.filter(k=>A[k]).map(k=>[k,A[k]]):[]};
 const passFilter=a=>actFilter==='all'||a.type===actFilter;
 const planVisible=()=>actFilter==='all'||actFilter==='予定';
-const daySpent=d=>kidsOf(d).reduce((s,[k,a])=>s+(a.x&&X[a.x]?X[a.x].amt:0),0);
+const daySpentAll=d=>kidsOf(d).reduce((s,[k,a])=>s+(a.x&&X[a.x]?X[a.x].amt:0),0);
+const daySpent=d=>{const ps=kidsOf(d).filter(([k,a])=>a.x&&X[a.x]);return ps.length>=2?ps.reduce((s,[k,a])=>s+X[a.x].amt,0):0};
 const dayDiary=d=>{const day=dayOfDate(d);return day&&day[1].body};
 /** その日の項目(記録+未記録の予定)を時刻の新しい順に */
 function dayItems(d){
@@ -30,7 +31,7 @@ route('activities',()=>{
   return largeTitle('タイムライン',{actions:[{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"},{icon:'more',label:'このモックについて',onclick:'openAbout()'}]})
     +chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")
     +`<div class="ax">`
-    +(upcoming.length&&actFilter==='all'?`<a href="#/plan">${axEdge(`明日以降の予定 ${upcoming.length}件、次は${relDay(upcoming[0][1].d)}の${esc(upcoming[0][1].t)}${IC.chev}`)}</a>`:'')
+    +(upcoming.length&&actFilter==='all'?`<a href="#/plan">${axEdge(`明日以降の予定 ${upcoming.length}件${IC.chev}`)}</a>`:'')
     +dayHead(TODAY,{href:`#/day/${TODAY}`,diary:dayDiary(TODAY),empty:'今日の日記を書く',sum:s?`自分 ${yen(s)}`:''})
     +axDay(TODAY)
     +dates.map(d=>{const sp=daySpent(d);return dayHead(d,{href:`#/day/${d}`,diary:dayDiary(d),sum:sp?`自分 ${yen(sp)}`:''})+axDay(d)}).join('')
@@ -41,7 +42,7 @@ route('activities',()=>{
 /* ---------- 日のページ: 1日=1ページの日記と、その日の軸 ---------- */
 route('day',d=>{
   const day=dayOfDate(d);const a=day&&day[1];const w=new Date(d+'T00:00').getDay();
-  const items=dayItems(d);const sp=daySpent(d);
+  const items=dayItems(d);const sp=daySpentAll(d);
   const people=new Set(items.flatMap(i=>i.kind==='rec'?(A[i.k].roles||[]).map(r=>r[1]).filter(x=>x&&x!=='me'):[]));
   const dl=[...new Set([...Object.values(A).filter(x=>x.type==='日記').map(x=>x.date),TODAY])].sort();const pi=dl.indexOf(d);const prev=dl.filter(x=>x<d).pop(),next=dl.find(x=>x>d);
   return appbar('',{actions:[...(next?[{icon:'up',label:'次の日(未来へ)',onclick:`go('#/day/${next}')`}]:[]),...(prev?[{icon:'down',label:'前の日(過去へ)',onclick:`go('#/day/${prev}')`}]:[]),{icon:'edit',label:'日記を書く',onclick:`openDiary('${d}')`}]})

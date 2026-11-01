@@ -100,7 +100,7 @@ function momentRow(k,o={}){
   const dd=a.parent&&A[a.parent]?A[a.parent].date:'';
   return axRow({href:`#/a/${k}`,time:o.showDate&&dd?{d:+dd.slice(8),t:a.time}:a.time,node:{cls:ncls,icon},cls:o.cls,future:o.future,
     t:esc(a.title),m:`${pl&&pl[1]!==o.exclude?`<span class="ell">${esc(placeName(pl))}</span>`:''}${knots(ppl)}`,
-    amt:a.amt!=null?`<b>${yen(a.amt)}</b>${x&&x.amt!==a.amt?`${payBar(a,x)}<small>自分 ${yen(x.amt)}</small>`:''}`:''});
+    amt:a.amt!=null?`<b>${yen(a.amt)}</b>${x&&x.amt!==a.amt?payBar(a,x):''}`:''});
 }
 /** 1つの支払いの棒: 自分(青) / ほかの人(灰) / 立替・未精算(琥珀の斜線) */
 function payBar(a,x){const rest=a.amt-x.amt;const owed=a.adv&&a.adv[2]==='未精算';
@@ -121,7 +121,7 @@ function dayHead(d,o={}){
 }
 /** 月の区切り(縁の時間軸) */
 const monthHeadAx=(ym,future)=>`<div class="dh2 month ${future?'future':''}"><span class="rule"></span><span class="dt"><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b></span></div>`;
-const nowLine=()=>`<div class="now" aria-label="いま ${NOW}"><span class="tm">${NOW}</span><span class="dot"></span><span class="ln"><span>いま</span></span></div>`;
+const nowLine=()=>`<div class="now" aria-label="いま ${NOW}"><span class="tm">${NOW}</span><span class="dot"></span><span class="ln"></span></div>`;
 const axEdge=(html,past)=>`<div class="ax-edge ${past?'past':''}"><span class="c">${html}</span></div>`;
 /** 詳細の主役: 軸上の点を大きくし、カードを掛ける */
 const focusRow=({time,node,card,plan})=>`<div class="ax-row focus ${plan?'plan future':''}"><span class="ax-time" style="padding-top:28px">${esc(time||'')}</span><span class="ax-node ${node.cls||''}">${IC[node.icon]||''}</span><div class="focus-card"><div class="mo-card">${card}</div></div></div>`;

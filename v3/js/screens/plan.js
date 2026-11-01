@@ -116,7 +116,8 @@ function plCalPane(){
     const its=plItemsOn(d);
     const hol=evOn(d).some(([k,e])=>e.hol);
     const cls=hol||wd===0?'sun':'';
-    const bars=its.slice(0,2).map(plBar).join('')+(its.length>2?`<span class="pl-more">+${its.length-2}</span>`:'');
+    /* 月のマスは「その日に何件あるか」だけ。小さいカプセル(塗り=記録、点線=予定)を最大4つ。文字は下の日の一覧で読む */
+    const bars=its.slice(0,4).map(it=>`<i class="pl-dot ${it.kind==='rec'?'rec':'plan'}"></i>`).join('');
     cells+=`<button class="pl-cell${cls==='sun'?' sun':''}${d===plSel?' sel':''}${d===TODAY?' today':''}" type="button" aria-label="${fmtMDW(d)}${its.length?' '+its.length+'件':''}" aria-pressed="${d===plSel}" onclick="plSelect('${d}')"><span class="pl-dn num ${cls}">${n}</span><span class="pl-bars">${bars}</span></button>`;
   }
   const head=`<div class="pl-mh"><button class="pl-nav" type="button" onclick="plMove(-1)">前の月</button><b class="num">${y}年${m}月</b><button class="pl-nav" type="button" onclick="plMove(1)">次の月</button></div>`;
