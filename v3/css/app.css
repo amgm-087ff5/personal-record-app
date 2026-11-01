@@ -916,3 +916,6 @@ a.dh2:active .dcard{background:color-mix(in srgb,var(--sunk) 80%,transparent)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121A2A;--surface:#1A2335;--surface-2:#1E283B;--sunk:#0E1522;--line:#28324A;--line-strong:#3A4662}}
 :root[data-theme="dark"]{--bg:#121A2A;--surface:#1A2335;--surface-2:#1E283B;--sunk:#0E1522;--line:#28324A;--line-strong:#3A4662}
 div.pl-grid .pl-cell.sun .pl-dn{background:color-mix(in srgb,var(--tx) 9%,transparent)}
+/* 日のカードは独立した面。中の文字は面の端から普通の余白で始める(時刻列・軸の幅に合わせない) */
+.dh2 .dcard,.dh2.noax .dcard,.pin .dh2 .dcard{padding:10px 16px}
+.dh2.month .dcard{padding:8px 16px}
