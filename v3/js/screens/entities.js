@@ -7,25 +7,21 @@ document.head.insertAdjacentHTML('beforeend',`<style>
 .en-search{margin:0 var(--gutter) 12px;position:relative}
 .en-search svg.i{position:absolute;left:12px;top:14px;color:var(--ink-3)}
 .en-search input{padding-left:40px}
-.en-row .r{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none}
-.en-row .r small{font:var(--t-cap);color:var(--ink-3)}
 .en-memo{margin:12px var(--gutter) 0;padding:14px 16px 14px 18px;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1),var(--hl);position:relative;display:block}
-.en-memo::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:var(--tc)}
+.en-memo::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:var(--kin)}
 .en-memo .h{display:flex;align-items:center;gap:6px;font:var(--t-label);color:var(--ink-2)}
 .en-memo .h svg.i{width:16px;height:16px}
 .en-memo p{margin-top:6px;font:var(--t-body);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .en-doc{margin:4px var(--gutter) 0;padding:20px 20px 24px 22px;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e2),var(--hl);position:relative}
-.en-doc::before{content:"";position:absolute;left:0;top:20px;bottom:20px;width:3px;border-radius:0 3px 3px 0;background:var(--tc)}
+.en-doc::before{content:"";position:absolute;left:0;top:20px;bottom:20px;width:3px;border-radius:0 3px 3px 0;background:var(--kin)}
 .en-doc h1{font:var(--t-title)} .en-doc .meta{font:var(--t-cap);color:var(--ink-3);margin-top:4px}
 .en-doc h3{font:600 14px/1.4 var(--font);color:var(--ink-2);margin-top:22px}
 .en-doc p{font:400 16px/1.9 var(--font);margin-top:6px}
 .en-doc .ref{vertical-align:middle;margin:0 2px}
-.en-tree .row{padding-left:calc(10px + var(--d,0)*22px)}
-.en-tree .row .lv{position:absolute;left:calc(10px + (var(--d,0) - 1)*22px + 13px);top:0;bottom:0;width:2px;background:var(--line)}
-.en-tree .row+.row::before{left:calc(10px + var(--d,0)*22px)}
-.en-tg{width:28px;height:28px;display:grid;place-items:center;color:var(--ink-3);flex:none}
+.en-tg{width:44px;height:44px;margin:-8px 0 -8px -8px;display:grid;place-items:center;color:var(--ink-3);flex:none}
 .en-tg svg.i{width:16px;height:16px}
-.en-dot{width:10px;height:10px;border-radius:3px;background:var(--line-strong);flex:none;margin:0 6px}
+/* 種類の階層: 子は字下げ+縦のガイド線だけ(└も小さい四角も使わない) */
+.objs>.row.ind::after{border-bottom:0;border-bottom-left-radius:0;width:0}
 </style>`);
 
 const enRoots=()=>Object.keys(TYPES).filter(k=>!TYPES[k].p);
@@ -34,6 +30,8 @@ const enCount=t=>enAll().filter(([k,e])=>e.t.some(x=>isUnder(x,t))).length;
 const enTypePath=t=>typeAnc(t).map(a=>TYPES[a].n).join(' › ');
 const enDesc=k=>{const r=[k];let grew=true;while(grew){grew=false;Object.keys(TYPES).forEach(c=>{if(!r.includes(c)&&r.includes(TYPES[c].p)){r.push(c);grew=true}})}return r};
 let enKind='all';
+/** この年に交わった回数 */
+const enYearN=k=>actsOf(k).filter(([kk,a])=>{const d=a.parent&&A[a.parent]?A[a.parent].date:a.date;return d&&d.startsWith(TODAY.slice(0,4))}).length;
 
 /** 種類のパンくず(1番目の種類の祖先)+ほかの種類 */
 const crumb=id=>{const e=E[id];const [t,...rest]=e.t;return typeAnc(t).map(a=>`<a href="#/types">${esc(TYPES[a].n)}</a>`).join('<span class="sep">›</span>')+(rest.length?`<span class="also">ほか ${rest.map(r=>esc(TYPES[r].n)).join('・')}</span>`:'')};
@@ -46,9 +44,9 @@ route('entities',()=>{
     .map(([k,e])=>[k,e,lastMet(k)]).sort((a,b)=>(b[2]||'').localeCompare(a[2]||'')||a[1].n.localeCompare(b[1].n));
   const age=d=>{if(!d)return 3;const n=(new Date(TODAY+'T00:00')-new Date(d+'T00:00'))/864e5;return n<=7?0:n<=31?1:2};
   const groups=[['この1週間に交わった',0],['この1か月',1],['それより前',2],['まだ記録なし',3]];
-  const rowOf=([k,e,d])=>row({href:'#/e/'+k,cls:'en-row',lead:knot(k),t:esc(e.n),s:esc(enTypePath(e.t[0])),
-    v:`<span class="r">${encStrip(k)}<small>${agoLabel(d)}</small></span>`});
-  return largeTitle('人・場所',{actions:[{icon:'type',label:'種類',onclick:"go('#/types')"}]})
+  const rowOf=([k,e,d])=>{const yn=enYearN(k);return row({href:'#/e/'+k,cls:'en-row',lead:knot(k),t:esc(e.n),s:esc(enTypePath(e.t[0]))+(yn?` 今年${yn}回`:''),
+    v:`<span class="faint">${agoLabel(d)}</span>`})};
+  return largeTitle('人・場所',{actions:[{text:'メモ',icon:'lines',onclick:"go('#/notes')"},{text:'種類',icon:'type',onclick:"go('#/types')"}]})
     +`<div class="en-search">${IC.search}<input class="input" type="search" placeholder="名前で探す" aria-label="名前で探す" oninput="enFilter(this.value)"></div>`
     +chips(kinds,enKind,"enKind='$v';rerender()")
     +`<div id="en-groups">${groups.map(([label,g])=>{const rs=shown.filter(x=>age(x[2])===g);return rs.length?`<div class="en-g">${sh(label,rs.length)}${objs(rs.map(rowOf))}</div>`:''}).join('')}</div>`;
@@ -90,14 +88,14 @@ route('e',id=>{
   const note=NOTES[id];
   return appbar('',{actions:[{icon:'more',label:'その他の操作',onclick:"toast('編集はモックでは未対応です')"}]})
     +`<section class="eh">${knot(id,'lg')}<div class="grow" style="min-width:0"><h1>${esc(e.n)}</h1><div class="crumb">${crumb(id)}</div></div></section>`
-    +`<div class="stats"><div><b>${agoLabel(lastMet(id))}</b><span>最後に交わった</span></div><div><b>${yearN}回</b><span>今年</span></div>${money?`<div><b>${yen(money)}</b><span>${rootOf(id)==='person'?'一緒の時の自分の支出':'ここでの自分の支出'}</span></div>`:''}${owed?`<div><b style="color:var(--warn)">${yen(owed)}</b><span>立替・未精算</span></div>`:''}</div>`
+    +`<div class="stats"><div><b>${agoLabel(lastMet(id))}</b><span>最後に交わった</span></div><div><b>${yearN}回</b><span>今年</span></div>${money?`<div><b>${yen(money)}</b><span>${rootOf(id)==='person'?'一緒の時の自分の支出':'ここでの自分の支出'}</span></div>`:''}${owed?`<div><b style="color:var(--owe-text)">${yen(owed)}</b><span>立替・未精算</span></div>`:''}</div>`
     +(dl?`<dl class="facts">${dl}</dl>`:'')
     +(rare.length?`<details class="list mt" style="overflow:hidden"><summary class="more" style="border:0;list-style:none;cursor:pointer">ほかの情報 ${rare.length}件</summary><dl class="facts" style="margin:0;box-shadow:none;border-radius:0;border-top:1px solid var(--line)">${rare.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}</dd>`).join('')}</dl></details>`:'')
-    +(note?`<a class="en-memo" href="#/n/${id}" style="--tc:${tc}"><span class="h">${IC.note}メモ<span class="grow"></span><span class="faint">更新 ${esc(note.upd)}</span></span><p>${esc((note.body[0]?note.body[0][1]:'').replace(/\{[ea]:\w+\}/g,''))}</p></a>`
-      :`<a class="en-memo" href="javascript:void 0" onclick="enNewNote('${id}')" style="--tc:${tc}"><span class="h">${IC.note}メモを書く</span></a>`)
+    +(note?`<a class="en-memo" href="#/n/${id}"><span class="h">${IC.lines}メモ<span class="grow"></span><span class="faint">更新 ${esc(note.upd)}</span></span><p>${esc((note.body[0]?note.body[0][1]:'').replace(/\{[ea]:\w+\}/g,''))}</p></a>`
+      :`<a class="en-memo" href="javascript:void 0" onclick="enNewNote('${id}')"><span class="h">${IC.lines}メモを書く</span></a>`)
     +sh('この縁の時間軸',acts.length?`交わった ${acts.length}回`:'')
     +`<div class="ax thread" style="--tc:${tc}">`
-    +(plans.length?plans.map(([k])=>planRowAx(k,{future:true})).join('')+nowLine():'')
+    +(plans.length?plans.map(([k])=>planRowAx(k,{future:true,showDate:true,exclude:id})).join('')+nowLine():'')
     +(body||axEdge('まだ記録はありません',true))
     +(body?axEdge('これより前の記録はありません',true):'')
     +`</div>`;
@@ -111,10 +109,20 @@ route('n',id=>{
   const rich=s=>esc(s).replace(/\{e:(\w+)\}/g,(_,k)=>eref(k)).replace(/\{a:(\w+)\}/g,(_,k)=>aref(k));
   return appbar('',{actions:[{icon:'edit',label:'メモを編集',onclick:"toast('編集はモックでは未対応です')"}]})
     +`<a class="parent" href="#/e/${id}">${knot(id,'sm')}<b class="grow ell">${esc(e.n)}</b>${IC.chev}</a>`
-    +`<article class="en-doc" style="--tc:${threadColor(id)}"><h1>${esc(e.n)}のメモ</h1><div class="meta">${note?`更新 ${esc(note.upd)}、${note.ver}版目`:'まだ書いていません'}</div>`
+    +`<article class="en-doc"><h1>${esc(e.n)}のメモ</h1><div class="meta">${note?`更新 ${esc(note.upd)}、${note.ver}版目`:'まだ書いていません'}</div>`
     +(note&&note.body.length?note.body.map(([h,s])=>`<h3>${esc(h)}</h3><p>${rich(s)}</p>`).join(''):`<p class="faint">本文はまだありません</p>`)
     +`</article>`
-    +(note&&note.subs.length?sh('サブページ',note.subs.length)+objs(note.subs.map(([s,m])=>row({lead:ico('note'),t:esc(s),v:`<span class="faint">${esc(m)}</span>`,chev:1}))):'');
+    +(note&&note.subs.length?sh('サブページ',note.subs.length)+objs(note.subs.map(([s,m])=>row({lead:ico('lines'),t:esc(s),v:`<span class="faint">${esc(m)}</span>`,chev:1}))):'');
+},{tab:'entities'});
+
+/* ---------- メモの一覧: 縁ごとに1件 ---------- */
+const enNoteKey=u=>{const m=(u||'').match(/(\d+)\/(\d+)\s*(\d+):(\d+)/);return m?((+m[1])*100+(+m[2]))*10000+(+m[3])*100+(+m[4]):0};
+route('notes',()=>{
+  const ids=Object.keys(NOTES).filter(k=>E[k]).sort((a,b)=>enNoteKey(NOTES[b].upd)-enNoteKey(NOTES[a].upd));
+  return appbar('メモ')
+    +(ids.length?`<div class="mt"></div>`+objs(ids.map(id=>{const first=(NOTES[id].body[0]?NOTES[id].body[0][1]:'').replace(/\{[ea]:\w+\}/g,'');
+      return row({href:'#/n/'+id,lead:knot(id),t:esc(E[id].n),s:esc(first)})}))
+      :empty('lines','メモはまだありません'));
 },{tab:'entities'});
 
 /* ---------- 種類: 縁の分類(木)。根の種類が輪郭を決める ---------- */
@@ -126,7 +134,7 @@ function enTreeRows(){
     const open=(d<2)!==enFlipped.has(k);
     const props=propsOf(k).map(p=>p[0]).join('・')||'なし';
     const root=typeAnc(k)[0];
-    const lead=`${kids.length?`<span class="en-tg" role="button" aria-label="${open?'閉じる':'開く'}" onclick="event.stopPropagation();enToggle('${k}')">${open?IC.down:IC.chev}</span>`:'<span class="en-tg"></span>'}${d===0?`<span class="kn sm ${ROOT_SHAPE[root]||'thing'}"><b>${esc(TYPES[k].n[0])}</b></span>`:'<span class="en-dot"></span>'}`;
+    const lead=`${kids.length?`<span class="en-tg" role="button" aria-label="${open?'閉じる':'開く'}" onclick="event.stopPropagation();enToggle('${k}')">${open?IC.down:IC.chev}</span>`:'<span class="en-tg"></span>'}${d===0?`<span class="kn sm ${ROOT_SHAPE[root]||'thing'}"><b>${esc(TYPES[k].n[0])}</b></span>`:''}`;
     out.push(`<button type="button" class="row ${d?'ind':''}" style="--d:${d}" onclick="enEditType('${k}')">${lead}<span class="grow"><div class="t ell">${esc(TYPES[k].n)}</div><div class="s ell">項目 ${esc(props)}</div></span><span class="v faint">${enCount(k)}</span></button>`);
     if(open)kids.forEach(c=>walk(c,d+1));
   };
