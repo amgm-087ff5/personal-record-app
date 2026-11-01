@@ -810,3 +810,39 @@ a.ref:active{background:none;text-decoration:underline}
 .pin-cur.plan.late>.node::after{background:var(--late)}
 .prop .ld-mini button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg);box-shadow:none;font-weight:600}
 .ld-seg .seg button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+
+/* =====================================================================
+   v5.1(11/01): 強さの階層。意味は1か所で1回だけ、強い印は1行に1つ
+   ===================================================================== */
+/* 日の区切り: 細い線(今日だけ青)。文字の大きさで区切りを示す */
+.dh2 .rule{height:1px;background:var(--line-strong)}
+.dh2.today .rule{height:2px;background:var(--me)}
+.dh2 .dt .td{background:none;padding:0;color:var(--me);font:600 13px/1 var(--font)}
+.dh2 .dt .sum,.dh2 .dd{color:var(--ink-3)}
+/* 時刻列と補足は静かに */
+.ax-time{color:var(--ink-3)}
+.ax-c .m{color:var(--ink-3)}
+/* いま: 赤い細線+赤い時刻だけ */
+.now .ln{height:2px;background:var(--late)}
+.now .dot{width:12px;height:2px}
+/* 操作(ピル): 枠を付けず、選択中だけ墨の塗り */
+.chip,.seg button,.ld-mini button{border:0;background:var(--sunk);color:var(--ink-2);height:32px;font-weight:500}
+.chip[aria-pressed="true"],.seg button[aria-pressed="true"],.prop .ld-mini button[aria-pressed="true"],.ld-seg .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg button,.ld-mini button{position:relative}
+.seg button::before,.ld-mini button::before{content:"";position:absolute;inset:-6px 0}
+.pl-root .seg button,.pl-root .chip,.ld-seg .seg button{height:32px}
+.chips,.seg{gap:6px}
+/* 一覧の支払いの棒は金額の下に小さく */
+.ax-c .amt .pbar{width:56px;height:5px;margin-top:5px}
+/* 予定の月: マスは件数の印だけ(小さいカプセル) */
+.pl-cell{min-height:60px;gap:6px;padding:6px 2px}
+.pl-bars{flex-direction:row;flex-wrap:wrap;justify-content:center;gap:3px;padding:0 4px}
+.pl-dot{display:block;width:12px;height:6px;border-radius:3px}
+.pl-dot.rec{background:var(--cap-ink)}
+.pl-dot.plan{outline:1.5px dashed var(--plan);outline-offset:-1.5px}
+.pl-cell.sun{background:none}
+.pl-cell.sun .pl-dn{color:var(--ink);font-weight:700;background:var(--sunk)}
+.pl-cell.today .pl-dn{background:var(--me);color:var(--on-me)}
+div.pl-root .seg button,div.pl-root .chip,div.ld-seg .seg button{height:32px}
+div.pl-grid .pl-cell.sun{background:none}
+.pl-dot.rec{background:var(--ink-2)}
