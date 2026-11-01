@@ -1,44 +1,64 @@
 /* =====================================================================
-   予定 — 月カレンダー(時間軸で選んだ日を見る) / ToDo / 予定の詳細 / ToDoの詳細
-   ルート: #/plan(?view=cal|todo), #/ev/{id}, #/task/{id}
+   予定 — 月 / 日(時間グリッド) / 3週間(時間軸) / ToDo / 予定の詳細 / ToDoの詳細
+   ルート: #/plan(?view=month|day|list|todo), #/ev/{id}, #/task/{id}
    ===================================================================== */
 
 document.head.insertAdjacentHTML('beforeend','<style>'+`
+.pl-root .seg button{height:44px}
+.pl-root .chip{height:44px}
+.pl-root .sh .act{min-height:44px}
+.pl-root .btn.sm{height:44px}
+.pl-nav{height:44px;padding:0 12px;border-radius:var(--r-pill);font:var(--t-label);color:var(--me);white-space:nowrap}
+.pl-nav:active{background:var(--sunk)}
 .pl-cal{padding:8px 8px 10px}
 .pl-mh{display:flex;align-items:center;gap:4px;height:44px}
 .pl-mh b{flex:1;text-align:center;font:var(--t-head)}
-.pl-wd,.pl-grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.pl-wd,.pl-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .pl-wd span{font:500 12px/24px var(--font);text-align:center;color:var(--ink-3)}
 .pl-wd .sun{color:var(--danger)} .pl-wd .sat{color:var(--plan)}
-.pl-cell{width:100%;min-height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:4px 0;border-radius:var(--r-sm)}
+.pl-cell{min-width:0;min-height:76px;display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:4px 2px;border-radius:var(--r-sm);overflow:hidden}
 .pl-cell:active{background:var(--sunk)}
-.pl-cell.sel{background:var(--brand-soft)}
-.pl-dn{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;font:500 15px/1 var(--font);font-variant-numeric:tabular-nums}
+.pl-cell.sel{background:var(--me-soft)}
+.pl-dn{align-self:center;display:grid;place-items:center;min-width:28px;height:28px;padding:0 4px;border-radius:6px;font:500 15px/1 var(--font);font-variant-numeric:tabular-nums}
 .pl-dn.sun{color:var(--danger)} .pl-dn.sat{color:var(--plan)}
-.pl-cell.today .pl-dn{background:var(--brand);color:var(--brand-ink)}
-.pl-marks{display:flex;gap:3px;align-items:center;height:6px}
-.pl-m{display:block;width:5px;height:5px;flex:none}
-.pl-ring{width:6px;height:6px;border:1.5px dashed var(--plan);border-radius:50%}
-.pl-sq{background:var(--c-expense);border-radius:1px}
-.pl-rec{background:var(--axis-past);border-radius:50%}
+.pl-cell.today .pl-dn{background:var(--me);color:var(--brand-ink)}
+.pl-bars{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pl-bar{display:block;width:100%;height:18px;padding:0 4px;border-radius:4px;box-sizing:border-box;font:500 12px/16px var(--font);color:var(--ink-2);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-bar.plan{outline:1.5px dashed var(--plan);outline-offset:-1.5px;background:transparent}
+.pl-bar.rec{background:var(--cap-ink);color:var(--bg)}
+.pl-cat{display:inline-block;width:8px;height:4px;border-radius:2px;background:var(--cc,var(--ink-3));margin-right:3px;vertical-align:middle}
+.pl-more{font:500 12px/16px var(--font);color:var(--ink-3);padding-left:4px}
 .pl-legend{display:flex;justify-content:center;gap:14px;padding:6px 0 0;font:var(--t-cap);color:var(--ink-3)}
-.pl-legend span{display:flex;align-items:center;gap:5px}
-.pl-legend .pl-m{width:6px;height:6px}
-.pl-over{color:var(--danger)}
-.pl-pri{color:var(--danger);font-weight:700;margin-left:4px}
-.pl-done-t{text-decoration:line-through;color:var(--ink-3)}
-.pl-gap{margin-top:20px}
-.pl-s span+span{margin-left:8px}
-.pl-cd{margin-top:8px;font:var(--t-label);color:var(--plan)}
-.pl-card::before{display:none}
-.pl-tk{display:flex;align-items:flex-start;gap:12px;margin-top:6px}
-.pl-tk h1{flex:1;min-width:0;margin-top:0}
+.pl-legend span{display:flex;align-items:center;gap:6px}
+.pl-key{display:inline-block;width:20px;height:12px;padding:0}
+.pl-dnav{display:flex;align-items:center;gap:4px;height:44px;margin:0 var(--gutter)}
+.pl-dnav b{flex:1;min-width:0;text-align:center;font:var(--t-head);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-allday{margin:0 var(--gutter) 8px;display:flex;flex-direction:column;gap:6px}
+.pl-allday .pl-bar{height:44px;line-height:42px;font-size:14px;padding:0 12px}
+.pl-tg{position:relative;margin:12px var(--gutter) 0}
+.pl-hl{position:absolute;left:0;width:44px;transform:translateY(-8px);font:500 12px/16px var(--font);color:var(--ink-3);text-align:right;padding-right:8px;font-variant-numeric:tabular-nums}
+.pl-hr{position:absolute;left:52px;right:0;height:1px;background:var(--line)}
+.pl-blk{position:absolute;z-index:1;box-sizing:border-box;padding:4px 8px;border-radius:var(--r-xs);overflow:hidden;font:500 12px/1.3 var(--font);color:var(--ink-2)}
+.pl-blk b{display:block;font:600 13px/1.3 var(--font);color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-blk span{display:block}
+.pl-blk.plan{outline:2px dashed var(--plan);outline-offset:-2px;background:var(--surface)}
+.pl-blk.rec{background:var(--cap-ink);color:var(--bg)}
+.pl-now{position:absolute;left:52px;right:0;height:2px;background:var(--late);z-index:2}
+.pl-now span{position:absolute;right:0;top:-20px;font:600 12px/16px var(--font);color:var(--late)}
+.pl-card{margin:4px var(--gutter) 0;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e2),var(--hl);padding:16px 18px}
+.pl-card .meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font:var(--t-label);color:var(--ink-2)}
+.pl-tk{display:flex;align-items:flex-start;gap:12px}
+.pl-tk h1{flex:1;min-width:0;font:var(--t-title);line-height:1.3}
 .pl-tk .check,.row .check{position:relative}
 .pl-tk .check::before,.row .check::before{content:"";position:absolute;inset:-10px}
+.pl-s span+span{margin-left:8px}
+.pl-s .tag{height:20px;padding:0 6px}
+.pl-pri{color:var(--late);font-weight:700;margin-left:4px}
+.pl-done-t{text-decoration:line-through;color:var(--ink-3)}
 `+'</style>');
 
 /* ---------- 状態(画面をまたいで残す) ---------- */
-let planView='cal';
+let planView='month';
 let plSel=TODAY, plYM=[+TODAY.slice(0,4),+TODAY.slice(5,7)];
 let plTodoView='today', plShowDone=false;
 
@@ -55,35 +75,33 @@ function plDayFor(date){
 }
 function plSetView(v){
   planView=v;
-  location.replace('#/plan?view='+(v==='todo'?'todo':'cal'));
+  location.replace('#/plan?view='+v);
   rerender();
 }
+/** その日の記録(実線)と予定(点線)を時間順に。繰り返しは evOn が日付ごとに含める */
+function plItemsOn(d){
+  const recs=actsOn(d).map(([k,a])=>({k,kind:'rec',t:a.title||'',time:a.time||'00:00',end:'',all:false,cat:a.x&&X[a.x]?X[a.x].cat:''}));
+  const plans=evOn(d).filter(([k,e])=>!e.hol&&!plRecordedOn(e,d)).map(([k,e])=>({k,kind:'plan',t:e.t,time:e.all?'00:00':e.s,end:e.all?'':e.e,all:!!e.all,cat:e.pay?e.pay.cat:''}));
+  return [...recs,...plans].sort((a,b)=>a.time.localeCompare(b.time));
+}
+/** 支払いのカテゴリの短い横棒 */
+const plCatMark=c=>c?`<i class="pl-cat" style="--cc:${catColor(c)}"></i>`:'';
 
 /* ---------- 予定タブ ---------- */
 route('plan',(id,q)=>{
-  if(q.view)planView=q.view==='todo'?'todo':'cal';
-  const today=evOn(TODAY).filter(([k,e])=>!e.hol);
-  const nextE=today.find(([k,e])=>!e.all&&e.s>NOW);
-  const over=overdueCount();
-  const metrics=[
-    {l:'今日',v:today.length+'件'},
-    {l:'次',v:nextE?nextE[1].s:'—'},
-    {l:'期限切れのToDo',v:over+'件',alert:over>0,href:'#/plan?view=todo'},
-  ];
-  return largeTitle('予定',{metrics})
-    +seg([['cal','カレンダー'],['todo','ToDo']],planView,"plSetView('$v')")
-    +(planView==='todo'?plTodoPane():plCalPane()+plSoonAx());
+  if(q.view)planView=['month','day','list','todo'].includes(q.view)?q.view:(q.view==='cal'?'month':planView);
+  const body=planView==='todo'?plTodoPane()
+    :planView==='day'?plDayView()
+    :planView==='list'?plListAx()
+    :plCalPane();
+  return `<div class="pl-root">`+largeTitle('予定')
+    +seg([['month','月'],['day','日'],['list','3週間'],['todo','ToDo']],planView,"plSetView('$v')")
+    +body+`</div>`;
 },{tab:'plan'});
 
-/* ---------- カレンダー(月) ---------- */
-/** 日の印: 予定=点線の輪 / 支払い予定=四角 / 記録=点 (最大3つ) */
-function plMarks(d){
-  const evs=evOn(d).filter(([k,e])=>!e.hol&&!plRecordedOn(e,d));
-  const m=[];
-  if(evs.some(([k,e])=>!e.pay))m.push('<i class="pl-m pl-ring"></i>');
-  if(evs.some(([k,e])=>e.pay))m.push('<i class="pl-m pl-sq"></i>');
-  if(actsOn(d).length)m.push('<i class="pl-m pl-rec"></i>');
-  return m.join('');
+/* ---------- 月 ---------- */
+function plBar(it){
+  return `<i class="pl-bar ${it.kind==='rec'?'rec':'plan'}">${plCatMark(it.cat)}${esc(it.t)}</i>`;
 }
 function plCalPane(){
   const [y,m]=plYM;
@@ -92,13 +110,15 @@ function plCalPane(){
   for(let n=1;n<=dim;n++){
     const d=`${y}-${String(m).padStart(2,'0')}-${String(n).padStart(2,'0')}`;
     const wd=(first+n-1)%7;
+    const its=plItemsOn(d);
     const hol=evOn(d).some(([k,e])=>e.hol);
     const cls=hol||wd===0?'sun':wd===6?'sat':'';
-    cells+=`<button class="pl-cell${d===plSel?' sel':''}${d===TODAY?' today':''}" type="button" aria-label="${fmtMDW(d)}" aria-pressed="${d===plSel}" onclick="plSelect('${d}')"><span class="pl-dn num ${cls}">${n}</span><span class="pl-marks">${plMarks(d)}</span></button>`;
+    const bars=its.slice(0,2).map(plBar).join('')+(its.length>2?`<span class="pl-more">+${its.length-2}</span>`:'');
+    cells+=`<button class="pl-cell${d===plSel?' sel':''}${d===TODAY?' today':''}" type="button" aria-label="${fmtMDW(d)}${its.length?' '+its.length+'件':''}" aria-pressed="${d===plSel}" onclick="plSelect('${d}')"><span class="pl-dn num ${cls}">${n}</span><span class="pl-bars">${bars}</span></button>`;
   }
-  const head=`<div class="pl-mh"><button class="iconbtn" type="button" aria-label="前の月" onclick="plMove(-1)">${IC.back}</button><b class="num">${y}年${m}月</b><button class="iconbtn" type="button" aria-label="次の月" onclick="plMove(1)">${IC.chev}</button></div>`;
+  const head=`<div class="pl-mh"><button class="pl-nav" type="button" onclick="plMove(-1)">前の月</button><b class="num">${y}年${m}月</b><button class="pl-nav" type="button" onclick="plMove(1)">次の月</button></div>`;
   const wd=`<div class="pl-wd">${WD.split('').map((w,i)=>`<span class="${i===0?'sun':i===6?'sat':''}">${w}</span>`).join('')}</div>`;
-  const legend=`<div class="pl-legend"><span><i class="pl-m pl-ring"></i>予定</span><span><i class="pl-m pl-sq"></i>支払い予定</span><span><i class="pl-m pl-rec"></i>記録</span></div>`;
+  const legend=`<div class="pl-legend"><span><i class="pl-bar plan pl-key"></i>予定</span><span><i class="pl-bar rec pl-key"></i>記録</span></div>`;
   return `<div class="list pl-cal">${head}${wd}<div class="pl-grid">${cells}</div>${legend}</div>`
     +plDayAx(plSel);
 }
@@ -110,7 +130,7 @@ function plMove(n){
   rerender();
 }
 
-/** 選んだ日を時間軸で見る。今日は「いま」の線で未来と過去を分ける */
+/** 選んだ日を時間軸で見る(月の下)。今日は「いま」の線で未来と過去を分ける */
 function plDayAx(d){
   const future=d>TODAY;
   const hol=evOn(d).find(([k,e])=>e.hol);
@@ -129,20 +149,67 @@ function plDayAx(d){
   return `<div class="ax">${head}${body||'<p class="hint">予定も記録もありません</p>'}</div>`;
 }
 
-/** これから2週間(今日を除く)。繰り返しは次の日付で出す */
-function plSoonAx(){
-  const end=addDays(TODAY,14);
-  const ups=Object.entries(EV).filter(([k,e])=>!e.hol)
-    .map(([k,e])=>({k,e,d:e.rep?nextOn(e):e.d}))
-    .filter(x=>x.d>TODAY&&x.d<=end&&(x.e.rep||!x.e.rec))
-    .sort((a,b)=>a.d.localeCompare(b.d)||(a.e.all?'0':a.e.s).localeCompare(b.e.all?'0':b.e.s));
-  if(!ups.length)return sh('これから2週間')+empty('schedule','2週間の予定はありません');
-  let cur='', html='';
-  ups.forEach(x=>{
-    if(x.d!==cur){cur=x.d;html+=dayHead(cur,{href:'#/day/'+cur,future:true,empty:' '})}
-    html+=planRowAx(x.k,{future:true});
-  });
-  return sh('これから2週間',ups.length+'件')+`<div class="ax">${html}</div>`;
+/* ---------- 日(時間グリッド 6:00–24:00) ---------- */
+function plStepDay(n){
+  plSel=addDays(plSel,n);
+  plYM=[+plSel.slice(0,4),+plSel.slice(5,7)];
+  rerender();
+}
+function plDayView(){
+  const d=plSel, isToday=d===TODAY;
+  const H0=6,H1=24,PH=48;
+  const minOf=t=>{const [h,m]=String(t).split(':').map(Number);return h*60+m};
+  const hol=evOn(d).find(([k,e])=>e.hol);
+  const its=plItemsOn(d);
+  const allday=its.filter(x=>x.all);
+  /* 重なりは列に分けて横に並べる */
+  const timed=its.filter(x=>!x.all).map(x=>{
+    const s=Math.max(minOf(x.time),H0*60);
+    const e=Math.min(Math.max(x.end?minOf(x.end):s+36,s+36),H1*60);
+    return {x,s,e};
+  }).sort((a,b)=>a.s-b.s);
+  const lanesEnd=[];
+  timed.forEach(b=>{let i=lanesEnd.findIndex(en=>en<=b.s);if(i<0){i=lanesEnd.length;lanesEnd.push(0)}lanesEnd[i]=b.e;b.i=i});
+  const N=Math.max(1,lanesEnd.length);
+  const blocks=timed.map(({x,s,e,i})=>{
+    const top=(s-H0*60)/60*PH, h=Math.max((e-s)/60*PH,28);
+    const isRec=x.kind==='rec';
+    const href=isRec?'#/a/'+x.k:'#/ev/'+x.k;
+    const tm=x.end?`${x.time}–${x.end}`:x.time;
+    return `<a class="pl-blk ${isRec?'rec':'plan'}" href="${href}" style="top:${top}px;height:${h}px;left:calc(52px + (100% - 52px) * ${i/N});width:calc((100% - 52px) / ${N} - 4px)"><b>${esc(x.t)}</b>${h>=48?`<span>${tm}</span>`:''}</a>`;
+  }).join('');
+  let grid='';
+  for(let h=H0;h<=H1;h++){const y=(h-H0)*PH;grid+=`<span class="pl-hl num" style="top:${y}px">${h}:00</span><i class="pl-hr" style="top:${y}px"></i>`}
+  const nowHtml=isToday?`<div class="pl-now" style="top:${(minOf(NOW)-H0*60)/60*PH}px"><span>いま ${NOW}</span></div>`:'';
+  const alld=allday.map(x=>`<a class="pl-bar ${x.kind==='rec'?'rec':'plan'}" href="${x.kind==='rec'?'#/a/'+x.k:'#/ev/'+x.k}">${plCatMark(x.cat)}${esc(x.t)}</a>`).join('');
+  return `<div class="pl-dnav"><button class="pl-nav" type="button" onclick="plStepDay(-1)">前の日</button><b class="num">${fmtMDW(d)}${hol?' '+esc(hol[1].t):''}${isToday?' 今日':''}</b><button class="pl-nav" type="button" onclick="plStepDay(1)">次の日</button></div>`
+    +(alld?`<div class="pl-allday">${alld}</div>`:'')
+    +`<div class="pl-tg" style="height:${(H1-H0)*PH+12}px">${grid}${blocks}${nowHtml}</div>`;
+}
+
+/* ---------- 3週間(今日から21日の時間軸) ---------- */
+function plListAx(){
+  let html='', n=0;
+  for(let i=0;i<21;i++){
+    const d=addDays(TODAY,i);
+    const its=plItemsOn(d);
+    if(!its.length&&d!==TODAY)continue;
+    n+=its.length;
+    const hol=evOn(d).find(([k,e])=>e.hol);
+    html+=dayHead(d,{href:'#/day/'+d,future:d>TODAY,empty:hol?hol[1].t:' '});
+    let nowDone=d!==TODAY;
+    for(const x of its){
+      if(!nowDone&&!x.all&&x.time>NOW){html+=nowLine();nowDone=true}
+      if(x.kind==='rec'){html+=momentRow(x.k);continue}
+      const e=EV[x.k];
+      const fut=d>TODAY||(!e.all&&e.s>NOW);
+      html+=planRowAx(x.k,{future:fut,late:!fut&&!e.all});
+    }
+    if(!nowDone)html+=nowLine();
+  }
+  return n
+    ?sh('今日から3週間',n)+`<div class="ax">${html}</div>`
+    :sh('今日から3週間')+empty('schedule','3週間の予定はありません');
 }
 
 /* ---------- ToDo ---------- */
@@ -208,7 +275,7 @@ function plTodoRow(k){
   const t=TD[k], over=t.due&&t.due<TODAY;
   const linked=t.ev&&EV[t.ev]?EV[t.ev].t:'';
   const parts=[
-    t.due?`<span class="${over?'pl-over':''}">${relDay(t.due)}</span>`:'',
+    t.due?(over?tag(relDay(t.due),{cls:'late'}):`<span>${relDay(t.due)}</span>`):'',
     LISTS[t.list]?`<span>${esc(LISTS[t.list].n)}</span>`:'',
     linked?`<span>${esc(linked)}</span>`:'',
   ].filter(Boolean).join('');
@@ -226,7 +293,7 @@ function toggleTask(k){
 }
 
 /* ---------- 新規ToDo ---------- */
-CREATE.push({id:'task',label:'ToDo',sub:'やること・買う物',icon:'todo',color:'var(--c-todo)',primaryOn:['plan'],onclick:'openNewTask()'});
+CREATE.push({id:'task',label:'ToDo',sub:'やること・買う物',icon:'todo',color:'var(--ink-2)',primaryOn:['plan'],onclick:'openNewTask()'});
 function openNewTask(){
   openSheet({title:'ToDoを追加',body:`<div class="list">
     <div class="field"><label for="pl-nt-t">タイトル</label><input id="pl-nt-t" placeholder="例: 牛乳を買う"></div>
@@ -259,7 +326,7 @@ route('ev',id=>{
     const n=Math.round((new Date(od+'T00:00')-new Date(TODAY+'T00:00'))/864e5);
     cd=n===1?'明日':`${n}日後`;
   }
-  const cap=`<section class="cap plan"><div class="kind">${IC.schedule}予定<span class="tm">${e.all?'終日':esc(e.s)}</span></div><h1>${esc(e.t)}</h1><div class="big">${e.all?'終日':`${e.s}–${e.e}`}</div>${cd?`<span class="cd">${cd}</span>`:''}<div class="meta"><span>${IC.schedule}${fmtMDW(od)}${e.d2?' – '+fmtMDW(e.d2):''}</span>${placeOf(e)?`<span>${IC.place}${esc(placeOf(e))}</span>`:''}${e.pay?`<span>${IC.pay}${yen(e.pay.amt)} 支払い予定</span>`:''}</div></section>`;
+  const cap=`<section class="cap plan"><div class="kind">${IC.schedule}予定</div><h1>${esc(e.t)}</h1><div class="big">${e.all?'終日':`${e.s}–${e.e}`}</div>${cd?`<span class="cd">${cd}</span>`:''}<div class="meta"><span>${IC.schedule}${fmtMDW(od)}${e.d2?' – '+fmtMDW(e.d2):''}</span>${placeOf(e)?`<span>${IC.place}${esc(placeOf(e))}</span>`:''}${e.pay?`<span>${IC.pay}${yen(e.pay.amt)} 支払い予定</span>`:''}</div></section>`;
   /* 同じ日のほかの予定・記録を前後に並べる(未来側の軸) */
   const same=[...evOn(od).filter(([k,x])=>k!==id&&!x.hol).map(([k,x])=>({time:x.all?'終日':x.s,title:x.t,href:'#/ev/'+k,plan:!x.rec,sort:x.all?'00:00':x.s})),
     ...(typeof kidsOf==='function'?kidsOf(od):[]).map(([k,x])=>({time:x.time,title:x.title,href:'#/a/'+k,sort:x.time||''}))].sort((p,q)=>q.sort.localeCompare(p.sort));
@@ -279,9 +346,8 @@ route('ev',id=>{
     +(tasks.length?sh('この予定のToDo',tasks.length)+objs(tasks.map(plEvTaskRow)):'')
     +sh('記録')
     +(rec
-      ?list([row({href:'#/a/'+e.rec,lead:`<span class="ax-node" style="margin:0">${IC.activity}</span>`,t:esc(rec.title),s:'記録済み',chev:1})])
-      :`<div class="btnrow"><button class="btn block" type="button" onclick="recordEvent('${id}')">${IC.check}記録にする</button></div>`
-        +(e.d<=TODAY?'<p class="hint">終わったら、記録として時間軸に残せます</p>':''));
+      ?`<div class="ax">${momentRow(e.rec)}</div>`
+      :`<div class="btnrow"><button class="btn block" type="button" onclick="recordEvent('${id}')">${IC.check}記録にする</button></div>`);
 },{tab:'plan'});
 function plEvTaskRow(k){
   const t=TD[k];
@@ -334,7 +400,7 @@ route('task',id=>{
   ].filter(Boolean);
   const sub=[t.due?'期限 '+fmtMDW(t.due):'期限なし',t.done?'完了 '+fmtMD(t.done):''].filter(Boolean);
   return appbar('ToDo')
-    +`<div class="mo-card pl-card" style="margin:4px var(--gutter) 0"><div class="kind">${IC.todo}ToDo</div><div class="pl-tk">${checkbox(!!t.done,`toggleTask('${id}')`,true)}<h1 class="${t.done?'pl-done-t':''}">${esc(t.t)}</h1></div>${sub.length?`<div class="meta">${sub.map(x=>`<span>${x}</span>`).join('')}</div>`:''}</div>`
+    +`<div class="pl-card"><div class="pl-tk">${checkbox(!!t.done,`toggleTask('${id}')`,true)}<h1 class="${t.done?'pl-done-t':''}">${esc(t.t)}</h1></div>${sub.length?`<div class="meta">${sub.map(x=>`<span>${x}</span>`).join('')}</div>`:''}</div>`
     +sh('詳細')+list([
       prop('期限',`<input class="input" type="date" aria-label="期限" value="${t.due||''}" onchange="plSetDue('${id}',this.value)">`),
       prop('リスト',`<select class="input" aria-label="リスト" onchange="plSetList('${id}',this.value)">${listOpts}</select>`),
