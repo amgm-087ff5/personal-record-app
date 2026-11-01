@@ -28,7 +28,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+`
 .pl-bars{display:flex;flex-direction:column;gap:2px;min-width:0}
 .pl-bar{display:block;width:100%;height:18px;padding:0 4px;border-radius:4px;box-sizing:border-box;font:500 12px/16px var(--font);color:var(--ink-2);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pl-bar.plan{outline:1.5px dashed var(--plan);outline-offset:-1.5px;background:transparent}
-.pl-bar.rec{background:var(--cap-ink);color:var(--bg)}
+.pl-bar.rec{background:var(--ev);color:var(--on-cap)}
 .pl-cat{display:inline-block;width:8px;height:4px;border-radius:2px;background:var(--cc,var(--ink-3));margin-right:3px;vertical-align:middle}
 .pl-more{font:500 12px/16px var(--font);color:var(--ink-3);padding-left:4px}
 .pl-legend{display:flex;justify-content:center;gap:14px;padding:6px 0 0;font:var(--t-cap);color:var(--ink-3)}
@@ -45,7 +45,7 @@ document.head.insertAdjacentHTML('beforeend','<style>'+`
 .pl-blk b{display:block;font:600 13px/1.3 var(--font);color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pl-blk span{display:block}
 .pl-blk.plan{outline:2px dashed var(--plan);outline-offset:-2px;background:var(--surface)}
-.pl-blk.rec{background:var(--cap-ink);color:var(--bg)}
+.pl-blk.rec{background:var(--ev);color:var(--on-cap)}
 .pl-now{position:absolute;left:52px;right:0;height:2px;background:var(--late);z-index:2}
 .pl-now span{position:absolute;right:0;top:-20px;font:600 12px/16px var(--font);color:var(--late)}
 .pl-card{margin:4px var(--gutter) 0;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e2),var(--hl);padding:16px 18px}
@@ -331,7 +331,10 @@ route('ev',id=>{
     cd=n===1?'明日':`${n}日後`;
   }
   const late=!rec&&(od<TODAY||(od===TODAY&&!e.all&&e.s<NOW));
-  const cap=`<section class="cap plan ${late?'late':''}"><div class="kind">${IC.schedule}予定</div><h1>${esc(e.t)}</h1><div class="big">${e.all?'終日':`${e.s}–${e.e}`}</div>${cd?`<span class="cd">${cd}</span>`:''}<div class="meta"><span>${fmtMDW(od)}${e.d2?' – '+fmtMDW(e.d2):''}</span>${e.pay?`<span>${IC.pay}${yen(e.pay.amt)} 支払い予定</span>`:''}</div></section>`;
+  const ppl=(e.who||[]).filter(w=>E[w]);
+  const meta=[placeOf(e)?`<span>${IC.place}${esc(placeOf(e))}</span>`:'',ppl.length?`<span>${knots(ppl)}${ppl.map(p=>esc(E[p].n.split(' ').pop())).join('、')}</span>`:'',cd?`<span>${esc(cd)}</span>`:''].join('');
+  const tm=e.all?(e.d2?`〜${fmtMD(e.d2)}`:'終日'):`${e.s}–${e.e}`;
+  const cap=`<section class="cap plan ${late?'late':''}"><div class="kind">${IC.schedule}予定${e.pay?`・支払い`:''}<span class="tm">${esc(tm)}</span></div><h1>${esc(e.t)}</h1>${e.pay?`<div class="big">${yen(e.pay.amt)}</div>`:''}${meta?`<div class="meta">${meta}</div>`:''}</section>`;
   /* 同じ日のほかの予定・記録を前後に並べる。今日なら「いま」の線を挟み、いまより上は点線(未来) */
   const isToday=od===TODAY,fut=t=>od>TODAY||(isToday&&t>NOW);
   const same=[...evOn(od).filter(([k,x])=>k!==id&&!x.hol).map(([k,x])=>{const t=x.all?'00:00':x.s;return {time:x.all?'終日':x.s,title:x.t,href:'#/ev/'+k,plan:!x.rec,late:!x.rec&&!fut(t)&&!x.all,fut:fut(t),sort:t}}),
