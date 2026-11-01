@@ -86,33 +86,46 @@ function itemsList(id,items){
 /** 支払いの割合: 自分の分 / 相手の分(立替・未精算は斜線) */
 function paySplit(a){
   const x=a.x&&X[a.x];const me=x?x.amt:0;const rest=a.amt-me;
-  const segs=[{v:me,cls:'me',label:'自分の支出',href:x?`#/x/${a.x}`:''}];
+  const segs=[{v:me,cls:'me',label:'自分の支出'}];
   if(rest>0){const who=a.adv?E[a.adv[0]].n.split(' ').pop()+'さん':'ほかの人';segs.push({v:rest,cls:a.adv&&a.adv[2]==='未精算'?'owed':'other',label:a.adv?`${who}の分・${a.adv[2]}`:'ほかの人の分'})}
   return splitBar(segs,a.amt);
 }
+/** 全ての記録を時刻の新しい順に(日をまたいで前後をたどるため) */
+function allMoments(){return Object.entries(A).filter(([k,a])=>a.type!=='日記'&&a.parent&&A[a.parent]).map(([k,a])=>({k,d:A[a.parent].date,time:a.time||''})).sort((x,y)=>(y.d+y.time).localeCompare(x.d+x.time))}
+/** 前後2件ずつ。日が変わる所に日付を挟む */
+function neighborsOf(id){
+  const all=allMoments();const i=all.findIndex(m=>m.k===id);if(i<0)return {later:[],earlier:[]};
+  const me=all[i];const pick=m=>({time:m.time,title:A[m.k].title,href:'#/a/'+m.k,icon:(AX_NODE[A[m.k].type]||[])[1]});
+  const later=all.slice(Math.max(0,i-2),i);const earlier=all.slice(i+1,i+3);
+  const L=[],R=[];let cur=null;
+  later.forEach(m=>{if(m.d!==cur){L.push({day:m.d});cur=m.d}L.push(pick(m))});
+  if(me.d!==cur)L.push({day:me.d});
+  cur=me.d;earlier.forEach(m=>{if(m.d!==cur){R.push({day:m.d});cur=m.d}R.push(pick(m))});
+  return {later:L,earlier:R};
+}
 function momentView(id,a){
   const day=A[a.parent];const d=day?day.date:TODAY;
-  const [ncls,icon]=AX_NODE[a.type]||['','activity'];
-  const all=dayItems(d);const i=all.findIndex(it=>it.kind==='rec'&&it.k===id);
-  const later=i<0?[]:all.slice(Math.max(0,i-2),i),earlier=i<0?[]:all.slice(i+1,i+3);
+  const [,icon]=AX_NODE[a.type]||['','activity'];
   const pl=(a.roles||[]).find(r=>['支払先','場所','到着'].includes(r[0]));
-  const meta=[pl?`<span>${IC.place}${esc(placeName(pl))}</span>`:'',a.pay?`<span>${IC.pay}${esc(a.pay)}</span>`:''].join('');
-  const card=`<div class="kind">${IC[icon]}${esc(a.type)}</div><h1>${esc(a.title)}</h1>${a.amt!=null?`<div class="big">${yen(a.amt)}</div>`:''}${meta?`<div class="meta">${meta}</div>`:''}${a.type==='支払い'?paySplit(a):''}`;
+  const ppl=(a.roles||[]).filter(r=>r[1]&&E[r[1]]&&r[1]!=='me'&&!['支払先','場所','到着','出発'].includes(r[0])).map(r=>r[1]);
+  const meta=[pl?`<span>${IC.place}${esc(placeName(pl))}</span>`:'',a.pay?`<span>${IC.pay}${esc(a.pay)}</span>`:'',ppl.length?`<span>${knots(ppl)}${ppl.map(p=>esc(E[p].n.split(' ').pop())).join('、')}</span>`:''].join('');
+  const isPay=a.type==='支払い';
+  const cap=`<section class="cap" style="${isPay?'--cap:var(--fill-pay)':''}"><div class="kind">${IC[icon]}${esc(a.type)}<span class="tm">${esc(a.time||'')}</span></div><h1>${esc(a.title)}</h1>${a.amt!=null?`<div class="big">${yen(a.amt)}</div>`:''}${meta?`<div class="meta">${meta}</div>`:''}${isPay?paySplit(a):''}</section>`;
+  const x=a.x&&X[a.x];
+  /* 子: 支払い → 自分の支出 を └ でぶら下げる */
+  const child=x?`<div class="hang"><a class="child" href="#/x/${a.x}">${ico('expense','var(--brand)')}<span class="grow"><div class="lbl">自分の支出</div><div class="amt">${yen(x.amt)}</div></span>${catTag(x.cat)}<span class="chev">${IC.chev}</span></a></div>`:'';
+  const nb=neighborsOf(id);
   const shop=(a.roles||[]).find(r=>r[0]==='支払先');
   const ev=Object.entries(EV).find(([k,e])=>e.rec===id);
   const att=(EXTRA.attach||{})[id];
   return appbar('',{actions:[menuAct(id)]})
-    +`<div class="ax">`+dayHead(d,{href:`#/day/${d}`,diary:dayDiary(d)})
-    +later.map(it=>itemHtml(it,{cls:'dim'})).join('')
-    +focusRow({time:a.time,node:{cls:ncls,icon},card})
-    +earlier.map(it=>itemHtml(it,{cls:'dim'})).join('')
-    +`</div>`
+    +pinView({later:nb.later,earlier:nb.earlier,cap:cap+child,capColor:isPay?'var(--fill-pay)':'var(--fill-act)'})
     +(a.adv&&a.adv[2]==='未精算'?suggest(`${esc(E[a.adv[0]].n)}さんの分 <b class="num">${yen(a.adv[1])}</b> を立て替え中`,{label:'精算済みにする',onclick:`settle('${id}')`}):'')
     +((a.roles||[]).length?sh('交わった人・場所',a.roles.length)+list(a.roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
     +(shop&&!shop[1]?suggest(`「${esc(shop[2])}」はまだ登録されていません`,{label:'店として登録',onclick:`registerShop('${id}')`}):'')
     +(a.items?sh('品目',a.items.length,{label:showBurden?'誰の分かを隠す':'誰の分か表示',onclick:'showBurden=!showBurden;rerender()'})+list([...itemsList(id,a.items),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(a.items.reduce((s,i)=>s+i.price,0))}</b>`})],'flat'):'')
     +(a.body?sh('内容')+`<div class="list"><p style="padding:14px 16px;line-height:1.85">${esc(a.body)}</p></div>`:'')
-    +(ev?sh('元の予定')+list([row({href:`#/ev/${ev[0]}`,lead:`<span class="ax-node plan" style="margin:0">${IC.schedule}</span>`,t:esc(ev[1].t),s:`${fmtMDW(ev[1].d)} ${ev[1].s||''}`,chev:1})]):'')
+    +(ev?sh('元の予定')+objs([row({href:`#/ev/${ev[0]}`,lead:`<span class="ax-node plan" style="margin:0">${IC.schedule}</span>`,t:esc(ev[1].t),s:`${fmtMDW(ev[1].d)} ${ev[1].s||''}`,chev:1})]):'')
     +(att?sh('添付',1)+`<div class="list" style="padding:12px"><img src="${att}" alt="レシートの写真" style="max-width:120px;border-radius:8px;display:block"></div>`:'');
 }
 function registerShop(aid){

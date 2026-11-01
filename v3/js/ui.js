@@ -6,6 +6,9 @@
 /* ---------- アイコン(24グリッド、線2px。AndroidのVectorDrawableへ移せる) ---------- */
 const sv=(d,fill)=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true" fill="${fill?'currentColor':'none'}" stroke="${fill?'none':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const IC={
+  future:sv('<path d="M6 2.5v3M6 12.5v9" /><path d="M6 2.5v19" stroke-dasharray="2 2.6"/><rect x="3" y="5.5" width="6" height="6" rx="1.8" fill="var(--bg,#fff)" stroke-dasharray="2.2 1.6"/><path d="M12.5 8.5h8.5M12.5 15h6"/>'),
+  kin:sv('<circle cx="8" cy="9.5" r="4.5"/><path d="M16.5 21.5s-5-4.3-5-8.2a5 5 0 0 1 10 0c0 3.9-5 8.2-5 8.2Z"/><circle cx="16.5" cy="13.3" r="1.6" fill="currentColor"/>'),
+  share:sv('<rect x="2.5" y="6.5" width="19" height="7" rx="1.5"/><rect x="2.5" y="6.5" width="8.5" height="7" rx="1.5" fill="currentColor"/><path d="M2.5 17v2.5h8.5V17"/>'),
   axis:sv('<path d="M6 2.5v19"/><rect x="3.5" y="4.5" width="5" height="5" rx="1.6" fill="currentColor"/><circle cx="6" cy="16" r="2.4"/><path d="M11.5 7h9M11.5 16h7"/>'),
   activity:sv('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
   schedule:sv('<rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'),
@@ -115,6 +118,14 @@ function splitBar(segs,total){
   return `<div class="split"><div class="bar">${segs.map(s=>`<i class="${s.cls}" style="flex:${s.v}"></i>`).join('')}</div><div class="lg">${segs.map(s=>{const c={me:'var(--brand)',other:'var(--th-person)',owed:'var(--warn)',dim:'var(--axis)'}[s.cls];const inner=`${esc(s.label)} <b>${yen(s.v)}</b>`;return s.href?`<a class="lgl" href="${s.href}"><span style="--c:${c}">${inner}</span></a>`:`<span style="--c:${c}">${inner}</span>`}).join('')}</div></div>`;
 }
 
+/** 独立したオブジェクトの並び(1件=1つの面) */
+const objs=rows=>`<div class="objs">${rows.join('')}</div>`;
+/** 出来事の詳細の最上部: 細い軸に掛かったカプセル。later/earlier: [{day}|{time,title,href,icon,plan}] */
+function pinView({later=[],earlier=[],cap,future,capColor}){
+  const n=x=>x.day?`<div class="pin-d">${fmtMDW(x.day)}${x.day===TODAY?'<span class="faint">今日</span>':''}</div>`
+    :`<a class="pin-n ${x.plan?'plan':''}" href="${x.href}"><span class="tm">${esc(x.time||'')}</span><span class="t">${esc(x.title)}</span>${x.icon?IC[x.icon]:''}</a>`;
+  return `<div class="pin ${future?'future':''}">${later.map(n).join('')}<div class="pin-cur" style="${capColor?`--cap:${capColor}`:''}"><span class="node"></span>${cap}</div>${earlier.map(n).join('')}</div>`;
+}
 /* ---- 汎用 ---- */
 const tag=(label,o={})=>{const inner=`${o.color?`<span class="dot" style="--cc:${o.color}"></span>`:''}${esc(label)}`;return o.href?`<a class="tag ${o.cls||''}" href="${o.href}">${inner}</a>`:`<span class="tag ${o.cls||''}">${inner}</span>`};
 const catTag=k=>tag(catPath(k),{color:catColor(k)});
@@ -161,10 +172,10 @@ addEventListener('scroll',()=>{const b=document.querySelector('.appbar');if(b)b.
 /* ---------- 下部ナビ ---------- */
 const TABS=[
   ['activities','タイムライン','axis'],
-  ['plan','予定','schedule'],
+  ['plan','予定','future'],
   null,
-  ['entities','人・場所','people'],
-  ['ledger','家計簿','ledger'],
+  ['entities','人・場所','kin'],
+  ['ledger','家計簿','share'],
 ];
 const navBadge=k=>k==='plan'?(typeof overdueCount==='function'?overdueCount():0):0;
 function renderNav(cur){
