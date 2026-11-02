@@ -318,7 +318,7 @@ const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 /* ---------- このモックについて ---------- */
 function openAbout(){
   openSheet({title:'このモックについて',body:`
-    ${sh('概要')}${list([prop('版','UI v5(意味表との照合)'),prop('データ','架空。操作はこのブラウザに保存'),prop('今日','2026年10月31日(土) として表示')])}
+    ${sh('概要')}${list([prop('版',window.BUILD||'不明'),prop('データ','架空。操作はこのブラウザに保存'),prop('今日','2026年10月31日(土) として表示')])}
     ${sh('表示')}${list([row({t:'テーマ',v:`<select class="input" style="height:36px;width:auto" onchange="setTheme(this.value)"><option value="">端末に合わせる</option><option value="light">ライト</option><option value="dark">ダーク</option></select>`})])}
     ${sh('データ')}<div class="btnrow"><button class="btn danger" type="button" onclick="resetData()">${IC.trash}データを初期状態に戻す</button></div>
     <p class="hint">旧版(UI v2)は別のURLに残しています。<a href="../" style="color:var(--brand)">UI v2 を開く</a></p>`});
