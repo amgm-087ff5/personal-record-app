@@ -974,3 +974,45 @@ div.pl-grid .pl-cell.sun .pl-dn{background:color-mix(in srgb,var(--tx) 9%,transp
 .ld-avgl .tb span{display:block;white-space:nowrap;transform:translateX(calc(-100% + 4px));width:max-content}
 .zm-card{border-radius:10px}
 .prop .meta svg.i{width:14px;height:14px;vertical-align:middle}
+
+/* =====================================================================
+   v7(11/02): ライトのまぶしさを下げる / 「今日」だけ発光 / 選択肢の余白 / 品目の入れ子
+   ===================================================================== */
+/* ライト: 純白と濃い文字の差・彩度の高い塗り・影を一段静かに。ダークは変えない */
+:root{--surface:#FAFBFD;--surface-2:#F4F6FA;--bg:#EEF1F6;--sunk:#E5E9F0;--line:#DDE2EA;--line-strong:#C3CBD8;
+  --tx:#34405A;--me-fill:#3560BC;--ev:#5A6C8D;--ev-soft:#E6EAF1;
+  --light:radial-gradient(130% 120% at 0% 0%,rgba(255,255,255,.15),rgba(255,255,255,0) 55%);
+  --e1:0 1px 2px rgba(40,55,90,.05),0 2px 8px rgba(40,55,90,.04)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) body{background:
+  radial-gradient(90% 60% at 0% 0%,rgba(255,226,180,.20),rgba(255,226,180,0) 70%),
+  radial-gradient(80% 60% at 100% 100%,rgba(150,178,230,.12),rgba(150,178,230,0) 70%),var(--bg);background-attachment:fixed}}
+:root[data-theme="light"] body{background:
+  radial-gradient(90% 60% at 0% 0%,rgba(255,226,180,.20),rgba(255,226,180,0) 70%),
+  radial-gradient(80% 60% at 100% 100%,rgba(150,178,230,.12),rgba(150,178,230,0) 70%),var(--bg);background-attachment:fixed}
+/* 「今日」= 灯り。今日のカード・月のマスだけが、細い青の縁と弱い光と薄い青の面を持つ。今日以外は消灯(縁も光もない) */
+.dh2 .dcard{box-shadow:var(--e1),var(--hl),0 0 0 1px color-mix(in srgb,var(--line) 70%,transparent)}
+.dh2.today .dcard{
+  background:color-mix(in srgb,var(--me) 8%,color-mix(in srgb,var(--surface) 62%,transparent));
+  box-shadow:var(--e1),var(--hl),0 0 0 1px color-mix(in srgb,var(--me) 55%,transparent),0 0 10px 1px color-mix(in srgb,var(--me) 30%,transparent),0 0 26px 2px color-mix(in srgb,var(--me) 13%,transparent)}
+div.pl-grid .pl-cell.today,.pl-cell.today{background:color-mix(in srgb,var(--me) 8%,transparent);
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--me) 50%,transparent),0 0 10px 1px color-mix(in srgb,var(--me) 24%,transparent)}
+/* 選択肢(ピル)の余白: 文字の左右 14px。3つ並んで足りなければ折り返す */
+.chip,.seg button,.ld-mini button{padding:0 14px}
+.ld-mini{flex-wrap:wrap}
+/* 品目のグループ: 開くと子が親の下に入れ子(インデント+縦の案内線+地を変える) */
+.row.grp.multi .chev{color:var(--tx-3)}
+.row.grp.multi .chev svg{transform:rotate(90deg);transition:transform .15s}
+.row.grp.multi.open .chev svg{transform:rotate(-90deg)}
+.grp-b{display:inline-flex;gap:4px;margin-right:8px;vertical-align:middle}
+.grp-kids{position:relative;margin:0 0 6px 34px;background:var(--surface-2);border-radius:var(--r-sm);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--line) 70%,transparent)}
+.grp-kids::before{content:"";position:absolute;left:-18px;top:-4px;bottom:50%;width:2px;background:var(--line-strong);border-radius:1px}
+.grp-kids .row.kid{min-height:44px;padding:6px 12px}
+.grp-kids .row.kid .t{font:var(--t-label);color:var(--tx-2)}
+.grp-kids .row.kid+.row.kid::before{left:12px}
+.kid-n{display:grid;place-items:center;width:22px;height:22px;flex:none;border-radius:50%;background:var(--sunk);font:600 12px/1 var(--font);color:var(--tx-2)}
+/* 品目編集の負担(自分/半分/相手)は2行目に */
+.ip-bur{flex:0 0 100%;padding:0 0 6px}
+/* 選択中の選択肢は、どの画面でも薄い青の面+青い文字(濃い紺の塗りはまぶしいので使わない) */
+.chip[aria-pressed="true"],.seg button[aria-pressed="true"],.ld-mini button[aria-pressed="true"],.field .ld-mini button[aria-pressed="true"],.prop .ld-mini button[aria-pressed="true"],.ld-seg .seg button[aria-pressed="true"],div.pl-root .seg button[aria-pressed="true"]{background:var(--me-soft);border-color:transparent;color:var(--me);font-weight:600;box-shadow:none}
+.check[aria-checked="true"]{background:var(--me-fill);border-color:var(--me-fill)}
+.grp-kids{margin:0 12px 8px 34px}

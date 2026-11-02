@@ -50,13 +50,13 @@ const X={
 const DAYS=['d1030','d1029','d1028','d1027'];
 /* カテゴリ: 階層 = 種類の軸。sp = 特別感の既定(子は親から継承、支出ごとに上書き可) */
 const CATS={
-  house:{n:'住居',c:'#5E6E91',fx:'固定'}, rent:{n:'家賃',p:'house'},
-  comm:{n:'通信',c:'#3E9AA0',fx:'固定'}, phone:{n:'スマホ',p:'comm'}, sub:{n:'サブスク',p:'comm'},
-  food:{n:'食費',c:'#E07A4F'}, cook:{n:'自炊',p:'food'}, eatout:{n:'外食',p:'food'}, cafe:{n:'カフェ・軽食',p:'food'},
-  daily:{n:'日用品',c:'#6FB07A'},
-  trans:{n:'交通費',c:'#4C8BC9'}, train:{n:'電車',p:'trans'}, taxi:{n:'タクシー',p:'trans',sp:'非日常'},
-  fun:{n:'娯楽',c:'#E3B341'}, hobby:{n:'趣味',p:'fun'}, travel:{n:'旅行',p:'fun',sp:'非日常'},
-  gift:{n:'贈り物',c:'#D9789B',sp:'非日常'},
+  house:{n:'住居',c:'#5E6E91',fx:'固定',sp:'日常'}, rent:{n:'家賃',p:'house'},
+  comm:{n:'通信',c:'#3E9AA0',fx:'固定',sp:'日常'}, phone:{n:'スマホ',p:'comm'}, sub:{n:'サブスク',p:'comm'},
+  food:{n:'食費',c:'#E07A4F',fx:'変動',sp:'日常'}, cook:{n:'自炊',p:'food'}, eatout:{n:'外食',p:'food'}, cafe:{n:'カフェ・軽食',p:'food'},
+  daily:{n:'日用品',c:'#6FB07A',fx:'変動',sp:'日常'},
+  trans:{n:'交通費',c:'#4C8BC9',fx:'変動',sp:'日常'}, train:{n:'電車',p:'trans'}, taxi:{n:'タクシー',p:'trans',sp:'非日常'},
+  fun:{n:'娯楽',c:'#E3B341',fx:'変動',sp:'日常'}, hobby:{n:'趣味',p:'fun'}, travel:{n:'旅行',p:'fun',sp:'非日常'},
+  gift:{n:'贈り物',c:'#D9789B',fx:'none',sp:'非日常'},
 };
 const COLORS=['#5E6E91','#3E9AA0','#E07A4F','#6FB07A','#4C8BC9','#E3B341','#D9789B','#8A9BB8'];
 /* 10月のほかの支払い(タイムラインには出さない架空データ) */
@@ -127,8 +127,10 @@ const catName=k=>CATS[k].n;
 const catPath=k=>catAnc(k).map(c=>CATS[c].n).join(' › ');
 const catColor=k=>{for(const c of catAnc(k).reverse())if(CATS[c].c)return CATS[c].c;return '#8B94A7'};
 const catChip=(k,path)=>`<span class="cat" style="--cc:${catColor(k)}">${path?catPath(k):CATS[k].n}</span>`;
-const catFx=k=>{for(const c of catAnc(k).reverse())if(CATS[c].fx)return CATS[c].fx;return '変動'};
-const xFx=x=>x.fx||catFx(x.cat);
+/* 固定・変動と特別感: 最も近い祖先の設定を引き継ぐ。'none' = 設定しない(null)。どこにも設定がなければ null(勝手な既定値は置かない) */
+const setv=v=>v==='none'||v===undefined?null:v;
+const catFx=k=>{for(const c of catAnc(k).reverse())if(CATS[c].fx!==undefined)return setv(CATS[c].fx);return null};
+const xFx=x=>x.fx!==undefined?setv(x.fx):catFx(x.cat);
 const ROOTS=()=>Object.keys(CATS).filter(k=>!CATS[k].p);
 const mdw=d=>{const dt=new Date(d);return `${dt.getMonth()+1}/${dt.getDate()}(${'日月火水木金土'[dt.getDay()]})`};
 const addDays=(d,n)=>{const dt=new Date(d);dt.setDate(dt.getDate()+n);return dt.toISOString().slice(0,10)};
@@ -138,8 +140,8 @@ const actsOn=d=>Object.entries(A).filter(([k,a])=>a.type!=='日記'&&a.parent&&A
 const placeOf=e=>e.place?(e.place[0]?E[e.place[0]].n:e.place[1]):'';
 const nextOn=e=>{if(!e.rep)return e.d;const dom=String(+e.d.slice(8)).padStart(2,'0');let y=+TODAY.slice(0,4),m=+TODAY.slice(5,7);let d=`${y}-${String(m).padStart(2,'0')}-${dom}`;if(d<=TODAY){m++;if(m>12){m=1;y++}d=`${y}-${String(m).padStart(2,'0')}-${dom}`}return d};
 const tdOpen=k=>!TD[k].done;
-const catSp=k=>{for(const c of catAnc(k).reverse())if(CATS[c].sp)return CATS[c].sp;return '日常'};
-const xSp=x=>x.sp||catSp(x.cat);
+const catSp=k=>{for(const c of catAnc(k).reverse())if(CATS[c].sp!==undefined)return setv(CATS[c].sp);return null};
+const xSp=x=>x.sp!==undefined?setv(x.sp):catSp(x.cat);
 const shopOf=x=>{const r=A[x.pay].roles[0];return r[1]?E[r[1]].n:r[2]};
 const whoOf=x=>{const w=A[x.pay].roles.filter(r=>r[1]&&!['支払先','支払者'].includes(r[0])).map(r=>E[r[1]].n);return w.length?w:['ひとり']};
 const xDate=x=>dayOf(A[x.pay]).date;

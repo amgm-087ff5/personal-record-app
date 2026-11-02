@@ -70,7 +70,7 @@ const ldTotal=m=>Object.values(m).reduce((a,b)=>a+b,0);
 const ldMap=()=>{const m={};ROOTS().forEach(r=>m[r]=0);Object.values(X).forEach(x=>{m[catAnc(x.cat)[0]]+=x.amt});return m};
 /** 6か月: [年月, ラベル, 大分類ごとの合計]。最後が10月(明細あり) */
 const ldMonths=()=>[...TREND.map((m,i)=>[`2026-${String(5+i).padStart(2,'0')}`,m[0],m[1]]),['2026-10','10月',ldMap()]];
-const ldMatch=x=>{if(!ldFilter)return true;const {ax,k}=ldFilter;return ax==='cat'?catAnc(x.cat).includes(k):ax==='fx'?xFx(x)===k:xSp(x)===k};
+const ldMatch=x=>{if(!ldFilter)return true;const {ax,k}=ldFilter;return ax==='cat'?catAnc(x.cat).includes(k):ax==='fx'?(xFx(x)||'未設定')===k:(xSp(x)||'未設定')===k};
 const ldFilterName=()=>ldFilter.ax==='cat'?CATS[ldFilter.k].n:ldFilter.k;
 const childrenOf=k=>Object.keys(CATS).filter(c=>CATS[c].p===k);
 const catDesc=k=>[k,...childrenOf(k).flatMap(catDesc)];
@@ -119,9 +119,13 @@ function ldRows(tot,fixed,nonDaily){
         childrenOf(r).filter(c=>sumOf(c)>0).sort(byAmt).forEach(c=>out.push(brow(CATS[c].n,sumOf(c),'cat',c,catColor(c),'ld-kid')));
     });
   }else if(ldAxis==='fx'){
-    out.push(brow('固定',fixed,'fx','固定','var(--tx-2)'),brow('変動',tot-fixed,'fx','変動','var(--axis)'));
+    const vr=ldSum(x=>xFx(x)==='変動'),un=tot-fixed-vr;
+    out.push(brow('固定',fixed,'fx','固定','var(--tx-2)'),brow('変動',vr,'fx','変動','var(--axis)'));
+    if(un>0)out.push(brow('未設定',un,'fx','未設定','var(--line-strong)'));
   }else{
-    out.push(brow('日常',tot-nonDaily,'sp','日常','var(--axis)'),brow('非日常',nonDaily,'sp','非日常','var(--tx)'));
+    const dl=ldSum(x=>xSp(x)==='日常'),un=tot-dl-nonDaily;
+    out.push(brow('日常',dl,'sp','日常','var(--axis)'),brow('非日常',nonDaily,'sp','非日常','var(--ev)'));
+    if(un>0)out.push(brow('未設定',un,'sp','未設定','var(--line-strong)'));
   }
   return out;
 }
@@ -141,7 +145,7 @@ route('ledger',()=>{
   const tot=ldTotal(cur),prev=ldM>0?ldTotal(months[ldM-1][2]):0;
   const diff=prev?Math.round((tot-prev)/prev*100):null;
   const roots=ROOTS(),ranked=roots.filter(r=>cur[r]>0).sort((a,b)=>cur[b]-cur[a]);
-  const fixed=ldSum(x=>xFx(x)==='固定'),nonDaily=ldSum(x=>xSp(x)==='非日常');
+  const fixed=ldSum(x=>xFx(x)==='固定'),varia=ldSum(x=>xFx(x)==='変動'),nonDaily=ldSum(x=>xSp(x)==='非日常');
 
   const nav=`<div class="ld-month"><button class="btn sm ghost" type="button" onclick="ldStep(-1)" ${ldM===0?'disabled':''}>前の月</button><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b><button class="btn sm ghost" type="button" onclick="ldStep(1)" ${isNow?'disabled':''}>次の月</button></div>`;
   const note=isNow?'':banner('info','この月の明細は10月だけ表示しています。');
@@ -150,7 +154,7 @@ route('ledger',()=>{
   const top=ranked.slice(0,4),restV=ranked.slice(4).reduce((a,r)=>a+cur[r],0);
   const legend=`<div class="ld-legend">${top.map(r=>`<span style="--cc:${catColor(r)}"><i></i>${esc(CATS[r].n)} ${ldPc(cur[r],tot)}%</span>`).join('')}${restV?`<span style="--cc:var(--axis)"><i></i>ほか ${ldPc(restV,tot)}%</span>`:''}</div>`;
   const figBtn=(l,ax,k,v,cls='')=>`<button type="button" class="${ldFilter&&ldFilter.ax===ax&&ldFilter.k===k?'on':''}" onclick="ldPick('${ax}','${k}',1)"><span class="k ${cls}">${l}</span><span class="v num">${yen(v)}</span></button>`;
-  const figs=isNow?`<div class="ld-fig">${figBtn('固定費','fx','固定',fixed)}${figBtn('変動費','fx','変動',tot-fixed)}${figBtn('✦ 非日常','sp','非日常',nonDaily,'strong')}</div>`:'';
+  const figs=isNow?`<div class="ld-fig">${figBtn('固定費','fx','固定',fixed)}${figBtn('変動費','fx','変動',varia)}${tot-fixed-varia>0?figBtn('固定・変動 未設定','fx','未設定',tot-fixed-varia):''}${figBtn('✦ 非日常','sp','非日常',nonDaily,'strong')}</div>`:'';
   const summary=list([`<div class="ld-sum"><div class="ld-lbl">自分の支出</div><div class="ld-r"><span class="ld-big num">${yen(tot)}</span>${diff!=null?tag(`前月比 ${diff>0?'+':''}${diff}%`):''}</div>${bar}</div>${figs}`]);
 
   const chart=list([`<div class="ld-chart">${ldChart(months)}</div>`]);
@@ -179,8 +183,10 @@ route('ledger',()=>{
 
 /* ---------- 支出の詳細(自分の分だけ切り取った点) ---------- */
 const ldMini=(items,cur,on)=>`<span class="ld-mini" role="group">${items.map(([v,l])=>`<button type="button" aria-pressed="${v===cur}" onclick="${on.replace('$v',v)}">${esc(l)}</button>`).join('')}</span>`;
-function ldSetFx(id,v){const x=X[id];x.fx=v===catFx(x.cat)?undefined:v;save();rerender()}
-function ldSetSp(id,v){const x=X[id];x.sp=v===catSp(x.cat)?undefined:v;save();rerender()}
+/* 'none' = 設定しない。カテゴリの設定と同じなら上書きを外す */
+const ldSame=(v,cur)=>(v==='none'?null:v)===cur;
+function ldSetFx(id,v){const x=X[id];x.fx=ldSame(v,catFx(x.cat))?undefined:v;save();rerender()}
+function ldSetSp(id,v){const x=X[id];x.sp=ldSame(v,catSp(x.cat))?undefined:v;save();rerender()}
 function ldMemo(id,v){X[id].memo=v;save()}
 function ldSetCat(id,k){X[id].cat=k;closeSheet();save();rerender();toast('カテゴリを変えました')}
 function ldCatPick(id){
@@ -212,13 +218,13 @@ route('x',id=>{
     +sh('分類')
     +list([
       `<button class="prop ld-tap" type="button" onclick="ldCatPick('${id}')"><span class="k">カテゴリ</span><span class="val">${catTag(x.cat)}</span><span class="meta">${IC.chev}</span></button>`,
-      prop('固定・変動',ldMini([['固定','固定'],['変動','変動']],xFx(x),`ldSetFx('${id}','$v')`),x.fx!==undefined?over:''),
-      prop('特別感',ldMini([['日常','日常'],['非日常','非日常']],xSp(x),`ldSetSp('${id}','$v')`),x.sp!==undefined?over:''),
+      prop('固定・変動',ldMini([['固定','固定'],['変動','変動'],['none','設定しない']],xFx(x)||'none',`ldSetFx('${id}','$v')`),x.fx!==undefined?over:''),
+      prop('特別感',ldMini([['日常','日常'],['非日常','非日常'],['none','設定しない']],xSp(x)||'none',`ldSetSp('${id}','$v')`),x.sp!==undefined?over:''),
       prop('メモ',`<input class="ld-in" value="${esc(x.memo||'')}" placeholder="メモを書く" oninput="ldMemo('${id}',this.value)">`)
     ])
-    +sh('品目',x.items.length)
-    +list([...x.items.map(it=>row({t:`${esc(it.n)}${it.memo?` <span class="faint">${esc(it.memo)}</span>`:''}`,s:`${esc(it.b)}${it.unk?` ${tag('内訳不明',{cls:'warn'})}`:''}`,v:yen(it.price),amt:true})),
-      row({cls:'plain',t:'<b>品目の合計 = 自分の支出</b>',v:`<b class="num" style="color:var(--me)">${yen(x.items.reduce((s,i)=>s+i.price,0))}</b>`})]);
+    +sh('品目',itemGroups(x.items).length,{label:'編集',icon:'edit',onclick:`ipOpen('${x.pay}')`})
+    +list([...itemsList(id,x.items,{x:1}),
+      row({cls:'plain',t:'<b>品目の合計 = 自分の支出</b>',v:`<b class="num" style="color:var(--me)">${yen(x.items.reduce((s,i)=>s+i.price,0))}</b>`})],'flat');
 },{tab:'ledger'});
 
 /* ---------- カテゴリの管理 ---------- */
@@ -226,9 +232,10 @@ function ldEditBody(){
   const d=ldDraft,isNew=!ldDraftKey,isKid=!!d.p;
   const parentOpts=['<option value="">いちばん上</option>',...Object.keys(CATS).filter(c=>!d.ban.includes(c)).map(c=>`<option value="${c}" ${c===d.p?'selected':''}>${esc(catPath(c))}</option>`)].join('');
   const sw=COLORS.map(c=>`<button type="button" class="sw" style="--c:${c}" aria-label="色 ${c}" aria-pressed="${d.c===c}" onclick="ldDraftSet('c','${c}')"></button>`).join('');
-  const fxItems=isKid?[['inh','親から'],['固定','固定'],['変動','変動']]:[['固定','固定'],['変動','変動']];
-  const spItems=isKid?[['inh','親から'],['日常','日常'],['非日常','非日常']]:[['日常','日常'],['非日常','非日常']];
-  const fxCur=d.fx==='inh'&&!isKid?'変動':d.fx, spCur=d.sp==='inh'&&!isKid?'日常':d.sp;
+  /* 'none' = 設定しない(既定値を持たない)。子は 'inh' = 親から引き継ぐ */
+  const fxItems=[...(isKid?[['inh','親から']]:[]),['none','設定しない'],['固定','固定'],['変動','変動']];
+  const spItems=[...(isKid?[['inh','親から']]:[]),['none','設定しない'],['日常','日常'],['非日常','非日常']];
+  const fxCur=d.fx==='inh'&&!isKid?'none':d.fx, spCur=d.sp==='inh'&&!isKid?'none':d.sp;
   const kids=!isNew&&childrenOf(ldDraftKey).length>0;
   const used=!isNew&&Object.values(X).some(x=>catDesc(ldDraftKey).includes(x.cat));
   const blocked=kids||used;
@@ -257,8 +264,9 @@ function ldSaveCat(){
   if(!n){toast('名前を入れてください');return}
   const isNew=!ldDraftKey,key=ldDraftKey||uid('cat'),o={n};
   if(d.p)o.p=d.p;else o.c=d.c;           /* 色は大分類だけ。子は親の色を使う */
-  if(d.fx!=='inh')o.fx=d.fx;
-  if(d.sp!=='inh')o.sp=d.sp;
+  const fx=d.fx==='inh'&&!d.p?'none':d.fx, sp=d.sp==='inh'&&!d.p?'none':d.sp;   /* 大分類には「親から」がない = 設定しない */
+  if(fx!=='inh')o.fx=fx;   /* 'none' = 設定しない、を明示的に保存 */
+  if(sp!=='inh')o.sp=sp;
   CATS[key]=o;
   closeSheet();save();rerender();toast(`「${n}」を${isNew?'作成':'保存'}しました`);
 }
@@ -273,8 +281,9 @@ function ldDelCat(){
 route('cats',()=>{
   const sumOf=k=>ldSum(x=>catAnc(x.cat).includes(k));
   const defs=k=>{
-    const parts=[`<span class="${CATS[k].fx?'':'faint'}">${catFx(k)}</span>`];
-    if(catSp(k)==='非日常')parts.push(`<span class="${CATS[k].sp?'':'faint'}">非日常</span>`);
+    const f=catFx(k),sp=catSp(k);
+    const parts=[f?`<span class="${CATS[k].fx!==undefined?'':'faint'}">${f}</span>`:`<span class="faint">固定・変動 設定なし</span>`];
+    if(sp==='非日常')parts.push(`<span class="${CATS[k].sp!==undefined?'':'faint'}">非日常</span>`);
     return parts.join('、');
   };
   const tree=(k,d)=>{
