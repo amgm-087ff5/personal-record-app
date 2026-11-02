@@ -72,13 +72,13 @@ function crPayment(o){
   const day=crDay(o.date);let shopId=crFindEnt(o.shop);
   if(!shopId&&o.register&&o.shop)shopId=crNewEnt(o.shop.trim(),[o.shopType||'shop']);
   const roles=[['支払先',shopId,o.shop||'(店なし)'],['支払者','me']];if(o.with)roles.push(['同席',o.with]);
-  const amt=o.items.reduce((s,i)=>s+i.price,0);
+  const amt=o.items.reduce((s,i)=>s+itemAmt(i),0);
   const aid=uid('p'),xid=uid('x');
-  const mine=o.items.filter(i=>i.b!=='相手').map(i=>({n:i.n,price:i.b==='半分'?Math.floor(i.price/2):i.price,b:i.b==='半分'?'1/2':'全額'}));
+  const mine=o.items.filter(i=>i.b!=='相手').map(i=>({n:i.n,price:i.b==='半分'?Math.floor(itemAmt(i)/2):itemAmt(i),b:i.b==='半分'?'1/2':'全額'}));
   const xamt=mine.reduce((s,i)=>s+i.price,0);
   const who=o.with?E[o.with].n.split(' ').pop():'相手';
   A[aid]={type:'支払い',parent:day,time:o.time,title:o.title||(o.items.length===1?o.items[0].n:'買い物'),pay:o.pay||'現金',amt,roles,
-    items:o.items.map(i=>({n:i.n,price:i.price,tax:i.tax||10,b:i.b==='相手'?who:i.b})),x:xamt?xid:undefined};
+    items:o.items.map(i=>{const r={n:i.n,price:i.price,tax:i.tax||10,b:i.b==='相手'?who:i.b};const ad=adjOut(i);if(ad.length)r.adj=ad;return r}),x:xamt?xid:undefined};
   if(o.with&&amt-xamt>0)A[aid].adv=[o.with,amt-xamt,'未精算'];
   if(xamt){X[xid]={pay:aid,amt:xamt,cat:o.cat||crGuessCat(shopId),memo:'',items:mine};
     /* カテゴリが都度指定の項目だけ、入力時に選んだ値を持つ */
@@ -337,14 +337,14 @@ function crCheckDup(b){
   const batchSame=crBT.find(x=>x!==b&&x.id<b.id&&x.hash===b.hash&&x.status!=='skip');
   if(savedSame){b.status='dup';b.dup={msg:'同じ写真を保存済み',aid:savedSame[0]};return}
   if(batchSame){b.status='dup';b.dup={msg:`同じ写真が${batchSame.id+1}枚目にあります`};return}
-  const t=b.rc.items.reduce((s,i)=>s+i.price,0);
+  const t=b.rc.items.reduce((s,i)=>s+itemAmt(i),0);
   const same=Object.entries(A).find(([k,a])=>a.type==='支払い'&&a.amt===t&&a.time===b.rc.time&&A[a.parent]&&A[a.parent].date===b.rc.date);
   if(same){b.status='dup';b.dup={msg:'同じ日時・金額の支払いあり',aid:same[0]}}
 }
 const CR_ST={scan:['読み取り中',''],ready:['確認待ち','brand'],ok:['確認済み','ok'],dup:['重複の疑い','cr-dup'],skip:['スキップ',''],saved:['保存済み','ok']};
 function crRowParts(b,i){
   const rc=b.rc;const [lab,cls]=CR_ST[b.status];
-  const total=rc?rc.items.reduce((s,x)=>s+x.price,0):0;
+  const total=rc?rc.items.reduce((s,x)=>s+itemAmt(x),0):0;
   const openable=rc&&(b.status==='ready'||b.status==='ok'||b.status==='dup');
   const sid=rc?crFindEnt(rc.shop):null;
   const main=row({lead:`<img class="cr-th" src="${b.img}" alt="">`,
@@ -373,13 +373,13 @@ function crOverride(i){const b=crBT[i];b.override=true;b.status='ready';b.dup=nu
 
 /* ---------- 1枚の確認 ---------- */
 function crOpenItem(i){const b=crBT[i];if(!b||!b.rc)return;CRS={rc:JSON.parse(JSON.stringify(b.rc)),idx:i,mode:CRS.mode==='single'?'single':'batch',td:{...(b.td||{})},open:false};crReview(true)}
-function crTotal(){return CRS.rc.items.reduce((s,i)=>s+(i.price||0),0)}
+function crTotal(){return CRS.rc.items.reduce((s,i)=>s+itemAmt(i),0)}
 function crTotHtml(){const rc=CRS.rc,t=crTotal();
   return list([row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(t)}</b>`})],'flat')
     +(rc.printed===t?'':banner('warn',`印字 ${yen(rc.printed)} / 差 ${yen(Math.abs(rc.printed-t))}`));}
 /** 負担の計算: 自分 = 自分の品目 + 半分(切り捨て)。立替 = 合計 - 自分 */
 function crBurCalc(){const rc=CRS.rc;const total=crTotal();let mine=0;
-  rc.items.forEach(it=>{const p=it.price||0;if(it.b==='相手')return;mine+=it.b==='半分'?Math.floor(p/2):p});
+  rc.items.forEach(it=>{const p=itemAmt(it);if(it.b==='相手')return;mine+=it.b==='半分'?Math.floor(p/2):p});
   return {total,mine,adv:total-mine}}
 function crBurHtml(){const c=crBurCalc();
   if(CRS.rc.with)return splitBar([{v:c.mine,cls:'me',label:'自分の支出'},{v:c.adv,cls:'owed',label:'相手の分・立替'}]);
@@ -387,8 +387,15 @@ function crBurHtml(){const c=crBurCalc();
 /** 金額だけ変わった時は本文を描き直さず、合計と負担だけ更新する */
 function crTotUpdate(){const t=document.getElementById('cr-tot');if(t)t.innerHTML=crTotHtml();const b=document.getElementById('cr-bur');if(b)b.innerHTML=crBurHtml()}
 function crItem(i,k,v){const it=CRS.rc.items[i];if(!it)return;
-  if(k==='price'){it.price=+String(v).replace(/[^\d]/g,'')||0;crTotUpdate();return}
+  if(k==='price'){it.price=+String(v).replace(/[^\d]/g,'')||0;crTotUpdate();crAdjUpd(i);return}
   if(k==='tax')it.tax=+v;else it[k]=v}
+/* 金額行(オプション・割引): 式の行と合計だけ更新する */
+function crAdjUpd(i){const e=document.getElementById('cr-eq-'+i);if(e)e.innerHTML=adjEq(CRS.rc.items[i]);crTotUpdate()}
+function crAdjAdd(i){const it=CRS.rc.items[i];if(!it)return;it.adj=(it.adj||[]).concat({n:'',v:0,sg:1});crReview();setTimeout(()=>{const ns=document.querySelectorAll('.cr-it:nth-child('+(i+1)+') .adj-r .cr-n');if(ns.length)ns[ns.length-1].focus()},30)}
+function crAdjSet(i,j,k,v,re){const a=(CRS.rc.items[i]||{adj:[]}).adj[j];if(!a)return;
+  if(k==='v')a.v=+String(v).replace(/[^\d]/g,'')||0;else if(k==='sg')a.sg=+v;else a.n=v;
+  if(re)crReview();else crAdjUpd(i)}
+function crAdjDel(i,j){CRS.rc.items[i].adj.splice(j,1);crReview()}
 function crBurSet(i,v){crItem(i,'b',v);crReview()}
 function crRvX(k,v){CRS.rc[k]=CRS.rc[k]===v?'':v;crReview()}
 function crAddItem(){CRS.rc.items.push({n:'',price:0,tax:8,b:'自分'});crReview();setTimeout(()=>{const ns=document.querySelectorAll('.cr-it input.cr-n');if(ns.length)ns[ns.length-1].focus()},30)}
@@ -420,7 +427,7 @@ function crReview(top){
       `<div class="field"><label>支払い方法</label><select onchange="CRS.rc.pay=this.value">${CR_PAYS.map(p=>`<option ${rc.pay===p?'selected':''}>${esc(p)}</option>`).join('')}</select></div>`])
     +(shopNew?`<div class="suggest"><span class="t">${eref(null,rc.shop,'place')}を店として登録</span>${toggle(rc.register,'crToggleReg()')}</div>`:'')
     +sh('品目',rc.items.length,{label:'品目を追加',icon:'plus',onclick:'crAddItem()'})
-    +list(rc.items.map((it,i)=>`<div class="cr-it"><input class="cr-n" value="${esc(it.n)}" placeholder="品名" oninput="crItem(${i},'n',this.value)"><input class="cr-pr num" inputmode="numeric" value="${it.price||''}" placeholder="¥0" oninput="crItem(${i},'price',this.value)"><select class="cr-tx" aria-label="税率" onchange="crItem(${i},'tax',this.value)"><option value="8" ${it.tax===8?'selected':''}>8%</option><option value="10" ${it.tax===10?'selected':''}>10%</option></select><button class="cr-del" type="button" aria-label="品目を削除" onclick="crDelItem(${i})">${IC.close}</button></div>`),'flat')
+    +list(rc.items.map((it,i)=>`<div class="cr-it"><input class="cr-n" value="${esc(it.n)}" placeholder="品名" oninput="crItem(${i},'n',this.value)"><input class="cr-pr num" inputmode="numeric" value="${it.price||''}" placeholder="¥0" aria-label="本体の金額" oninput="crItem(${i},'price',this.value)"><select class="cr-tx" aria-label="税率" onchange="crItem(${i},'tax',this.value)"><option value="8" ${it.tax===8?'selected':''}>8%</option><option value="10" ${it.tax===10?'selected':''}>10%</option></select><button class="cr-del" type="button" aria-label="品目を削除" onclick="crDelItem(${i})">${IC.close}</button>${adjEditHtml('cr',i,it)}</div>`),'flat')
     +`<div id="cr-tot">${crTotHtml()}</div>`
     +crSugHtml()
     +`<div style="margin-top:12px">${list([row({t:'分け方・カテゴリ',s:crSumText(),chev:true,onclick:'crToggleSec()'})])}</div>`
