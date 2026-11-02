@@ -88,8 +88,8 @@ function itemsList(id,items,o={}){
     const sub=o.x?(multi?`1個 ${yen(u)}`:esc(items[g.idx[0]].b)):`${multi?`1個 ${yen(u)}、`:''}${ad?ad+`<span class="adj-l">税${g.tax}%</span>`:`税${g.tax}%`}`;
     const main=row({cls:`plain grp${multi?' multi':''}${open?' open':''}`,t:`${esc(g.n)}${multi?` <span class="faint">×${g.idx.length}</span><span class="grp-chev" aria-hidden="true">${IC.chev}</span>`:''}`,s:sub,
       v:`<span class="num" style="font-weight:600">${yen(u*g.idx.length)}</span>`,
-      onclick:multi?`openGroups.has('${key}')?openGroups.delete('${key}'):openGroups.add('${key}');rerender()`:''});
-    const kids=open?`<div class="grp-kids" role="group" aria-label="${esc(g.n)}の内訳">${g.idx.map((i,n)=>row({cls:'plain kid',lead:`<span class="kid-n">${n+1}</span>`,t:esc(items[i].memo||'メモなし'),v:tag(items[i].b)})).join('')}</div>`:'';
+      chev:multi?0:1,onclick:multi?`openGroups.has('${key}')?openGroups.delete('${key}'):openGroups.add('${key}');rerender()`:`go('#/i/${id}/${g.idx[0]}')`});
+    const kids=open?`<div class="grp-kids" role="group" aria-label="${esc(g.n)}の内訳">${g.idx.map((i,n)=>row({cls:'plain kid',lead:`<span class="kid-n">${n+1}</span>`,t:esc(items[i].memo||'メモなし'),v:tag(items[i].b),chev:1,onclick:`go('#/i/${id}/${i}')`})).join('')}</div>`:'';
     return main+kids;
   });
 }
@@ -199,7 +199,7 @@ function momentView(id,a){
     +(a.adv&&a.adv[2]==='未精算'?`<div class="suggest owe"><span class="pbar lg" aria-hidden="true"><i class="owed" style="flex:1"></i></span><span class="t">${esc(E[a.adv[0]].n.split(' ').pop())}さんの分 <b class="num">${yen(a.adv[1])}</b> 未精算</span><button class="btn sm" type="button" onclick="settle('${id}')">精算済みにする</button></div>`:'')
     +shopTodoSug(id,a)
     +((a.roles||[]).length?sh('交わった人・場所',a.roles.length,shop&&!shop[1]?{label:'支払先を店として登録',onclick:`registerShop('${id}')`}:null)+list(a.roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
-    +(a.items?sh('品目',itemGroups(a.items).length,{label:'編集',icon:'edit',onclick:`ipOpen('${id}')`})+list([...itemsList(id,a.items),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(a.items.reduce((s,i)=>s+itemAmt(i),0))}</b>`})],'flat'):'')
+    +(a.items?sh('品目',itemGroups(a.items).length,{label:'追加',icon:'plus',onclick:`itAdd('${id}')`})+list([...itemsList(id,a.items),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(a.items.reduce((s,i)=>s+itemAmt(i),0))}</b>`})],'flat'):'')
     +(a.items&&ipPartner(a)?sh('負担')+list([row({cls:'plain',t:bpText(a),s:`自分 ${yen(a.x&&X[a.x]?X[a.x].amt:0)}、${esc(ipPartner(a))}さん ${yen(a.adv?a.adv[1]:0)}`,chev:1,onclick:`bpOpen('${id}')`})]):'')
     +(a.body?sh('内容')+`<div class="list"><p style="padding:14px 16px;line-height:1.85">${esc(a.body)}</p></div>`:'')
     +(ev?sh('元の予定')+objs([row({href:`#/ev/${ev[0]}`,lead:`<span class="ax-node plan" style="margin:0"></span>`,t:esc(ev[1].t),s:`${fmtMDW(ev[1].d)} ${ev[1].s||''}`,chev:1})]):'')
@@ -226,3 +226,40 @@ function photoThumb(d,i){
   const h=(+d.slice(8)*37+i*71)%40;const sky=`hsl(${195+h/2} 50% 74%)`,land=`hsl(${85+h} 28% 42%)`,sun=`hsl(${45+h/4} 85% 86%)`;
   return `<svg class="dp-ph" viewBox="0 0 88 88" role="img" aria-label="写真${i+1}"><rect width="88" height="88" fill="${sky}"/><circle cx="${20+i*18}" cy="26" r="9" fill="${sun}"/><path d="M0 64 Q22 ${46+i*6} 44 60 T88 56 V88 H0Z" fill="${land}"/><path d="M0 74 Q30 66 60 76 T88 72 V88 H0Z" fill="${land}" opacity=".7"/></svg>`;
 }
+
+/* ---------- 品目の詳細(v12): 1品目=1ページ。見る→同じ画面で直せる ---------- */
+route('i',rid=>{
+  const [id,ix]=(rid||'').split('/'),a=A[id],it=a&&a.items&&a.items[+ix];
+  if(!it)return appbar('')+empty('activity','この品目は見つかりません');
+  const pt=ipPartner(a),amt=itemAmt(it),am=it.lines&&it.lines.length>1?lnAmts(it.lines):null;
+  const bs=['自分','半分',...(pt?[pt]:[])];
+  const whole=a.split&&a.split.mode==='whole';
+  const mine=payShares(a)[+ix];
+  return appbar('品目',{actions:[{icon:'edit',label:'編集',onclick:`itOpen('${id}',${ix})`}]})
+    +`<section class="it-hero"><div class="it-n">${esc(it.n)}</div><div class="it-a num">${yen(amt)}</div><div class="it-m">${esc(a.title)} ・ 税${it.tax||8}%${it.memo?' ・ '+esc(it.memo):''}</div></section>`
+    +(am?sh('内訳')+list([row({cls:'plain',t:'本体',v:`<span class="num">${yen(am[0])}</span>`}),...it.lines.slice(1).map((l,j)=>row({cls:'plain',t:esc(lnName(l))+(l.k==='pct'?` <span class="faint">${Math.abs(lnV(l))}%</span>`:''),v:`<span class="num" style="color:${am[j+1]<0?'var(--late)':'inherit'}">${am[j+1]<0?'−':'＋'}${yen(Math.abs(am[j+1]))}</span>`})),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(amt)}</b>`})],'flat'):'')
+    +(pt?sh('負担')+(whole?`<div class="it-note">全体で割る設定です。この品目の自分の分は ${yen(mine)}（負担画面で変更）</div>`
+      :`<div class="it-bs" role="group" aria-label="負担">${bs.map(v=>`<button class="cr-b" type="button" aria-pressed="${it.b===v}" onclick="itSetB('${id}',${ix},'${v}')">${esc(v)}</button>`).join('')}</div><div class="it-note">自分の分 ${yen(mine)}</div>`):'')
+    +`<div style="margin-top:20px"><button class="btn block ghost" type="button" onclick="itOpen('${id}',${ix})">この品目を編集</button></div>`;
+});
+function itSetB(id,ix,v){const a=A[id],snap=bpSnap(a);a.items[ix].b=v;applyShares(a);save();rerender();toast('負担を変更しました',()=>{bpRestore(a,snap);save();rerender()})}
+let itD=null;
+itemEd('it',{items:()=>itD.items,redraw:()=>setSheetBody(itBody()),upd:i=>{const e=document.getElementById('ie-eq-it-'+i);if(e)e.innerHTML=IED.it.eq(i)}});
+const itBody=()=>IED.it.html()+`<div class="it-memo"><label>メモ<input value="${esc(itD.items[itD.ix].memo||'')}" placeholder="任意" oninput="itD.items[itD.ix].memo=this.value"></label></div>`
+;
+function itOpen(id,ix){
+  const a=A[id];itD={id,ix:+ix,items:[itemToEdit(a.items[+ix])]};itD.ix=0;itD.at=+ix;IED.it.open=0;
+  openSheet({title:'品目を編集',full:true,left:{label:'閉じる',onclick:'closeSheet()'},body:itBody()});
+  crFooter(`<button class="btn block" type="button" onclick="itSave()">保存</button>`);
+}
+function itAdd(id){const a=A[id];itD={id,ix:0,at:-1,isNew:1,items:[{n:'',price:0,tax:8,b:'自分'}]};IED.it.open=0;
+  openSheet({title:'品目を追加',full:true,left:{label:'閉じる',onclick:'closeSheet()'},body:itBody()});
+  crFooter(`<button class="btn block" type="button" onclick="itSave()">追加</button>`)}
+function itSave(){
+  const a=A[itD.id],i=itD.items[0];if(!i.n||!itemAmt(i)){toast('品名と金額を入れてください');return}
+  const snap=bpSnap(a),o={n:i.n,price:itemAmt(i),tax:i.tax||8,b:i.b||'自分'},ln=lnSave(i);if(ln)o.lines=ln;if(i.memo)o.memo=i.memo;
+  if(itD.at>=0)a.items[itD.at]=o;else a.items.push(o);
+  a.amt=a.items.reduce((s,x)=>s+x.price,0);applyShares(a);closeSheet();crFooter('');save();rerender();toast('保存しました',()=>{bpRestore(a,snap);save();rerender()});
+}
+function itDel(){const a=A[itD.id];if(a.items.length<2){toast('最後の1品目は削除できません');return}
+  const snap=bpSnap(a);a.items.splice(itD.at,1);a.amt=a.items.reduce((s,x)=>s+itemAmt(x),0);applyShares(a);closeSheet();crFooter('');save();go('#/a/'+itD.id);toast('削除しました',()=>{bpRestore(a,snap);save();rerender()})}

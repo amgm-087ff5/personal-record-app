@@ -1076,3 +1076,37 @@ div.pl-grid .pl-cell.today,.pl-cell.today{background:color-mix(in srgb,var(--me)
   background:var(--dcard-bg);
   box-shadow:0 1px 2px rgba(60,90,140,.06),0 0 0 1.5px var(--glow),0 0 14px 2px color-mix(in srgb,var(--glow) 80%,transparent),0 0 38px 6px color-mix(in srgb,var(--glow) 45%,transparent)}
 a.dh2:active .dcard{background:var(--sunk)}
+
+/* ===== UI v12: タイムラインをリッチに(白いカード+細い軸+大きな金額)/ 品目の詳細 ===== */
+:root{--tl-card:#FFFFFF;--tl-sh:0 1px 2px rgba(40,70,130,.06),0 6px 18px -6px rgba(60,100,180,.16);--tl-bg1:#F4F7FD;--tl-bg2:#EAF1FD}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--tl-card:var(--surface);--tl-sh:0 1px 2px rgba(0,0,0,.4);--tl-bg1:var(--bg);--tl-bg2:var(--bg)}}
+:root[data-theme="dark"]{--tl-card:var(--surface);--tl-sh:0 1px 2px rgba(0,0,0,.4);--tl-bg1:var(--bg);--tl-bg2:var(--bg)}
+.ax{--tcol:52px;--rail:26px;background:linear-gradient(180deg,var(--tl-bg1),var(--tl-bg2) 60%,var(--tl-bg1));padding-bottom:24px}
+.ax-row::before{width:1.5px;opacity:.7}
+.ax-time{font:600 12px/1 var(--font);color:var(--tx-3);padding-top:19px;text-align:right;padding-right:4px;font-variant-numeric:tabular-nums}
+.ax-row{min-height:0}
+.ax-c{margin:6px var(--gutter) 6px 4px;padding:12px 14px;background:var(--tl-card);border-radius:16px;box-shadow:var(--tl-sh);align-items:center;gap:12px}
+.ax-row.plan .ax-c,.ax-row.dim .ax-c{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line-strong);border-style:dashed}
+.ax-row.plan .ax-c{box-shadow:none;border:1.5px dashed var(--line-strong)}
+a.ax-row:active .ax-c{background:var(--sunk);transform:scale(.99)}
+.ax-c .t{font:600 15.5px/1.35 var(--font);letter-spacing:.01em}
+.ax-c .m{margin-top:4px}
+.ax-c .amt b{font:700 17px/1.2 var(--font);letter-spacing:-.01em}
+.ax-node{margin-top:14px}
+.dh2 .dcard{border-radius:18px}
+/* 品目の詳細 */
+.it-hero{margin:8px var(--gutter) 4px;padding:24px 20px;background:var(--surface);border-radius:20px;box-shadow:var(--tl-sh);text-align:center}
+.it-n{font:600 17px/1.4 var(--font);color:var(--tx-2)}
+.it-a{font:700 40px/1.2 var(--font);margin:6px 0;letter-spacing:-.02em;color:var(--tx)}
+.it-m{font:var(--t-cap);color:var(--tx-3)}
+.it-bs{display:flex;gap:8px;margin:0 var(--gutter)}
+.it-bs .cr-b{flex:1;height:44px}
+.it-note{margin:10px var(--gutter) 0;font:var(--t-cap);color:var(--tx-3)}
+.it-memo{margin-top:20px}
+.it-memo label{display:block;font:var(--t-cap);color:var(--tx-3)}
+.it-memo input{display:block;width:100%;margin-top:6px;height:44px;border:1px solid var(--line-strong);border-radius:12px;padding:0 12px;font:var(--t-body);background:var(--surface);color:var(--tx);box-sizing:border-box}
+.it-del{display:block;width:100%;margin-top:28px;height:44px;border:0;background:transparent;color:var(--late);font:var(--t-label)}
+/* 編集フォームの整理: 1品目だけ・枠なしで余白で区切る(近接・整列) */
+.sheet .ie-o{padding:4px 0}
+.sheet .ie-l{margin-bottom:10px}
+.sheet .it-memo{padding:0 16px}.sheet .it-memo input{width:100%}
