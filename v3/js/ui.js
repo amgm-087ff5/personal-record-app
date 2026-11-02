@@ -252,7 +252,10 @@ const SKEY='prmock-v3';
 function save(){try{localStorage.setItem(SKEY,JSON.stringify({A,X,E,EV,TD,TYPES,CATS,NOTES,LISTS,TYPE_PROPS,EXTRA:typeof EXTRA!=='undefined'?EXTRA:{}}))}catch(e){}}
 function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(!s)return;
   for(const [k,o] of Object.entries({A,X,E,EV,TD,TYPES,CATS,NOTES,LISTS,TYPE_PROPS})){if(s[k]){for(const kk of Object.keys(o))delete o[kk];Object.assign(o,s[k])}}
-  if(s.EXTRA&&typeof EXTRA!=='undefined')Object.assign(EXTRA,s.EXTRA);}catch(e){}}
+  if(s.EXTRA&&typeof EXTRA!=='undefined')Object.assign(EXTRA,s.EXTRA);
+  /* 旧データの移行: 以前は「設定なし」が暗黙に 変動/日常 だった。大分類は明示の値に置き換える(以後 'none' = 設定しない) */
+  for(const k of Object.keys(CATS)){const c=CATS[k];if(!c.p){if(c.fx===undefined)c.fx='変動';if(c.sp===undefined)c.sp='日常'}}
+  }catch(e){}}
 function resetData(){try{localStorage.removeItem(SKEY)}catch(e){}location.hash='#/activities';location.reload()}
 /** 画面ファイルが自由に使える追加の保存領域 */
 const EXTRA={};
