@@ -3,7 +3,8 @@
    ルート: #/activities , #/a/{id}(出来事の詳細=その点の前後を切り取った軸), #/day/{date}(日のページ)
    ===================================================================== */
 
-let actFilter='all';
+let actFilter='all';let actMonth=TODAY.slice(0,7);
+const monthShift=n=>{const [y,m]=actMonth.split('-').map(Number);const d=new Date(y,m-1+n,1);actMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');rerender()};
 const ACT_FILTERS=[['all','すべて'],['予定','予定'],['支払い','支払い'],['会話','会話'],['移動','移動']];
 const dayOfDate=d=>Object.entries(A).find(([k,a])=>a.type==='日記'&&a.date===d);
 const kidsOf=d=>{const day=dayOfDate(d);return day?day[1].kids.filter(k=>A[k]).map(k=>[k,A[k]]):[]};
@@ -27,17 +28,18 @@ const axDay=(d,o={})=>{const items=dayItems(d);return d===TODAY?items.filter(isF
 
 route('activities',()=>{
   const upcoming=Object.entries(EV).filter(([k,e])=>!e.hol&&!e.rec&&e.d>TODAY).sort((a,b)=>a[1].d.localeCompare(b[1].d));
-  const dates=recordDates().filter(d=>d>=TODAY.slice(0,8)+'01');
+  const isNow=actMonth===TODAY.slice(0,7),dates=recordDates().filter(d=>d.startsWith(actMonth));
+  const allD=[...recordDates(),TODAY],minM=allD.sort()[0].slice(0,7),maxM=TODAY.slice(0,7);
   const pm=+TODAY.slice(5,7)===1?12:+TODAY.slice(5,7)-1;
   const s=daySpent(TODAY);
   return largeTitle('タイムライン',{actions:[{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"},{icon:'more',label:'このモックについて',onclick:'openAbout()'}]})
+    +`<div class="mnav"><button type="button" aria-label="前の月" ${actMonth<=minM?'disabled':''} onclick="monthShift(-1)">${IC.back}</button><b>${actMonth.slice(0,4)}年${+actMonth.slice(5)}月</b><button type="button" class="nx" aria-label="次の月" ${actMonth>=maxM?'disabled':''} onclick="monthShift(1)">${IC.back}</button></div>`
     +chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")
     +`<div class="ax">`
-    +(upcoming.length&&actFilter==='all'?`<a href="#/plan">${axEdge(`明日以降の予定 ${upcoming.length}件${IC.chev}`)}</a>`:'')
-    +dayHead(TODAY,{href:`#/day/${TODAY}`,diary:dayDiary(TODAY),empty:'今日の日記を書く',sum:s?`自分 ${yen(s)}`:''})
-    +axDay(TODAY)
+    +(isNow&&upcoming.length&&actFilter==='all'?`<a href="#/plan">${axEdge(`明日以降の予定 ${upcoming.length}件${IC.chev}`)}</a>`:'')
+    +(isNow?dayHead(TODAY,{href:`#/day/${TODAY}`,diary:dayDiary(TODAY),empty:'今日の日記を書く',sum:s?`自分 ${yen(s)}`:''})+axDay(TODAY):'')
     +dates.map(d=>{const sp=daySpent(d);return dayHead(d,{href:`#/day/${d}`,diary:dayDiary(d),sum:sp?`自分 ${yen(sp)}`:''})+axDay(d)}).join('')
-    +axEdge(`${pm}月を読み込む`,true)
+    +(!isNow&&!dates.length?`<div class="it-note" style="text-align:center;padding:32px 0">この月の記録はありません</div>`:'')
     +`</div>`;
 },{tab:'activities'});
 
