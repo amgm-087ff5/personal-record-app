@@ -1033,13 +1033,34 @@ div.pl-grid .pl-cell.today,.pl-cell.today{background:color-mix(in srgb,var(--me)
 .grp-chev svg{width:16px;height:16px;transform:rotate(90deg);transition:transform .15s}
 .row.grp.open .grp-chev svg{transform:rotate(-90deg)}
 
-/* 品目の金額行(オプション・割引)。意味は DESIGN.md v9 */
+/* 品目の編集(1品目ずつ開く)と負担の画面。意味は DESIGN.md v10 */
 .adj-l{display:inline-block;margin-right:8px;white-space:nowrap}
-.cr-it .adj-ed{flex:0 0 calc(100% - 12px);min-width:0;display:flex;flex-direction:column;gap:2px;margin:0 0 6px 12px;padding:4px 8px;background:var(--surface-2);border-radius:var(--r-sm);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--line) 70%,transparent)}
-.adj-r{display:flex;align-items:center;gap:8px}
-.adj-r .adj-sg{display:flex;gap:6px;flex:none}
-.adj-r .cr-n{flex:1;min-width:0}
-.cr-it .adj-r .cr-pr{width:72px}
-.adj-eq{font:var(--t-cap);color:var(--tx-3);padding:2px 0 4px;font-variant-numeric:tabular-nums}
-.adj-add{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;min-height:44px;padding:0 4px;color:var(--brand);font:500 13px/1 var(--font)}
-.adj-add svg.i{width:16px;height:16px}
+.ie-o{display:flex;flex-direction:column;gap:8px;padding:8px 14px 6px;background:var(--surface-2)}
+.ie-top{display:flex;align-items:center;gap:4px}
+.ie-n{flex:1;min-width:0;height:44px;background:transparent;outline:none;font:600 17px/1 var(--font);color:var(--tx)}
+.ie-c{width:44px;height:44px;display:grid;place-items:center;color:var(--tx-3);transform:rotate(-90deg);flex:none}
+.ie-a{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:0 12px;border-radius:var(--r-sm);background:var(--surface);font:var(--t-label);color:var(--tx-2)}
+.ie-p{width:140px;height:48px;background:transparent;outline:none;text-align:right;font:600 20px/1 var(--font);color:var(--tx);font-variant-numeric:tabular-nums}
+.ie-ls{display:flex;flex-direction:column;gap:8px}
+.ie-l{display:grid;grid-template-columns:76px minmax(0,1fr) 92px 36px;gap:6px;align-items:center}
+.ie-lab{font:var(--t-label);color:var(--tx-2);padding-left:4px}
+.ie-k,.ie-ln,.ie-v{height:44px;border-radius:var(--r-xs);background:var(--surface);outline:none;font:var(--t-body);color:var(--tx);min-width:0}
+.ie-k{padding:0 6px}.ie-ln{padding:0 10px}
+.ie-v{padding:0 10px;text-align:right;font-variant-numeric:tabular-nums}
+.ie-d{width:36px;height:44px;display:grid;place-items:center;color:var(--tx-3)}
+.ie-d svg.i{width:16px;height:16px}
+.ie-eq{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font:var(--t-cap);color:var(--tx-3);padding:0 4px}
+.ie-eq b{font:600 15px/1 var(--font);color:var(--tx);flex:none}
+.ie-add{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;min-height:44px;padding:0 4px;color:var(--brand);font:500 14px/1 var(--font)}
+.ie-add svg.i{width:16px;height:16px}
+.ie-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding-top:6px}
+.ie-tax{display:flex;gap:6px}
+.ie-tax .cr-b{height:40px;min-width:64px}
+.ie-del{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 8px;color:var(--tx-2);font:500 14px/1 var(--font)}
+.ie-del svg.i{width:16px;height:16px}
+.bp-i{display:flex;flex-direction:column;gap:8px;padding:12px 14px}
+.bp-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font:500 15px/1.4 var(--font)}
+.bp-c{display:flex;gap:8px}
+.bp-c .cr-b{flex:1;height:44px;font-size:14px}
+.bp-w{display:flex;flex-direction:column;gap:12px;padding:12px 14px}
+.bp-w .ie-a{background:var(--surface-2)}

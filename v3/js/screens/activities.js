@@ -77,69 +77,101 @@ function deleteActivity(id){
   toast('記録を削除しました',()=>{const s=JSON.parse(snap);A[id]=s.a;if(xid)X[xid]=s.x;if(p)p.kids.push(id)});
 }
 
-/** 品目を「同じ名前+同じ値段」でまとめる(表示だけ。データは1行=1個) */
+/** 品目を「同じ名前+同じ合計+同じ金額行」でまとめる(表示だけ。データは1行=1個) */
 let showBurden=false;const openGroups=new Set();
-function itemGroups(items){const g=[];items.forEach((it,i)=>{const f=g.find(x=>x.n===it.n&&x.price===it.price&&adjKey(x)===adjKey(it));if(f)f.idx.push(i);else g.push({n:it.n,price:it.price,adj:it.adj,tax:it.tax,idx:[i]})});return g}
-/** 品目の一覧。同じ名前+同じ値段は「×N」にまとめ、開くと子(1個目,2個目…)が親の下に入れ子で並ぶ。o.x = 自分の支出側の表示 */
+function itemGroups(items){const g=[];items.forEach((it,i)=>{const f=g.find(x=>x.n===it.n&&x.price===it.price&&lnKey(x)===lnKey(it));if(f)f.idx.push(i);else g.push({n:it.n,price:it.price,lines:it.lines,tax:it.tax,idx:[i]})});return g}
+/** 品目の一覧。同じものは「×N」にまとめ、開くと子(1個目,2個目…)が親の下に入れ子で並ぶ。金額行がある品目は補足行に内訳。o.x = 自分の支出側の表示 */
 function itemsList(id,items,o={}){
   return itemGroups(items).map((g,gi)=>{
     const key=id+':'+gi,multi=g.idx.length>1,open=multi&&openGroups.has(key);
-    const bs=[...new Set(g.idx.map(i=>items[i].b))];
-    const burden=showBurden&&!o.x?bs.map(b=>tag(b,{cls:b==='自分'?'brand':''})).join(''):'';
-    const u=itemAmt(g),ad=adjSumHtml(g);
+    const u=itemAmt(g),ad=lnSumHtml(g);
     const sub=o.x?(multi?`1個 ${yen(u)}`:esc(items[g.idx[0]].b)):`${multi?`1個 ${yen(u)}、`:''}${ad?ad+`<span class="adj-l">税${g.tax}%</span>`:`税${g.tax}%`}`;
     const main=row({cls:`plain grp${multi?' multi':''}${open?' open':''}`,t:`${esc(g.n)}${multi?` <span class="faint">×${g.idx.length}</span><span class="grp-chev" aria-hidden="true">${IC.chev}</span>`:''}`,s:sub,
-      v:`${burden?`<span class="grp-b">${burden}</span>`:''}<span class="num" style="font-weight:600">${yen(u*g.idx.length)}</span>`,
+      v:`<span class="num" style="font-weight:600">${yen(u*g.idx.length)}</span>`,
       onclick:multi?`openGroups.has('${key}')?openGroups.delete('${key}'):openGroups.add('${key}');rerender()`:''});
     const kids=open?`<div class="grp-kids" role="group" aria-label="${esc(g.n)}の内訳">${g.idx.map((i,n)=>row({cls:'plain kid',lead:`<span class="kid-n">${n+1}</span>`,t:esc(items[i].memo||'メモなし'),v:tag(items[i].b)})).join('')}</div>`:'';
     return main+kids;
   });
 }
-/* ---------- 品目の編集(支払いの品目。自分の支出と立替は品目から計算し直す) ---------- */
-let ipD=null;
+/* ---------- 負担の計算(品目ごと / 全体割)。a.split が無ければ品目ごと(各品目の b)。
+   全体割 = {mode:'whole', how:'half'|'amount', me}。自分の分を品目の金額比で按分する ---------- */
 const ipPartner=a=>a.adv&&E[a.adv[0]]?E[a.adv[0]].n.split(' ').pop():null;
 const ipMine=(it,partner)=>it.b===partner?0:it.b==='半分'?Math.floor(itemAmt(it)/2):itemAmt(it);
-function ipTot(){
-  const a=A[ipD.id],pt=ipPartner(a),t=ipD.items.reduce((s,i)=>s+itemAmt(i),0),me=ipD.items.reduce((s,i)=>s+ipMine(i,pt),0);
-  return list([row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(t)}</b>`}),...(a.x?[row({cls:'plain',t:'自分の支出',v:`<b class="num" style="color:var(--me)">${yen(me)}</b>`})]:[]),...(pt?[row({cls:'plain',t:`${esc(pt)}さんの分`,v:`<span class="num">${yen(t-me)}</span>`})]:[])],'flat');
+function payShares(a){
+  const pt=ipPartner(a),amts=a.items.map(itemAmt),total=amts.reduce((s,x)=>s+x,0);
+  if(a.split&&a.split.mode==='whole'){
+    const me=a.split.how==='amount'?Math.min(a.split.me||0,total):Math.floor(total/2);let left=me;
+    return amts.map((x,i)=>{const v=i===amts.length-1?left:Math.min(left,total?Math.floor(x*me/total):0);left-=v;return v});
+  }
+  return a.items.map(it=>ipMine(it,pt));
 }
+/** 支払いの品目・負担から、自分の支出と相手の分(立替)を計算し直す */
+function applyShares(a){
+  const x=a.x&&X[a.x];if(!x)return;
+  const sh=payShares(a),whole=a.split&&a.split.mode==='whole',unk=new Set(x.items.filter(i=>i.unk).map(i=>i.n));
+  x.items=a.items.map((i,k)=>{const o={n:i.n,price:sh[k],b:whole?(sh[k]===itemAmt(i)?'全額':'按分'):(i.b==='半分'?'1/2':'全額')};if(i.memo)o.memo=i.memo;if(unk.has(i.n))o.unk=1;return o}).filter(i=>i.price>0);
+  x.amt=x.items.reduce((s,i)=>s+i.price,0);
+  if(a.adv)a.adv[1]=a.amt-x.amt;
+}
+const bpSnap=a=>{const x=a.x&&X[a.x];return JSON.stringify({a:{items:a.items,amt:a.amt,adv:a.adv,split:a.split},x:x&&{items:x.items,amt:x.amt}})};
+const bpRestore=(a,snap)=>{const o=JSON.parse(snap),x=a.x&&X[a.x];a.items=o.a.items;a.amt=o.a.amt;a.adv=o.a.adv;if(o.a.split)a.split=o.a.split;else delete a.split;if(x&&o.x){x.items=o.x.items;x.amt=o.x.amt}};
+
+/* ---------- 品目の編集(1品目ずつ開く。負担は別の画面) ---------- */
+let ipD=null;
+itemEd('ip',{items:()=>ipD.items,redraw:()=>setSheetBody(ipBody()),upd:i=>{const e=document.getElementById('ie-eq-ip-'+i);if(e)e.innerHTML=IED.ip.eq(i);const t=document.getElementById('ip-tot');if(t)t.innerHTML=ipTot()}});
+const ipTot=()=>list([row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(ipD.items.reduce((s,i)=>s+itemAmt(i),0))}</b>`})],'flat');
 function ipBody(){
-  const a=A[ipD.id],pt=ipPartner(a);
-  return sh('品目',ipD.items.length,{label:'品目を追加',icon:'plus',onclick:'ipAdd()'})
-    +list(ipD.items.map((it,i)=>`<div class="cr-it"><input class="cr-n" value="${esc(it.n)}" placeholder="品名" oninput="ipSet(${i},'n',this.value)"><input class="cr-pr num" inputmode="numeric" value="${it.price||''}" placeholder="¥0" aria-label="本体の金額" oninput="ipSet(${i},'price',this.value)"><select class="cr-tx" aria-label="税率" onchange="ipSet(${i},'tax',this.value)"><option value="8" ${+it.tax===8?'selected':''}>8%</option><option value="10" ${+it.tax===10?'selected':''}>10%</option></select><button class="cr-del" type="button" aria-label="品目を削除" onclick="ipDel(${i})">${IC.close}</button>${pt?`<span class="cr-bur ip-bur">${['自分','半分',pt].map(v=>`<button class="cr-b" type="button" aria-pressed="${it.b===v}" onclick="ipSet(${i},'b','${v}',1)">${esc(v)}</button>`).join('')}</span>`:''}${adjEditHtml('ip',i,it)}</div>`),'flat')
+  return sh('品目',ipD.items.length,{label:'品目を追加',icon:'plus',onclick:'IED.ip.add()'})
+    +IED.ip.html()
     +`<div id="ip-tot" style="margin-top:12px">${ipTot()}</div>`;
 }
 function ipOpen(id){
-  ipD={id,items:A[id].items.map(i=>({...i,adj:(i.adj||[]).map(a=>({n:a.n,v:Math.abs(a.amt),sg:a.amt<0?-1:1}))}))};
-  openSheet({title:'品目を編集',full:true,left:{label:'閉じる',onclick:'closeSheet()'},right:{label:'保存',onclick:'ipSave()'},body:ipBody()});
+  ipD={id,items:A[id].items.map(itemToEdit)};IED.ip.open=-1;
+  openSheet({title:'品目を編集',full:true,left:{label:'閉じる',onclick:'closeSheet()'},body:ipBody()});
+  crFooter(`<button class="btn block" type="button" onclick="ipSave()">保存</button>`);
 }
-function ipSet(i,k,v,re){const it=ipD.items[i];if(!it)return;
-  if(k==='price')it.price=+String(v).replace(/[^\d]/g,'')||0;else if(k==='tax')it.tax=+v;else it[k]=v;
-  if(re)setSheetBody(ipBody());else ipAdjUpd(i)}
-/* 金額行: 追加・変更・削除。式の行と合計だけ更新する(入力中の欄を描き直さない) */
-function ipAdjUpd(i){const e=document.getElementById('ip-eq-'+i);if(e)e.innerHTML=adjEq(ipD.items[i]);const t=document.getElementById('ip-tot');if(t)t.innerHTML=ipTot()}
-function ipAdjAdd(i){const it=ipD.items[i];if(!it)return;it.adj=(it.adj||[]).concat({n:'',v:0,sg:1});setSheetBody(ipBody());setTimeout(()=>{const ns=document.querySelectorAll('#sheet-b .cr-it:nth-child('+(i+1)+') .adj-r .cr-n');if(ns.length)ns[ns.length-1].focus()},30)}
-function ipAdjSet(i,j,k,v,re){const a=(ipD.items[i]||{adj:[]}).adj[j];if(!a)return;
-  if(k==='v')a.v=+String(v).replace(/[^\d]/g,'')||0;else if(k==='sg')a.sg=+v;else a.n=v;
-  if(re)setSheetBody(ipBody());else ipAdjUpd(i)}
-function ipAdjDel(i,j){ipD.items[i].adj.splice(j,1);setSheetBody(ipBody())}
-function ipAdd(){ipD.items.push({n:'',price:0,tax:8,b:'自分'});setSheetBody(ipBody());setTimeout(()=>{const ns=document.querySelectorAll('#sheet-b .cr-it input.cr-n');if(ns.length)ns[ns.length-1].focus()},30)}
-function ipDel(i){ipD.items.splice(i,1);setSheetBody(ipBody())}
 function ipSave(){
-  const a=A[ipD.id],pt=ipPartner(a),items=ipD.items.filter(i=>i.n&&i.price);
+  const a=A[ipD.id],items=ipD.items.filter(i=>i.n&&itemAmt(i));
   if(!items.length){toast('品目を入れてください');return}
-  const x=a.x&&X[a.x],snap=JSON.stringify({a:{items:a.items,amt:a.amt,adv:a.adv},x:x&&{items:x.items,amt:x.amt}});
-  a.items=items.map(i=>{const o={n:i.n,price:i.price,tax:i.tax||8,b:i.b||'自分'};const ad=adjOut(i);if(ad.length)o.adj=ad;if(i.memo)o.memo=i.memo;return o});
-  a.amt=items.reduce((s,i)=>s+itemAmt(i),0);
-  if(x){
-    const unk=new Set(x.items.filter(i=>i.unk).map(i=>i.n));
-    x.items=items.filter(i=>i.b!==pt).map(i=>{const o={n:i.n,price:ipMine(i,pt),b:i.b==='半分'?'1/2':'全額'};if(i.memo)o.memo=i.memo;if(unk.has(i.n))o.unk=1;return o});
-    x.amt=x.items.reduce((s,i)=>s+i.price,0);
-    if(a.adv)a.adv[1]=a.amt-x.amt;
-  }
-  closeSheet();save();rerender();
-  toast('品目を保存しました',()=>{const o=JSON.parse(snap);a.items=o.a.items;a.amt=o.a.amt;a.adv=o.a.adv;if(x){x.items=o.x.items;x.amt=o.x.amt}});
+  const snap=bpSnap(a);
+  a.items=items.map(i=>{const o={n:i.n,price:itemAmt(i),tax:i.tax||8,b:i.b||'自分'};const ln=lnSave(i);if(ln)o.lines=ln;if(i.memo)o.memo=i.memo;return o});
+  a.amt=a.items.reduce((s,i)=>s+i.price,0);
+  applyShares(a);
+  closeSheet();crFooter('');save();rerender();
+  toast('品目を保存しました',()=>bpRestore(a,snap));
 }
+
+/* ---------- 負担(誰がいくら)。品目の編集とは別の画面 ---------- */
+let bpD=null;
+const bpCalc=()=>{const a=A[bpD.id],t={items:a.items.map((i,k)=>({...i,b:bpD.bs[k]})),adv:a.adv,split:bpD.mode==='whole'?{mode:'whole',how:bpD.how,me:bpD.me}:undefined};
+  const sh=payShares(t),total=t.items.reduce((s,i)=>s+itemAmt(i),0),me=sh.reduce((s,x)=>s+x,0);return {sh,total,me}};
+const bpMode=m=>{bpD.mode=m;bpRe()};
+function bpBody(){
+  const a=A[bpD.id],pt=ipPartner(a),c=bpCalc();
+  const head=seg([['items','食べた分'],['whole','全体で割る']],bpD.mode,"bpMode('$v')");
+  const mid=bpD.mode==='items'
+    ?sh('品目ごとの負担',a.items.length)+list(a.items.map((it,i)=>`<div class="bp-i"><div class="bp-h"><span>${esc(it.n)}</span><b class="num">${yen(itemAmt(it))}</b></div><div class="bp-c" role="group" aria-label="${esc(it.n)}の負担">${['自分','半分',pt].map(v=>`<button class="cr-b" type="button" aria-pressed="${bpD.bs[i]===v}" onclick="bpD.bs[${i}]='${v}';bpRe()">${esc(v)}</button>`).join('')}</div></div>`),'flat')
+    :sh('全体の割り方')+`<div class="bp-w">${seg([['half','半分ずつ'],['amount','自分の金額を決める']],bpD.how,"bpD.how='$v';bpRe()")}`
+      +(bpD.how==='amount'?`<label class="ie-a"><span>自分の負担</span><input class="ie-p num" inputmode="numeric" value="${bpD.me||''}" placeholder="¥0" oninput="bpD.me=+this.value.replace(/[^\\d]/g,'')||0;bpSum()"></label>`:'')+`</div>`;
+  return head+mid+`<div id="bp-sum" style="margin-top:12px">${bpSumHtml(c,pt)}</div>`;
+}
+const bpSumHtml=(c,pt)=>list([row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(c.total)}</b>`}),row({cls:'plain',t:'自分',v:`<b class="num" style="color:var(--me)">${yen(c.me)}</b>`}),row({cls:'plain',t:`${esc(pt)}さん`,v:`<span class="num">${yen(c.total-c.me)}</span>`})],'flat');
+const bpSum=()=>{const e=document.getElementById('bp-sum');if(e)e.innerHTML=bpSumHtml(bpCalc(),ipPartner(A[bpD.id]))};
+const bpRe=()=>setSheetBody(bpBody());
+function bpOpen(id){
+  const a=A[id],sp=a.split&&a.split.mode==='whole'?a.split:null;
+  bpD={id,mode:sp?'whole':'items',how:sp?sp.how:'half',me:sp?sp.me||0:0,bs:a.items.map(i=>i.b||'自分')};
+  openSheet({title:'負担',full:true,left:{label:'閉じる',onclick:'closeSheet()'},body:bpBody()});
+  crFooter(`<button class="btn block" type="button" onclick="bpSave()">保存</button>`);
+}
+function bpSave(){
+  const a=A[bpD.id],snap=bpSnap(a);
+  a.items.forEach((i,k)=>{i.b=bpD.bs[k]});
+  if(bpD.mode==='whole')a.split={mode:'whole',how:bpD.how,me:bpD.me};else delete a.split;
+  applyShares(a);closeSheet();crFooter('');save();rerender();
+  toast('負担を保存しました',()=>bpRestore(a,snap));
+}
+const bpText=a=>a.split&&a.split.mode==='whole'?`全体で割る(${a.split.how==='amount'?'自分の金額を決めた':'半分ずつ'})`:'食べた分(品目ごと)';
 /** 支払いの割合: 自分の分 / 相手の分(立替・未精算は斜線) */
 function paySplit(a){
   const x=a.x&&X[a.x];const me=x?x.amt:0;const rest=a.amt-me;
@@ -167,7 +199,8 @@ function momentView(id,a){
     +(a.adv&&a.adv[2]==='未精算'?`<div class="suggest owe"><span class="pbar lg" aria-hidden="true"><i class="owed" style="flex:1"></i></span><span class="t">${esc(E[a.adv[0]].n.split(' ').pop())}さんの分 <b class="num">${yen(a.adv[1])}</b> 未精算</span><button class="btn sm" type="button" onclick="settle('${id}')">精算済みにする</button></div>`:'')
     +shopTodoSug(id,a)
     +((a.roles||[]).length?sh('交わった人・場所',a.roles.length,shop&&!shop[1]?{label:'支払先を店として登録',onclick:`registerShop('${id}')`}:null)+list(a.roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
-    +(a.items?sh('品目',itemGroups(a.items).length,{label:'編集',icon:'edit',onclick:`ipOpen('${id}')`})+list([...itemsList(id,a.items),...(ipPartner(a)?[row({cls:'plain',t:'誰の分かを表示',v:toggle(showBurden,'showBurden=!showBurden;rerender()')})]:[]),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(a.items.reduce((s,i)=>s+itemAmt(i),0))}</b>`})],'flat'):'')
+    +(a.items?sh('品目',itemGroups(a.items).length,{label:'編集',icon:'edit',onclick:`ipOpen('${id}')`})+list([...itemsList(id,a.items),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(a.items.reduce((s,i)=>s+itemAmt(i),0))}</b>`})],'flat'):'')
+    +(a.items&&ipPartner(a)?sh('負担')+list([row({cls:'plain',t:bpText(a),s:`自分 ${yen(a.x&&X[a.x]?X[a.x].amt:0)}、${esc(ipPartner(a))}さん ${yen(a.adv?a.adv[1]:0)}`,chev:1,onclick:`bpOpen('${id}')`})]):'')
     +(a.body?sh('内容')+`<div class="list"><p style="padding:14px 16px;line-height:1.85">${esc(a.body)}</p></div>`:'')
     +(ev?sh('元の予定')+objs([row({href:`#/ev/${ev[0]}`,lead:`<span class="ax-node plan" style="margin:0"></span>`,t:esc(ev[1].t),s:`${fmtMDW(ev[1].d)} ${ev[1].s||''}`,chev:1})]):'')
     +(att?sh('添付',1)+`<div class="list" style="padding:12px"><img src="${att}" alt="レシートの写真" style="max-width:120px;border-radius:8px;display:block"></div>`:'');
