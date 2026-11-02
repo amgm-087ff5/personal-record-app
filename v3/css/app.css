@@ -1065,14 +1065,14 @@ div.pl-grid .pl-cell.today,.pl-cell.today{background:color-mix(in srgb,var(--me)
 .bp-w{display:flex;flex-direction:column;gap:12px;padding:12px 14px}
 .bp-w .ie-a{background:var(--surface-2)}
 
-/* 日のカードは白い面(すりガラスをやめる)。輪郭は明るく発光: どの日もはっきり、今日はさらに強く。意味は DESIGN.md v11 */
-:root{--dcard-bg:#FFFFFF}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--dcard-bg:var(--surface)}}
-:root[data-theme="dark"]{--dcard-bg:var(--surface)}
+/* 日のカードは白い面。輪郭は「明るく光る」: 濃い青を強めるのではなく、明るい淡青(白寄り)の光を使う。意味は DESIGN.md v11 */
+:root{--dcard-bg:#FFFFFF;--glow:#9CC4FF;--glow-hi:#CFE2FF}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--dcard-bg:var(--surface);--glow:#A9CCFF;--glow-hi:#DCEAFF}}
+:root[data-theme="dark"]{--dcard-bg:var(--surface);--glow:#A9CCFF;--glow-hi:#DCEAFF}
 .dh2 .dcard{
   background:var(--dcard-bg);-webkit-backdrop-filter:none;backdrop-filter:none;
-  box-shadow:var(--e1),0 0 0 1px color-mix(in srgb,var(--me) 30%,var(--dcard-bg)),0 0 12px 1px color-mix(in srgb,var(--me) 20%,transparent),0 0 26px 2px color-mix(in srgb,var(--me) 9%,transparent)}
+  box-shadow:0 1px 2px rgba(60,90,140,.06),0 0 0 1px var(--glow-hi),0 0 12px 1px color-mix(in srgb,var(--glow) 55%,transparent),0 0 28px 3px color-mix(in srgb,var(--glow) 28%,transparent)}
 .dh2.today .dcard{
   background:var(--dcard-bg);
-  box-shadow:var(--e1),0 0 0 1.5px color-mix(in srgb,var(--me) 75%,var(--dcard-bg)),0 0 14px 2px color-mix(in srgb,var(--me) 48%,transparent),0 0 36px 5px color-mix(in srgb,var(--me) 24%,transparent)}
+  box-shadow:0 1px 2px rgba(60,90,140,.06),0 0 0 1.5px var(--glow),0 0 14px 2px color-mix(in srgb,var(--glow) 80%,transparent),0 0 38px 6px color-mix(in srgb,var(--glow) 45%,transparent)}
 a.dh2:active .dcard{background:var(--sunk)}
