@@ -87,9 +87,9 @@ function itemsList(id,items,o={}){
     const bs=[...new Set(g.idx.map(i=>items[i].b))];
     const burden=showBurden&&!o.x?bs.map(b=>tag(b,{cls:b==='自分'?'brand':''})).join(''):'';
     const sub=o.x?(multi?`1個 ${yen(g.price)}`:esc(items[g.idx[0]].b)):`${multi?`1個 ${yen(g.price)}、`:''}税${g.tax}%`;
-    const main=row({cls:`plain grp${multi?' multi':''}${open?' open':''}`,t:`${esc(g.n)}${multi?` <span class="faint">×${g.idx.length}</span>`:''}`,s:sub,
+    const main=row({cls:`plain grp${multi?' multi':''}${open?' open':''}`,t:`${esc(g.n)}${multi?` <span class="faint">×${g.idx.length}</span><span class="grp-chev" aria-hidden="true">${IC.chev}</span>`:''}`,s:sub,
       v:`${burden?`<span class="grp-b">${burden}</span>`:''}<span class="num" style="font-weight:600">${yen(g.price*g.idx.length)}</span>`,
-      onclick:multi?`openGroups.has('${key}')?openGroups.delete('${key}'):openGroups.add('${key}');rerender()`:'',chev:multi});
+      onclick:multi?`openGroups.has('${key}')?openGroups.delete('${key}'):openGroups.add('${key}');rerender()`:''});
     const kids=open?`<div class="grp-kids" role="group" aria-label="${esc(g.n)}の内訳">${g.idx.map((i,n)=>row({cls:'plain kid',lead:`<span class="kid-n">${n+1}</span>`,t:esc(items[i].memo||'メモなし'),v:tag(items[i].b)})).join('')}</div>`:'';
     return main+kids;
   });

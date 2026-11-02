@@ -56,7 +56,7 @@ const CATS={
   daily:{n:'日用品',c:'#6FB07A',fx:'変動',sp:'日常'},
   trans:{n:'交通費',c:'#4C8BC9',fx:'変動',sp:'日常'}, train:{n:'電車',p:'trans'}, taxi:{n:'タクシー',p:'trans',sp:'非日常'},
   fun:{n:'娯楽',c:'#E3B341',fx:'変動',sp:'日常'}, hobby:{n:'趣味',p:'fun'}, travel:{n:'旅行',p:'fun',sp:'非日常'},
-  gift:{n:'贈り物',c:'#D9789B',fx:'none',sp:'非日常'},
+  gift:{n:'贈り物',c:'#D9789B',fx:'ask',sp:'非日常'},
 };
 const COLORS=['#5E6E91','#3E9AA0','#E07A4F','#6FB07A','#4C8BC9','#E3B341','#D9789B','#8A9BB8'];
 /* 10月のほかの支払い(タイムラインには出さない架空データ) */
@@ -127,8 +127,8 @@ const catName=k=>CATS[k].n;
 const catPath=k=>catAnc(k).map(c=>CATS[c].n).join(' › ');
 const catColor=k=>{for(const c of catAnc(k).reverse())if(CATS[c].c)return CATS[c].c;return '#8B94A7'};
 const catChip=(k,path)=>`<span class="cat" style="--cc:${catColor(k)}">${path?catPath(k):CATS[k].n}</span>`;
-/* 固定・変動と特別感: 最も近い祖先の設定を引き継ぐ。'none' = 設定しない(null)。どこにも設定がなければ null(勝手な既定値は置かない) */
-const setv=v=>v==='none'||v===undefined?null:v;
+/* 固定・変動と特別感: 最も近い祖先の設定を引き継ぐ。'ask' = 都度指定(null: 支出ごとに選ぶ)。どこにも設定がなければ null(勝手な既定値は置かない) */
+const setv=v=>v==='ask'||v==='none'||v===undefined?null:v;   /* 'ask' = 都度指定(カテゴリは既定値を持たず、支出ごとに選ぶ) */
 const catFx=k=>{for(const c of catAnc(k).reverse())if(CATS[c].fx!==undefined)return setv(CATS[c].fx);return null};
 const xFx=x=>x.fx!==undefined?setv(x.fx):catFx(x.cat);
 const ROOTS=()=>Object.keys(CATS).filter(k=>!CATS[k].p);

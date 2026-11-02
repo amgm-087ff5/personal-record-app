@@ -80,7 +80,9 @@ function crPayment(o){
   A[aid]={type:'支払い',parent:day,time:o.time,title:o.title||(o.items.length===1?o.items[0].n:'買い物'),pay:o.pay||'現金',amt,roles,
     items:o.items.map(i=>({n:i.n,price:i.price,tax:i.tax||10,b:i.b==='相手'?who:i.b})),x:xamt?xid:undefined};
   if(o.with&&amt-xamt>0)A[aid].adv=[o.with,amt-xamt,'未精算'];
-  if(xamt)X[xid]={pay:aid,amt:xamt,cat:o.cat||crGuessCat(shopId),memo:'',items:mine};
+  if(xamt){X[xid]={pay:aid,amt:xamt,cat:o.cat||crGuessCat(shopId),memo:'',items:mine};
+    /* カテゴリが都度指定の項目だけ、入力時に選んだ値を持つ */
+    if(o.fx&&catFx(X[xid].cat)===null)X[xid].fx=o.fx;if(o.sp&&catSp(X[xid].cat)===null)X[xid].sp=o.sp}
   A[day].kids.push(aid);
   EXTRA.attach=EXTRA.attach||{};EXTRA.hashes=EXTRA.hashes||{};
   if(o.img)EXTRA.attach[aid]=o.img;
@@ -133,9 +135,17 @@ function crWithChips(cur){
   </div>`;
 }
 
+/* カテゴリが「都度指定」の項目(固定・変動 / 特別感)だけ、入力時に選ぶ欄を出す。既定値のあるカテゴリでは何も出さない */
+function crAskHtml(st,cat,fn){
+  const rows=[];
+  if(catFx(cat)===null)rows.push(`<div class="field"><label>固定・変動</label>${ldMini([['固定','固定'],['変動','変動']],st.fx||'',`${fn}('fx','$v')`)}</div>`);
+  if(catSp(cat)===null)rows.push(`<div class="field"><label>特別感</label>${ldMini([['日常','日常'],['非日常','非日常']],st.sp||'',`${fn}('sp','$v')`)}</div>`);
+  return rows.length?sh('このカテゴリは都度指定')+list(rows):'';
+}
 /* ---------- ＋支出(金額だけ) ---------- */
 let CQ={amt:'',shop:'',date:TODAY,root:'food',cat:'eatout'};
 function openQuickExpense(){CQ={amt:'',shop:'',date:TODAY,root:'food',cat:'eatout'};crQeRender()}
+function crQeX(k,v){CQ[k]=CQ[k]===v?'':v;crQeRender()}
 function crQeChildren(root){return Object.keys(CATS).filter(k=>CATS[k].p===root)}
 function crQeRoot(k){CQ.root=k;const ks=crQeChildren(k);CQ.cat=ks.length?ks[0]:k;crQeRender()}
 function crQeRender(){
@@ -149,14 +159,15 @@ function crQeRender(){
   ${sh('カテゴリ')}
   ${chips(ROOTS().map(k=>[k,CATS[k].n]),CQ.root,"crQeRoot('$v')")}
   ${kids.length?`<div class="list">
-    <div class="field"><label>小分類</label><select onchange="CQ.cat=this.value">${kids.map(k=>`<option value="${k}" ${CQ.cat===k?'selected':''}>${esc(CATS[k].n)}</option>`).join('')}</select></div></div>`:''}`;
+    <div class="field"><label>小分類</label><select onchange="CQ.cat=this.value;crQeRender()">${kids.map(k=>`<option value="${k}" ${CQ.cat===k?'selected':''}>${esc(CATS[k].n)}</option>`).join('')}</select></div></div>`:''}
+  ${crAskHtml(CQ,CQ.cat,'crQeX')}`;
   crPanel('金額だけで支払い',body,{right:{label:'支払いを保存',onclick:'crQeSave()'}});
 }
 function crQePick(k){CQ.shop=E[k].n;crQeRender()}
 function crQeSave(){
   const amt=+String(CQ.amt).replace(/[^\d]/g,'');if(!amt){toast('金額を入れてください');return}
   const cat=CQ.cat;const shop=(CQ.shop||'').trim();
-  const aid=crPayment({date:CQ.date||TODAY,time:crNowHM(),shop,register:false,items:[{n:CATS[cat].n,price:amt,tax:10,b:'自分'}],cat,title:CATS[cat].n});
+  const aid=crPayment({date:CQ.date||TODAY,time:crNowHM(),shop,register:false,items:[{n:CATS[cat].n,price:amt,tax:10,b:'自分'}],cat,fx:CQ.fx,sp:CQ.sp,title:CATS[cat].n});
   closeSheet();save();go('#/a/'+aid);toast('支払いを保存しました(自分の支出=全額)');
 }
 
@@ -379,6 +390,7 @@ function crItem(i,k,v){const it=CRS.rc.items[i];if(!it)return;
   if(k==='price'){it.price=+String(v).replace(/[^\d]/g,'')||0;crTotUpdate();return}
   if(k==='tax')it.tax=+v;else it[k]=v}
 function crBurSet(i,v){crItem(i,'b',v);crReview()}
+function crRvX(k,v){CRS.rc[k]=CRS.rc[k]===v?'':v;crReview()}
 function crAddItem(){CRS.rc.items.push({n:'',price:0,tax:8,b:'自分'});crReview();setTimeout(()=>{const ns=document.querySelectorAll('.cr-it input.cr-n');if(ns.length)ns[ns.length-1].focus()},30)}
 function crDelItem(i){CRS.rc.items.splice(i,1);crReview()}
 function crShopSet(v){CRS.rc.shop=v;CRS.rc.cat=crGuessCat(crFindEnt(v));crReview()}
@@ -412,9 +424,10 @@ function crReview(top){
     +`<div id="cr-tot">${crTotHtml()}</div>`
     +crSugHtml()
     +`<div style="margin-top:12px">${list([row({t:'分け方・カテゴリ',s:crSumText(),chev:true,onclick:'crToggleSec()'})])}</div>`
+    +crAskHtml(rc,rc.cat,'crRvX')
     +(CRS.open?`<div style="margin-top:8px">`
       +sh('誰かと分ける')+crWithChips(rc.with)
-      +list([`<div class="field"><label>カテゴリ</label><select onchange="CRS.rc.cat=this.value">${catOpts}</select></div>`])
+      +list([`<div class="field"><label>カテゴリ</label><select onchange="CRS.rc.cat=this.value;crReview()">${catOpts}</select></div>`])
       +(rc.with?sh('品目ごとの負担')+list(rc.items.map((it,i)=>`<div class="cr-it"><span class="cr-n ell">${esc(it.n||'品名なし')}</span><span class="cr-bur">${burBtns(i)}</span></div>`),'flat'):'')
       +`<div id="cr-bur">${crBurHtml()}</div></div>`:'');
   const foot=single?`<button class="btn block" type="button" onclick="crSaveSingle()">支払いを保存</button>`
@@ -431,7 +444,7 @@ function crConfirm(){
 /** 1枚だけの保存 */
 function crPayFrom(rc,hash,img,todo){
   const items=rc.items.filter(i=>i.n&&i.price);
-  return crPayment({date:rc.date,time:rc.time,shop:rc.shop,register:rc.register,items,pay:rc.pay,with:rc.with||null,cat:rc.cat,hash,img,todo});
+  return crPayment({date:rc.date,time:rc.time,shop:rc.shop,register:rc.register,items,pay:rc.pay,with:rc.with||null,cat:rc.cat,fx:rc.fx,sp:rc.sp,hash,img,todo});
 }
 function crSaveSingle(){
   const rc=CRS.rc;if(!rc.items.some(i=>i.n&&i.price)){toast('品目を入れてください');return}

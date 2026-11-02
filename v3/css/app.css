@@ -324,7 +324,7 @@ a.ref:active{background:var(--sunk)}
 .ax{--rail:30px;--tcol:60px;position:relative;padding:0 0 8px}
 .ax-row{display:grid;grid-template-columns:var(--tcol) var(--rail) 1fr;align-items:start;position:relative;min-height:52px}
 .ax-row::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:0;bottom:0;width:2px;background:var(--rail-c,var(--axis-past))}
-.ax .future{--rail-c:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
+.ax .future{--rail-c:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
 .ax-row.future::before{background:var(--rail-c)}
 .ax-time{padding:15px 6px 0 8px;font:500 13px/1 var(--font);color:var(--tx-2);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .ax-node{position:relative;z-index:1;justify-self:center;margin-top:10px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
@@ -363,7 +363,7 @@ a.ax-row:active .ax-c{background:linear-gradient(90deg,var(--sunk),#0000)}
 a.dh:active .c{background:var(--sunk)}
 /* いま */
 .now{display:grid;grid-template-columns:var(--tcol) var(--rail) 1fr;align-items:center;height:28px;position:relative}
-.now::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:0;height:50%;width:2px;background:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
+.now::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:0;height:50%;width:2px;background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
 .now::after{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:50%;bottom:0;width:2px;background:var(--axis-past)}
 .now .tm{padding-right:6px;text-align:right;font:600 12px/1 var(--font);color:var(--now);font-variant-numeric:tabular-nums}
 .now .dot{justify-self:center;width:10px;height:10px;border-radius:50%;background:var(--now);box-shadow:0 0 0 4px color-mix(in srgb,var(--now) 22%,transparent);z-index:1}
@@ -372,7 +372,7 @@ a.dh:active .c{background:var(--sunk)}
 /* 未来の端: 点線が上へ消えていく */
 .ax-edge{display:grid;grid-template-columns:var(--tcol) var(--rail) 1fr;align-items:center;min-height:48px;position:relative}
 .ax-edge::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:0;bottom:0;width:2px;
-  background:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px);-webkit-mask:linear-gradient(#0000,#000);mask:linear-gradient(#0000,#000)}
+  background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px);-webkit-mask:linear-gradient(#0000,#000);mask:linear-gradient(#0000,#000)}
 .ax-edge.past::before{background:var(--axis-past);-webkit-mask:linear-gradient(#000,#0000);mask:linear-gradient(#000,#0000)}
 .ax-edge .c{grid-column:3;padding:0 var(--gutter) 0 6px;font:var(--t-label);color:var(--plan);display:flex;align-items:center;gap:4px}
 .ax-edge.past .c{color:var(--tx-3)}
@@ -509,7 +509,7 @@ a.dh:active .c{background:var(--sunk)}
 .pin{position:relative;margin:4px var(--gutter) 0;padding-left:30px}
 .pin::before{content:"";position:absolute;left:9px;top:0;bottom:0;width:2px;background:var(--axis-past);
   -webkit-mask:linear-gradient(#0000,#000 24px,#000 calc(100% - 24px),#0000);mask:linear-gradient(#0000,#000 24px,#000 calc(100% - 24px),#0000)}
-.pin.future::before{background:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
+.pin.future::before{background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
 .pin-n{position:relative;display:flex;align-items:center;gap:8px;min-height:40px;font:var(--t-label);color:var(--tx-2)}
 .pin-n::before{content:"";position:absolute;left:-25px;width:10px;height:10px;border-radius:3px;background:var(--axis-past)}
 .pin-n.plan::before{background:var(--surface);outline:2px dashed var(--plan);outline-offset:-2px}
@@ -617,9 +617,9 @@ a.pin-n:active{color:var(--tx)}
 .ax-node.plan.late{outline-color:var(--late);color:var(--late)}
 .ax-node.fact{width:14px;height:14px;border-radius:3px;transform:rotate(45deg);margin-top:15px;background:var(--bg);box-shadow:inset 0 0 0 2.5px var(--kin)}
 .ax-row.dim .ax-node{opacity:1}
-.ax .future,.ax-row.future::before{--rail-c:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
-.now::before{background:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
-.ax-edge::before{background:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
+.ax .future,.ax-row.future::before{--rail-c:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
+.now::before{background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
+.ax-edge::before{background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
 .ax-edge .c{color:var(--tx-2)}
 /* いま: 点を付けない横線 */
 .now .dot{width:22px;height:3px;border-radius:2px;box-shadow:none;background:var(--late)}
@@ -705,7 +705,7 @@ a.pin-n:active{color:var(--tx)}
 .dh2{display:block;position:relative;padding:22px var(--gutter) 6px calc(var(--tcol) + var(--rail) + 6px);position:sticky;top:0;z-index:5;
   background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(10px)}
 .dh2::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:0;bottom:0;width:2px;background:var(--axis-past)}
-.dh2.future::before{background:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
+.dh2.future::before{background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
 .dh2 .rule{position:absolute;left:8px;right:var(--gutter);top:10px;height:3px;border-radius:2px;background:var(--tx)}
 .dh2.today .rule{background:var(--me)}
 .dh2 .dt{display:flex;align-items:baseline;gap:8px;position:relative}
@@ -747,9 +747,9 @@ a.dh2:active .dt b{text-decoration:underline}
 .pin::before{display:none}
 .pin>*{position:relative}
 .pin>.pin-n::after,.pin>.pin-cur::after,.pin>.pin-now::after{content:"";position:absolute;left:-21px;top:0;bottom:0;width:2px;background:var(--axis-past);z-index:0}
-.pin>.fut::after{background:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
+.pin>.fut::after{background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
 .pin>.pin-now::after{top:50%;}
-.pin>.pin-now::before{content:"";position:absolute;left:-21px;top:0;height:50%;width:2px;background:repeating-linear-gradient(to bottom,var(--plan) 0 4px,#0000 4px 9px)}
+.pin>.pin-now::before{content:"";position:absolute;left:-21px;top:0;height:50%;width:2px;background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
 .pin-cur>.node,.pin-n .pn{z-index:1}
 .pin-now{display:flex;align-items:center;height:32px}
 .pin-now span{position:relative;z-index:1;margin-left:-30px;display:flex;align-items:center;gap:8px;width:calc(100% + 30px);font:600 12px/1 var(--font);color:var(--late);font-variant-numeric:tabular-nums}
@@ -1000,9 +1000,6 @@ div.pl-grid .pl-cell.today,.pl-cell.today{background:color-mix(in srgb,var(--me)
 .chip,.seg button,.ld-mini button{padding:0 14px}
 .ld-mini{flex-wrap:wrap}
 /* 品目のグループ: 開くと子が親の下に入れ子(インデント+縦の案内線+地を変える) */
-.row.grp.multi .chev{color:var(--tx-3)}
-.row.grp.multi .chev svg{transform:rotate(90deg);transition:transform .15s}
-.row.grp.multi.open .chev svg{transform:rotate(-90deg)}
 .grp-b{display:inline-flex;gap:4px;margin-right:8px;vertical-align:middle}
 .grp-kids{position:relative;margin:0 0 6px 34px;background:var(--surface-2);border-radius:var(--r-sm);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--line) 70%,transparent)}
 .grp-kids::before{content:"";position:absolute;left:-18px;top:-4px;bottom:50%;width:2px;background:var(--line-strong);border-radius:1px}
@@ -1016,3 +1013,22 @@ div.pl-grid .pl-cell.today,.pl-cell.today{background:color-mix(in srgb,var(--me)
 .chip[aria-pressed="true"],.seg button[aria-pressed="true"],.ld-mini button[aria-pressed="true"],.field .ld-mini button[aria-pressed="true"],.prop .ld-mini button[aria-pressed="true"],.ld-seg .seg button[aria-pressed="true"],div.pl-root .seg button[aria-pressed="true"]{background:var(--me-soft);border-color:transparent;color:var(--me);font-weight:600;box-shadow:none}
 .check[aria-checked="true"]{background:var(--me-fill);border-color:var(--me-fill)}
 .grp-kids{margin:0 12px 8px 34px}
+
+/* =====================================================================
+   v8(11/02): 線は「あるのが分かる最小の濃さ」/ 光は今日=強・他の日=弱 / 開閉の印は左(右は金額の列)
+   ===================================================================== */
+/* 線・枠・区切りは薄く。濃さは文字と塗りだけが持つ(ライトのみ。ダークは別の値) */
+:root{--axis-past:#B9C3D2;--axis:#D8DEE8;--line:#E4E8EF;--line-strong:#D0D7E1;--plan-ln:color-mix(in srgb,var(--plan) 45%,transparent)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--plan-ln:color-mix(in srgb,var(--plan) 55%,transparent)}}
+:root[data-theme="dark"]{--plan-ln:color-mix(in srgb,var(--plan) 55%,transparent)}
+/* 日のカードの光: どの日もうっすら(消灯ではない)。今日だけ強く、背景にも色が乗る */
+.dh2 .dcard{
+  background:color-mix(in srgb,var(--me) 2.5%,color-mix(in srgb,var(--surface) 60%,transparent));
+  box-shadow:var(--e1),var(--hl),0 0 0 1px color-mix(in srgb,var(--me) 14%,var(--line)),0 0 9px 0 color-mix(in srgb,var(--me) 9%,transparent)}
+.dh2.today .dcard{
+  background:color-mix(in srgb,var(--me) 9%,color-mix(in srgb,var(--surface) 60%,transparent));
+  box-shadow:var(--e1),var(--hl),0 0 0 1px color-mix(in srgb,var(--me) 60%,transparent),0 0 10px 1px color-mix(in srgb,var(--me) 34%,transparent),0 0 28px 3px color-mix(in srgb,var(--me) 15%,transparent)}
+/* 品目グループの開閉の印: 名前のすぐ右(左の列)。右の列は金額だけ */
+.grp-chev{display:inline-grid;vertical-align:-3px;margin-left:4px;color:var(--tx-3)}
+.grp-chev svg{width:16px;height:16px;transform:rotate(90deg);transition:transform .15s}
+.row.grp.open .grp-chev svg{transform:rotate(-90deg)}
