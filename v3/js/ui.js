@@ -150,18 +150,59 @@ const row=o=>{const tagN=o.href?'a':o.onclick?'button':'div';const attr=o.href?`
 const prop=(k,val,meta)=>`<div class="prop"><span class="k">${esc(k)}</span><span class="val">${val}</span>${meta?`<span class="meta">${meta}</span>`:''}</div>`;
 const largeTitle=(title,{actions=[],metrics=[]}={})=>`<header class="lt"><h1>${esc(title)}</h1>${actions.map(a=>a.text?`<button class="btn sm ghost" type="button" onclick="${a.onclick}">${a.icon?IC[a.icon]:''}${esc(a.text)}</button>`:`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>`;
 const appbar=(title='',{back=true,actions=[]}={})=>`<header class="appbar">${back?`<button class="iconbtn" type="button" aria-label="戻る" onclick="goBack()">${IC.back}</button>`:''}<div class="title">${esc(title)}</div>${actions.map(a=>`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>`;
-/* ---- 品目の金額 = 本体(price) + 金額行(adj。加算=オプション/減算=割引)。編集中の金額行は {n,v,sg}、保存形は {n,amt} ---- */
-const adjSigned=a=>a.sg!=null?a.sg*(a.v||0):(a.amt||0);
-const itemAmt=it=>(it.price||0)+(it.adj||[]).reduce((s,a)=>s+adjSigned(a),0);
-const adjKey=it=>JSON.stringify((it.adj||[]).map(a=>[a.n,adjSigned(a)]));
-const adjTxt=a=>{const v=adjSigned(a);return `${v<0?'−':'＋'}${esc(a.n||(v<0?'割引':'オプション'))} ${yen(Math.abs(v))}`};
-const adjSumHtml=it=>(it.adj&&it.adj.length)?[`本体 ${yen(it.price)}`,...it.adj.map(adjTxt)].map(s=>`<span class="adj-l">${s}</span>`).join(''):'';
-const adjEq=it=>[`本体 ${yen(it.price||0)}`,...(it.adj||[]).map(adjTxt)].join(' ')+' = '+yen(itemAmt(it));
-const adjOut=it=>(it.adj||[]).map(a=>({n:a.n||(adjSigned(a)<0?'割引':'オプション'),amt:adjSigned(a)})).filter(a=>a.amt);
-/** 品目の編集(支払いの編集・レシート確認で共通)。P=関数名の接頭辞(ip / cr)。金額行は品目の下に一段沈めて並べる */
-const adjEditHtml=(P,i,it)=>`<div class="adj-ed">`+(it.adj||[]).map((a,j)=>`<div class="adj-r"><span class="adj-sg" role="group">${[[1,'＋','加算(オプション)'],[-1,'−','減算(割引)']].map(([s,l,t])=>`<button class="cr-b" type="button" aria-label="${t}" aria-pressed="${(a.sg||1)===s}" onclick="${P}AdjSet(${i},${j},'sg',${s},1)">${l}</button>`).join('')}</span><input class="cr-n" value="${esc(a.n)}" placeholder="${(a.sg||1)<0?'割引':'オプション'}" aria-label="金額の名前" oninput="${P}AdjSet(${i},${j},'n',this.value)"><input class="cr-pr num" inputmode="numeric" value="${a.v||''}" placeholder="¥0" aria-label="金額" oninput="${P}AdjSet(${i},${j},'v',this.value)"><button class="cr-del" type="button" aria-label="金額を削除" onclick="${P}AdjDel(${i},${j})">${IC.close}</button></div>`).join('')
-  +((it.adj||[]).length?`<div class="adj-eq" id="${P}-eq-${i}">${adjEq(it)}</div>`:'')
-  +`<button class="adj-add" type="button" onclick="${P}AdjAdd(${i})">${IC.plus}オプション・割引を追加</button></div>`;
+/* ---- 品目 = 金額行(lines)の配列。もとの本体も1行目。行がない品目は合計(price)だけ持つ。保存形の price は常に合計 ----
+   行: {n, k:'amt'|'pct', v}。pct は直前までの小計にかける(−10 = 10%オフ)。編集中は v を絶対値、sg を符号にして持つ */
+const lnV=l=>l.sg!=null?l.sg*(l.v||0):(l.v||0);
+const lnAmts=lines=>{let s=0;return lines.map((l,j)=>{const a=l.k==='pct'?(j?Math.round(s*lnV(l)/100):0):lnV(l);s+=a;return a})};
+const itemAmt=it=>it.lines&&it.lines.length?lnAmts(it.lines).reduce((s,a)=>s+a,0):(it.price||0);
+const lnKey=it=>it.lines?JSON.stringify(it.lines.map(l=>[l.n||'',l.k||'amt',lnV(l)])):'';
+const lnName=l=>l.n||(lnV(l)<0?'割引':'オプション');
+const lnTxt=(l,a)=>`${a<0?'−':'＋'}${esc(lnName(l))} ${l.k==='pct'?Math.abs(lnV(l))+'%':yen(Math.abs(a))}`;
+const lnSumHtml=it=>{if(!(it.lines&&it.lines.length>1))return '';const am=lnAmts(it.lines);
+  return [`本体 ${yen(am[0])}`,...it.lines.slice(1).map((l,j)=>lnTxt(l,am[j+1]))].map(s=>`<span class="adj-l">${s}</span>`).join('')};
+const lnEq=it=>{const am=lnAmts(it.lines);return [`本体 ${yen(am[0])}`,...it.lines.slice(1).map((l,j)=>lnTxt(l,am[j+1])+(l.k==='pct'?`(${am[j+1]<0?'−':'＋'}${yen(Math.abs(am[j+1]))})`:''))].join(' ')};
+/** 保存形の行(2行以上のときだけ持つ。0の追加行は捨てる) */
+const lnSave=it=>{if(!(it.lines&&it.lines.length>1))return undefined;const r=it.lines.map((l,j)=>({n:j?lnName(l):'',k:l.k||'amt',v:lnV(l)})).filter((l,j)=>j===0||l.v!==0);return r.length>1?r:undefined};
+/** 保存形の品目 → 編集用(絶対値+符号) */
+const itemToEdit=it=>({...it,lines:it.lines?it.lines.map(l=>({n:l.n,k:l.k,v:Math.abs(l.v),sg:l.v<0?-1:1})):undefined});
+/** 旧データ(UI v9の本体+adj)を lines に移す */
+const itemMigrate=it=>{if(it&&it.adj){it.lines=[{n:'',k:'amt',v:it.price||0},...it.adj.map(a=>({n:a.n,k:'amt',v:a.amt}))];delete it.adj;it.price=itemAmt(it)}};
+
+/** 品目の編集部品(支払いの編集・レシート確認で共通)。1品目ずつ開く。P=名前(ip / cr)。
+    o={items:()=>配列, redraw:()=>全体を描き直す, upd:i=>入力中の合計だけ更新} */
+const IED={};
+function itemEd(P,o){
+  const ed=IED[P]={open:0};
+  const foc=sel=>setTimeout(()=>{const e=document.querySelectorAll(sel);if(e.length)e[e.length-1].focus()},30);
+  const num=(v,pct)=>pct?(parseFloat(String(v).replace(/[^\d.]/g,''))||0):(+String(v).replace(/[^\d]/g,'')||0);
+  ed.tg=i=>{ed.open=ed.open===i?-1:i;o.redraw()};
+  ed.set=(i,k,v)=>{const it=o.items()[i];if(!it)return;
+    if(k==='price'){it.price=num(v);o.upd(i)}else if(k==='tax'){it.tax=+v;o.redraw()}else it[k]=v};
+  ed.add=()=>{o.items().push({n:'',price:0,tax:8,b:'自分'});ed.open=o.items().length-1;o.redraw();foc('.ie-o .ie-n')};
+  ed.del=i=>{o.items().splice(i,1);ed.open=-1;o.redraw()};
+  ed.ladd=i=>{const it=o.items()[i];if(!it)return;if(!it.lines)it.lines=[{n:'',k:'amt',v:it.price||0,sg:1}];it.lines.push({n:'',k:'amt',v:0,sg:1});ed.open=i;o.redraw();foc('.ie-o .ie-l .ie-ln')};
+  ed.lset=(i,j,k,v,re)=>{const l=((o.items()[i]||{}).lines||[])[j];if(!l)return;
+    if(k==='v')l.v=num(v,l.k==='pct');else if(k==='kind'){l.k=v[0]==='p'?'pct':'amt';l.sg=v[1]==='-'?-1:1}else l.n=v;
+    if(re)o.redraw();else o.upd(i)};
+  ed.ldel=(i,j)=>{const it=o.items()[i];it.lines.splice(j,1);if(it.lines.length===1){it.price=lnV(it.lines[0]);delete it.lines}o.redraw()};
+  ed.eq=i=>{const it=o.items()[i];return it&&it.lines?`<span>${lnEq(it)}</span><b class="num">= ${yen(itemAmt(it))}</b>`:''};
+  ed.html=()=>{const items=o.items();
+    return list(items.map((it,i)=>{
+      const amt=itemAmt(it);
+      if(ed.open!==i)return row({cls:'plain',t:esc(it.n||'品名なし'),s:lnSumHtml(it)||`税${it.tax||8}%`,v:`<span class="num" style="font-weight:600">${yen(amt)}</span>`,onclick:`IED.${P}.tg(${i})`});
+      const kinds=[['a+','＋円'],['a-','−円'],['p+','＋%'],['p-','−%']];
+      const lines=it.lines?`<div class="ie-ls">`+it.lines.map((l,j)=>{const k=(l.k==='pct'?'p':'a')+((l.sg||1)<0?'-':'+');
+        return j===0
+          ?`<div class="ie-l"><span class="ie-lab">本体</span><span></span><input class="ie-v num" inputmode="numeric" value="${l.v||''}" placeholder="¥0" aria-label="本体の金額" oninput="IED.${P}.lset(${i},0,'v',this.value)"><span></span></div>`
+          :`<div class="ie-l"><select class="ie-k" aria-label="種類" onchange="IED.${P}.lset(${i},${j},'kind',this.value,1)">${kinds.map(([v,t])=>`<option value="${v}" ${v===k?'selected':''}>${t}</option>`).join('')}</select><input class="ie-ln" value="${esc(l.n)}" placeholder="${(l.sg||1)<0?'割引':'オプション'}" aria-label="名前" oninput="IED.${P}.lset(${i},${j},'n',this.value)"><input class="ie-v num" inputmode="${l.k==='pct'?'decimal':'numeric'}" value="${l.v||''}" placeholder="${l.k==='pct'?'0%':'¥0'}" aria-label="${l.k==='pct'?'割合':'金額'}" oninput="IED.${P}.lset(${i},${j},'v',this.value)"><button class="ie-d" type="button" aria-label="この行を削除" onclick="IED.${P}.ldel(${i},${j})">${IC.close}</button></div>`}).join('')+`<div class="ie-eq" id="ie-eq-${P}-${i}">${ed.eq(i)}</div></div>`
+        :`<label class="ie-a"><span>金額</span><input class="ie-p num" inputmode="numeric" value="${it.price||''}" placeholder="¥0" aria-label="品目の金額" oninput="IED.${P}.set(${i},'price',this.value)"></label>`;
+      return `<div class="ie-o"><div class="ie-top"><input class="ie-n" value="${esc(it.n)}" placeholder="品名" aria-label="品名" oninput="IED.${P}.set(${i},'n',this.value)"><button class="ie-c" type="button" aria-label="閉じる" onclick="IED.${P}.tg(${i})">${IC.chev}</button></div>`
+        +lines
+        +`<button class="ie-add" type="button" onclick="IED.${P}.ladd(${i})">${IC.plus}オプション・割引を追加</button>`
+        +`<div class="ie-foot"><span class="ie-tax" role="group" aria-label="税率">${[8,10].map(t=>`<button class="cr-b" type="button" aria-pressed="${+it.tax===t}" onclick="IED.${P}.set(${i},'tax',${t})">税${t}%</button>`).join('')}</span><button class="ie-del" type="button" onclick="IED.${P}.del(${i})">${IC.trash}削除</button></div></div>`;
+    }),'flat')};
+  return ed;
+}
 const seg=(items,cur,on)=>`<div class="seg" role="group">${items.map(([v,l])=>`<button type="button" aria-pressed="${v===cur}" onclick="${on.replace('$v',v)}">${esc(l)}</button>`).join('')}</div>`;
 const chips=(items,cur,on)=>`<div class="chips" role="group">${items.map(([v,l,n])=>`<button class="chip" type="button" aria-pressed="${v===cur}" onclick="${on.replace('$v',v)}">${esc(l)}${n!=null?`<span class="n">${n}</span>`:''}</button>`).join('')}</div>`;
 const empty=(icon,text,btn)=>`<div class="empty">${ico(icon)}<div>${text}</div>${btn?`<button class="btn sm tonal" type="button" onclick="${btn.onclick}">${esc(btn.label)}</button>`:''}</div>`;
@@ -265,6 +306,7 @@ function save(){try{localStorage.setItem(SKEY,JSON.stringify({A,X,E,EV,TD,TYPES,
 function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(!s)return;
   for(const [k,o] of Object.entries({A,X,E,EV,TD,TYPES,CATS,NOTES,LISTS,TYPE_PROPS})){if(s[k]){for(const kk of Object.keys(o))delete o[kk];Object.assign(o,s[k])}}
   if(s.EXTRA&&typeof EXTRA!=='undefined')Object.assign(EXTRA,s.EXTRA);
+  Object.values(A).forEach(a=>(a.items||[]).forEach(itemMigrate));
   /* 旧データの移行: 以前は「設定なし」が暗黙に 変動/日常 だった。大分類は明示の値に置き換える(以後 'none' = 設定しない) */
   for(const k of Object.keys(CATS)){const c=CATS[k];if(c.fx==='none')c.fx='ask';if(c.sp==='none')c.sp='ask';if(!c.p){if(c.fx===undefined)c.fx='変動';if(c.sp===undefined)c.sp='日常'}}
   }catch(e){}}

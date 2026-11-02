@@ -78,7 +78,7 @@ function crPayment(o){
   const xamt=mine.reduce((s,i)=>s+i.price,0);
   const who=o.with?E[o.with].n.split(' ').pop():'相手';
   A[aid]={type:'支払い',parent:day,time:o.time,title:o.title||(o.items.length===1?o.items[0].n:'買い物'),pay:o.pay||'現金',amt,roles,
-    items:o.items.map(i=>{const r={n:i.n,price:i.price,tax:i.tax||10,b:i.b==='相手'?who:i.b};const ad=adjOut(i);if(ad.length)r.adj=ad;return r}),x:xamt?xid:undefined};
+    items:o.items.map(i=>{const r={n:i.n,price:itemAmt(i),tax:i.tax||10,b:i.b==='相手'?who:i.b};const ln=lnSave(i);if(ln)r.lines=ln;return r}),x:xamt?xid:undefined};
   if(o.with&&amt-xamt>0)A[aid].adv=[o.with,amt-xamt,'未精算'];
   if(xamt){X[xid]={pay:aid,amt:xamt,cat:o.cat||crGuessCat(shopId),memo:'',items:mine};
     /* カテゴリが都度指定の項目だけ、入力時に選んだ値を持つ */
@@ -372,7 +372,7 @@ function crUnskip(i){crCheckDup(crBT[i]);crBatchView()}
 function crOverride(i){const b=crBT[i];b.override=true;b.status='ready';b.dup=null;crBatchView()}
 
 /* ---------- 1枚の確認 ---------- */
-function crOpenItem(i){const b=crBT[i];if(!b||!b.rc)return;CRS={rc:JSON.parse(JSON.stringify(b.rc)),idx:i,mode:CRS.mode==='single'?'single':'batch',td:{...(b.td||{})},open:false};crReview(true)}
+function crOpenItem(i){const b=crBT[i];if(!b||!b.rc)return;IED.cr.open=-1;CRS={rc:JSON.parse(JSON.stringify(b.rc)),idx:i,mode:CRS.mode==='single'?'single':'batch',td:{...(b.td||{})},open:false};crReview(true)}
 function crTotal(){return CRS.rc.items.reduce((s,i)=>s+itemAmt(i),0)}
 function crTotHtml(){const rc=CRS.rc,t=crTotal();
   return list([row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(t)}</b>`})],'flat')
@@ -387,19 +387,13 @@ function crBurHtml(){const c=crBurCalc();
 /** 金額だけ変わった時は本文を描き直さず、合計と負担だけ更新する */
 function crTotUpdate(){const t=document.getElementById('cr-tot');if(t)t.innerHTML=crTotHtml();const b=document.getElementById('cr-bur');if(b)b.innerHTML=crBurHtml()}
 function crItem(i,k,v){const it=CRS.rc.items[i];if(!it)return;
-  if(k==='price'){it.price=+String(v).replace(/[^\d]/g,'')||0;crTotUpdate();crAdjUpd(i);return}
   if(k==='tax')it.tax=+v;else it[k]=v}
-/* 金額行(オプション・割引): 式の行と合計だけ更新する */
-function crAdjUpd(i){const e=document.getElementById('cr-eq-'+i);if(e)e.innerHTML=adjEq(CRS.rc.items[i]);crTotUpdate()}
-function crAdjAdd(i){const it=CRS.rc.items[i];if(!it)return;it.adj=(it.adj||[]).concat({n:'',v:0,sg:1});crReview();setTimeout(()=>{const ns=document.querySelectorAll('.cr-it:nth-child('+(i+1)+') .adj-r .cr-n');if(ns.length)ns[ns.length-1].focus()},30)}
-function crAdjSet(i,j,k,v,re){const a=(CRS.rc.items[i]||{adj:[]}).adj[j];if(!a)return;
-  if(k==='v')a.v=+String(v).replace(/[^\d]/g,'')||0;else if(k==='sg')a.sg=+v;else a.n=v;
-  if(re)crReview();else crAdjUpd(i)}
-function crAdjDel(i,j){CRS.rc.items[i].adj.splice(j,1);crReview()}
+/* 品目の編集は ui.js の itemEd('cr')。入力中は式の行と合計だけ更新する */
+itemEd('cr',{items:()=>CRS.rc.items,redraw:()=>crReview(),upd:i=>{const e=document.getElementById('ie-eq-cr-'+i);if(e)e.innerHTML=IED.cr.eq(i);crTotUpdate()}});
 function crBurSet(i,v){crItem(i,'b',v);crReview()}
 function crRvX(k,v){CRS.rc[k]=CRS.rc[k]===v?'':v;crReview()}
-function crAddItem(){CRS.rc.items.push({n:'',price:0,tax:8,b:'自分'});crReview();setTimeout(()=>{const ns=document.querySelectorAll('.cr-it input.cr-n');if(ns.length)ns[ns.length-1].focus()},30)}
-function crDelItem(i){CRS.rc.items.splice(i,1);crReview()}
+function crAddItem(){IED.cr.add()}
+function crDelItem(i){IED.cr.del(i)}
 function crShopSet(v){CRS.rc.shop=v;CRS.rc.cat=crGuessCat(crFindEnt(v));crReview()}
 function crToggleReg(){CRS.rc.register=!CRS.rc.register;crReview()}
 function crToggleSec(){CRS.open=!CRS.open;crReview()}
@@ -427,7 +421,7 @@ function crReview(top){
       `<div class="field"><label>支払い方法</label><select onchange="CRS.rc.pay=this.value">${CR_PAYS.map(p=>`<option ${rc.pay===p?'selected':''}>${esc(p)}</option>`).join('')}</select></div>`])
     +(shopNew?`<div class="suggest"><span class="t">${eref(null,rc.shop,'place')}を店として登録</span>${toggle(rc.register,'crToggleReg()')}</div>`:'')
     +sh('品目',rc.items.length,{label:'品目を追加',icon:'plus',onclick:'crAddItem()'})
-    +list(rc.items.map((it,i)=>`<div class="cr-it"><input class="cr-n" value="${esc(it.n)}" placeholder="品名" oninput="crItem(${i},'n',this.value)"><input class="cr-pr num" inputmode="numeric" value="${it.price||''}" placeholder="¥0" aria-label="本体の金額" oninput="crItem(${i},'price',this.value)"><select class="cr-tx" aria-label="税率" onchange="crItem(${i},'tax',this.value)"><option value="8" ${it.tax===8?'selected':''}>8%</option><option value="10" ${it.tax===10?'selected':''}>10%</option></select><button class="cr-del" type="button" aria-label="品目を削除" onclick="crDelItem(${i})">${IC.close}</button>${adjEditHtml('cr',i,it)}</div>`),'flat')
+    +IED.cr.html()
     +`<div id="cr-tot">${crTotHtml()}</div>`
     +crSugHtml()
     +`<div style="margin-top:12px">${list([row({t:'分け方・カテゴリ',s:crSumText(),chev:true,onclick:'crToggleSec()'})])}</div>`
