@@ -1064,3 +1064,15 @@ div.pl-grid .pl-cell.today,.pl-cell.today{background:color-mix(in srgb,var(--me)
 .bp-c .cr-b{flex:1;height:44px;font-size:14px}
 .bp-w{display:flex;flex-direction:column;gap:12px;padding:12px 14px}
 .bp-w .ie-a{background:var(--surface-2)}
+
+/* 日のカードは白い面(すりガラスをやめる)。輪郭は明るく発光: どの日もはっきり、今日はさらに強く。意味は DESIGN.md v11 */
+:root{--dcard-bg:#FFFFFF}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--dcard-bg:var(--surface)}}
+:root[data-theme="dark"]{--dcard-bg:var(--surface)}
+.dh2 .dcard{
+  background:var(--dcard-bg);-webkit-backdrop-filter:none;backdrop-filter:none;
+  box-shadow:var(--e1),0 0 0 1px color-mix(in srgb,var(--me) 30%,var(--dcard-bg)),0 0 12px 1px color-mix(in srgb,var(--me) 20%,transparent),0 0 26px 2px color-mix(in srgb,var(--me) 9%,transparent)}
+.dh2.today .dcard{
+  background:var(--dcard-bg);
+  box-shadow:var(--e1),0 0 0 1.5px color-mix(in srgb,var(--me) 75%,var(--dcard-bg)),0 0 14px 2px color-mix(in srgb,var(--me) 48%,transparent),0 0 36px 5px color-mix(in srgb,var(--me) 24%,transparent)}
+a.dh2:active .dcard{background:var(--sunk)}
