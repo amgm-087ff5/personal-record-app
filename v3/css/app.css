@@ -1032,3 +1032,14 @@ div.pl-grid .pl-cell.today,.pl-cell.today{background:color-mix(in srgb,var(--me)
 .grp-chev{display:inline-grid;vertical-align:-3px;margin-left:4px;color:var(--tx-3)}
 .grp-chev svg{width:16px;height:16px;transform:rotate(90deg);transition:transform .15s}
 .row.grp.open .grp-chev svg{transform:rotate(-90deg)}
+
+/* 品目の金額行(オプション・割引)。意味は DESIGN.md v9 */
+.adj-l{display:inline-block;margin-right:8px;white-space:nowrap}
+.cr-it .adj-ed{flex:0 0 calc(100% - 12px);min-width:0;display:flex;flex-direction:column;gap:2px;margin:0 0 6px 12px;padding:4px 8px;background:var(--surface-2);border-radius:var(--r-sm);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--line) 70%,transparent)}
+.adj-r{display:flex;align-items:center;gap:8px}
+.adj-r .adj-sg{display:flex;gap:6px;flex:none}
+.adj-r .cr-n{flex:1;min-width:0}
+.cr-it .adj-r .cr-pr{width:72px}
+.adj-eq{font:var(--t-cap);color:var(--tx-3);padding:2px 0 4px;font-variant-numeric:tabular-nums}
+.adj-add{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;min-height:44px;padding:0 4px;color:var(--brand);font:500 13px/1 var(--font)}
+.adj-add svg.i{width:16px;height:16px}

@@ -150,6 +150,18 @@ const row=o=>{const tagN=o.href?'a':o.onclick?'button':'div';const attr=o.href?`
 const prop=(k,val,meta)=>`<div class="prop"><span class="k">${esc(k)}</span><span class="val">${val}</span>${meta?`<span class="meta">${meta}</span>`:''}</div>`;
 const largeTitle=(title,{actions=[],metrics=[]}={})=>`<header class="lt"><h1>${esc(title)}</h1>${actions.map(a=>a.text?`<button class="btn sm ghost" type="button" onclick="${a.onclick}">${a.icon?IC[a.icon]:''}${esc(a.text)}</button>`:`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>`;
 const appbar=(title='',{back=true,actions=[]}={})=>`<header class="appbar">${back?`<button class="iconbtn" type="button" aria-label="戻る" onclick="goBack()">${IC.back}</button>`:''}<div class="title">${esc(title)}</div>${actions.map(a=>`<button class="iconbtn" type="button" aria-label="${esc(a.label)}" onclick="${a.onclick}">${IC[a.icon]}</button>`).join('')}</header>`;
+/* ---- 品目の金額 = 本体(price) + 金額行(adj。加算=オプション/減算=割引)。編集中の金額行は {n,v,sg}、保存形は {n,amt} ---- */
+const adjSigned=a=>a.sg!=null?a.sg*(a.v||0):(a.amt||0);
+const itemAmt=it=>(it.price||0)+(it.adj||[]).reduce((s,a)=>s+adjSigned(a),0);
+const adjKey=it=>JSON.stringify((it.adj||[]).map(a=>[a.n,adjSigned(a)]));
+const adjTxt=a=>{const v=adjSigned(a);return `${v<0?'−':'＋'}${esc(a.n||(v<0?'割引':'オプション'))} ${yen(Math.abs(v))}`};
+const adjSumHtml=it=>(it.adj&&it.adj.length)?[`本体 ${yen(it.price)}`,...it.adj.map(adjTxt)].map(s=>`<span class="adj-l">${s}</span>`).join(''):'';
+const adjEq=it=>[`本体 ${yen(it.price||0)}`,...(it.adj||[]).map(adjTxt)].join(' ')+' = '+yen(itemAmt(it));
+const adjOut=it=>(it.adj||[]).map(a=>({n:a.n||(adjSigned(a)<0?'割引':'オプション'),amt:adjSigned(a)})).filter(a=>a.amt);
+/** 品目の編集(支払いの編集・レシート確認で共通)。P=関数名の接頭辞(ip / cr)。金額行は品目の下に一段沈めて並べる */
+const adjEditHtml=(P,i,it)=>`<div class="adj-ed">`+(it.adj||[]).map((a,j)=>`<div class="adj-r"><span class="adj-sg" role="group">${[[1,'＋','加算(オプション)'],[-1,'−','減算(割引)']].map(([s,l,t])=>`<button class="cr-b" type="button" aria-label="${t}" aria-pressed="${(a.sg||1)===s}" onclick="${P}AdjSet(${i},${j},'sg',${s},1)">${l}</button>`).join('')}</span><input class="cr-n" value="${esc(a.n)}" placeholder="${(a.sg||1)<0?'割引':'オプション'}" aria-label="金額の名前" oninput="${P}AdjSet(${i},${j},'n',this.value)"><input class="cr-pr num" inputmode="numeric" value="${a.v||''}" placeholder="¥0" aria-label="金額" oninput="${P}AdjSet(${i},${j},'v',this.value)"><button class="cr-del" type="button" aria-label="金額を削除" onclick="${P}AdjDel(${i},${j})">${IC.close}</button></div>`).join('')
+  +((it.adj||[]).length?`<div class="adj-eq" id="${P}-eq-${i}">${adjEq(it)}</div>`:'')
+  +`<button class="adj-add" type="button" onclick="${P}AdjAdd(${i})">${IC.plus}オプション・割引を追加</button></div>`;
 const seg=(items,cur,on)=>`<div class="seg" role="group">${items.map(([v,l])=>`<button type="button" aria-pressed="${v===cur}" onclick="${on.replace('$v',v)}">${esc(l)}</button>`).join('')}</div>`;
 const chips=(items,cur,on)=>`<div class="chips" role="group">${items.map(([v,l,n])=>`<button class="chip" type="button" aria-pressed="${v===cur}" onclick="${on.replace('$v',v)}">${esc(l)}${n!=null?`<span class="n">${n}</span>`:''}</button>`).join('')}</div>`;
 const empty=(icon,text,btn)=>`<div class="empty">${ico(icon)}<div>${text}</div>${btn?`<button class="btn sm tonal" type="button" onclick="${btn.onclick}">${esc(btn.label)}</button>`:''}</div>`;
