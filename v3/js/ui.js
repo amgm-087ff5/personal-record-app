@@ -117,7 +117,7 @@ function planRowAx(k,o={}){
 function dayHead(d,o={}){
   const w=new Date(d+'T00:00').getDay();const tagN=o.href?'a':'div';
   const txt=o.diary?esc(o.diary):(o.empty||'');
-  return `<${tagN} class="dh2 ${d===TODAY?'today':''} ${o.future?'future':''} ${o.noax?'noax':''}" ${o.href?`href="${o.href}"`:''}><span class="dcard"><span class="dt"><b>${+d.slice(5,7)}月${+d.slice(8)}日</b><span class="wd">${WD[w]}曜</span>${d===TODAY?'<span class="td">今日</span>':''}<span class="grow"></span>${o.sum?`<span class="sum">${o.sum}</span>`:''}</span>${txt?`<span class="dd ${o.diary?'':'none'}">${txt}</span>`:''}</span></${tagN}>`;
+  return `<${tagN} class="dh2 ${d===TODAY?'today':''} ${o.future?'future':''} ${o.noax?'noax':''}" ${o.href?`href="${o.href}"`:''}><span class="dcard"><span class="dnum" aria-hidden="true"><b>${+d.slice(8)}</b><small>${WD[w]}</small></span><span class="dbody"><span class="dt"><b>${+d.slice(5,7)}月${+d.slice(8)}日 ${WD[w]}曜</b>${d===TODAY?'<span class="td">今日</span>':''}<span class="grow"></span>${o.sum?`<span class="sum">${o.sum}</span>`:''}</span>${txt?`<span class="dd ${o.diary?'':'none'}">${txt}</span>`:''}</span></span></${tagN}>`;
 }
 /** 月の区切り(縁の時間軸) */
 const monthHeadAx=(ym,future)=>`<div class="dh2 month ${future?'future':''}"><span class="dcard"><span class="dt"><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b></span></span></div>`;
