@@ -42,7 +42,7 @@
 .obj-e h1{font:700 22px/1.3 var(--font);color:var(--on-kin);overflow-wrap:anywhere}
 /* 種類の値札: 塗りの上用の半透明の白+白文字。＋種類は破線の札(当たり判定 44px) */
 .obj-e .kinds{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.obj-e .vtag{background:color-mix(in srgb,var(--on-kin) 18%,transparent);color:var(--on-kin)}
+.obj-e .vtag{background:var(--fill);color:var(--on-kin);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--on-kin) 22%,transparent)}
 .obj-e .vtag::before{background:var(--on-kin)}
 .obj-e .vtag.add{overflow:visible;position:relative;border:0;border-radius:6px;padding:0 12px;clip-path:none;cursor:pointer;
   background:transparent;outline:1.5px dashed color-mix(in srgb,var(--on-kin) 70%,transparent);outline-offset:-1.5px}
