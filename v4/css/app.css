@@ -123,7 +123,7 @@ button.row{width:100%;text-align:left}
 .nav{position:fixed;left:max(10px,calc(50% - 350px));right:max(10px,calc(50% - 350px));bottom:calc(10px + env(safe-area-inset-bottom));z-index:40;height:var(--nav-h);border-radius:22px;--nav-sh:0 10px 30px -10px rgba(40,72,150,.28);box-shadow:var(--nav-sh);background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(14px) saturate(1.4);display:flex;justify-content:center}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .nav{--nav-sh:var(--e3)}}
 :root[data-theme="dark"] .nav{--nav-sh:var(--e3)}
-.nav-in{display:grid;grid-template-columns:repeat(5,1fr);width:100%;max-width:720px}
+.nav-in{display:grid;grid-template-columns:repeat(7,1fr);width:100%;max-width:720px}
 .nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:500 12px/1 var(--font);color:var(--tx-3);position:relative}
 .nav a .pill{width:56px;height:30px;border-radius:var(--r-pill);display:grid;place-items:center;transition:background .2s}
 .nav a[aria-current="page"]{color:var(--tx)}

@@ -8,20 +8,22 @@ const monthShift=n=>{const [y,m]=actMonth.split('-').map(Number);const d=new Dat
 const ACT_FILTERS=[['all','すべて'],['予定','予定'],['支払い','支払い'],['会話','会話'],['移動','移動']];
 const dayOfDate=d=>Object.entries(A).find(([k,a])=>a.type==='日記'&&a.date===d);
 const kidsOf=d=>{const day=dayOfDate(d);return day?day[1].kids.filter(k=>A[k]).map(k=>[k,A[k]]):[]};
+/** その日の全部の記録(活動の中の支払いも) */
+const allOf=d=>{const day=dayOfDate(d);return day?descOf(day[0]).map(k=>[k,A[k]]):[]};
 const passFilter=a=>actFilter==='all'||a.type===actFilter;
 const planVisible=()=>actFilter==='all'||actFilter==='予定';
-const daySpentAll=d=>kidsOf(d).reduce((s,[k,a])=>s+(a.x&&X[a.x]?X[a.x].amt:0),0);
-const daySpent=d=>{const ps=kidsOf(d).filter(([k,a])=>a.x&&X[a.x]);return ps.length>=2?ps.reduce((s,[k,a])=>s+X[a.x].amt,0):0};
+const daySpentAll=d=>allOf(d).reduce((s,[k,a])=>s+(a.x&&X[a.x]?X[a.x].amt:0),0);
+const daySpent=d=>{const ps=allOf(d).filter(([k,a])=>a.x&&X[a.x]);return ps.length>=2?ps.reduce((s,[k,a])=>s+X[a.x].amt,0):0};
 const dayDiary=d=>{const day=dayOfDate(d);return day&&day[1].body};
 /** その日の項目(記録+未記録の予定)を時刻の新しい順に */
 function dayItems(d){
-  const items=actFilter==='予定'?[]:kidsOf(d).filter(([k,a])=>passFilter(a)).map(([k,a])=>({time:a.time||'',kind:'rec',k}));
+  const items=actFilter==='予定'?[]:(actFilter==='支払い'?allOf(d):kidsOf(d)).filter(([k,a])=>passFilter(a)).map(([k,a])=>({time:a.time||'',kind:'rec',k}));
   if(planVisible())evOn(d).filter(([k,e])=>!e.rec&&!e.hol).forEach(([k,e])=>items.push({time:e.all?'00:00':e.s,kind:'plan',k}));
   return items.sort((a,b)=>b.time.localeCompare(a.time));
 }
 const isFuturePlan=it=>it.kind==='plan'&&!EV[it.k].all&&EV[it.k].d===TODAY&&EV[it.k].s>NOW;
 const itemHtml=(it,o={})=>it.kind==='rec'?momentRow(it.k,o):planRowAx(it.k,{...o,late:!o.future&&!isFuturePlan(it)});
-function recordDates(){const ds=new Set(Object.values(A).filter(a=>a.type==='日記'&&a.date<TODAY&&a.kids&&a.kids.some(k=>A[k]&&passFilter(A[k]))).map(a=>a.date));
+function recordDates(){const ds=new Set(Object.values(A).filter(a=>a.type==='日記'&&a.date<TODAY&&a.kids&&descOf(Object.keys(A).find(id=>A[id]===a)).some(k=>A[k]&&passFilter(A[k]))).map(a=>a.date));
   if(planVisible())Object.values(EV).forEach(e=>{if(!e.rec&&!e.hol&&e.d<TODAY&&e.d>=TODAY.slice(0,8)+'01')ds.add(e.d)});
   return [...ds].sort().reverse()}
 const axDay=(d,o={})=>{const items=dayItems(d);return d===TODAY?items.filter(isFuturePlan).map(it=>itemHtml(it,{future:true})).join('')+nowLine()+items.filter(it=>!isFuturePlan(it)).map(it=>itemHtml(it)).join(''):items.map(it=>itemHtml(it)).join('')};
@@ -33,7 +35,7 @@ route('activities',()=>{
   const pm=+TODAY.slice(5,7)===1?12:+TODAY.slice(5,7)-1;
   const s=daySpent(TODAY);
   /* まとめカード(v2のB+v3の見出し): 数字は表示中の月の記録と今日。押せる数字は予定・ToDoへ */
-  const monthRec=Object.values(A).filter(a=>a.type!=='日記'&&a.parent&&A[a.parent]&&A[a.parent].date.startsWith(actMonth)).length;
+  const monthRec=Object.values(A).filter(a=>a.type!=='日記'&&dateOf(a).startsWith(actMonth)).length;
   const todayEv=evOn(TODAY).filter(([k,e])=>!e.hol).length;
   return largeTitle('タイムライン',{actions:[{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"},{icon:'more',label:'このモックについて',onclick:'openAbout()'}]})
     +summaryCard({metrics:[
@@ -190,7 +192,7 @@ function paySplit(a){
   return splitBar(segs,a.amt);
 }
 function momentView(id,a){
-  const day=A[a.parent];const d=day?day.date:TODAY;
+  const day=dayOf(a);const d=day?day.date:TODAY;
   const [,icon]=AX_NODE[a.type]||['','activity'];
   const pl=(a.roles||[]).find(r=>['支払先','場所','到着'].includes(r[0]));
   const ppl=(a.roles||[]).filter(r=>r[1]&&E[r[1]]&&r[1]!=='me'&&!['支払先','場所','到着','出発'].includes(r[0])).map(r=>r[1]);

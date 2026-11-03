@@ -6,6 +6,10 @@
 /* ---------- アイコン(24グリッド、線2px。AndroidのVectorDrawableへ移せる) ---------- */
 const sv=(d,fill)=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true" fill="${fill?'currentColor':'none'}" stroke="${fill?'none':'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const IC={
+  /* 家=ホーム(毎日最初に戻る場所) */
+  home:sv('<path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10v9h11v-9"/><path d="M10.5 19v-4.5h3V19"/>'),
+  /* 角を折った紙=メモ(メモの形と同じ) */
+  memo:sv('<path d="M6 3.5h8.5L19 8v12.5H6z"/><path d="M14.5 3.5V8H19"/><path d="M9 12h7M9 15.5h5"/>'),
   future:sv('<path d="M5 2.5v19" stroke-dasharray="2 2.6"/><rect x="8.5" y="8" width="13" height="8" rx="4" stroke-dasharray="2.4 1.8"/>'),
   moment:sv('<path d="M5 2.5v19"/><rect x="8.5" y="8" width="13" height="8" rx="4" fill="currentColor"/>'),
   lines:sv('<path d="M5 7h14M5 12h14M5 17h9"/>'),
@@ -80,25 +84,32 @@ const aref=id=>`<a class="ref" href="#/a/${id}">${IC[ACT_IC[A[id].type]]||IC.act
 /** 12週の出会い(週ごとの登場数) */
 function encStrip(id){
   const end=new Date(TODAY+'T00:00');const c=Array(12).fill(0);
-  actsOf(id).forEach(([k,a])=>{const d=a.parent&&A[a.parent]?A[a.parent].date:a.date;if(!d)return;const w=Math.floor((end-new Date(d+'T00:00'))/(7*864e5));if(w>=0&&w<12)c[11-w]++});
+  actsOf(id).forEach(([k,a])=>{const d=dateOf(a);if(!d)return;const w=Math.floor((end-new Date(d+'T00:00'))/(7*864e5));if(w>=0&&w<12)c[11-w]++});
   return `<span class="enc" style="--kc:${threadColor(id)}" aria-label="最近12週の登場">${c.map(n=>`<i class="${n>=3?'h3':n==2?'h2':n==1?'h1':''}"></i>`).join('')}</span>`;
 }
-function lastMet(id){const ds=actsOf(id).map(([k,a])=>a.parent&&A[a.parent]?A[a.parent].date:a.date).filter(Boolean).sort();return ds.length?ds[ds.length-1]:null}
+function lastMet(id){const ds=actsOf(id).map(([k,a])=>dateOf(a)).filter(Boolean).sort();return ds.length?ds[ds.length-1]:null}
 const agoLabel=d=>{if(!d)return 'まだなし';const n=Math.round((new Date(TODAY+'T00:00')-new Date(d+'T00:00'))/864e5);return n===0?'今日':n===1?'昨日':n<7?`${n}日前`:n<35?`${Math.round(n/7)}週間前`:`${Math.round(n/30)}か月前`};
 
 /* ---- 時間軸 ---- */
-const AX_NODE={'支払い':['pay','pay'],'会話':['','talk'],'移動':['','move'],'出来事':['','spark'],'日記':['','diary']};
+const AX_NODE={'支払い':['pay','pay'],'会話':['','talk'],'移動':['','move'],'出来事':['','spark'],'日記':['','diary'],'食事':['','moment'],'買い物':['','moment'],'作業':['','moment']};
+/** 瞬間の種類(時刻1つ。カードにしない小さい行)。支払いも瞬間だが、お金の行として扱う */
+const INSTANT_TYPES=['起床','就寝','出発','到着','出来事(瞬間)'];
 /** 軸の1行。o:{href,time,node:{cls,icon},t,m,amt,cls,future} */
-const axRow=o=>{const tagN=o.href?'a':'div';return `<${tagN} class="ax-row ${o.cls||''} ${o.future?'future':''}" ${o.href?`href="${o.href}"`:''}><span class="ax-time">${o.time&&typeof o.time==='object'?`<b>${o.time.d}日</b><small>${esc(o.time.t||'')}</small>`:esc(o.time??'')}</span><span class="ax-node ${o.node&&o.node.cls||''}">${o.node&&IC[o.node.icon]||''}</span><span class="ax-c"><span class="main"><div class="t">${o.t}</div>${o.m?`<div class="m">${o.m}</div>`:''}</span>${o.amt?`<span class="amt">${o.amt}</span>`:''}${o.right||''}</span></${tagN}>`};
+const axRow=o=>{const tagN=o.href?'a':'div';return `<${tagN} class="ax-row ${o.cls||''} ${o.future?'future':''}" ${o.href?`href="${o.href}"`:''}><span class="ax-time">${o.time&&typeof o.time==='object'?`<b>${o.time.d}日</b><small>${esc(o.time.t||'')}</small>${o.end?`<small class="to">${esc(o.end)}</small>`:''}`:`${esc(o.time??'')}${o.end?`<small class="to">${esc(o.end)}</small>`:''}`}</span><span class="ax-node ${o.node&&o.node.cls||''}">${o.node&&IC[o.node.icon]||''}</span><span class="ax-c"><span class="main"><div class="t">${o.t}</div>${o.m?`<div class="m">${o.m}</div>`:''}${o.kids||''}</span>${o.amt?`<span class="amt">${o.amt}</span>`:''}${o.right||''}</span></${tagN}>`};
 const placeName=r=>r?(r[1]&&E[r[1]]?E[r[1]].n:r[2]):'';
 /** 記録(アクティビティ)の1行 */
 function momentRow(k,o={}){
-  const a=A[k];const [ncls,icon]=AX_NODE[a.type]||['','activity'];
+  const a=A[k];
+  if(INSTANT_TYPES.includes(a.type))return axRow({href:`#/a/${k}`,time:a.time,node:{cls:'at'},cls:'at',t:esc(a.title)});
+  const [ncls,icon]=AX_NODE[a.type]||['','activity'];
   const pl=(a.roles||[]).find(r=>['支払先','場所','到着'].includes(r[0]));
   const ppl=(a.roles||[]).filter(r=>r[1]&&E[r[1]]&&r[1]!=='me'&&r[1]!==o.exclude&&!['支払先','場所','到着','出発'].includes(r[0])).map(r=>r[1]);
   const x=a.x&&X[a.x];
-  const dd=a.parent&&A[a.parent]?A[a.parent].date:'';
-  return axRow({href:`#/a/${k}`,time:o.showDate&&dd?{d:+dd.slice(8),t:a.time}:a.time,node:{cls:ncls,icon},cls:(o.cls||'')+(a.type==='支払い'?' pay':''),future:o.future,
+  const dd=dateOf(a);
+  /* 活動の中の支払い(サブ)は、カードの中の1行。押すとその支払い */
+  const kids=(a.kids||[]).filter(c=>A[c]&&A[c].type==='支払い'&&!o.flat).map(c=>{const p=A[c],px=p.x&&X[p.x];
+    return `<span class="kid" role="link" tabindex="0" onclick="event.preventDefault();event.stopPropagation();go('#/a/${c}')"><span class="kid-i">${IC.pay}</span><span class="kid-t">${esc(p.title)}<small>${esc(p.time)}</small></span><span class="kid-a"><b>${yen(p.amt)}</b>${px&&px.amt!==p.amt?payBar(p,px):''}</span></span>`}).join('');
+  return axRow({href:`#/a/${k}`,time:o.showDate&&dd?{d:+dd.slice(8),t:a.time}:a.time,end:a.end,kids:kids?`<span class="kids">${kids}</span>`:'',node:{cls:ncls,icon},cls:(o.cls||'')+(a.type==='支払い'?' pay':'')+(a.end?' span':''),future:o.future,
     t:esc(a.title),m:`${o.role?`<span class="role">${esc(o.role)}</span>`:''}${pl&&pl[1]!==o.exclude?`<span class="ell">${esc(placeName(pl))}</span>`:''}${knots(ppl)}`,
     amt:a.amt!=null?`<b>${yen(a.amt)}</b>${x&&x.amt!==a.amt?payBar(a,x):''}`:''});
 }
@@ -230,17 +241,17 @@ const checkbox=(on,onclick,lg)=>`<button class="check ${lg?'lg':''}" type="butto
    tab: 下部ナビで選択中にするタブ */
 const ROUTES={};
 const route=(name,fn,opt={})=>{ROUTES[name]={fn,...opt}};
-let CUR={name:'activities',id:null,q:{}};
-const parseHash=()=>{const h=location.hash.slice(2)||'activities';const [path,qs]=h.split('?');const [name,...rest]=path.split('/');const q=Object.fromEntries(new URLSearchParams(qs||''));return {name,id:rest.join('/')||null,q}};
+let CUR={name:'home',id:null,q:{}};
+const parseHash=()=>{const h=location.hash.slice(2)||'home';const [path,qs]=h.split('?');const [name,...rest]=path.split('/');const q=Object.fromEntries(new URLSearchParams(qs||''));return {name,id:rest.join('/')||null,q}};
 const go=h=>{location.hash=h};
-const goBack=()=>{history.length>1?history.back():go('#/activities')};
-let lastTab='activities';
+const goBack=()=>{history.length>1?history.back():go('#/home')};
+let lastTab='home';
 function render(keepScroll){
   CUR=parseHash();const r=ROUTES[CUR.name]||ROUTES.activities;
   const y=scrollY;
   const safe=(fn,id,q)=>{try{return fn(id,q)}catch(e){console.error(e);return appbar('表示できません')+banner('warn',`この画面を表示できませんでした。<br><small>${esc(e.message)}</small>`)}};
-  const ROOT={activities:'activities',plan:'plan',entities:'entities',ledger:'ledger'};
-  const wide=innerWidth>=1100;const rootName=ROOT[r.tab||lastTab]||'activities';
+  const ROOT={home:'home',activities:'activities',plan:'plan',memo:'memo',entities:'entities',ledger:'ledger'};
+  const wide=innerWidth>=1100;const rootName=ROOT[r.tab||lastTab]||'home';
   const app=document.getElementById('app');
   if(wide){
     const isRoot=CUR.name===rootName;const ly=app.querySelector('.pane-l')?.scrollTop||0;const sameRoot=app.dataset.root===rootName;
@@ -263,10 +274,14 @@ addEventListener('hashchange',()=>{closeSheet(true);render()});
 addEventListener('scroll',()=>{const b=document.querySelector('.appbar');if(b)b.classList.toggle('scrolled',scrollY>4)},{passive:true});
 
 /* ---------- 下部ナビ ---------- */
+/* v4.3: ホーム(毎日最初に見る)とメモを追加(11/04 ユーザー指示)。6タブ+中央の＋。
+   幅412で1枠約56pxのため、タイムラインのタブ名は「記録」(画面の見出しはタイムラインのまま) */
 const TABS=[
-  ['activities','タイムライン','axis'],
+  ['home','ホーム','home'],
+  ['activities','記録','axis'],
   ['plan','予定','future'],
   null,
+  ['memo','メモ','memo'],
   ['entities','人・場所','kin'],
   ['ledger','家計簿','share'],
 ];
@@ -318,16 +333,16 @@ function openCreate(){
 }
 
 /* ---------- 保存(このブラウザ) ---------- */
-const SKEY='prmock-v4';
-function save(){try{localStorage.setItem(SKEY,JSON.stringify({A,X,E,EV,TD,TYPES,CATS,NOTES,LISTS,TYPE_PROPS,EXTRA:typeof EXTRA!=='undefined'?EXTRA:{}}))}catch(e){}}
+const SKEY='prmock-v4.3'; /* v4.3でデータモデルを変えたので、古い保存データは読まない */
+function save(){try{localStorage.setItem(SKEY,JSON.stringify({A,X,E,EV,TD,TYPES,CATS,NOTES,MEMOS,LISTS,TYPE_PROPS,EXTRA:typeof EXTRA!=='undefined'?EXTRA:{}}))}catch(e){}}
 function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(!s)return;
-  for(const [k,o] of Object.entries({A,X,E,EV,TD,TYPES,CATS,NOTES,LISTS,TYPE_PROPS})){if(s[k]){for(const kk of Object.keys(o))delete o[kk];Object.assign(o,s[k])}}
+  for(const [k,o] of Object.entries({A,X,E,EV,TD,TYPES,CATS,NOTES,MEMOS,LISTS,TYPE_PROPS})){if(s[k]){for(const kk of Object.keys(o))delete o[kk];Object.assign(o,s[k])}}
   if(s.EXTRA&&typeof EXTRA!=='undefined')Object.assign(EXTRA,s.EXTRA);
   Object.values(A).forEach(a=>(a.items||[]).forEach(itemMigrate));
   /* 旧データの移行: 以前は「設定なし」が暗黙に 変動/日常 だった。大分類は明示の値に置き換える(以後 'none' = 設定しない) */
   for(const k of Object.keys(CATS)){const c=CATS[k];if(c.fx==='none')c.fx='ask';if(c.sp==='none')c.sp='ask';if(!c.p){if(c.fx===undefined)c.fx='変動';if(c.sp===undefined)c.sp='日常'}}
   }catch(e){}}
-function resetData(){try{localStorage.removeItem(SKEY)}catch(e){}location.hash='#/activities';location.reload()}
+function resetData(){try{localStorage.removeItem(SKEY)}catch(e){}location.hash='#/home';location.reload()}
 /** 画面ファイルが自由に使える追加の保存領域 */
 const EXTRA={};
 const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
