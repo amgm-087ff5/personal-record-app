@@ -63,6 +63,11 @@
 .hang{position:relative;margin:12px 0 0 28px}
 .hang::before{content:"";position:absolute;left:-18px;top:-12px;height:calc(50% + 12px);width:18px;border-left:2px solid var(--line-strong);border-bottom:2px solid var(--line-strong);border-bottom-left-radius:8px}
 
+/* 精算・完了の帯(支払いの詳細): 未精算=琥珀の帯。ボタンは見た目36px、当たり判定は44px以上 */
+.suggest.owe{background:var(--owe-soft)}
+.suggest .btn.sm{position:relative}
+.suggest .btn.sm::before{content:"";position:absolute;inset:-6px -4px}
+
 /* ---------- 品目の詳細(/i/…): 主役(名前+金額)→内訳→負担→編集 ---------- */
 .it-hero{margin:8px var(--gutter) 0;padding:24px 20px 22px;border-radius:20px;background:var(--tl-card);box-shadow:var(--tl-sh);text-align:center}
 .it-n{font:600 18px/1.4 var(--font);color:var(--tx)}

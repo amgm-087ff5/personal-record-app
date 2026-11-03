@@ -1,55 +1,45 @@
 /* =====================================================================
    人・場所(縁) — 時間をまたいで続くもの。
-   一覧 = 最近いつ交わったか / 詳細 = その縁の糸で切り取った時間軸
-   ルート: #/entities , #/e/{id} , #/n/{id}(メモ) , #/types(種類)
+   一覧 = 種類ごと(値札)に、最後に交わった順 / 詳細 = フォルダのタブ+その縁の糸で切り取った時間軸
+   ルート: #/entities , #/e/{id} , #/n/{id}(メモ) , #/notes(メモの一覧) , #/types(種類)
+   見た目は css/s-entities.css(値札・フォルダのタブ・角を折った紙)
    ===================================================================== */
-document.head.insertAdjacentHTML('beforeend',`<style>
-.en-search{margin:0 var(--gutter) 12px;position:relative}
-.en-search svg.i{position:absolute;left:12px;top:14px;color:var(--tx-3)}
-.en-search input{padding-left:40px}
-.en-memo{margin:12px var(--gutter) 0;padding:14px 16px 14px 18px;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1),var(--hl);position:relative;display:block}
-.en-memo::before{content:"";position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:var(--kin)}
-.en-memo .h{display:flex;align-items:center;gap:6px;font:var(--t-label);color:var(--tx-2)}
-.en-memo .h svg.i{width:16px;height:16px}
-.en-memo p{margin-top:6px;font:var(--t-body);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.en-doc{margin:4px var(--gutter) 0;padding:20px 20px 24px 22px;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e2),var(--hl);position:relative}
-.en-doc::before{content:"";position:absolute;left:0;top:20px;bottom:20px;width:3px;border-radius:0 3px 3px 0;background:var(--kin)}
-.en-doc h1{font:var(--t-title)} .en-doc .meta{font:var(--t-cap);color:var(--tx-3);margin-top:4px}
-.en-doc h3{font:600 14px/1.4 var(--font);color:var(--tx-2);margin-top:22px}
-.en-doc p{font:400 16px/1.9 var(--font);margin-top:6px}
-.en-doc .ref{vertical-align:middle;margin:0 2px}
-.en-tg{width:44px;height:44px;margin:-8px 0 -8px -8px;display:grid;place-items:center;color:var(--tx-3);flex:none}
-.en-tg svg.i{width:16px;height:16px}
-/* 種類の階層: 子は字下げ+縦のガイド線だけ(└も小さい四角も使わない) */
-.objs>.row.ind::after{border-bottom:0;border-bottom-left-radius:0;width:0}
-</style>`);
-
 const enRoots=()=>Object.keys(TYPES).filter(k=>!TYPES[k].p);
 const enAll=()=>Object.entries(E).filter(([k])=>k!=='me');
 const enCount=t=>enAll().filter(([k,e])=>e.t.some(x=>isUnder(x,t))).length;
 const enTypePath=t=>typeAnc(t).map(a=>TYPES[a].n).join(' › ');
 const enDesc=k=>{const r=[k];let grew=true;while(grew){grew=false;Object.keys(TYPES).forEach(c=>{if(!r.includes(c)&&r.includes(TYPES[c].p)){r.push(c);grew=true}})}return r};
 let enKind='all';
-/** この年に交わった回数 */
-const enYearN=k=>actsOf(k).filter(([kk,a])=>{const d=a.parent&&A[a.parent]?A[a.parent].date:a.date;return d&&d.startsWith(TODAY.slice(0,4))}).length;
+/** 種類の値札(一覧の見出し・種類の木) */
+const vtag=label=>`<span class="vtag">${esc(label)}</span>`;
+/** 詳細のタブ: 種類のパンくず(先頭の種類の祖先をたどる) */
+const enTabPath=id=>typeAnc(E[id].t[0]).map(a=>`<a href="#/types">${esc(TYPES[a].n)}</a>`).join('<span class="sep">›</span>');
+/** 同じ月の項目を1つの面にまとめる(入力は時間順) */
+const enByMonth=items=>items.reduce((out,x)=>{const g=out[out.length-1];if(g&&g.ym===x.ym)g.rows.push(x.html);else out.push({ym:x.ym,rows:[x.html]});return out},[]);
 
-/** 種類のパンくず(1番目の種類の祖先)+ほかの種類 */
-const crumb=id=>{const e=E[id];const [t,...rest]=e.t;return typeAnc(t).map(a=>`<a href="#/types">${esc(TYPES[a].n)}</a>`).join('<span class="sep">›</span>')+(rest.length?`<span class="also">ほか ${rest.map(r=>esc(TYPES[r].n)).join('・')}</span>`:'')};
-
-/* ---------- 一覧: 最近いつ交わったか ---------- */
+/* ---------- 一覧: 種類ごと・最後に交わった順 ---------- */
 route('entities',()=>{
   const all=enAll();
-  const kinds=[['all','すべて',all.length],...enRoots().map(r=>[r,ROOT_LABEL[r]||TYPES[r].n,enCount(r)]).filter(k=>k[2])];
+  const kinds=[['all','すべて',all.length],...enRoots().map(r=>[r,TYPES[r].n,enCount(r)]).filter(k=>k[2])];
+  /* 一覧の見出し = 種類。「すべて」では根の種類、絞り込み中はその下の種類で束ねる */
+  const groupOf=e=>{const t=(enKind==='all'?e.t[0]:e.t.find(x=>isUnder(x,enKind)))||e.t[0];
+    return enKind==='all'?typeAnc(t)[0]:(typeAnc(t).find(a=>TYPES[a].p===enKind)||t)};
   const shown=all.filter(([k,e])=>enKind==='all'||e.t.some(t=>isUnder(t,enKind)))
-    .map(([k,e])=>[k,e,lastMet(k)]).sort((a,b)=>(b[2]||'').localeCompare(a[2]||'')||a[1].n.localeCompare(b[1].n));
-  const age=d=>{if(!d)return 3;const n=(new Date(TODAY+'T00:00')-new Date(d+'T00:00'))/864e5;return n<=7?0:n<=31?1:2};
-  const groups=[['この1週間に交わった',0],['この1か月',1],['それより前',2],['まだ記録なし',3]];
-  const rowOf=([k,e,d])=>{const yn=enYearN(k);return row({href:'#/e/'+k,cls:'en-row',lead:knot(k),t:esc(e.n),s:esc(enTypePath(e.t[0])),
-    v:`<span class="en-ago">${agoLabel(d)}${encStrip(k)}</span>`})};
-  return largeTitle('人・場所',{actions:[{text:'メモ',icon:'lines',onclick:"go('#/notes')"},{text:'種類',icon:'type',onclick:"go('#/types')"}]})
+    .map(([k,e])=>({k,e,d:lastMet(k),g:groupOf(e)}))
+    .sort((a,b)=>(b.d||'').localeCompare(a.d||'')||a.e.n.localeCompare(b.e.n));
+  const order=Object.keys(TYPES);
+  const keys=[...new Set(shown.map(x=>x.g))].sort((a,b)=>order.indexOf(a)-order.indexOf(b));
+  const rowOf=({k,e,d})=>row({href:'#/e/'+k,cls:'en-row',lead:knot(k),t:esc(e.n),s:esc(enTypePath(e.t[0])),
+    v:`<span class="en-ago">${agoLabel(d)}${encStrip(k)}</span>`});
+  const groups=keys.map(g=>{const rs=shown.filter(x=>x.g===g);
+    return `<section class="en-g"><div class="en-gh">${vtag(TYPES[g].n)}<span class="n">${rs.length}件</span></div><div class="objs">${rs.map(rowOf).join('')}</div></section>`}).join('');
+  return largeTitle('人・場所',{actions:[
+      {text:'縁を追加',icon:'plus',primary:true,onclick:'openNewEntity()'},
+      {label:'メモ',icon:'lines',onclick:"go('#/notes')"},
+      {label:'種類',icon:'type',onclick:"go('#/types')"}]})
     +`<div class="en-search">${IC.search}<input class="input" type="search" placeholder="名前で探す" aria-label="名前で探す" oninput="enFilter(this.value)"></div>`
     +chips(kinds,enKind,"enKind='$v';rerender()")
-    +`<div id="en-groups">${groups.map(([label,g])=>{const rs=shown.filter(x=>age(x[2])===g);return rs.length?`<div class="en-g">${sh(label,rs.length)}${objs(rs.map(rowOf))}</div>`:''}).join('')}</div>`;
+    +`<div id="en-groups">${groups||empty('people','この種類の縁はまだありません')}</div>`;
 },{tab:'entities'});
 function enFilter(v){
   v=v.trim();document.querySelectorAll('#en-groups .en-g').forEach(g=>{let n=0;g.querySelectorAll('.row').forEach(r=>{const hit=!v||r.querySelector('.t').textContent.includes(v);r.hidden=!hit;if(hit)n++});g.hidden=!n});
@@ -68,7 +58,6 @@ function factEvents(id){
   relsOf(id).forEach(([rel,other,period])=>{const m=(period||'').match(/(\d{4}-\d{2})/);if(m)out.push({ym:m[1],t:`${esc(rel)}: ${esc(E[other].n)}`,m:`${knot(other,'sm')}<span class="ell">関係が始まった</span>`})});
   return out;
 }
-function monthHead(ym){return monthHeadAx(ym)}
 route('e',id=>{
   const e=E[id];if(!e)return appbar('')+empty('people','この人・場所は見つかりません');
   const tc=threadColor(id);
@@ -81,53 +70,55 @@ route('e',id=>{
   const since=f=>{const m=(f.ver||'').match(/(\d{4})-(\d{2})〜/);return m?`${m[1]}年${+m[2]}月から`:''};
   const dl=facts.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}${since(f)?`<span class="since">${since(f)}</span>`:''}</dd>`).join('')
     +relsOf(id).map(([rel,other,period,sym])=>`<dt>${esc(rel)}</dt><dd><span class="rel-dir" title="${sym?'お互い':'一方向'}">${sym?'⟷':'→'}</span>${eref(other)}${period?`<span class="since">${esc(period.replace(/(\d{4})-(\d{2})〜/,(m,y,mo)=>`${y}年${+mo}月から`))}</span>`:''}</dd>`).join('');
-  /* 糸の時間軸: 予定(点線) → いま → 出会い・事実の変化を新しい順に。月ごとに区切る */
-  const evs=[...acts.map(x=>({key:x.d+' '+(x.a.time||''),ym:x.d.slice(0,7),html:momentRow(x.k,{exclude:id,showDate:true,role:x.role})})),
+  /* 糸の時間軸: 予定(点線) → いま → 出会い・事実の変化を新しい順に。月ごとの面にまとめる */
+  const past=[...acts.map(x=>({key:x.d+' '+(x.a.time||''),ym:x.d.slice(0,7),html:momentRow(x.k,{exclude:id,showDate:true,role:x.role})})),
     ...factEvents(id).map(f=>({key:f.ym+'-00',ym:f.ym,html:axRow({time:'',node:{cls:'fact'},t:f.t,m:f.m})}))].sort((a,b)=>b.key.localeCompare(a.key));
-  let lastYm='';
-  const fut=plans.map(([k,ev])=>{const ym=(ev.rep?nextOn(ev):ev.d).slice(0,7);let h='';if(ym!==lastYm){lastYm=ym;h=monthHeadAx(ym,true)}return h+planRowAx(k,{future:true,showDate:true,exclude:id})}).join('');
-  const body=evs.map(ev=>{let h='';if(ev.ym!==lastYm){lastYm=ev.ym;h=monthHead(ev.ym)}return h+ev.html}).join('');
+  const fut=enByMonth(plans.map(([k,ev])=>({ym:(ev.rep?nextOn(ev):ev.d).slice(0,7),html:planRowAx(k,{future:true,showDate:true,exclude:id})})));
+  if(fut.length)fut[fut.length-1].rows.push(nowLine());
+  const pastGroups=enByMonth(past);
   const note=NOTES[id];
+  const rest=e.t.slice(1).map(t=>esc(TYPES[t].n));
   return appbar('',{actions:[{icon:'more',label:'その他の操作',onclick:"toast('編集はモックでは未対応です')"}]})
-    +`<section class="eh">${knot(id,'lg')}<div class="grow" style="min-width:0"><h1>${esc(e.n)}</h1><div class="crumb">${crumb(id)}</div></div></section>`
+    +`<section class="obj-e" style="--fc:${tc}"><div class="tab">${enTabPath(id)}</div>`
+    +`<div class="hero">${knot(id,'lg')}<div class="grow" style="min-width:0"><h1>${esc(e.n)}</h1>${rest.length?`<div class="also">ほか ${rest.join('・')}</div>`:''}</div></div></section>`
     +`<div class="stats"><div><b>${agoLabel(lastMet(id))}</b><span>最後に交わった</span></div><div><b>${yearN}回</b><span>今年</span></div>${money?`<div><b>${yen(money)}</b><span>${rootOf(id)==='person'?'一緒の時の自分の支出':'ここでの自分の支出'}</span></div>`:''}${owed?`<div><b style="color:var(--owe-text)">${yen(owed)}</b><span>立替・未精算</span></div>`:''}</div>`
     +(dl?`<dl class="facts">${dl}</dl>`:'')
-    +(rare.length?`<details class="list mt" style="overflow:hidden"><summary class="more" style="border:0;list-style:none;cursor:pointer">ほかの情報 ${rare.length}件</summary><dl class="facts" style="margin:0;box-shadow:none;border-radius:0;border-top:1px solid var(--line)">${rare.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}</dd>`).join('')}</dl></details>`:'')
-    +(note?`<a class="en-memo" href="#/n/${id}"><span class="h">${IC.lines}メモ<span class="grow"></span><span class="faint">更新 ${esc(note.upd)}</span></span><p>${esc((note.body[0]?note.body[0][1]:'').replace(/\{[ea]:\w+\}/g,''))}</p></a>`
-      :`<a class="en-memo" href="javascript:void 0" onclick="enNewNote('${id}')"><span class="h">${IC.lines}メモを書く</span></a>`)
+    +(rare.length?`<details class="en-more"><summary>ほかの情報 ${rare.length}件</summary><dl class="facts">${rare.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}</dd>`).join('')}</dl></details>`:'')
+    +(note?`<a class="en-paper en-memo" href="#/n/${id}"><span class="h">${IC.lines}メモ<span class="grow"></span><span class="faint">更新 ${esc(note.upd)}</span></span><p>${esc((note.body[0]?note.body[0][1]:'').replace(/\{[ea]:\w+\}/g,''))}</p></a>`
+      :`<button class="en-paper en-memo en-empty" type="button" onclick="enNewNote('${id}')"><span class="h">${IC.lines}メモを書く</span></button>`)
     +sh('この縁の時間軸')
     +`<div class="ax thread" style="--tc:${tc}">`
-    +(plans.length?fut+nowLine():'')
-    +(body||axEdge('まだ記録はありません',true))
-    +(body?axEdge('これより前の記録はありません',true):'')
+    +fut.map(g=>axGroup(monthHeadAx(g.ym,true),g.rows.join(''),{future:true})).join('')
+    +(pastGroups.length?pastGroups.map(g=>axGroup(monthHeadAx(g.ym),g.rows.join(''))).join(''):axEdge('まだ記録はありません',true))
+    +(pastGroups.length?axEdge('これより前の記録はありません',true):'')
     +`</div>`;
 },{tab:'entities'});
 
-/* ---------- メモ: 縁に綴じた文章 ---------- */
+/* ---------- メモ: 縁に綴じた文章(角を折った紙) ---------- */
 function enNewNote(id){NOTES[id]={upd:`${+TODAY.slice(5,7)}/${+TODAY.slice(8)} ${NOW}`,ver:1,body:[],subs:[]};save();go('#/n/'+id)}
 route('n',id=>{
   const e=E[id];if(!e)return appbar('')+empty('note','このメモは見つかりません');
   const note=NOTES[id];
   const rich=s=>esc(s).replace(/\{e:(\w+)\}/g,(_,k)=>eref(k)).replace(/\{a:(\w+)\}/g,(_,k)=>aref(k));
   return appbar('',{actions:[{icon:'edit',label:'メモを編集',onclick:"toast('編集はモックでは未対応です')"}]})
-    +`<a class="parent" href="#/e/${id}">${knot(id,'sm')}<b class="grow ell">${esc(e.n)}</b>${IC.chev}</a>`
-    +`<article class="en-doc"><h1>${esc(e.n)}のメモ</h1><div class="meta">${note?`主観・最新、更新 ${esc(note.upd)}、${note.ver}版目`:'まだ書いていません'}</div>`
+    +`<a class="en-owner" href="#/e/${id}">${knot(id,'sm')}<span class="grow ell">${esc(e.n)}</span>${IC.chev}</a>`
+    +`<article class="en-paper en-doc"><h1>${esc(e.n)}のメモ</h1><div class="meta">${note?`主観・最新、更新 ${esc(note.upd)}、${note.ver}版目`:'まだ書いていません'}</div>`
     +(note&&note.body.length?note.body.map(([h,s])=>`<h3>${esc(h)}</h3><p>${rich(s)}</p>`).join(''):`<p class="faint">本文はまだありません</p>`)
     +`</article>`
     +(note&&note.subs.length?sh('サブページ',note.subs.length)+objs(note.subs.map(([s,m])=>row({lead:ico('lines'),t:esc(s),v:`<span class="faint">${esc(m)}</span>`,chev:1}))):'');
 },{tab:'entities'});
 
-/* ---------- メモの一覧: 縁ごとに1件 ---------- */
+/* ---------- メモの一覧: 縁ごとに1枚の紙 ---------- */
 const enNoteKey=u=>{const m=(u||'').match(/(\d+)\/(\d+)\s*(\d+):(\d+)/);return m?((+m[1])*100+(+m[2]))*10000+(+m[3])*100+(+m[4]):0};
 route('notes',()=>{
   const ids=Object.keys(NOTES).filter(k=>E[k]).sort((a,b)=>enNoteKey(NOTES[b].upd)-enNoteKey(NOTES[a].upd));
   return appbar('メモ')
-    +(ids.length?`<div class="mt"></div>`+objs(ids.map(id=>{const first=(NOTES[id].body[0]?NOTES[id].body[0][1]:'').replace(/\{[ea]:\w+\}/g,'');
-      return row({href:'#/n/'+id,lead:knot(id),t:esc(E[id].n),s:esc(first)})}))
+    +(ids.length?`<div class="en-papers">`+ids.map(id=>{const first=(NOTES[id].body[0]?NOTES[id].body[0][1]:'').replace(/\{[ea]:\w+\}/g,'');
+      return `<a class="en-paper en-note" href="#/n/${id}"><span class="nh">${knot(id,'sm')}<b class="ell">${esc(E[id].n)}のメモ</b></span><span class="ln">${esc(first)}</span><span class="dt">${esc(NOTES[id].upd)}</span></a>`}).join('')+`</div>`
       :empty('lines','メモはまだありません'));
 },{tab:'entities'});
 
-/* ---------- 種類: 縁の分類(木)。根の種類が輪郭を決める ---------- */
+/* ---------- 種類: 縁の分類(木)。根の種類が輪郭を決める。ラベルは値札 ---------- */
 const enFlipped=new Set();
 function enTreeRows(){
   const out=[];
@@ -137,14 +128,14 @@ function enTreeRows(){
     const props=propsOf(k).map(p=>p[0]).join('・')||'なし';
     const root=typeAnc(k)[0];
     const lead=`${kids.length?`<span class="en-tg" role="button" aria-label="${open?'閉じる':'開く'}" onclick="event.stopPropagation();enToggle('${k}')">${open?IC.down:IC.chev}</span>`:'<span class="en-tg"></span>'}${d===0?`<span class="kn sm ${ROOT_SHAPE[root]||'thing'}"><b>${esc(TYPES[k].n[0])}</b></span>`:''}`;
-    out.push(`<button type="button" class="row ${d?'ind':''}" style="--d:${d}" onclick="enEditType('${k}')">${lead}<span class="grow"><div class="t ell">${esc(TYPES[k].n)}</div><div class="s ell">項目 ${esc(props)}</div></span><span class="v faint">${enCount(k)}</span></button>`);
+    out.push(`<button type="button" class="row ${d?'ind':''}" style="--d:${d}" onclick="enEditType('${k}')">${lead}<span class="grow"><div class="t ell">${vtag(TYPES[k].n)}</div><div class="s ell">項目 ${esc(props)}</div></span><span class="v faint">${enCount(k)}</span></button>`);
     if(open)kids.forEach(c=>walk(c,d+1));
   };
   enRoots().forEach(r=>walk(r,0));
   return out;
 }
 function enToggle(k){enFlipped.has(k)?enFlipped.delete(k):enFlipped.add(k);rerender()}
-route('types',()=>appbar('種類',{actions:[{icon:'plus',label:'種類を作成',onclick:'enNewType()'}]})+`<div class="mt"></div>`+objs(enTreeRows()),{tab:'entities'});
+route('types',()=>appbar('種類',{actions:[{icon:'plus',label:'種類を作成',onclick:'enNewType()'}]})+`<div class="mt"></div><div class="objs en-tree">${enTreeRows().join('')}</div>`,{tab:'entities'});
 function enParentSelect(k,cur){const ban=k?enDesc(k):[];return `<select id="en-p"><option value="">いちばん上(輪郭を決める)</option>${Object.keys(TYPES).filter(c=>!ban.includes(c)).map(c=>`<option value="${c}" ${c===cur?'selected':''}>${esc(enTypePath(c))}</option>`).join('')}</select>`}
 function enEditType(k){
   const t=TYPES[k];const own=TYPE_PROPS[k]||[];const inh=propsOf(k).filter(([p,from])=>from!==k);

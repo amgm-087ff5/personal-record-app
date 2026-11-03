@@ -6,6 +6,8 @@
 /* ---- 月の切り替え(見出しの下) ---- */
 .ld-month{display:flex;align-items:center;justify-content:center;gap:12px;padding:0 var(--gutter) 6px}
 .ld-month b{font:600 17px/1.4 var(--font);min-width:132px;text-align:center;font-variant-numeric:tabular-nums}
+.ld-month .btn{position:relative}
+.ld-month .btn::before{content:"";position:absolute;inset:-4px 0}
 .ld-month .btn[disabled]{opacity:.3;pointer-events:none}
 
 /* ---- 自分の支出の合計(v3の数値・前月比・内訳の棒。面は1枚) ---- */
@@ -13,7 +15,7 @@
 .ld-lbl{font:var(--t-label);color:var(--tx-2)}
 .ld-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .ld-big{font:700 34px/1.1 var(--font);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
-.ld-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;background:var(--sunk)}
+.ld-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;background:var(--line)}
 .ld-bar i{display:block;height:100%;min-width:0}
 /* 固定費・変動費・非日常(押すと絞り込み) */
 .ld-fig{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
@@ -43,12 +45,13 @@
 .ld-row{min-height:52px;padding:8px 14px}
 .ld-row.on{background:var(--brand-soft)}
 .ld-row .ld-m{display:block;margin-top:4px}
+.ld-row .meter{background:var(--line)}
 .ld-pct{color:var(--tx-3);font-weight:400;font-size:12px;margin-left:6px}
 /* 内訳の子カテゴリ(今月の絞り込みで出す): 字下げ+親からの細い線 */
 .ld-kid{padding-left:36px;background:linear-gradient(var(--line-strong),var(--line-strong)) 19px 0/1px 100% no-repeat}
 .ld-kid2{padding-left:58px;background:linear-gradient(var(--line-strong),var(--line-strong)) 19px 0/1px 100% no-repeat,linear-gradient(var(--line-strong),var(--line-strong)) 41px 0/1px 100% no-repeat}
 .ld-clear{padding:0 var(--gutter) 10px}
-.ld-clear .chip{height:32px}
+.ld-clear .chip{height:36px}
 
 /* ---- 支出の一覧: 1件=1枚の半券チケット(白い面)。行の間は8px ---- */
 .ld-tix{display:flex;flex-direction:column;gap:8px;padding:0 var(--gutter)}
@@ -75,9 +78,11 @@
 
 /* ---- 「区分」のピル(固定・変動 / 特別感 / 都度指定。詳細・編集・作成で共通) ---- */
 .ld-mini{display:inline-flex;flex-wrap:wrap;gap:6px}
-.ld-mini button{position:relative;height:36px;padding:0 14px;border-radius:var(--r-pill);border:0;background:var(--sunk);color:var(--tx-2);font:var(--t-label);font-weight:500}
+/* 未選択の面は --surface-2 + 輪郭(--sunk は暗いモードで墨に近いので使わない) */
+.ld-mini button{position:relative;height:36px;padding:0 14px;border-radius:var(--r-pill);border:1px solid var(--line-strong);background:var(--surface-2);color:var(--tx-2);font:var(--t-label);font-weight:500}
 .ld-mini button::before{content:"";position:absolute;inset:-4px 0}
-.ld-mini button[aria-pressed="true"]{background:var(--me-soft);color:var(--me);font-weight:600}
+.ld-mini button[aria-pressed="true"]{background:var(--me-soft);border-color:transparent;color:var(--me);font-weight:600}
+.ld-seg .seg button{background:var(--surface-2);border:1px solid var(--line-strong)}
 .ld-seg .seg button[aria-pressed="true"]{background:var(--me-soft);color:var(--me);border-color:transparent;font-weight:600}
 
 /* ---- カテゴリの色の印・色の選択 ---- */
