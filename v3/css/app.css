@@ -1134,3 +1134,19 @@ a.ax-row:active .ax-c{background:var(--sunk);transform:scale(.99)}
 /* v12.2: 余白は margin でなく padding で取る(軸の線は要素の内側にしか引けず、margin だと線が切れる) */
 .dh2{margin-top:0;margin-bottom:0;padding-top:30px;padding-bottom:10px}
 .dh2:first-child,.ax>a:first-child+.dh2{padding-top:10px}
+
+/* ===== v13: 青みのある背景を全画面に / 「帯のタブ」= カードの左端に付く小さな半カプセル ===== */
+:root{--bg:#F1F5FC;--bg-grad:linear-gradient(180deg,#F4F7FD 0%,#EAF1FD 55%,#F4F7FD 100%);--tab:var(--axis)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg-grad:none}}
+:root[data-theme="dark"]{--bg-grad:none}
+body{background-color:var(--bg);background-image:var(--bg-grad);background-attachment:fixed}
+.ax{background:none}
+/* 帯のタブ: 記録=青灰(出来事の色)、縁の行=青緑(縁の色)、予定にはつけない */
+.ax-c,.objs>.row{position:relative}
+.ax-row:not(.plan):not(.dim) .ax-c::before,.objs>.row::before{content:"";display:block;position:absolute;left:0;top:50%;width:4px;height:26px;margin-top:-13px;border-radius:0 4px 4px 0;background:var(--tab)}
+.ax-row:not(.plan):not(.dim) .ax-c::before{background:var(--ev-c);opacity:.85}
+.objs>.row:has(.kn)::before{background:var(--kin)}
+.objs>.row:not(:has(.kn))::before{background:var(--tab);opacity:.7}
+.objs>.row.ind::after{display:none}
+.list{background:var(--surface)}
+.objs>.row:not(:has(.kn))::before{display:none}
