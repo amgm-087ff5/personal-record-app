@@ -1174,3 +1174,10 @@ body{background-color:var(--bg);background-image:var(--bg-grad);background-attac
 .ld-exp{position:relative}
 .ld-exp .ld-pbar{position:absolute;left:9px;bottom:10px;width:38px;margin:0}
 .objs>.row.ld-exp::before{padding-bottom:14px}
+
+/* ===== v13.2: タイムラインは v12.2 の見た目に戻す(ユーザー指示「タイムラインを直して欲しいわけじゃない」)。ギザギザ・節の位置変更を取り消す。日付カードの固定解除は維持 ===== */
+.ax-row.pay .ax-c{border-radius:16px;box-shadow:var(--tl-sh);filter:none;margin-bottom:6px}
+.ax-row.pay .ax-c::after{display:none}
+.ax-node{margin-top:14px}
+.ax-node.fact{margin-top:15px}
+.ax-time{padding-top:19px}
