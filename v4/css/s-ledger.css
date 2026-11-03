@@ -1,0 +1,93 @@
+/* =====================================================================
+   画面: 家計簿(#/ledger, #/x/…, #/cats) — UI v4
+   色は tokens.css の変数だけ。1つの規則は1か所(js の style 注入はしない)。
+   ===================================================================== */
+
+/* ---- 月の切り替え(見出しの下) ---- */
+
+/* ---- 自分の支出の合計(v3の数値・前月比・内訳の棒。面は1枚) ---- */
+.ld-sum{padding:14px 16px 12px;display:flex;flex-direction:column;gap:10px}
+.ld-lbl{font:var(--t-label);color:var(--tx-2)}
+.ld-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ld-big{font:700 34px/1.1 var(--font);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.ld-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;background:var(--line)}
+.ld-bar i{display:block;height:100%;min-width:0}
+/* 固定費・変動費・非日常(押すと絞り込み) */
+.ld-fig{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
+.ld-fig button{display:flex;flex-direction:column;gap:2px;align-items:flex-start;padding:10px 14px;min-height:56px;text-align:left}
+.ld-fig button+button{border-left:1px solid var(--line)}
+.ld-fig button.on{background:var(--brand-soft)}
+.ld-fig .k{font:var(--t-cap);color:var(--tx-3)}
+.ld-fig .k.strong{color:var(--tx)}
+.ld-fig .v{font:600 15px/1.3 var(--font);font-variant-numeric:tabular-nums}
+
+/* ---- 推移(月ごとの横棒。今月は太い) ---- */
+.ld-chart{padding:12px 14px 10px;display:flex;flex-direction:column;gap:8px}
+.ld-tr{display:grid;grid-template-columns:32px 1fr auto;align-items:center;gap:8px;font:var(--t-cap);color:var(--tx-2)}
+.ld-tr .tb{min-width:0;position:relative}
+.ld-tr .ld-bar{height:12px;border-radius:3px;background:none;padding:0}
+.ld-tr .ld-bar i{border-radius:0}
+.ld-tr .v{font:500 13px/1 var(--font);color:var(--tx-2);min-width:72px;text-align:right}
+.ld-tr.on .mo,.ld-tr.on .v{color:var(--tx);font-weight:700}
+.ld-tr.on .ld-bar{height:14px}
+.ld-avg{position:absolute;top:-3px;bottom:-3px;width:0;border-left:1.5px dashed var(--tx-3);z-index:1}
+.ld-avgl{font:var(--t-cap);color:var(--tx-3)}
+.ld-avgl .tb span{display:block;white-space:nowrap;transform:translateX(calc(-100% + 4px));width:max-content}
+
+/* ---- 内訳(切替はピル。行は詰める) ---- */
+.ld-seg .seg{margin-bottom:10px}
+.ld-seg .seg button{height:34px}
+.ld-row{min-height:52px;padding:8px 14px}
+.ld-row.on{background:var(--brand-soft)}
+.ld-row .ld-m{display:block;margin-top:4px}
+.ld-row .meter{background:var(--line)}
+.ld-pct{color:var(--tx-3);font-weight:400;font-size:12px;margin-left:6px}
+/* 内訳の子カテゴリ(今月の絞り込みで出す): 字下げ+親からの細い線 */
+.ld-kid{padding-left:36px;background:linear-gradient(var(--line-strong),var(--line-strong)) 19px 0/1px 100% no-repeat}
+.ld-kid2{padding-left:58px;background:linear-gradient(var(--line-strong),var(--line-strong)) 19px 0/1px 100% no-repeat,linear-gradient(var(--line-strong),var(--line-strong)) 41px 0/1px 100% no-repeat}
+.ld-clear{padding:0 var(--gutter) 10px}
+.ld-clear .chip{height:36px}
+
+/* ---- 支出の一覧: 1件=1枚の半券チケット(白い面)。行の間は8px ---- */
+.ld-tix{display:flex;flex-direction:column;gap:8px;padding:0 var(--gutter)}
+/* 補足(店・カテゴリ・非日常)は行の中で折り返す(切らない) */
+.ld-tix .tkt-b .s{flex-wrap:wrap;white-space:normal;overflow:visible;row-gap:4px}
+.ld-tix .amt small{display:block;margin-top:3px;font:400 12px/1.2 var(--font);color:var(--tx-3);text-align:right}
+/* 支払いの棒(割り勘・立替の自分の区間) = 補足の中に小さく */
+.ld-pbar{display:inline-flex;width:32px;height:6px;border-radius:3px;overflow:hidden;flex:none;vertical-align:middle}
+.ld-pbar i{display:block;height:100%;min-width:0}
+.ld-pbar i.me{background:var(--me)}
+.ld-pbar i.rest{background:var(--axis)}
+.ld-pbar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 2px,color-mix(in srgb,var(--owe) 40%,transparent) 2px 4px)}
+
+/* ---- 支出の詳細: 親の支払いへの1行 + 半券チケット(主役) ---- */
+.ld-top{padding:6px var(--gutter) 0;display:flex;flex-direction:column;gap:8px}
+.ld-parent{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 2px;font:var(--t-label);color:var(--tx-2)}
+.ld-parent .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ld-parent .v{font:600 14px/1 var(--font);color:var(--tx);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ld-parent svg.i{width:16px;height:16px;color:var(--tx-3)}
+.ld-tap{width:100%;text-align:left}
+.ld-in{flex:1;min-width:0;height:44px;font:var(--t-body);color:var(--tx);outline:none;background:none;border:0}
+.ld-in::placeholder{color:var(--tx-3)}
+.ld-chk{color:var(--brand);display:grid;place-items:center}
+
+/* ---- 「区分」のピル(固定・変動 / 特別感 / 都度指定。詳細・編集・作成で共通) ---- */
+.ld-mini{display:inline-flex;flex-wrap:wrap;gap:6px}
+/* 未選択の面は --surface-2 + 輪郭(--sunk は暗いモードで墨に近いので使わない) */
+.ld-mini button{position:relative;height:36px;padding:0 14px;border-radius:var(--r-pill);border:1px solid var(--line-strong);background:var(--surface-2);color:var(--tx-2);font:var(--t-label);font-weight:500}
+.ld-mini button::before{content:"";position:absolute;inset:-4px 0}
+.ld-mini button[aria-pressed="true"]{background:var(--me-soft);border-color:transparent;color:var(--me);font-weight:600}
+.ld-seg .seg button{background:var(--surface-2);border:1px solid var(--line-strong)}
+.ld-seg .seg button[aria-pressed="true"]{background:var(--me-soft);color:var(--me);border-color:transparent;font-weight:600}
+
+/* ---- カテゴリの色の印・色の選択 ---- */
+.ld-sq{width:14px;height:6px;border-radius:3px;background:var(--cc);flex:none}
+.ld-sw{display:flex;flex-wrap:wrap;padding:0}
+.ld-sw .sw{width:44px;height:44px;border-radius:50%;display:grid;place-items:center}
+.ld-sw .sw::before{content:"";width:32px;height:32px;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 1px var(--line-strong)}
+.ld-sw .sw[aria-pressed="true"]::before{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--brand)}
+
+/* ---- カテゴリの木(#/cats): 1枚の面。子は親の印の真下から出る細い縦線で繋ぐ ---- */
+.ld-tree .row{min-height:var(--row)}
+.ld-tree .ld-node+.ld-node>.row::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--line)}
+.ld-tree .ld-kids{margin-left:21px;border-left:1px solid var(--line-strong)}

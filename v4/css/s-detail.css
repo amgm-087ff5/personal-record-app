@@ -1,0 +1,106 @@
+/* =====================================================================
+   画面: 出来事の詳細・品目・日のページ(UI v4)
+   出来事の詳細の最上部 = 上に日の札(白い面・押すと日のページ)、
+   その下に軸の切れ端(上下で薄れる)、そこに掛かった塗りのカプセル(記録)。
+   カプセルの下の └ は親→子(自分の支出の半券チケット)。前後の出来事は出さない。
+   ===================================================================== */
+
+/* ---------- 出来事の詳細の最上部(ui.js pinView の .pin) ---------- */
+.pin{--px:36px;--ax:17px;position:relative;margin:4px var(--gutter) 0;padding:0 0 22px var(--px)}
+/* 軸の切れ端: 上下で薄れる。予定の詳細(.pin-cur.fut)では点線 */
+.pin::before{content:"";position:absolute;left:calc(var(--ax) - 1px);top:0;bottom:0;width:2px;background:var(--axis-past);
+  -webkit-mask:linear-gradient(#0000,#000 22px,#000 calc(100% - 22px),#0000);mask:linear-gradient(#0000,#000 22px,#000 calc(100% - 22px),#0000)}
+.pin:has(>.pin-cur.fut)::before{background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
+
+/* 日の札: 1枚の白い面。軸から短い横棒でつながる */
+.pin>.dh2{position:relative;margin:0 0 16px;padding:12px 14px;border-radius:18px;background:var(--tl-card);box-shadow:var(--tl-sh)}
+.pin>.dh2::before{content:"";position:absolute;left:calc(var(--ax) - var(--px));top:50%;width:calc(var(--px) - var(--ax));height:2px;margin-top:-1px;background:var(--axis-past)}
+.pin>.dh2.future::before{background:var(--plan-ln)}
+
+/* 軸の上の節(カプセルの印): 軸の上に乗る小さい塗りの札。カプセルの1行目と中心を合わせる */
+.pin-cur{position:relative}
+.pin-cur>.node{position:absolute;left:calc(var(--ax) - var(--px) - 15px);top:18px;z-index:1;width:30px;height:18px;border-radius:9px;
+  background:var(--light),var(--ev);box-shadow:var(--hl-fill),0 0 0 4px var(--bg)}
+.pin-cur>.node::after{content:"";position:absolute;left:100%;top:50%;width:6px;height:2px;margin-top:-1px;background:var(--ev)}
+/* 予定(未記録): 中抜きの点線の節 */
+.pin-cur.late>.node{outline-color:var(--late)}
+.pin-cur.late>.node::after{background:var(--late)}
+
+/* カプセル(記録): 塗りのグラデ+左上の光+上端のハイライト(明るさで光を表す) */
+.cap{position:relative;padding:20px 22px 22px;border-radius:28px;background:var(--light),var(--ev);color:var(--on-cap);
+  box-shadow:var(--tl-sh),var(--hl-fill)}
+.cap .kind{display:flex;align-items:center;gap:8px;font:600 13px/1 var(--font);opacity:.9}
+.cap .kind svg.i{width:16px;height:16px}
+.cap .kind .tm{margin-left:auto;font:600 14px/1 var(--font);font-variant-numeric:tabular-nums}
+.cap h1{margin-top:12px;font:600 24px/1.25 var(--font);letter-spacing:-.01em}
+.cap .big{margin-top:6px;font:600 40px/1.1 var(--font);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.cap .meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font:var(--t-label);opacity:.92}
+.cap .meta span{display:inline-flex;align-items:center;gap:5px}
+.cap .meta svg.i{width:15px;height:15px}
+/* 予定のカプセル: 白い面+点線の輪郭(塗らない) */
+
+/* 支払いのカプセルの中の割合の棒(自分 / ほかの人 / 立替・未精算の斜線) */
+.cap .split{margin-top:16px}
+.cap .split .bar{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px;background:color-mix(in srgb,var(--on-cap) 22%,transparent)}
+.cap .split .bar i{display:block;height:100%}
+.cap .split .bar i.me{background:var(--on-cap)}
+.cap .split .bar i.other{background:color-mix(in srgb,var(--on-cap) 45%,transparent)}
+.cap .split .bar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 4px,color-mix(in srgb,var(--owe) 40%,transparent) 4px 8px)}
+.cap .split .lg{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font:var(--t-cap);opacity:.92}
+.cap .split .lg span{display:inline-flex;align-items:center;gap:6px}
+.cap .split .lg span::before{content:"";width:10px;height:10px;border-radius:3px;background:var(--on-cap)}
+.cap .split .lg span[style*="--owe"]::before{background:var(--owe)}
+.cap .split .lg span[style*="--axis"]::before{background:color-mix(in srgb,var(--on-cap) 45%,transparent)}
+.cap .split .lg b{font:600 13px/1 var(--font);color:inherit;font-variant-numeric:tabular-nums}
+
+/* 支払いの下の └ = 親→子(自分の支出の半券チケットを、カプセルからぶら下げる) */
+.hang{position:relative;margin:12px 0 0 28px}
+.hang::before{content:"";position:absolute;left:-18px;top:-12px;height:calc(50% + 12px);width:18px;border-left:2px solid var(--line-strong);border-bottom:2px solid var(--line-strong);border-bottom-left-radius:8px}
+
+/* 精算・完了の帯(支払いの詳細): 未精算=琥珀の帯。ボタンは見た目36px、当たり判定は44px以上 */
+.suggest.owe{background:var(--owe-soft)}
+.suggest .btn.sm{position:relative}
+.suggest .btn.sm::before{content:"";position:absolute;inset:-6px -4px}
+
+/* ---------- 品目の詳細(/i/…): 主役(名前+金額)→内訳→負担→編集 ---------- */
+.it-hero{margin:8px var(--gutter) 0;padding:24px 20px 22px;border-radius:20px;background:var(--tl-card);box-shadow:var(--tl-sh);text-align:center}
+.it-n{font:600 18px/1.4 var(--font);color:var(--tx)}
+.it-a{margin:6px 0 8px;font:600 44px/1.1 var(--font);letter-spacing:-.02em;color:var(--tx);font-variant-numeric:tabular-nums}
+.it-m{font:var(--t-cap);color:var(--tx-3)}
+.it-bs{display:flex;gap:8px;margin:0 var(--gutter)}
+.it-note{margin:10px var(--gutter) 0;font:var(--t-cap);color:var(--tx-3)}
+.it-memo{margin-top:20px}
+.it-memo label{display:block;font:var(--t-cap);color:var(--tx-3)}
+.it-memo input{display:block;width:100%;margin-top:6px;height:44px;border:1px solid var(--line-strong);border-radius:12px;padding:0 12px;font:var(--t-body);background:var(--surface);color:var(--tx);box-sizing:border-box}
+.sheet .it-memo{padding:0 16px}
+.sheet .it-memo input{width:100%}
+
+/* 品目の内訳(同じ品目を開いた子): 面ではなく、親の下の行。左の案内線だけ */
+.grp-kids{position:relative;margin:0 0 6px 34px}
+.grp-kids::before{content:"";position:absolute;left:-18px;top:-4px;bottom:50%;width:2px;background:var(--line-strong);border-radius:1px}
+.grp-kids .row.kid{min-height:44px;padding:6px 12px}
+.grp-kids .row.kid .t{font:var(--t-label);color:var(--tx-2)}
+.grp-kids .row.kid+.row.kid::before{left:12px}
+.kid-n{display:grid;place-items:center;width:22px;height:22px;flex:none;border-radius:50%;background:var(--sunk);font:600 12px/1 var(--font);color:var(--tx-2)}
+.grp-chev{display:inline-grid;vertical-align:-3px;margin-left:4px;color:var(--tx-3)}
+.grp-chev svg{width:16px;height:16px;transform:rotate(90deg);transition:transform .15s}
+.row.grp.open .grp-chev svg{transform:rotate(-90deg)}
+
+/* 負担の画面(シート内) */
+.bp-i{display:flex;flex-direction:column;gap:8px;padding:12px 14px}
+.bp-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font:500 15px/1.4 var(--font)}
+.bp-c{display:flex;gap:8px}
+.bp-w{display:flex;flex-direction:column;gap:12px;padding:12px 14px}
+.bp-w .ie-a{background:var(--surface-2)}
+
+/* ---------- 日のページ(/day/…): 大きな日付+日記本文 ---------- */
+.dp-date{display:flex;align-items:flex-end;gap:14px}
+.dp-date b{font:600 76px/.9 var(--font);letter-spacing:-.04em;color:var(--tx);font-variant-numeric:tabular-nums}
+.dp-date span{font:600 17px/1.3 var(--font);color:var(--tx);padding-bottom:4px}
+.dp-date small{display:block;font:var(--t-cap);color:var(--tx-3);margin-top:2px}
+.dp-text{display:block;width:100%;margin-top:18px;font:400 17px/1.95 var(--font);color:var(--tx);white-space:pre-wrap;text-align:left}
+.dp-text.none{font:var(--t-body);color:var(--tx-3);background:none;border:0;padding:0;min-height:44px}
+/* 写真: 小さく控えめに(空の箱は出さない。写真がある日だけ出る) */
+.dp-photos{display:flex;gap:8px;margin-top:14px;overflow-x:auto}
+.dp-ph{width:72px;height:72px;flex:none;border-radius:12px;display:block}
+.dp-kin{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 var(--gutter)}

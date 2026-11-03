@@ -1,0 +1,41 @@
+/* =====================================================================
+   UI v4 — 半券チケット = 自分の支出(v2「自分の支出=半券付きチケット」)
+   左に半券、半券と本体の境に上下の切れ込み、点線の切り取り線。
+   支払いの詳細の下にぶら下がる帯 / 自分の支出の詳細の最上部 / 家計簿の支出の行 で同じ形。
+   主役(詳細の最上部・支払いの下の帯)=自分の青の塗り(.fill)。一覧の行=白い面の半券(塗らない)。
+   影は外側の .tkt-w に drop-shadow で付ける(切れ込みの mask で影が消えないように)。
+   ===================================================================== */
+.tkt-w{--stub:56px;--nt:8px;display:block;position:relative;color:var(--tx);text-align:left;width:100%;
+  filter:drop-shadow(0 1px 1px rgba(40,70,130,.07)) drop-shadow(0 5px 12px rgba(60,100,180,.12))}
+.tkt{display:flex;align-items:stretch;min-height:64px;border-radius:14px;background:var(--tl-card);overflow:hidden;
+  -webkit-mask:radial-gradient(circle var(--nt) at var(--stub) 0,#0000 97%,#000) top/100% 51% no-repeat,radial-gradient(circle var(--nt) at var(--stub) 100%,#0000 97%,#000) bottom/100% 51% no-repeat;
+          mask:radial-gradient(circle var(--nt) at var(--stub) 0,#0000 97%,#000) top/100% 51% no-repeat,radial-gradient(circle var(--nt) at var(--stub) 100%,#0000 97%,#000) bottom/100% 51% no-repeat}
+.tkt-s{width:var(--stub);flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 4px;
+  background:var(--me-soft);color:var(--me);font:600 12px/1.25 var(--font);text-align:center;font-variant-numeric:tabular-nums}
+.tkt-s b{font:700 15px/1.1 var(--font)}
+.tkt-s svg.i{width:20px;height:20px}
+.tkt-b{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-left:2px dashed var(--line)}
+.tkt-b .main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.tkt-b .t{font:600 15px/1.35 var(--font);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tkt-b .s{display:flex;align-items:center;gap:6px;min-width:0;font:400 13px/1.35 var(--font);color:var(--tx-3);overflow:hidden;white-space:nowrap}
+.tkt-b .amt{flex:none;font:700 17px/1 var(--font);text-align:right}
+.tkt-b .chev{color:var(--tx-3);display:grid}
+.tkt-b .chev svg.i{width:16px;height:16px}
+a.tkt-w:active .tkt,button.tkt-w:active .tkt{filter:brightness(.97)}
+
+/* 主役: 自分の青の塗り+塗りの光(左上の光・上端のハイライト) */
+.tkt-w.fill{filter:drop-shadow(0 2px 2px rgba(40,70,160,.12)) drop-shadow(0 10px 18px rgba(45,89,184,.28))}
+.tkt-w.fill .tkt{background:var(--light),var(--me-fill);color:var(--on-me)}
+.tkt-w.fill .tkt-s{background:rgba(255,255,255,.12);color:var(--on-me)}
+.tkt-w.fill .tkt-b{border-left-color:rgba(255,255,255,.42)}
+.tkt-w.fill .tkt-b .s,.tkt-w.fill .tkt-b .chev{color:var(--on-me);opacity:.82}
+.tkt-w.fill .tag{background:rgba(255,255,255,.18);color:var(--on-me)}
+/* 詳細の最上部: 大きい */
+.tkt-w.lg{--stub:68px;--nt:10px}
+.tkt-w.lg .tkt{min-height:112px;border-radius:18px}
+.tkt-w.lg .tkt-s{font-size:12px}
+.tkt-w.lg .tkt-s svg.i{width:24px;height:24px}
+.tkt-w.lg .tkt-b{padding:16px 18px;align-items:flex-start}
+.tkt-w.lg .tkt-b .main{gap:6px}
+.tkt-w.lg .tkt-b .t{font:700 36px/1.1 var(--font);font-variant-numeric:tabular-nums;overflow:visible}
+.tkt-w.lg .tkt-b .s{font-size:14px;white-space:normal}
