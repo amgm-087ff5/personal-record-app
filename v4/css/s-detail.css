@@ -13,9 +13,6 @@
 .pin:has(>.pin-cur.fut)::before{background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
 
 /* 日の札: 1枚の白い面。軸から短い横棒でつながる */
-.pin>.dh2{position:relative;margin:0 0 16px;padding:12px 14px;border-radius:18px;background:var(--tl-card);box-shadow:var(--tl-sh)}
-.pin>.dh2::before{content:"";position:absolute;left:calc(var(--ax) - var(--px));top:50%;width:calc(var(--px) - var(--ax));height:2px;margin-top:-1px;background:var(--axis-past)}
-.pin>.dh2.future::before{background:var(--plan-ln)}
 
 /* 軸の上の節(カプセルの印): 軸の上に乗る小さい塗りの札。カプセルの1行目と中心を合わせる */
 .pin-cur{position:relative}

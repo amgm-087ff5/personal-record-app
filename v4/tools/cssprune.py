@@ -40,7 +40,10 @@ def prune(css, classes, prefixes, removed):
         lead = (m.group(1) or '') + (m.group(2) or '')
         sel = m.group(3)
         if sel.strip().startswith('@media') or sel.strip().startswith('@supports'):
-            inner = prune(body, classes, prefixes, removed)
+            sub = []
+            inner = prune(body, classes, prefixes, sub)
+            if sub:  # 取り出した規則は条件(@media 等)ごと保存する(条件を落とすと常に効いてしまう)
+                removed.append(f"{sel.strip()}{{{' '.join(sub)}}}")
             if inner.strip():
                 res.append(f'{lead}{sel}{{{inner}}}')
             else:

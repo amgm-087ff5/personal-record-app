@@ -32,12 +32,13 @@ route('activities',()=>{
   const allD=[...recordDates(),TODAY],minM=allD.sort()[0].slice(0,7),maxM=TODAY.slice(0,7);
   const pm=+TODAY.slice(5,7)===1?12:+TODAY.slice(5,7)-1;
   const s=daySpent(TODAY);
-  return largeTitle('タイムライン',{actions:[{text:'日記を書く',icon:'edit',primary:true,onclick:`openDiary('${TODAY}')`},{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"},{icon:'more',label:'このモックについて',onclick:'openAbout()'}]})
-    +`<div class="toolbar">${periodNav({label:`${+actMonth.slice(5)}月`,sub:actMonth.slice(0,4),prev:{on:'monthShift(-1)',dis:actMonth<=minM},next:{on:'monthShift(1)',dis:actMonth>=maxM}})}${chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")}</div>`
+  return largeTitle('タイムライン',{actions:[{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"},{icon:'more',label:'このモックについて',onclick:'openAbout()'}]})
+    +`<div class="mnav"><button type="button" aria-label="前の月" ${actMonth<=minM?'disabled':''} onclick="monthShift(-1)">${IC.back}</button><b>${actMonth.slice(0,4)}年${+actMonth.slice(5)}月</b><button type="button" class="nx" aria-label="次の月" ${actMonth>=maxM?'disabled':''} onclick="monthShift(1)">${IC.back}</button></div>`
+    +chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")
     +`<div class="ax">`
     +(isNow&&upcoming.length&&actFilter==='all'?`<a href="#/plan">${axEdge(`明日以降の予定 ${upcoming.length}件${IC.chev}`)}</a>`:'')
-    +(isNow?axGroup(dayHead(TODAY,{href:`#/day/${TODAY}`,diary:dayDiary(TODAY),empty:'今日の日記を書く',sum:s?`自分 ${yen(s)}`:''}),axDay(TODAY),{cls:'today'}):'')
-    +dates.map(d=>{const sp=daySpent(d);return axGroup(dayHead(d,{href:`#/day/${d}`,diary:dayDiary(d),sum:sp?`自分 ${yen(sp)}`:''}),axDay(d))}).join('')
+    +(isNow?dayHead(TODAY,{href:`#/day/${TODAY}`,diary:dayDiary(TODAY),empty:'今日の日記を書く',sum:s?`自分 ${yen(s)}`:''})+axDay(TODAY):'')
+    +dates.map(d=>{const sp=daySpent(d);return dayHead(d,{href:`#/day/${d}`,diary:dayDiary(d),sum:sp?`自分 ${yen(sp)}`:''})+axDay(d)}).join('')
     +(!isNow&&!dates.length?`<div class="it-note" style="text-align:center;padding:32px 0">この月の記録はありません</div>`:'')
     +`</div>`;
 },{tab:'activities'});
@@ -55,7 +56,7 @@ route('day',d=>{
     +`</section>`
     +`<div class="stats"><div><b>${items.filter(i=>i.kind==='rec').length}件</b><span>出来事</span></div>${sp?`<div><b>${yen(sp)}</b><span>自分の支出</span></div>`:''}</div>`+(people.size?sh('この日に交わった縁',people.size)+`<div class="dp-kin">${[...people].map(p=>eref(p)).join('')}</div>`:'')
     +sh('この日の時間軸')
-    +(items.length?`<div class="ax">${axGroup('',axDay(d),{cls:d===TODAY?'today':''})}</div>`:empty('activity','この日の出来事はまだありません',{label:'出来事を追加',onclick:`openNewHappening('${d}')`}));
+    +(items.length?`<div class="ax">${axDay(d)}</div>`:empty('activity','この日の出来事はまだありません',{label:'出来事を追加',onclick:`openNewHappening('${d}')`}));
 },{tab:'activities'});
 
 /* ---------- 出来事の詳細: その点の前後を切り取った軸 ---------- */

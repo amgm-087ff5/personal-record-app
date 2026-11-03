@@ -119,9 +119,9 @@ function dayHead(d,o={}){
   const txt=o.diary?esc(o.diary):(o.empty||'');
   return `<${tagN} class="dh2 ${d===TODAY?'today':''} ${o.future?'future':''} ${o.noax?'noax':''}" ${o.href?`href="${o.href}"`:''}><span class="dcard"><span class="dnum" aria-hidden="true"><b>${+d.slice(8)}</b><small>${WD[w]}</small></span><span class="dbody"><span class="dt"><b>${+d.slice(5,7)}月${+d.slice(8)}日 ${WD[w]}曜</b>${d===TODAY?'<span class="td">今日</span>':''}<span class="grow"></span>${o.sum?`<span class="sum">${o.sum}</span>`:''}</span>${txt?`<span class="dd ${o.diary?'':'none'}">${txt}</span>`:''}</span></span></${tagN}>`;
 }
-/** v4: 1日(または1か月)=1枚の面。head=日付の札(dayHead/monthHeadAx)、rows=その日の行。
-    o.future=面ごと未来(点線の軸) o.cls=追加クラス。軸は面の左の溝を途切れず通る(各部品が自分の区間を描く) */
-const axGroup=(head,rows,o={})=>`<section class="axg ${o.future?'future':''} ${o.cls||''}"><div class="axp">${head||''}${rows?`<div class="axp-rows">${rows}</div>`:''}</div></section>`;
+/** 日(または月)の札+その行。v4で「1日=1枚の面」にしたが、ユーザー評価「タイムラインはv3の方が良い」(11/03 22:49)で v3 の見た目に戻した。
+    呼び出し側はそのまま使えるよう、札と行を並べるだけにしてある */
+const axGroup=(head,rows)=>`${head||''}${rows||''}`;
 /** v4: 半券チケット=自分の支出(DESIGN.md v4)。どの画面でもこの1つの部品を使う。
     o:{href,onclick,stub(半券の中身HTML),t(題名),s(補足HTML),amt(金額HTML),cls:'fill'(主役・塗り)|'lg'(詳細の最上部)|'', label} */
 const ticket=o=>{const tagN=o.href?'a':o.onclick?'button':'div';const attr=o.href?`href="${o.href}"`:o.onclick?`type="button" onclick="${o.onclick}"`:'';

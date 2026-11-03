@@ -1,106 +1,204 @@
 /* =====================================================================
-   UI v4 — 時間軸と「日の面」(DESIGN.md v4)
-   1日=1枚の白い面(.axg > .axp)。上端に日付の札(.dh2)、その下に記録の行(.ax-row)。
-   軸はページ全体で1本。面の左の溝(--ax-x)を通り、各部品が自分の高さの区間を描くので、
-   面と面の間・余白でも切れない(余白は padding。margin は使わない)。
-   過去=実線(--axis-past) / 未来=点線(--plan-ln) / いま=赤い線と赤い時刻(点は付けない)。
+   時間軸 — v3(UI v13.2)の規則をそのまま戻した(2026-11-03 22:49 ユーザー評価「タイムラインはv3の方が良い」)。
+   v3 の app.css から、v3 と同じ順で取り出したもの。値を変えない。
    ===================================================================== */
-.ax{
-  --ax-x:22px;          /* 軸の中心(.ax の左端から) */
-  --px:44px;            /* 面の左端(.ax の左端から) */
-  --in:calc(var(--ax-x) - var(--px));   /* 面の中から見た軸の位置(負) */
-  --past:var(--axis-past);
-  --fut:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px);
-  position:relative;padding:4px var(--gutter) 8px 0;
-}
-/* 縁の時間軸: 軸の色=縁の色(その縁だけを通る糸) */
-.ax.thread{--past:var(--tc,var(--kin))}
 
-/* ---- 1日=1枚の面 ---- */
-.axg{position:relative;padding:0 0 12px var(--px)}
-.axg::after{content:"";position:absolute;left:calc(var(--ax-x) - 1px);bottom:0;height:12px;width:2px;background:var(--past)}
-.axg.future::after{background:var(--fut)}
-.axg:last-child::after{-webkit-mask:linear-gradient(#000,#0000);mask:linear-gradient(#000,#0000)}
-.axp{position:relative;background:var(--tl-card);border-radius:18px;box-shadow:var(--tl-sh)}
-.axp-rows{position:relative}
-
-/* 各部品の軸の区間(面の中から、左の溝へ) */
-.axp .dh2::before,.axp .ax-row::before,.axp .now::before,.axp .now::after{
-  content:"";position:absolute;left:calc(var(--in) - 1px);width:2px;top:0;bottom:0;background:var(--past)}
-.axp .dh2.today::before,.axp .dh2.future::before,.axg.future .dh2::before,.axp .ax-row.future::before{background:var(--fut)}
-
-/* ---- 日付の札(v12.1の形): 左に日付のブロック、右に月日・日記・その日の支出 ---- */
-.dh2{position:relative;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:18px 18px 0 0}
-a.dh2:active{background:var(--sunk)}
-.dh2 .dcard{display:contents}
-.dh2 .dnum{width:48px;height:48px;flex:none;border-radius:13px;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  background:var(--me-soft);color:var(--me);font-variant-numeric:tabular-nums}
-.dh2 .dnum b{font:700 22px/1 var(--font)}
-.dh2 .dnum small{font:600 12px/1 var(--font);margin-top:3px}
-.dh2.today .dnum{background:var(--light),var(--me-fill);color:var(--on-me);box-shadow:var(--hl-fill),0 6px 14px -8px var(--me)}
-.dh2 .dbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-.dh2 .dt{display:flex;align-items:baseline;gap:8px;min-width:0}
-.dh2 .dt b{font:700 16px/1.3 var(--font);color:var(--tx);white-space:nowrap}
-.dh2 .dt .td{font:600 13px/1 var(--font);color:var(--me)}
-.dh2 .dt .sum{font:500 13px/1 var(--font);color:var(--tx-3);font-variant-numeric:tabular-nums;white-space:nowrap}
-.dh2 .dd{font:400 13px/1.4 var(--font);color:var(--tx-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dh2 .dd.none{color:var(--tx-3)}
-/* 札と行の境目 */
-.axp .dh2+.axp-rows{border-top:1px solid var(--line)}
-/* 月の札(縁の時間軸): 日付ブロックなし */
-.dh2.month{padding:10px 14px}
-.dh2.month .dt b{font-size:15px}
-
-/* ---- 行=1件の記録(面の中の行。面ではない) ---- */
-.ax-row{position:relative;display:grid;grid-template-columns:58px 1fr;align-items:start;min-height:56px;padding:0 14px 0 0}
-.axp-rows>.ax-row+.ax-row>.ax-c,.axp-rows>.now+.ax-row>.ax-c{border-top:1px solid var(--line)}
-.axp-rows>.ax-row:last-child{border-radius:0 0 18px 18px}
-a.ax-row:active{background:var(--sunk)}
-.ax-time{padding:14px 0 0 14px;font:500 13px/21px var(--font);color:var(--tx-3);font-variant-numeric:tabular-nums;white-space:nowrap}
-.ax-time b{display:block;font:600 13px/21px var(--font);color:var(--tx-2)}
-.ax-time small{display:block;font:400 12px/1.2 var(--font);color:var(--tx-3)}
-/* 節: 軸の上の小さいカプセル。中心=行の1行目の中心(上14+行高21/2) */
-.ax-node{position:relative;flex:none;width:24px;height:17px;border-radius:9px;
-  display:grid;place-items:center;background:var(--light),var(--ev);color:var(--on-cap);box-shadow:var(--hl-fill),0 0 0 3px var(--bg)}
-.ax-node svg.i{width:11px;height:11px}
-.ax-row>.ax-node{position:absolute;left:calc(var(--in) - 12px);top:16px;z-index:1}
-.ax-row>.ax-node.fact{left:calc(var(--in) - 6.5px);top:20px}
-.ax-row>.ax-node.todo{left:calc(var(--in) - 8.5px)}
-.ax-node.plan{background:var(--surface);box-shadow:0 0 0 3px var(--bg);outline:2px dashed var(--plan);outline-offset:-2px;color:var(--plan)}
-.ax-node.plan.late{outline-color:var(--late);color:var(--late)}
-.ax-node.fact{width:13px;height:13px;border-radius:3px;transform:rotate(45deg);background:var(--light),var(--tc,var(--kin))}
-.ax-node.todo{border-radius:5px;width:17px;background:var(--surface);box-shadow:0 0 0 3px var(--bg),inset 0 0 0 2px var(--ev)}
-.ax-c{display:flex;align-items:flex-start;gap:10px;padding:14px 0 13px;min-width:0}
+.ax{--rail:30px;--tcol:60px;position:relative;padding:0 0 8px}
+.ax-row{display:grid;grid-template-columns:var(--tcol) var(--rail) 1fr;align-items:start;position:relative;min-height:52px}
+.ax-row::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:0;bottom:0;width:2px;background:var(--rail-c,var(--axis-past))}
+.ax .future{--rail-c:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
+.ax-row.future::before{background:var(--rail-c)}
+.ax-time{padding:15px 6px 0 8px;font:500 13px/1 var(--font);color:var(--tx-2);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ax-node{position:relative;z-index:1;justify-self:center;margin-top:10px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  background:var(--bg);box-shadow:inset 0 0 0 2px var(--axis-past);color:var(--tx-2)}
+.ax-node svg.i{width:13px;height:13px}
+.ax-node.pay{background:var(--c-expense);box-shadow:none;color:#fff}
+.ax-node.plan{box-shadow:none;background:var(--bg);outline:2px dashed var(--plan);outline-offset:-2px;color:var(--plan)}
+.ax-node.plan.late{outline-color:var(--warn);color:var(--warn)}
+.ax-node.todo{border-radius:6px;box-shadow:inset 0 0 0 2px var(--c-todo);color:var(--c-todo)}
+.ax-node.fact{width:14px;height:14px;margin-top:15px;border-radius:3px;transform:rotate(45deg);background:var(--bg);box-shadow:inset 0 0 0 2px var(--tc,var(--axis-past))}
+.ax-c{display:flex;align-items:flex-start;gap:10px;padding:10px var(--gutter) 10px 6px;min-width:0}
+a.ax-row:active .ax-c{background:linear-gradient(90deg,var(--sunk),#0000)}
 .ax-c .main{flex:1;min-width:0}
-.ax-c .t{font:600 15px/21px var(--font);color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ax-c .m{display:flex;align-items:center;gap:6px;margin-top:2px;min-height:20px;font:400 13px/1.4 var(--font);color:var(--tx-3);min-width:0}
+.ax-c .t{font:500 15px/1.4 var(--font);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ax-c .m{display:flex;align-items:center;gap:6px;margin-top:3px;font:var(--t-cap);color:var(--tx-3);min-width:0}
 .ax-c .m .ell{min-width:0}
-.ax-c .m .role{color:var(--tx-2)}
-.ax-c .amt{flex:none;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-.ax-c .amt b{font:700 17px/21px var(--font);color:var(--tx);font-variant-numeric:tabular-nums}
-.ax-c .amt small{font:400 12px/1 var(--font);color:var(--tx-3)}
-/* 予定=まだ起きていない: 節が点線の中抜き、題名は控えめ */
-.ax-row.plan .t{color:var(--tx-2);font-weight:500}
+.ax-c .amt{text-align:right;flex:none}
+.ax-c .amt b{display:block;font:600 15px/1.4 var(--font);font-variant-numeric:tabular-nums}
+.ax-c .amt small{display:block;font:var(--t-cap);color:var(--tx-3);margin-top:3px;font-variant-numeric:tabular-nums}
+.ax-row.plan .t{color:var(--tx-2)}
 .ax-row.dim .t{color:var(--tx-3);font-weight:400}
-.ax-row .tag.late{background:var(--late-soft);color:var(--late)}
-
-/* ---- いま: 今日の面を横切る赤い線と赤い時刻 ---- */
-.now{position:relative;display:grid;grid-template-columns:58px 1fr;align-items:center;height:26px}
-.axp .now::before{bottom:50%;background:var(--fut)}
-.axp .now::after{top:50%;background:var(--past)}
-.now .tm{padding-left:14px;font:700 12px/1 var(--font);color:var(--late);font-variant-numeric:tabular-nums}
-.now .dot{display:none}
-.now .ln{position:absolute;left:var(--in);right:14px;top:50%;height:2px;margin-top:-1px;border-radius:1px;background:var(--late);z-index:2}
-.now .tm{position:relative;z-index:3}
-.now .tm::after{content:"";position:absolute;inset:-2px -4px -2px 10px;z-index:-1;background:var(--tl-card)}
-
-/* ---- 軸の端: 上=未来の続き(点線で消える)、下=過去の続き ---- */
-.ax-edge{position:relative;display:flex;align-items:center;min-height:48px;padding-left:var(--px)}
-.ax-edge::before{content:"";position:absolute;left:calc(var(--ax-x) - 1px);top:0;bottom:0;width:2px;background:var(--fut);
-  -webkit-mask:linear-gradient(#0000,#000 70%);mask:linear-gradient(#0000,#000 70%)}
-.ax-edge.past::before{background:var(--past);-webkit-mask:linear-gradient(#000,#0000);mask:linear-gradient(#000,#0000)}
-.ax-edge .c{display:flex;align-items:center;gap:4px;min-height:44px;padding:0 4px;font:500 13px/1 var(--font);color:var(--tx-2)}
-.ax-edge .c svg.i{width:16px;height:16px}
+.now{display:grid;grid-template-columns:var(--tcol) var(--rail) 1fr;align-items:center;height:28px;position:relative}
+.now::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:0;height:50%;width:2px;background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
+.now::after{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:50%;bottom:0;width:2px;background:var(--axis-past)}
+.now .tm{padding-right:6px;text-align:right;font:600 12px/1 var(--font);color:var(--now);font-variant-numeric:tabular-nums}
+.now .dot{justify-self:center;width:10px;height:10px;border-radius:50%;background:var(--now);box-shadow:0 0 0 4px color-mix(in srgb,var(--now) 22%,transparent);z-index:1}
+.now .ln{height:1.5px;background:linear-gradient(90deg,var(--now),color-mix(in srgb,var(--now) 0%,transparent));margin-right:var(--gutter);position:relative}
+.now .ln span{position:absolute;left:6px;top:-9px;padding:0 6px;background:var(--bg);font:600 12px/18px var(--font);color:var(--now)}
+.ax-edge{display:grid;grid-template-columns:var(--tcol) var(--rail) 1fr;align-items:center;min-height:48px;position:relative}
+.ax-edge::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:0;bottom:0;width:2px;
+  background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px);-webkit-mask:linear-gradient(#0000,#000);mask:linear-gradient(#0000,#000)}
+.ax-edge.past::before{background:var(--axis-past);-webkit-mask:linear-gradient(#000,#0000);mask:linear-gradient(#000,#0000)}
+.ax-edge .c{grid-column:3;padding:0 var(--gutter) 0 6px;font:var(--t-label);color:var(--plan);display:flex;align-items:center;gap:4px}
+.ax-edge.past .c{color:var(--tx-3)}
+.ax-row.focus{min-height:auto;padding:6px 0}
+.ax-row.focus .ax-node{width:36px;height:36px;margin-top:18px;box-shadow:0 0 0 5px var(--bg),0 0 0 6px var(--line)}
+.ax-row.focus .ax-node svg.i{width:18px;height:18px}
+.ax-row.focus .ax-node:not(.pay):not(.plan){background:var(--tx);color:var(--surface);box-shadow:0 0 0 5px var(--bg)}
+.ax-row.focus .focus-card{grid-column:3;margin:0 var(--gutter) 0 6px}
+.ax-row.plan .mo-card{box-shadow:none;outline:2px dashed var(--plan);outline-offset:-2px}
+.ax-row.plan .mo-card::before{background:var(--plan)}
+.ax.thread{--axis-past:var(--tc)}
+.ax.thread .ax-row::before,.ax.thread .dh::before{width:3px;left:calc(var(--tcol) + var(--rail)/2 - 1.5px)}
+.ax-time b{display:block;font:600 14px/1 var(--font);color:var(--tx)}
+.ax-time small{display:block;font:var(--t-cap);color:var(--tx-3);margin-top:4px}
+.ax-row.focus .ax-time{padding-right:14px}
+.ax-node{background:var(--c-activity);box-shadow:none;color:#fff}
+.ax-node.pay{background:var(--c-expense)}
+.ax-node.plan{background:var(--surface);outline:2.5px dashed var(--plan);color:var(--plan)}
+.ax-node.plan.late{outline-color:var(--warn);color:var(--warn)}
+.ax-node.fact{background:var(--surface);box-shadow:inset 0 0 0 2.5px var(--tc,var(--axis-past))}
+.ax-row.dim .ax-node{opacity:.55}
+.ax-c .m{color:var(--tx-2)}
+.ax-node{background:var(--fill-act)}
+.ax-node.pay{background:var(--fill-pay)}
+.ax-node{width:30px;height:20px;border-radius:10px;margin-top:12px;background:var(--ev-c);color:var(--bg);box-shadow:0 0 0 3px var(--bg)}
+.ax-node.pay{background:var(--ev-c)}
+.ax-node svg.i{width:13px;height:13px}
+.ax-node.plan{background:var(--bg);outline:2px dashed var(--plan);outline-offset:-2px;color:var(--plan)}
+.ax-node.plan.late{outline-color:var(--late);color:var(--late)}
+.ax-node.fact{width:14px;height:14px;border-radius:3px;transform:rotate(45deg);margin-top:15px;background:var(--bg);box-shadow:inset 0 0 0 2.5px var(--kin)}
+.ax-row.dim .ax-node{opacity:1}
+.ax .future,.ax-row.future::before{--rail-c:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
+.now::before{background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
+.ax-edge::before{background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
+.ax-edge .c{color:var(--tx-2)}
+.now .dot{width:22px;height:3px;border-radius:2px;box-shadow:none;background:var(--late)}
+.now .ln{height:3px;border-radius:2px;background:linear-gradient(90deg,var(--late),color-mix(in srgb,var(--late) 0%,transparent))}
+.now .ln span{color:var(--late);font-size:12px}
+.now .tm{color:var(--late)}
+.dh2{display:block;position:relative;padding:22px var(--gutter) 6px calc(var(--tcol) + var(--rail) + 6px);position:sticky;top:0;z-index:5;
+  background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(10px)}
+.dh2::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:0;bottom:0;width:2px;background:var(--axis-past)}
+.dh2.future::before{background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
+.dh2 .rule{position:absolute;left:8px;right:var(--gutter);top:10px;height:3px;border-radius:2px;background:var(--tx)}
+.dh2.today .rule{background:var(--me)}
+.dh2 .dt{display:flex;align-items:baseline;gap:8px;position:relative}
+.dh2 .dt b{font:700 19px/1.3 var(--font);font-variant-numeric:tabular-nums;color:var(--tx)}
+.dh2 .dt .wd{font:500 13px/1 var(--font);color:var(--tx-2)}
+.dh2 .dt .td{font:600 12px/1 var(--font);color:var(--on-me);background:var(--me);padding:4px 8px;border-radius:6px}
+.dh2 .dt .sum{font:500 13px/1 var(--font);color:var(--tx-2);font-variant-numeric:tabular-nums}
+.dh2 .dd{display:block;margin-top:4px;font:var(--t-label);color:var(--tx-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dh2 .dd.none{color:var(--tx-3)}
+a.dh2:active .dt b{text-decoration:underline}
+.dh2.month .dt b{font-size:15px}
+.ax.thread .dh2::before{background:var(--kin);width:3px}
+.ax-node{color:var(--on-cap)}
+.ax-node.plan{color:var(--plan)}
+.pin .dh2{--tcol:0px;--rail:20px;position:relative;top:auto;margin-left:-30px;padding:22px 0 6px 30px;background:none;backdrop-filter:none}
+.pin .dh2 .rule{left:0;right:0}
+.dh2.noax{position:relative;top:auto;padding:22px var(--gutter) 8px;background:none;backdrop-filter:none}
+.dh2.noax::before{display:none}
+.dh2.noax .rule{left:var(--gutter);right:var(--gutter)}
+.dh2 .dt .grow{flex:1}
+.ax-node.fact{background:var(--kin);box-shadow:0 0 0 3px var(--bg)}
+.dh2 .rule{height:1px;background:var(--line-strong)}
+.dh2.today .rule{height:2px;background:var(--me)}
+.dh2 .dt .td{background:none;padding:0;color:var(--me);font:600 13px/1 var(--font)}
+.dh2 .dt .sum,.dh2 .dd{color:var(--tx-3)}
+.ax-time{color:var(--tx-3)}
+.ax-c .m{color:var(--tx-3)}
+.now .ln{height:2px;background:var(--late)}
+.now .dot{width:12px;height:2px}
+.ax-c .amt .pbar{width:56px;height:5px;margin-top:5px}
+.ax-node,.ax-node.pay{background:var(--ev);color:var(--on-cap)}
+.ax-node.plan{background:var(--bg);color:var(--plan)}
+.dh2,.dh2.noax,.pin .dh2{padding:6px 8px;background:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+.dh2 .rule{display:none}
+.dh2::before{z-index:0}
+.dh2 .dcard{display:block;position:relative;z-index:1;border-radius:var(--r-md);padding:10px 14px 10px calc(var(--tcol) + var(--rail) - 2px);
+  background:color-mix(in srgb,var(--surface) 62%,transparent);-webkit-backdrop-filter:blur(14px) saturate(1.6);backdrop-filter:blur(14px) saturate(1.6);
+  box-shadow:var(--e1),var(--hl),0 0 0 1px color-mix(in srgb,var(--line) 70%,transparent)}
+.dh2.today .dcard{box-shadow:var(--e1),var(--hl),0 0 0 1.5px var(--me)}
+.dh2.noax .dcard{padding-left:14px}
+.dh2.noax{padding:16px 8px 8px}
+.pin .dh2{margin-left:-30px;padding:6px 0}
+.pin .dh2 .dcard{padding-left:30px}
+.dh2.month .dcard{padding-top:8px;padding-bottom:8px}
+a.dh2:active .dcard{background:color-mix(in srgb,var(--sunk) 80%,transparent)}
+.ax-row::before,.dh2::before{opacity:.7}
+.dh2 .dcard,.dh2.noax .dcard,.pin .dh2 .dcard{padding:10px 16px}
+.dh2.month .dcard{padding:8px 16px}
+.pin .dh2::before{-webkit-mask:linear-gradient(#0000,#000 70%);mask:linear-gradient(#0000,#000 70%)}
+.ax-node:not(.plan):not(.fact){background:var(--light),var(--ev)}
+.dh2 .dcard{background:color-mix(in srgb,var(--surface) 58%,transparent);-webkit-backdrop-filter:blur(5px) saturate(1.4);backdrop-filter:blur(5px) saturate(1.4)}
+.ax-row::before,.dh2::before{opacity:.8}
+.ax-c .m .role{font:600 12px/1 var(--font);color:var(--tx-2);margin-right:2px}
+.dh2 .dcard{box-shadow:var(--e1),var(--hl),0 0 0 1px color-mix(in srgb,var(--line) 70%,transparent)}
+.dh2.today .dcard{background:color-mix(in srgb,var(--me) 8%,color-mix(in srgb,var(--surface) 62%,transparent));
+  box-shadow:var(--e1),var(--hl),0 0 0 1px color-mix(in srgb,var(--me) 55%,transparent),0 0 10px 1px color-mix(in srgb,var(--me) 30%,transparent),0 0 26px 2px color-mix(in srgb,var(--me) 13%,transparent)}
+.dh2 .dcard{background:color-mix(in srgb,var(--me) 2.5%,color-mix(in srgb,var(--surface) 60%,transparent));
+  box-shadow:var(--e1),var(--hl),0 0 0 1px color-mix(in srgb,var(--me) 14%,var(--line)),0 0 9px 0 color-mix(in srgb,var(--me) 9%,transparent)}
+.dh2.today .dcard{background:color-mix(in srgb,var(--me) 9%,color-mix(in srgb,var(--surface) 60%,transparent));
+  box-shadow:var(--e1),var(--hl),0 0 0 1px color-mix(in srgb,var(--me) 60%,transparent),0 0 10px 1px color-mix(in srgb,var(--me) 34%,transparent),0 0 28px 3px color-mix(in srgb,var(--me) 15%,transparent)}
+.dh2 .dcard{background:var(--dcard-bg);-webkit-backdrop-filter:none;backdrop-filter:none;
+  box-shadow:0 1px 2px rgba(60,90,140,.06),0 0 0 1px var(--glow-hi),0 0 12px 1px color-mix(in srgb,var(--glow) 55%,transparent),0 0 28px 3px color-mix(in srgb,var(--glow) 28%,transparent)}
+.dh2.today .dcard{background:var(--dcard-bg);
+  box-shadow:0 1px 2px rgba(60,90,140,.06),0 0 0 1.5px var(--glow),0 0 14px 2px color-mix(in srgb,var(--glow) 80%,transparent),0 0 38px 6px color-mix(in srgb,var(--glow) 45%,transparent)}
+a.dh2:active .dcard{background:var(--sunk)}
+.ax{--tcol:52px;--rail:26px;background:linear-gradient(180deg,var(--tl-bg1),var(--tl-bg2) 60%,var(--tl-bg1));padding-bottom:24px}
+.ax-row::before{width:1.5px;opacity:.7}
+.ax-time{font:600 12px/1 var(--font);color:var(--tx-3);padding-top:19px;text-align:right;padding-right:4px;font-variant-numeric:tabular-nums}
+.ax-row{min-height:0}
+.ax-c{margin:6px var(--gutter) 6px 4px;padding:12px 14px;background:var(--tl-card);border-radius:16px;box-shadow:var(--tl-sh);align-items:center;gap:12px}
+.ax-row.plan .ax-c,.ax-row.dim .ax-c{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line-strong);border-style:dashed}
+.ax-row.plan .ax-c{box-shadow:none;border:1.5px dashed var(--line-strong)}
+a.ax-row:active .ax-c{background:var(--sunk);transform:scale(.99)}
+.ax-c .t{font:600 15.5px/1.35 var(--font);letter-spacing:.01em}
+.ax-c .m{margin-top:4px}
+.ax-c .amt b{font:700 17px/1.2 var(--font);letter-spacing:-.01em}
+.ax-node{margin-top:14px}
+.dh2 .dcard{border-radius:18px}
+.dh2{margin-top:30px;margin-bottom:10px;padding-top:0}
+.dh2:first-child,.ax>a:first-child+.dh2{margin-top:10px}
+.dh2 .dcard,.dh2.today .dcard{display:flex;align-items:center;gap:14px;padding:10px 16px 10px 10px;background:var(--surface);border-radius:16px;box-shadow:none;border:1px solid var(--line);-webkit-backdrop-filter:none;backdrop-filter:none}
+.dh2.today .dcard{border-color:var(--me)}
+.dh2 .dnum{flex:none;width:52px;height:56px;border-radius:14px;background:#E3EEFF;color:#2D59B8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.dh2 .dnum b{font:700 24px/1 var(--font);font-variant-numeric:tabular-nums}
+.dh2 .dnum small{font:600 12px/1 var(--font);letter-spacing:.04em}
+.dh2.today .dnum{background:var(--me);color:#fff}
+.dh2 .dbody{flex:1;min-width:0;display:block}
+.dh2 .dt{display:flex;align-items:baseline;gap:8px}
+.dh2 .dt b{font:700 15px/1.3 var(--font)}
+.dh2.month .dnum{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dh2 .dnum{background:#1E2A44;color:#A9CCFF} :root:not([data-theme="light"]) .dh2.today .dnum{background:var(--me-fill);color:#fff}}
+:root[data-theme="dark"] .dh2 .dnum{background:#1E2A44;color:#A9CCFF}
+.mnav{display:flex;align-items:center;justify-content:center;gap:18px;padding:4px var(--gutter) 8px}
+.mnav b{font:700 16px/1 var(--font);min-width:110px;text-align:center}
+.mnav button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line-strong);background:var(--surface);color:var(--tx-2);display:flex;align-items:center;justify-content:center}
+.mnav button.nx svg{transform:rotate(180deg)}
+.mnav button:disabled{opacity:.3}
+.mnav button{position:relative}
+.mnav button::before{content:"";position:absolute;inset:-4px}
+.dh2{margin-top:0;margin-bottom:0;padding-top:30px;padding-bottom:10px}
+.dh2:first-child,.ax>a:first-child+.dh2{padding-top:10px}
+.ax{background:none}
+.ax-c{position:relative}
+.ax-row:not(.plan):not(.dim) .ax-c::before{content:"";display:block;position:absolute;left:0;top:50%;width:4px;height:26px;margin-top:-13px;border-radius:0 4px 4px 0;background:var(--tab)}
+.ax-row:not(.plan):not(.dim) .ax-c::before{background:var(--ev-c);opacity:.85}
+.ax-row:not(.plan):not(.dim) .ax-c::before{display:none!important}
+.dh2,.dh2.noax{position:relative;top:auto;background:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+.ax-node{margin-top:18px}
+.ax-node.fact{margin-top:21px}
+.ax-time{padding-top:22px}
+.ax-row.pay .ax-c{border-radius:16px 16px 0 0;box-shadow:none;filter:drop-shadow(0 1px 1.5px rgba(40,70,130,.10)) drop-shadow(0 5px 8px rgba(60,100,180,.10));margin-bottom:12px}
+.ax-row.pay .ax-c::after{content:"";position:absolute;left:0;right:0;top:100%;height:7px;background:var(--tl-card);
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50% 0/14px 100%;mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50% 0/14px 100%}
+.ax-row.pay .ax-c{border-radius:16px;box-shadow:var(--tl-sh);filter:none;margin-bottom:6px}
+.ax-row.pay .ax-c::after{display:none}
+.ax-node{margin-top:14px}
+.ax-node.fact{margin-top:15px}
+.ax-time{padding-top:19px}
 
 /* ---- 見出しの下の道具の段: 月の切替+絞り込み(1段) ---- */
 .toolbar{display:flex;align-items:center;gap:8px;padding:2px 0 12px var(--gutter)}
