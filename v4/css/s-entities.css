@@ -1,0 +1,18 @@
+/* 画面: entities — v3から移した規則(担当エージェントが書き直す) */
+.eh{display:flex;align-items:center;gap:16px;padding:8px var(--gutter) 4px}
+.eh h1{font:var(--t-display);font-size:26px}
+.crumb{display:flex;flex-wrap:wrap;align-items:center;gap:2px 4px;margin-top:6px;font:var(--t-label);color:var(--tx-2)}
+.crumb a{padding:2px 0}
+.crumb .sep{color:var(--tx-3)}
+.crumb .also{margin-left:6px;color:var(--tx-3)}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:0;margin:12px var(--gutter) 0;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--e1),var(--hl);overflow:hidden}
+.facts dt,.facts dd{padding:11px 14px;border-top:1px solid var(--line);font:var(--t-body);min-height:44px;display:flex;align-items:center}
+.facts dt{font:var(--t-label);color:var(--tx-3);padding-right:6px;white-space:nowrap}
+.facts dd{gap:8px;flex-wrap:wrap;min-width:0}
+.facts dt:first-of-type,.facts dt:first-of-type+dd{border-top:0}
+.facts dd .since{margin-left:auto;font:var(--t-cap);color:var(--tx-3);white-space:nowrap}
+.en-memo::before,.en-doc::before{background:var(--kin)}
+.en-ago{display:flex;flex-direction:column;align-items:flex-end;gap:3px;font:var(--t-label);color:var(--tx-2);white-space:nowrap}
+.en-ago small{font:var(--t-cap);color:var(--tx-3)}
+.rel-dir{color:var(--tx-3);font:500 14px/1 var(--font);margin-right:2px}
+.eh h1{font-size:22px}

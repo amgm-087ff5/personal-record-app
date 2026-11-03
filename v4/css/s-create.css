@@ -1,0 +1,6 @@
+/* 画面: create — v3から移した規則(担当エージェントが書き直す) */
+.cr-b{position:relative}
+.cr-b::before{content:"";position:absolute;inset:-6px 0}
+.ie-tax .cr-b{height:40px;min-width:64px}
+.bp-c .cr-b{flex:1;height:44px;font-size:14px}
+.it-bs .cr-b{flex:1;height:44px}

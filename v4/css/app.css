@@ -1,0 +1,679 @@
+/* =====================================================================
+   個人記録 UI v3 — デザインシステム
+   方針: 静かな面 + 1か所だけ強い要素(タイムラインの軸)。
+   クラス(データモデル)は「形の印(glyph)」と「色」で示し、面そのものは揃える。
+   ===================================================================== */
+
+/* ---------- Tokens ---------- */
+
+/* ---------- Base ---------- */
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;color-scheme:light dark}
+body{font:var(--t-body);color:var(--tx);background:var(--bg);min-height:100dvh;-webkit-font-smoothing:antialiased;font-feature-settings:"palt" 1}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit;background:none;border:0}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:6px}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+.grow{flex:1;min-width:0}
+.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.muted{color:var(--tx-2)} .faint{color:var(--tx-3)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+svg.i{width:20px;height:20px;flex:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- App shell ---------- */
+#app{max-width:720px;margin:0 auto;min-height:100dvh;padding-bottom:calc(var(--nav-h) + 24px + env(safe-area-inset-bottom))}
+.screen{animation:in .18s var(--ease)}
+@keyframes in{from{opacity:.4;transform:translateY(4px)}}
+
+/* Top app bar (詳細画面・サブ画面) */
+.appbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:4px;height:56px;padding:0 4px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:saturate(1.4) blur(12px)}
+.appbar.scrolled{box-shadow:0 1px 0 var(--line)}
+.appbar .title{font:var(--t-head);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px}
+.iconbtn{width:var(--tap);height:var(--tap);display:grid;place-items:center;border-radius:var(--r-pill);color:var(--tx-2)}
+.iconbtn:hover{background:var(--sunk)} .iconbtn:active{background:var(--line)}
+.iconbtn svg.i{width:22px;height:22px}
+
+/* Large title (タブのトップ) */
+.lt{padding:12px var(--gutter) 4px;display:flex;align-items:center;gap:8px}
+.lt h1{font:var(--t-display);letter-spacing:.01em;flex:1}
+.lt .iconbtn{margin-right:-10px}
+/* サマリ: 1行の数値。タップで該当画面へ */
+.metrics{display:flex;gap:8px;padding:6px var(--gutter) 14px;overflow-x:auto;scrollbar-width:none}
+.metrics::-webkit-scrollbar{display:none}
+.metric{flex:none;display:flex;align-items:baseline;gap:6px;height:36px;padding:0 12px;border-radius:var(--r-pill);background:var(--surface);box-shadow:var(--e1);font:var(--t-label);color:var(--tx-2);white-space:nowrap}
+.metric b{font:600 15px/1 var(--font);color:var(--tx)}
+.mt{margin-top:10px}
+.metric.alert b{color:var(--danger)}
+.metric:active{background:var(--sunk)}
+
+/* Segmented control */
+.seg{display:flex;padding:3px;margin:0 var(--gutter) 12px;background:var(--sunk);border-radius:var(--r-sm);gap:2px}
+.seg button{flex:1;height:34px;border-radius:8px;font:var(--t-label);color:var(--tx-2)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--tx);box-shadow:var(--e1);font-weight:600}
+
+/* Filter chips (横スクロール) */
+.chips{display:flex;gap:8px;padding:0 var(--gutter) 12px;overflow-x:auto;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:32px;padding:0 12px;border-radius:var(--r-pill);border:1px solid var(--line-strong);font:var(--t-label);color:var(--tx-2);display:inline-flex;align-items:center;gap:6px;background:var(--surface)}
+.chip[aria-pressed="true"]{background:var(--tx);border-color:var(--tx);color:var(--surface)}
+.chip .n{font-weight:400;opacity:.7}
+
+/* Section header */
+.sh{display:flex;align-items:center;gap:8px;padding:20px var(--gutter) 8px}
+.sh h2{font:600 13px/1.4 var(--font);color:var(--tx-2);letter-spacing:.02em}
+.sh .n{font:var(--t-cap);color:var(--tx-3)}
+.sh .act{margin-left:auto;font:var(--t-label);color:var(--brand);min-height:32px;display:inline-flex;align-items:center;gap:4px;padding:0 4px}
+
+/* ---------- List (inset grouped) ---------- */
+.list{margin:0 var(--gutter);background:var(--surface);border-radius:var(--r-md);box-shadow:var(--e1),var(--hl);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;min-height:var(--row);padding:10px 14px;position:relative}
+.row+.row::before{content:"";position:absolute;top:0;left:54px;right:0;height:1px;background:var(--line)}
+.row.plain+.row.plain::before,.list.flat .row+.row::before{left:14px}
+a.row:active,button.row:active,.row.tap:active{background:var(--sunk)}
+button.row{width:100%;text-align:left}
+.row .t{font:500 15px/1.4 var(--font);color:var(--tx)}
+.row .s{font:var(--t-cap);color:var(--tx-3);margin-top:2px}
+.row .v{font:500 15px/1.4 var(--font);color:var(--tx);text-align:right}
+.row .v.amt{font-weight:600}
+.row .chev{color:var(--tx-3);width:16px;height:16px}
+.row .time{font:500 13px/1 var(--font);color:var(--tx-2);width:40px;flex:none}
+/* property row: ラベル | 値 */
+.prop{display:flex;align-items:center;gap:12px;min-height:48px;padding:10px 14px;position:relative}
+.prop+.prop::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--line)}
+.prop .k{width:84px;flex:none;font:var(--t-label);color:var(--tx-3)}
+.prop .val{flex:1;min-width:0;font:var(--t-body);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.prop .meta{font:var(--t-cap);color:var(--tx-3)}
+.more{display:flex;align-items:center;justify-content:center;gap:4px;height:44px;font:var(--t-label);color:var(--brand);width:100%;border-top:1px solid var(--line)}
+
+/* ---------- Ref (エンティティ等への参照) ---------- */
+.ref{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px 0 2px;border-radius:3px 10px 10px 10px;background:var(--c-entity-soft);color:var(--c-entity);font:500 14px/1 var(--font);max-width:100%}
+.ref .av{width:24px;height:24px;font-size:12px;border-radius:2px 8px 8px 8px;background:var(--surface)}
+.ref.unreg{background:transparent;border:1.5px dashed var(--line-strong);color:var(--tx-2);padding-left:10px}
+.ref.act{border-radius:var(--r-pill);background:var(--c-activity-soft);color:var(--c-activity);padding:0 10px}
+.ref.act svg.i{width:15px;height:15px}
+/* tag: 種類・カテゴリ */
+.tag{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:6px;background:var(--sunk);color:var(--tx-2);font:500 12px/1 var(--font);white-space:nowrap}
+.tag .dot{width:8px;height:8px;border-radius:2px;background:var(--cc,var(--tx-3))}
+.tag.special{background:var(--special-soft);color:var(--special)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.danger{background:var(--danger-soft);color:var(--danger)}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.brand{background:var(--brand-soft);color:var(--brand)}
+
+/* ---------- Buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;padding:0 20px;border-radius:var(--r-sm);font:600 15px/1 var(--font);background:var(--brand);color:var(--brand-ink);box-shadow:var(--e1)}
+.btn:active{background:var(--brand-press)}
+.btn.block{width:100%}
+.btn.sm{height:36px;padding:0 14px;font-size:14px}
+.btn.tonal{background:var(--brand-soft);color:var(--brand);box-shadow:none}
+.btn.ghost{background:transparent;color:var(--brand);box-shadow:none}
+.btn.danger{background:var(--danger-soft);color:var(--danger);box-shadow:none}
+.btn[disabled]{opacity:.45;pointer-events:none}
+.btnrow{display:flex;gap:8px;padding:12px var(--gutter)}
+.btnrow .btn{flex:1}
+
+/* Suggest (サジェスト + ボタン1つ) */
+.suggest{display:flex;align-items:center;gap:12px;margin:12px var(--gutter) 0;padding:12px 14px;border-radius:var(--r-md);background:var(--brand-soft)}
+.suggest .t{font:var(--t-label);color:var(--tx);flex:1}
+
+/* ---------- Bottom nav + FAB ---------- */
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:40;height:calc(var(--nav-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(14px) saturate(1.4);border-top:1px solid var(--line);display:flex;justify-content:center}
+.nav-in{display:grid;grid-template-columns:repeat(5,1fr);width:100%;max-width:720px}
+.nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:500 12px/1 var(--font);color:var(--tx-3);position:relative}
+.nav a .pill{width:56px;height:30px;border-radius:var(--r-pill);display:grid;place-items:center;transition:background .2s}
+.nav a[aria-current="page"]{color:var(--tx)}
+.nav a[aria-current="page"] .pill{background:var(--brand-soft);color:var(--brand)}
+.nav .badge{position:absolute;top:6px;left:calc(50% + 8px);min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--danger);color:#fff;font:600 12px/16px var(--font);text-align:center}
+.fab-slot{display:grid;place-items:center}
+.fab{width:56px;height:56px;border-radius:18px;background:var(--brand);color:var(--brand-ink);display:grid;place-items:center;box-shadow:var(--e3);transform:translateY(-14px);transition:transform .2s var(--ease)}
+.fab:active{transform:translateY(-12px) scale(.96)}
+.fab svg.i{width:26px;height:26px}
+
+/* ---------- Sheet / Dialog ---------- */
+.scrim{position:fixed;inset:0;z-index:60;background:rgba(10,14,22,.42);opacity:0;transition:opacity .2s;pointer-events:none}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:61;max-width:720px;margin:0 auto;max-height:92dvh;display:flex;flex-direction:column;background:var(--bg);border-radius:var(--r-lg) var(--r-lg) 0 0;box-shadow:var(--e3);transform:translateY(105%);transition:transform .26s var(--ease)}
+.sheet.on{transform:none}
+.sheet.full{height:96dvh}
+.sheet .grab{width:36px;height:4px;border-radius:2px;background:var(--line-strong);margin:8px auto 0;flex:none}
+.sheet-h{display:flex;align-items:center;gap:4px;padding:4px 12px 4px 4px;min-height:52px;flex:none}
+.sheet-h .title{font:var(--t-head);flex:1;text-align:center}
+.sheet-h .btn{height:36px;padding:0 14px;font-size:14px}
+.sheet-h .txtbtn{min-width:64px;height:44px;padding:0 12px;font:500 15px/1 var(--font);color:var(--brand)}
+.sheet-b{overflow-y:auto;padding-bottom:calc(24px + env(safe-area-inset-bottom));flex:1}
+.sheet-f{flex:none;padding:12px var(--gutter) calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--surface);display:flex;gap:8px}
+.sheet-f .btn{flex:1}
+/* Action list in create sheet */
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:8px var(--gutter) 4px}
+.action{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:14px;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1),var(--hl);text-align:left;min-height:92px}
+.action:active{background:var(--sunk)}
+.action .t{font:600 15px/1.3 var(--font)}
+.action .s{font:var(--t-cap);color:var(--tx-3)}
+.action.primary{grid-column:1/-1;flex-direction:row;align-items:center;min-height:64px;background:var(--brand);color:var(--brand-ink)}
+.action.primary .s{color:currentColor;opacity:.75}
+.action.primary .g{background:rgba(255,255,255,.18);color:#fff}
+
+/* ---------- Forms ---------- */
+.field{display:flex;align-items:center;gap:12px;min-height:52px;padding:6px 14px;position:relative}
+.field+.field::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--line)}
+.field>label,.field>.k{width:84px;flex:none;font:var(--t-label);color:var(--tx-3)}
+.field input,.field select,.field textarea{flex:1;min-width:0;height:40px;font:var(--t-body);color:var(--tx);outline:none}
+.field textarea{height:auto;min-height:80px;padding:8px 0;resize:vertical;line-height:1.6}
+.field input::placeholder,.field textarea::placeholder{color:var(--tx-3)}
+.field .amt{font:700 22px/1 var(--font);text-align:right;font-variant-numeric:tabular-nums}
+.input{width:100%;height:48px;padding:0 14px;border-radius:var(--r-sm);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line-strong);font:var(--t-body);outline:none}
+.input:focus{box-shadow:inset 0 0 0 2px var(--brand)}
+.toggle{width:48px;height:28px;border-radius:14px;background:var(--line-strong);position:relative;flex:none;transition:background .2s}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:var(--e1);transition:transform .2s var(--ease)}
+.toggle[aria-checked="true"]{background:var(--brand)} .toggle[aria-checked="true"]::after{transform:translateX(20px)}
+.check{width:24px;height:24px;flex:none;border-radius:7px;border:2px solid var(--c-todo);display:grid;place-items:center;color:#fff}
+.check[aria-checked="true"]{background:var(--c-todo)}
+.check svg.i{width:16px;height:16px}
+.check.lg{width:28px;height:28px}
+.hint{font:var(--t-cap);color:var(--tx-3);padding:6px var(--gutter) 0}
+
+/* ---------- Charts ---------- */
+.bar100{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;background:var(--sunk)}
+.bar100 i{display:block;height:100%}
+.meter{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.meter i{display:block;height:100%;border-radius:3px}
+
+/* ---------- Feedback ---------- */
+.toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + 20px + env(safe-area-inset-bottom));z-index:80;transform:translate(-50%,20px);opacity:0;display:flex;align-items:center;gap:16px;min-height:48px;padding:0 8px 0 16px;max-width:calc(100% - 32px);width:max-content;border-radius:var(--r-sm);background:var(--tx);color:var(--surface);font:var(--t-label);box-shadow:var(--e3);transition:all .22s var(--ease);pointer-events:none}
+.toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.toast button{color:var(--brand-soft);font-weight:600;height:40px;padding:0 10px}
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;padding:40px 32px;color:var(--tx-2);font:var(--t-label)}
+.empty .g{width:48px;height:48px;border-radius:14px}
+.banner{display:flex;gap:10px;align-items:flex-start;margin:0 var(--gutter) 12px;padding:12px 14px;border-radius:var(--r-md);font:var(--t-label)}
+.banner.warn{background:var(--warn-soft);color:var(--tx)} .banner.warn svg.i{color:var(--warn)}
+.banner.info{background:var(--brand-soft)} .banner.info svg.i{color:var(--brand)}
+.skel{background:linear-gradient(90deg,var(--sunk),var(--surface-2),var(--sunk));background-size:200% 100%;animation:sk 1.2s linear infinite;border-radius:6px}
+@keyframes sk{to{background-position:-200% 0}}
+
+/* ---------- Wide screens: ナビを左のレールに ---------- */
+@media (min-width:900px){
+  body{padding-left:96px}
+  .nav{top:0;right:auto;width:96px;height:auto;border-top:0;border-right:1px solid var(--line);padding:24px 0}
+  .nav-in{grid-template-columns:1fr;grid-auto-rows:72px;align-content:start}
+  .fab-slot{order:-1;height:96px} .fab{transform:none}
+  .toast{bottom:24px}
+  .sheet{bottom:auto;top:50%;border-radius:var(--r-lg);transform:translateY(-40%) scale(.98);opacity:0;max-height:86dvh;width:560px}
+  .sheet.on{transform:translateY(-50%);opacity:1}
+  .sheet.full{height:86dvh}
+  .sheet .grab{display:none}
+}
+
+/* =====================================================================
+   時間と縁 — 固有の部品
+   ===================================================================== */
+
+/* ---------- 縁の輪郭(knot): 種類の根で形が決まる ---------- */
+.kn{--kc:var(--th-person);--ks:var(--th-person-s);width:36px;height:36px;flex:none;display:grid;place-items:center;
+  background:var(--ks);color:var(--kc);font:600 15px/1 var(--font);position:relative}
+.kn>b{font:inherit}
+.kn.person{border-radius:50%}
+.kn.place{--kc:var(--th-place);--ks:var(--th-place-s);border-radius:50% 50% 50% 3px;transform:rotate(-45deg)}
+.kn.place>b{transform:rotate(45deg)}
+.kn.org{--kc:var(--th-org);--ks:var(--th-org-s);border-radius:5px}
+.kn.org::after{content:"";position:absolute;left:22%;right:22%;bottom:0;height:3px;background:var(--kc);opacity:.35;border-radius:2px 2px 0 0}
+.kn.thing{--kc:var(--th-thing);--ks:var(--th-thing-s);clip-path:polygon(25% 3%,75% 3%,100% 50%,75% 97%,25% 97%,0 50%)}
+.kn.doc{--kc:var(--th-doc);--ks:var(--th-doc-s);border-radius:3px;clip-path:polygon(0 0,70% 0,100% 30%,100% 100%,0 100%)}
+.kn.sm{width:22px;height:22px;font-size:12px}
+.kn.lg{width:72px;height:72px;font-size:30px}
+.kn.me{--kc:var(--tx-2);--ks:var(--sunk)}
+/* 出来事に交わった縁(重ねて並べる) */
+.knots{display:inline-flex;align-items:center;vertical-align:middle}
+.knots .kn{box-shadow:0 0 0 2px var(--bg)}
+.knots .kn+.kn{margin-left:-5px}
+.knots .kn.place+.kn,.knots .kn+.kn.place{margin-left:-2px}
+/* 名前つき参照 */
+.ref{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:2px 12px 2px 3px;border-radius:var(--r-pill);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);font:500 14px/1.2 var(--font);color:var(--tx);max-width:100%}
+.ref .kn{width:24px;height:24px;font-size:12px}
+.ref.unreg{box-shadow:inset 0 0 0 1.5px var(--line-strong);border:0;background:repeating-linear-gradient(135deg,#0000 0 6px,var(--sunk) 6px 8px);color:var(--tx-2);padding-left:12px}
+a.ref:active{background:var(--sunk)}
+
+/* ---------- 時間軸 ---------- */
+
+/* 日の区切り: 軸を横切る見出し */
+.dh{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:var(--tcol) var(--rail) 1fr;align-items:center;min-height:56px;
+  background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(10px) saturate(1.3)}
+.dh::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:0;bottom:0;width:2px;background:var(--rail-c,var(--axis-past))}
+.dh .d{padding-left:8px;text-align:right;padding-right:6px;line-height:1}
+.dh .d b{display:block;font:700 22px/1 var(--font);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.dh .d i{display:block;font:500 12px/1 var(--font);font-style:normal;color:var(--tx-3);margin-top:3px}
+.dh .d.sun i,.dh .d.sun b{color:var(--danger)} .dh .d.sat i{color:var(--plan)}
+.dh .tick{justify-self:center;width:14px;height:14px;border-radius:4px;background:var(--tx);position:relative;z-index:1;box-shadow:0 0 0 4px var(--bg)}
+.dh .tick.today{background:var(--brand)}
+.dh .c{display:flex;align-items:center;gap:8px;padding:8px var(--gutter) 8px 6px;min-width:0}
+.dh .c .diary{flex:1;min-width:0;font:var(--t-label);color:var(--tx-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dh .c .diary.none{color:var(--tx-3)}
+.dh .c .sum{font:500 12px/1 var(--font);color:var(--tx-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+a.dh:active .c{background:var(--sunk)}
+/* いま */
+
+/* 未来の端: 点線が上へ消えていく */
+
+/* 主役(詳細画面で切り取った点) */
+
+.focus-card{grid-column:2/4;margin:0 var(--gutter) 0 calc(var(--rail) + 4px);position:relative}
+
+.mo-card{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e2),var(--hl);padding:16px 18px 16px;position:relative}
+.mo-card::before{content:"";position:absolute;left:-12px;top:34px;width:12px;height:2px;background:var(--tx)}
+
+.mo-card .kind{display:flex;align-items:center;gap:6px;font:var(--t-label);color:var(--tx-2)}
+.mo-card .kind svg.i{width:15px;height:15px}
+.mo-card h1{font:var(--t-title);margin-top:6px;line-height:1.3}
+.mo-card .big{font:700 34px/1.1 var(--font);margin-top:6px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.mo-card .meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font:var(--t-label);color:var(--tx-2)}
+.mo-card .meta span{display:inline-flex;align-items:center;gap:5px}
+.mo-card .meta svg.i{width:15px;height:15px;color:var(--tx-3)}
+
+/* ---------- お金: 割合の棒 ---------- */
+
+/* ---------- 出会いの記録(12週) ---------- */
+.enc{display:grid;grid-template-columns:repeat(12,6px);gap:2px;align-items:end;height:18px}
+.enc i{display:block;width:6px;border-radius:2px;background:var(--axis);height:4px}
+.enc i.h1{height:8px;background:var(--kc,var(--brand));opacity:.55}
+.enc i.h2{height:12px;background:var(--kc,var(--brand));opacity:.8}
+.enc i.h3{height:18px;background:var(--kc,var(--brand))}
+
+/* ---------- 縁の頭(エンティティ詳細) ---------- */
+
+.stats{display:flex;gap:20px;padding:14px var(--gutter) 4px}
+.stats div{min-width:0}
+.stats b{display:block;font:600 17px/1.2 var(--font);font-variant-numeric:tabular-nums}
+.stats span{font:var(--t-cap);color:var(--tx-3)}
+/* 糸: 縁で切り取った時間軸は軸がその縁の色 */
+
+/* ---------- 日のページ ---------- */
+.dp{padding:4px var(--gutter) 0}
+
+ 
+
+/* ---------- 小さい道具 ---------- */
+.tag{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:6px;background:var(--sunk);color:var(--tx-2);font:500 12px/1 var(--font);white-space:nowrap}
+.tag .dot{width:8px;height:8px;border-radius:2px;background:var(--cc,var(--tx-3))}
+.tag.special{background:var(--special-soft);color:var(--special)} .tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.ok{background:var(--ok-soft);color:var(--ok)} .tag.brand{background:var(--brand-soft);color:var(--brand)} .tag.danger{background:var(--danger-soft);color:var(--danger)}
+.prop{display:flex;align-items:center;gap:12px;min-height:48px;padding:10px 14px;position:relative}
+.prop+.prop::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--line)}
+.prop .k{width:84px;flex:none;font:var(--t-label);color:var(--tx-3)}
+.prop .val{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.prop .meta{font:var(--t-cap);color:var(--tx-3)}
+.suggest{display:flex;align-items:center;gap:12px;margin:12px var(--gutter) 0;padding:12px 14px;border-radius:var(--r-md);background:var(--brand-soft)}
+.suggest .t{font:var(--t-label);flex:1}
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;padding:36px 32px;color:var(--tx-2);font:var(--t-label)}
+.banner{display:flex;gap:10px;align-items:flex-start;margin:12px var(--gutter) 0;padding:12px 14px;border-radius:var(--r-md);font:var(--t-label)}
+.banner.warn{background:var(--warn-soft)} .banner.warn svg.i{color:var(--warn)}
+.banner.info{background:var(--brand-soft)} .banner.info svg.i{color:var(--brand)}
+.check{width:24px;height:24px;flex:none;border-radius:7px;border:2px solid var(--c-todo);display:grid;place-items:center;color:#fff;background:var(--surface)}
+.check[aria-checked="true"]{background:var(--c-todo)} .check svg.i{width:16px;height:16px} .check.lg{width:30px;height:30px;border-radius:9px}
+.toggle{width:48px;height:28px;border-radius:14px;background:var(--line-strong);position:relative;flex:none;transition:background .2s}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:var(--e1);transition:transform .2s var(--ease)}
+.toggle[aria-checked="true"]{background:var(--brand)} .toggle[aria-checked="true"]::after{transform:translateX(20px)}
+.mt{margin-top:12px}
+.parent{display:flex;align-items:center;gap:8px;margin:0 var(--gutter) 8px;padding:8px 12px;border-radius:var(--r-sm);border:1px dashed var(--line-strong);font:var(--t-label);color:var(--tx-2);min-height:40px}
+.ico{width:32px;height:32px;flex:none;border-radius:10px;display:grid;place-items:center;color:var(--ic);background:color-mix(in srgb,var(--ic) 13%,transparent)}
+.ico svg.i{width:18px;height:18px}
+.action.primary .ico{background:rgba(255,255,255,.18);color:#fff}
+
+.stats b.knots{display:inline-flex}
+
+/* =====================================================================
+   改訂(11/01): 塗りとコントラスト / 1つの面=1つのオブジェクト / 詳細の最上部
+   ===================================================================== */
+/* 縁の輪郭は塗りつぶし(誰・どこが一目で分かる) */
+.kn{background:var(--kc);color:#fff}
+.kn.me{--kc:var(--tx-2)}
+.ref .kn{box-shadow:none}
+/* 記録の節は塗り。予定は中抜き(まだ起きていない) */
+
+.dh .tick{background:var(--tx)}
+
+.chip{border-color:var(--line-strong);color:var(--tx)}
+.row .s,.prop .meta{color:var(--tx-3)}
+
+/* 1つの面 = 1つのオブジェクト。独立したものは別々の面に */
+.objs{display:flex;flex-direction:column;gap:8px;margin:0 var(--gutter)}
+.objs>.row{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--e1),var(--hl)}
+.objs>.row::before{display:none}
+.objs>.row.ind{margin-left:calc(var(--d,0)*20px);position:relative}
+.objs>.row.ind::after{content:"";position:absolute;left:-12px;top:-8px;height:calc(50% + 8px);width:9px;border-left:2px solid var(--line-strong);border-bottom:2px solid var(--line-strong);border-bottom-left-radius:6px}
+
+/* ---------- 出来事の詳細: 細い軸に掛かったカプセル(時刻列なし) ---------- */
+
+/* カプセル: 時間に掛かった出来事。塗りつぶし、光は左上から */
+
+ 
+
+/* 子を └ でぶら下げる(支払い → 自分の支出) */
+
+/* ---------- 自分の支出の詳細: 支払いの棒から自分の区間を拡大する ---------- */
+
+ 
+
+ 
+
+.objs>.row.ind{width:auto}
+/* 塗りの面(白文字を載せる)は、ダークでも十分に濃い色を使う */
+
+ 
+
+/* =====================================================================
+   v4: DESIGN.md「全要素の意味」に合わせた最終の定義(以前の定義より優先)
+   ===================================================================== */
+
+/* 属性の面: 影なし・枠線 / 独立したオブジェクト: 影 */
+.list{box-shadow:none;border:1px solid var(--line);background:var(--surface)}
+.objs>.row{box-shadow:var(--e1),var(--hl)}
+/* 分類の階層: 縦のガイド線+字下げ(└ は親子専用なので使わない) */
+.objs>.row.ind::after{border-bottom:0;border-bottom-left-radius:0;top:-8px;height:calc(100% + 8px);width:0}
+
+/* 時間軸の節 = 小さいカプセル(出来事の形) */
+
+/* いま: 点を付けない横線 */
+
+/* 日の区切り: 軸を横切る短い太線 */
+.dh .tick{width:22px;height:4px;border-radius:2px;background:var(--tx);box-shadow:0 0 0 3px var(--bg)}
+.dh .tick.today{background:var(--me)}
+/* 縁の輪郭: 青緑(縁)、自分は青。会社=建物 */
+.kn{background:var(--kin);color:#fff}
+.kn.me{background:var(--me)}
+.kn.org{border-radius:3px 3px 2px 2px;clip-path:polygon(0 22%,45% 22%,45% 0,100% 0,100% 100%,0 100%)}
+.kn.org::after{display:none}
+.kn.unreg{background:transparent;color:var(--kin);box-shadow:inset 0 0 0 2px var(--kin)}
+.ref.unreg{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line-strong);padding-left:3px;color:var(--tx-2)}
+/* カプセル(出来事の詳細) = 出来事の色の塗り */
+
+ 
+
+/* 自分の支出の詳細: 拡大した「帯」(棒の区間の形=角の小さい長方形) */
+
+/* 塗りの自分の支出の子 */
+
+/* カテゴリ = 短い横棒 */
+.tag .dot{width:14px;height:6px;border-radius:3px}
+
+/* 非日常 = ✦ (色を使わない) */
+.tag.special{background:var(--sunk);color:var(--tx)}
+/* 赤 = 期限切れ・遅れ / 琥珀 = 貸し借り */
+.tag.warn{background:var(--owe-soft);color:var(--owe-text)}
+.tag.late{background:var(--late-soft);color:var(--late)}
+.banner.warn{background:var(--owe-soft)} .banner.warn svg.i{color:var(--owe)}
+/* ToDo: チェック欄。塗り=完了 */
+.check{border-color:var(--tx-2)} .check[aria-checked="true"]{background:var(--tx);border-color:var(--tx)}
+/* 操作(ピル) / タグ(データ) */
+.chip{position:relative;height:36px}
+.chip::before{content:"";position:absolute;inset:-4px 0}
+.chip[aria-pressed="true"]{background:var(--tx);color:var(--bg)}
+.tag{border-radius:6px}
+/* 押せる領域 44px */
+.check::before,.toggle::before{content:"";position:absolute;inset:-10px}
+.check,.toggle{position:relative}
+.nav .badge{background:var(--late)}
+/* メモの左の線 = 縁の糸の色 */
+
+.parent{border-style:solid}
+/* 幅が広い時: 一覧+詳細の2列 */
+@media (min-width:1100px){
+  #app{max-width:none;margin:0;display:grid;grid-template-columns:minmax(360px,440px) 1fr;min-height:100dvh}
+  #app .pane-l{border-right:1px solid var(--line);height:100dvh;overflow-y:auto;position:sticky;top:0}
+  #app .pane-r{min-width:0;max-width:760px;width:100%;justify-self:center}
+  #app .pane-r .empty{min-height:60dvh;justify-content:center}
+}
+
+.pane-l .sel{box-shadow:inset 3px 0 0 var(--me)}
+.pane-l .sel.row{background:var(--me-soft)}
+.lt .btn.ghost{height:40px;padding:0 10px;color:var(--me)}
+
+/* ---- 日の区切り(11/01改): 軸から右端まで横切る線 + 「10月30日 金曜」 ---- */
+
+/* ---- ダーク: 塗りの上の文字色をトークンにする ---- */
+
+.kn{color:var(--on-kin)} .kn.me{color:var(--on-me)} .kn.unreg{color:var(--kin)}
+
+.check[aria-checked="true"]{color:var(--bg)}
+
+.btn{color:var(--on-me)} .btn.tonal,.btn.ghost{color:var(--me)} .btn.danger{color:var(--late)}
+.nav .badge{color:var(--on-late)}
+
+.action.primary{color:var(--on-me)} .action.primary .ico{color:var(--on-me)}
+
+/* =====================================================================
+   v5(11/01): 意味表との照合で見つかった不一致の修正(以前の定義より優先)
+   ===================================================================== */
+/* 日の区切り = 1つの部品(dh2)。タイムライン・詳細の前後・家計簿で同じ見た目 */
+
+/* 詳細の前後の軸: 区間ごとに過去=実線 / 未来=点線 */
+
+/* 予定の残り時間: データの文字(ピルでも赤でもない) */
+
+/* 1つの支払いの棒(一覧の行・精算) */
+.pbar{display:flex;width:64px;height:6px;margin:4px 0 0 auto;border-radius:3px;overflow:hidden;gap:1px;background:var(--sunk)}
+.pbar i{display:block;height:100%;min-width:0}
+.pbar i.me{background:var(--me)} .pbar i.other{background:var(--axis)}
+.pbar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 2px,color-mix(in srgb,var(--owe) 40%,transparent) 2px 4px)}
+.pbar.lg{width:28px;height:10px;margin:0;border-radius:3px}
+.pbar.lg i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 3px,color-mix(in srgb,var(--owe) 40%,transparent) 3px 6px)}
+/* 貸し借り(立替・未精算) = 琥珀 */
+
+/* 縁の参照 = 輪郭+名前。囲みを付けない(ピルは操作だけ) */
+.ref,.ref.unreg{min-height:32px;padding:0;border-radius:0;background:none;box-shadow:none;border:0;color:var(--tx);font:500 15px/1.3 var(--font)}
+.ref.unreg{color:var(--tx-2)}
+a.ref:active{background:none;text-decoration:underline}
+
+/* 切替(操作) = ピル */
+.seg{background:none;padding:0;gap:8px;overflow-x:auto;scrollbar-width:none}
+.seg button{flex:none;height:36px;padding:0 14px;border-radius:var(--r-pill);border:1px solid var(--line-strong);background:var(--surface);color:var(--tx);font:var(--t-label)}
+.seg button[aria-pressed="true"]{background:var(--tx);border-color:var(--tx);color:var(--bg);box-shadow:none;font-weight:600}
+
+/* 縁の事実が変わった点 = 塗りのひし形(確定した事実) */
+
+/* 2列: 右に開いているもの = 自分が選んだ(薄い青の面)。左の線は使わない */
+.pane-l .sel{box-shadow:none;background:var(--me-soft)}
+/* 作成: 操作の一覧。面(オブジェクト)にしない。主ボタンだけ青の塗り */
+.actions{grid-template-columns:1fr;gap:0;padding:4px var(--gutter)}
+.action{flex-direction:row;align-items:center;gap:14px;min-height:56px;padding:6px 4px;border-radius:0;background:none;box-shadow:none;border-top:1px solid var(--line)}
+.action.primary{min-height:56px;margin-bottom:8px;padding:6px 14px;border-radius:var(--r-sm);border-top:0;background:var(--me)}
+.action.primary+.action{border-top:0}
+.action .t{font:500 15px/1.3 var(--font)}
+/* 家計簿の推移: 月ごとの自分の支出の棒 */
+
+/* 人・場所の一覧: 最後に交わった日と回数は右の列 */
+
+/* =====================================================================
+   v5.1(11/01): 強さの階層。意味は1か所で1回だけ、強い印は1行に1つ
+   ===================================================================== */
+/* 日の区切り: 細い線(今日だけ青)。文字の大きさで区切りを示す */
+
+/* 時刻列と補足は静かに */
+
+/* いま: 赤い細線+赤い時刻だけ */
+
+/* 操作(ピル): 枠を付けず、選択中だけ出来事の色の塗り */
+.chip,.seg button{border:0;background:var(--sunk);color:var(--tx-2);height:32px;font-weight:500}
+.chip[aria-pressed="true"],.seg button[aria-pressed="true"]{background:var(--tx);color:var(--bg)}
+.seg button{position:relative}
+.seg button::before{content:"";position:absolute;inset:-6px 0}
+
+.chips,.seg{gap:6px}
+/* 一覧の支払いの棒は金額の下に小さく */
+
+/* 予定の月: マスは件数の印だけ(小さいカプセル) */
+
+/* =====================================================================
+   v5.2(11/01): 出来事の色 / 日のカード / 予定と記録のカードを同じ骨格に
+   ===================================================================== */
+/* 出来事の色 = 時間軸の色(青灰)を濃くしたもの。軸の上の点だから軸と同じ系統。黒に近い濃色は使わない */
+
+/* 完了したToDo = 起きたこと(出来事の色の塗り) */
+.check[aria-checked="true"]{background:var(--ev);border-color:var(--ev);color:var(--on-cap)}
+/* 選択中の操作(ピル) = 自分が選んだ(薄い青+青の文字)。ナビ・2列の選択と同じ */
+.chip[aria-pressed="true"],.seg button[aria-pressed="true"]{background:var(--me-soft);color:var(--me);font-weight:600}
+/* トースト = 浮いた面(白)+影 */
+.toast{background:var(--surface);color:var(--tx);box-shadow:var(--e3),0 0 0 1px var(--line)}
+.toast button{color:var(--me)}
+/* 予定のカード: 記録と同じ骨格。点線の中抜き(まだ起きていない)。光だけ同じ */
+
+/* 日のカード: 軸を超えて横いっぱい。すりガラス。軸はカードの後ろを通る */
+
+/* 軸は後面: 線を細く・薄く */
+
+/* =====================================================================
+   v5.3(11/01): 墨(黒に近い濃色)を一切使わない。文字は「影の青」
+   嗜好: 自然光・間接照明・さりげない影。自然光の影は青みを帯びる → 文字と出来事の塗りは影の青の系統
+   ===================================================================== */
+
+/* 塗りの上の文字は白。ダークでも塗りを白文字が読める濃さにする(黒い文字を載せない) */
+
+.btn,.fab,.action.primary{background-color:var(--me-fill)}
+
+.btn.tonal,.btn.ghost{background:transparent}.btn.tonal{background:var(--me-soft)}
+.btn.danger{background:var(--late-soft)}
+.kn{background:var(--kin-fill)} .kn.me{background:var(--me-fill)} .kn.unreg{background:transparent}
+.nav .badge{background:var(--late-fill)}
+
+/* ダーク = 夜の空(黒ではなく深い紺)。嗜好「夜景・ライトアップ」 */
+
+/* 日のカードは独立した面。中の文字は面の端から普通の余白で始める(時刻列・軸の幅に合わせない) */
+
+/* 詳細の軸の切れ端: 主役の上下で薄れて消える(時間上の1点であることだけを示す。前後の出来事は出さない) */
+
+/* =====================================================================
+   v6(11/02): 光(窓辺)/ 塗りの面は全て同じ光、違いは形
+   嗜好: 自然光・間接照明・さりげない影。光は左上の窓から。影は右下に青く落ちる
+   ===================================================================== */
+/* 塗りの光(全ての塗りの面で共通): 左上からの柔らかい光+上端のハイライト+色を帯びた影 */
+
+.btn:not(.tonal):not(.ghost):not(.danger),.fab,.action.primary{background:var(--light),var(--me-fill);box-shadow:0 6px 16px -8px color-mix(in srgb,var(--me-fill) 80%,transparent),var(--hl-fill)}
+.kn:not(.unreg){background:var(--light),var(--kin-fill)} .kn.me{background:var(--light),var(--me-fill)}
+
+/* 形 = 種類。出来事=カプセル(丸み30) / 自分の支出=帯(棒の区間なので角は小さい10) / 縁=輪郭 / 操作=角丸10のボタン・＋は角丸の正方形 */
+
+/* 窓辺の背景(ライト): 左上に暖かい日差し、右下に青い陰。どちらも気づく程度に弱く */
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) body{background:
+  radial-gradient(90% 60% at 0% 0%,rgba(255,226,180,.32),rgba(255,226,180,0) 70%),
+  radial-gradient(80% 60% at 100% 100%,rgba(150,178,230,.20),rgba(150,178,230,0) 70%),var(--bg);background-attachment:fixed}}
+:root[data-theme="light"] body{background:
+  radial-gradient(90% 60% at 0% 0%,rgba(255,226,180,.32),rgba(255,226,180,0) 70%),
+  radial-gradient(80% 60% at 100% 100%,rgba(150,178,230,.20),rgba(150,178,230,0) 70%),var(--bg);background-attachment:fixed}
+/* 夜(ダーク): 夜の空。下から街の明かりが弱く照らす */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) body{background:
+  radial-gradient(100% 50% at 50% 110%,rgba(120,150,220,.16),rgba(120,150,220,0) 70%),var(--bg);background-attachment:fixed}}
+:root[data-theme="dark"] body{background:radial-gradient(100% 50% at 50% 110%,rgba(120,150,220,.16),rgba(120,150,220,0) 70%),var(--bg);background-attachment:fixed}
+/* 背景に光を入れたので、上部バー・日のカードは背景を透かす */
+.appbar{background:color-mix(in srgb,var(--bg) 70%,transparent)}
+/* すりガラスは弱く: 後ろを通る軸がうっすら透ける */
+
+/* v6: v2から戻したもの・取り残しの整理 */
+
+.prop .meta svg.i{width:14px;height:14px;vertical-align:middle}
+
+/* =====================================================================
+   v7(11/02): ライトのまぶしさを下げる / 「今日」だけ発光 / 選択肢の余白 / 品目の入れ子
+   ===================================================================== */
+/* ライト: 純白と濃い文字の差・彩度の高い塗り・影を一段静かに。ダークは変えない */
+
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) body{background:
+  radial-gradient(90% 60% at 0% 0%,rgba(255,226,180,.20),rgba(255,226,180,0) 70%),
+  radial-gradient(80% 60% at 100% 100%,rgba(150,178,230,.12),rgba(150,178,230,0) 70%),var(--bg);background-attachment:fixed}}
+:root[data-theme="light"] body{background:
+  radial-gradient(90% 60% at 0% 0%,rgba(255,226,180,.20),rgba(255,226,180,0) 70%),
+  radial-gradient(80% 60% at 100% 100%,rgba(150,178,230,.12),rgba(150,178,230,0) 70%),var(--bg);background-attachment:fixed}
+/* 「今日」= 灯り。今日のカード・月のマスだけが、細い青の縁と弱い光と薄い青の面を持つ。今日以外は消灯(縁も光もない) */
+
+/* 選択肢(ピル)の余白: 文字の左右 14px。3つ並んで足りなければ折り返す */
+.chip,.seg button{padding:0 14px}
+
+/* 品目のグループ: 開くと子が親の下に入れ子(インデント+縦の案内線+地を変える) */
+.grp-b{display:inline-flex;gap:4px;margin-right:8px;vertical-align:middle}
+
+/* 品目編集の負担(自分/半分/相手)は2行目に */
+.ip-bur{flex:0 0 100%;padding:0 0 6px}
+/* 選択中の選択肢は、どの画面でも薄い青の面+青い文字(濃い紺の塗りはまぶしいので使わない) */
+.chip[aria-pressed="true"],.seg button[aria-pressed="true"]{background:var(--me-soft);border-color:transparent;color:var(--me);font-weight:600;box-shadow:none}
+.check[aria-checked="true"]{background:var(--me-fill);border-color:var(--me-fill)}
+
+/* =====================================================================
+   v8(11/02): 線は「あるのが分かる最小の濃さ」/ 光は今日=強・他の日=弱 / 開閉の印は左(右は金額の列)
+   ===================================================================== */
+/* 線・枠・区切りは薄く。濃さは文字と塗りだけが持つ(ライトのみ。ダークは別の値) */
+
+/* 日のカードの光: どの日もうっすら(消灯ではない)。今日だけ強く、背景にも色が乗る */
+
+/* 品目グループの開閉の印: 名前のすぐ右(左の列)。右の列は金額だけ */
+
+/* 品目の編集(1品目ずつ開く)と負担の画面。意味は DESIGN.md v10 */
+.adj-l{display:inline-block;margin-right:8px;white-space:nowrap}
+.ie-o{display:flex;flex-direction:column;gap:8px;padding:8px 14px 6px;background:var(--surface-2)}
+.ie-top{display:flex;align-items:center;gap:4px}
+.ie-n{flex:1;min-width:0;height:44px;background:transparent;outline:none;font:600 17px/1 var(--font);color:var(--tx)}
+.ie-c{width:44px;height:44px;display:grid;place-items:center;color:var(--tx-3);transform:rotate(-90deg);flex:none}
+.ie-a{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:0 12px;border-radius:var(--r-sm);background:var(--surface);font:var(--t-label);color:var(--tx-2)}
+.ie-p{width:140px;height:48px;background:transparent;outline:none;text-align:right;font:600 20px/1 var(--font);color:var(--tx);font-variant-numeric:tabular-nums}
+.ie-ls{display:flex;flex-direction:column;gap:8px}
+.ie-l{display:grid;grid-template-columns:76px minmax(0,1fr) 92px 36px;gap:6px;align-items:center}
+.ie-lab{font:var(--t-label);color:var(--tx-2);padding-left:4px}
+.ie-k,.ie-ln,.ie-v{height:44px;border-radius:var(--r-xs);background:var(--surface);outline:none;font:var(--t-body);color:var(--tx);min-width:0}
+.ie-k{padding:0 6px}.ie-ln{padding:0 10px}
+.ie-v{padding:0 10px;text-align:right;font-variant-numeric:tabular-nums}
+.ie-d{width:36px;height:44px;display:grid;place-items:center;color:var(--tx-3)}
+.ie-d svg.i{width:16px;height:16px}
+.ie-eq{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font:var(--t-cap);color:var(--tx-3);padding:0 4px}
+.ie-eq b{font:600 15px/1 var(--font);color:var(--tx);flex:none}
+.ie-add{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;min-height:44px;padding:0 4px;color:var(--brand);font:500 14px/1 var(--font)}
+.ie-add svg.i{width:16px;height:16px}
+.ie-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line);padding-top:6px}
+.ie-tax{display:flex;gap:6px}
+
+.ie-del{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 8px;color:var(--tx-2);font:500 14px/1 var(--font)}
+.ie-del svg.i{width:16px;height:16px}
+
+/* 日のカードは白い面。輪郭は「明るく光る」: 濃い青を強めるのではなく、明るい淡青(白寄り)の光を使う。意味は DESIGN.md v11 */
+
+/* ===== UI v12: タイムラインをリッチに(白いカード+細い軸+大きな金額)/ 品目の詳細 ===== */
+
+/* 品目の詳細 */
+
+/* 編集フォームの整理: 1品目だけ・枠なしで余白で区切る(近接・整列) */
+.sheet .ie-o{padding:4px 0}
+.sheet .ie-l{margin-bottom:10px}
+
+/* ===== v12.1: 日付カード=「日付の札」(発光なし)/ 日付の前後の余白 / 月の切り替え ===== */
+
+/* v12.2: 余白は margin でなく padding で取る(軸の線は要素の内側にしか引けず、margin だと線が切れる) */
+
+/* ===== v13: 青みのある背景を全画面に / 「帯のタブ」= カードの左端に付く小さな半カプセル ===== */
+
+body{background-color:var(--bg);background-image:var(--bg-grad);background-attachment:fixed}
+
+/* 帯のタブ: 記録=青灰(出来事の色)、縁の行=青緑(縁の色)、予定にはつけない */
+.objs>.row{position:relative}
+.objs>.row::before{content:"";display:block;position:absolute;left:0;top:50%;width:4px;height:26px;margin-top:-13px;border-radius:0 4px 4px 0;background:var(--tab)}
+
+.objs>.row:has(.kn)::before{background:var(--kin)}
+.objs>.row:not(:has(.kn))::before{background:var(--tab);opacity:.7}
+.objs>.row.ind::after{display:none}
+.list{background:var(--surface)}
+.objs>.row:not(:has(.kn))::before{display:none}
+
+/* ===== v13.1: v2の「形の言語」に戻す。帯のタブは廃止(線+アイコンの二重表示をやめる)/ 日付カードは固定しない / 節とカードの縦位置を揃える ===== */
+.objs>.row::before,.objs>.row:has(.kn)::before{display:none!important}
+
+/* 支払い = カプセル+レシートのギザギザ(下の縁) */
+
+/* 自分の支出 = 半券付きチケット(切れ込み+点線の切り取り線) */
+
+/* ===== v13.2: タイムラインは v12.2 の見た目に戻す(ユーザー指示「タイムラインを直して欲しいわけじゃない」)。ギザギザ・節の位置変更を取り消す。日付カードの固定解除は維持 ===== */
+
+
+/* ---------- v4: 押した時の手応え(一瞬だけ沈む。動きの例外。DESIGN.md v4) ---------- */
+a.row,button.row,.btn,.chip,.iconbtn,.mnav button,a.ax-row,a.dh2,.tkt-w,.metric{transition:transform .08s var(--ease),filter .08s}
+a.row:active,button.row:active,.btn:active,.chip:active,a.ax-row:active,a.dh2:active,.metric:active{transform:scale(.985)}
+.btn:active,.chip:active{filter:brightness(.96)}
+
+/* ---------- v4: 当たり判定を44pxに広げる(見た目の大きさは変えない) ---------- */
+.btn.sm,.ref,.sh .act{position:relative}
+.btn.sm::before,.ref::before,.sh .act::before{content:"";position:absolute;left:0;right:0;top:50%;height:44px;margin-top:-22px}
