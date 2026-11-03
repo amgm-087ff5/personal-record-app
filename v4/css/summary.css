@@ -1,0 +1,27 @@
+/* =====================================================================
+   まとめカード(タブ上部の白い1枚) — UI v4.1 / ui.js の summaryCard・sumActs
+   v2のB(数字3つ+大きなボタン2つ)を、v3の見出し(大見出し+右のアイコン)の下に置く。
+   中身は数字とラベルとボタンだけ(説明文は書かない)。全体はスマホで160px以内。
+   色は tokens.css の変数だけ。押せる数字と作成のボタンは44px以上。
+   ===================================================================== */
+
+/* 1枚の面(白・角丸18・淡青の影) */
+.sc{margin:4px var(--gutter) 12px;padding:12px 14px 14px;background:var(--tl-card);border-radius:18px;box-shadow:var(--tl-sh)}
+
+/* 数字3つ。区切りは細い縦線(--line)。押せる数字は押すと該当画面へ */
+.sc-ms{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.sc-m{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;min-height:44px;padding:0 10px;text-align:left;color:var(--tx-2);background:none;border-radius:10px;min-width:0}
+.sc-m+.sc-m{border-left:1px solid var(--line)}
+.sc-m b{font:600 20px/1.2 var(--font);color:var(--tx);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sc-m span{display:flex;align-items:center;gap:2px;font:500 12px/1.3 var(--font);color:var(--tx-2);white-space:nowrap}
+.sc-m svg.i{width:12px;height:12px;flex:none}
+.sc-m:active{background:var(--surface-2)}
+
+/* 作成のボタン2つ(左=主の塗り、右=副の淡い塗り)。高さ48 */
+.sc-acts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:12px}
+.sc-acts .btn{height:48px;width:100%;padding:0 12px;font-size:15px;min-width:0}
+.sc-acts .btn svg.i{width:18px;height:18px;flex:none}
+
+/* 家計簿: 自分の支出のカードの下段(面は増やさない。カードの中の区切り線だけ) */
+.sc-foot{padding:12px 14px 14px;border-top:1px solid var(--line)}
+.sc-foot .sc-acts{margin-top:0}

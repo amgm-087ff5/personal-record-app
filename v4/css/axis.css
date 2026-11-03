@@ -214,3 +214,6 @@ a.ax-row:active .ax-c{background:var(--sunk);transform:scale(.99)}
 .lt .lt-cta{height:36px;padding:0 14px;font-size:14px;background:var(--light),var(--me-fill);color:var(--on-me);box-shadow:var(--hl-fill),0 6px 14px -8px var(--me)}
 .lt .lt-cta svg.i{width:16px;height:16px}
 .lt h1{white-space:nowrap;min-width:0;overflow:hidden;text-overflow:clip}
+
+/* v4.2: 軸の節と詳細の主役は同じ「出来事の塗り」(同じものは同じ見た目)。形・大きさ・位置は v3 のまま */
+.ax-node:not(.plan):not(.fact):not(.todo),.pin-cur:not(.plan):not(.fut)>.node{background:var(--light),linear-gradient(135deg,var(--ev-hi),var(--ev-lo))}

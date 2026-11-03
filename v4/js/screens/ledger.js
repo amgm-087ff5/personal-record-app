@@ -100,7 +100,7 @@ route('ledger',()=>{
   const bar=`<div class="ld-bar" role="img" aria-label="大分類の割合">${ranked.map(r=>`<i style="flex:${cur[r]} 1 0;background:${catColor(r)}"></i>`).join('')}</div>`;
   const figBtn=(l,ax,k,v,cls='')=>`<button type="button" class="${ldFilter&&ldFilter.ax===ax&&ldFilter.k===k?'on':''}" onclick="ldPick('${ax}','${k}',1)"><span class="k ${cls}">${l}</span><span class="v num">${yen(v)}</span></button>`;
   const figs=isNow?`<div class="ld-fig">${figBtn('固定費','fx','固定',fixed)}${figBtn('変動費','fx','変動',varia)}${tot-fixed-varia>0?figBtn('固定・変動 未指定','fx','未指定',tot-fixed-varia):''}${figBtn('✦ 非日常','sp','非日常',nonDaily,'strong')}</div>`:'';
-  const summary=list([`<div class="ld-sum"><div class="ld-lbl">自分の支出</div><div class="ld-r"><span class="ld-big num">${yen(tot)}</span>${diff!=null?tag(`前月比 ${diff>0?'+':''}${diff}%`):''}</div>${bar}</div>${figs}`]);
+  const summary=list([`<div class="ld-sum"><div class="ld-lbl">自分の支出</div><div class="ld-r"><span class="ld-big num">${yen(tot)}</span>${diff!=null?tag(`前月比 ${diff>0?'+':''}${diff}%`):''}</div>${bar}</div>${figs}${isNow?`<div class="sc-foot">${sumActs([{text:'レシートで支払い',icon:'camera',primary:true,onclick:'openReceipt()'},{text:'金額だけ',icon:'plus',onclick:'openQuickExpense()'}])}</div>`:''}`]);
 
   const chart=list([`<div class="ld-chart">${ldChart(months)}</div>`]);
 
@@ -120,8 +120,7 @@ route('ledger',()=>{
   }
 
   return largeTitle('家計簿',{actions:[
-      {text:'カテゴリ',icon:'cats',onclick:"go('#/cats')"},
-      {text:'レシートで支払い',icon:'camera',primary:true,onclick:'openReceipt()'}]})
+      {text:'カテゴリ',icon:'cats',onclick:"go('#/cats')"}]})
     +nav+note+summary+sh('推移','6か月')+chart+breakdown+upcoming+spend;
 },{tab:'ledger'});
 
