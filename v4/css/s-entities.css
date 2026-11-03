@@ -21,7 +21,7 @@
 .vtag::before{content:"";position:absolute;left:8px;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--surface)}
 
 /* ---------- 詳細 /e/…: フォルダのタブ+塗りの本体。縁の色 = --kin-fill(ダークは --kin-fill が暗め) ---------- */
-.obj-e{--fill:var(--kin-fill);--fill-hi:color-mix(in srgb,var(--kin-fill) 72%,var(--on-kin));position:relative;margin:12px var(--gutter) 0}
+.obj-e{--fill:var(--kin-fill);--fill-hi:color-mix(in srgb,var(--kin-fill) 82%,var(--on-kin));position:relative;margin:12px var(--gutter) 0}
 /* タブ: 本体の左上と同じ塗り(白文字が4.5:1の濃さ)。右下の内側の丸みで本体につながる */
 .obj-e .tab{position:relative;display:inline-flex;flex-wrap:wrap;align-items:center;height:32px;max-width:100%;margin-bottom:-1px;padding:0 14px;
   border-radius:14px 14px 0 0;background:var(--fill);color:var(--on-kin);font:700 13px/1 var(--font);letter-spacing:.02em}
