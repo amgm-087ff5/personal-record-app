@@ -88,8 +88,10 @@ route('e',id=>{
       :`<button class="en-paper en-memo en-empty" type="button" onclick="enNewNote('${id}')"><span class="h">${IC.lines}メモを書く</span></button>`)
     +sh('この縁の時間軸')
     +`<div class="ax thread" style="--tc:${tc}">`
-    +fut.map(g=>axGroup(monthHeadAx(g.ym,true),g.rows.join(''),{future:true})).join('')
-    +(pastGroups.length?pastGroups.map(g=>axGroup(monthHeadAx(g.ym),g.rows.join(''))).join(''):axEdge('まだ記録はありません',true))
+    +(()=>{/* いまの月は1枚の面: 予定(点線) → いまの線 → 済んだ記録。同じ月を2枚に分けない */
+      const lf=fut[fut.length-1],fp=pastGroups[0];const join=lf&&fp&&lf.ym===fp.ym;
+      return fut.map((g,i)=>join&&i===fut.length-1?axGroup(monthHeadAx(g.ym,true),g.rows.join('')+fp.rows.join('')):axGroup(monthHeadAx(g.ym,true),g.rows.join(''),{future:true})).join('')
+        +(pastGroups.length?pastGroups.slice(join?1:0).map(g=>axGroup(monthHeadAx(g.ym),g.rows.join(''))).join(''):axEdge('まだ記録はありません',true))})()
     +(pastGroups.length?axEdge('これより前の記録はありません',true):'')
     +`</div>`;
 },{tab:'entities'});

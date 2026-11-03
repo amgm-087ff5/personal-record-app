@@ -52,6 +52,8 @@
 .pl-dnav{display:flex;align-items:center;justify-content:space-between;height:44px;margin:0 var(--gutter)}
 
 /* ---- ToDo: 行56px・チェック欄・押し面44px ---- */
+/* 絞り込みのピルは足りなければ折り返す(途中で切らない) */
+.pl-root .chips{flex-wrap:wrap;overflow:visible}
 .pl-todo{min-height:var(--row);padding:10px 14px;gap:14px}
 .pl-todo .t{font:500 15px/1.4 var(--font);color:var(--tx)}
 .pl-todo .s{margin-top:3px}
