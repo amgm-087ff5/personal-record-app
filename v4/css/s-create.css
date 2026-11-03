@@ -29,6 +29,7 @@
 .cr-dm{font:var(--t-cap);color:var(--tx-2)}
 .cr-date{padding:4px var(--gutter) 0;font:var(--t-label);color:var(--tx-2)}
 .cr-diary textarea{min-height:240px}
+.cr-memo textarea{min-height:140px}
 
 /* ---- レシートの写真・一覧 ---- */
 .cr-th{width:40px;height:40px;flex:none;border-radius:var(--r-xs);object-fit:cover;background:var(--sunk);box-shadow:var(--e1)}
@@ -65,3 +66,7 @@
 #sheet .seg button{min-height:44px}
 #sheet .toggle{position:relative}
 #sheet .toggle::before{content:"";position:absolute;inset:-8px -6px}
+/* 入力欄・小さいボタンの押す面(見た目は小さいまま、当たり判定を44pxに) */
+#sheet .field input,#sheet .field select{min-height:44px}
+#sheet .sh .act{position:relative;min-height:44px;display:inline-flex;align-items:center}
+#sheet .suggest .btn{height:44px}

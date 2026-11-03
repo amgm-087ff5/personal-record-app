@@ -338,9 +338,11 @@ function recordEvent(id){
       items:[{n:e.t,price:e.pay.amt,b:'自分',tax:10}],x:xid};
     X[xid]={pay:aid,amt:e.pay.amt,cat:e.pay.cat,memo:'',items:[{n:e.t,price:e.pay.amt,b:'全額'}]};
   }else{
+    /* 予定の時刻の範囲のまま活動(期間)にする。種類は内容から推定せず「出来事」。終日は時刻の範囲が無いので1つの時刻 */
     const roles=(e.who||[]).map(w=>['参加',w]);
     if(e.place)roles.push(['場所',placeId,placeName]);
-    A[aid]={type:e.who?'会話':'出来事',parent:day,time:e.s||'09:00',title:e.t,roles,body:''};
+    const span=!e.all&&e.s&&e.e?{time:e.s,end:e.e}:{time:e.s||'09:00'};
+    A[aid]={type:'出来事',parent:day,...span,title:e.t,roles,body:'',kids:[]};
   }
   A[day].kids.push(aid);e.rec=aid;
   save();go('#/a/'+aid);toast('記録にしました');

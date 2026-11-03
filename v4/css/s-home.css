@@ -33,6 +33,7 @@
 
 /* ---- 5. すぐメモ: 入力の面+保存(押し面44px) ---- */
 .hm-root .hm-memo-in .field{min-height:52px}
+.hm-root .hm-memo-in .field input{height:44px}
 .hm-root .hm-memo-in .field .btn{height:44px;padding:0 16px}
 .hm-root .hm-memo .t{font:500 15px/1.5 var(--font);color:var(--tx);white-space:normal}
 .hm-root .hm-memo .s{margin-top:3px}

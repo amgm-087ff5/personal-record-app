@@ -108,3 +108,42 @@
 .dp-photos{display:flex;gap:8px;margin-top:14px;overflow-x:auto}
 .dp-ph{width:72px;height:72px;flex:none;border-radius:12px;display:block}
 .dp-kin{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0 var(--gutter)}
+
+/* ---------- 記録の詳細(v4.3): 活動=主役+「この中の支払い」/ 支払い=親の1行+主役 / 瞬間=小さな主役 ---------- */
+/* 主役の時刻の横に長さを小さく */
+.cap .kind .tm small{margin-left:6px;font:400 12px/1 var(--font);opacity:.9}
+/* 移動: 出発 → 到着 を主役の中に。駅・店は縁の詳細へ */
+.cap .route{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:14px;font:600 16px/1.4 var(--font)}
+.cap .route .rs{display:inline-flex;align-items:baseline;gap:6px}
+.cap .route small{font:500 12px/1 var(--font);opacity:.85}
+.cap .route b{font-variant-numeric:tabular-nums}
+.cap .route i{font-style:normal;opacity:.85}
+.cap .route a{color:inherit;text-decoration:underline;text-underline-offset:3px}
+.cap .route a{position:relative}
+.cap .route a::before{content:"";position:absolute;inset:-11px -6px}
+/* この中の支払いの節: 押し面を44pxに(見た目は小さいまま) */
+.dsec .sh .act{position:relative}
+.dsec .sh .act::before{content:"";position:absolute;inset:-6px -10px}
+/* 白い1行の支払いの右側(金額の下に割合の棒) */
+.pv{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+/* 支払いの詳細の上: 親の活動の1行(軸の上のカプセル+題名+時刻の範囲)。押すとその活動 */
+.pin>.pin-n{position:relative;display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 0;color:var(--tx);font:500 15px/1.3 var(--font)}
+.pin>.pin-n .pn{position:absolute;left:calc(var(--ax) - var(--px) - 15px);top:50%;margin-top:-9px;width:30px;height:18px;border-radius:9px;background:var(--light),linear-gradient(135deg,var(--ev-hi),var(--ev-lo));box-shadow:0 0 0 3px var(--bg)}
+.pin>.pin-n .tm{flex:none;font:600 13px/1 var(--font);color:var(--tx-2);font-variant-numeric:tabular-nums}
+.pin>.pin-n .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pin>.pin-n:active{background:var(--sunk)}
+/* 記録の札は種類の札(28px)が1行目。節の中心をその中心(32px)に合わせる。予定の札は対象外 */
+.pin-cur:not(.plan)>.node{top:23px}
+/* 瞬間(起床など): 小さな主役。軸の上の小さい四角の節 */
+.ins-c{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 0}
+.ins-tm{font:600 22px/1 var(--font);color:var(--tx);font-variant-numeric:tabular-nums}
+.ins-t{font:600 16px/1.3 var(--font);color:var(--tx)}
+.pin-cur:has(>.ins-c)>.node{left:calc(var(--ax) - var(--px) - 7px);top:15px;width:14px;height:14px;border-radius:4px;background:var(--surface);box-shadow:inset 0 0 0 2.5px var(--ev),0 0 0 4px var(--bg)}
+.pin-cur:has(>.ins-c)>.node::after{width:12px}
+/* 時刻の編集(シート) */
+.ins-f{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px;padding:0 16px}
+.ins-f input{height:44px;padding:0 10px;border:1px solid var(--line-strong);border-radius:12px;background:var(--surface);color:var(--tx);font:var(--t-body);font-variant-numeric:tabular-nums}
+/* 活動の内容・添付 */
+.ac-body{margin:0;padding:14px 16px;line-height:1.85}
+.ac-att{padding:12px}
+.ac-att img{display:block;max-width:120px;border-radius:8px}

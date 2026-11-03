@@ -88,7 +88,7 @@ function hmMemoSave(){
 function hmMemo(){
   const recent=Object.entries(MEMOS).sort((a,b)=>b[1].at.localeCompare(a[1].at)).slice(0,2);
   const input=`<div class="list hm-memo-in"><div class="field"><input id="hm-memo" placeholder="思いついたことを書く" aria-label="メモ" onkeydown="if(event.key==='Enter'&&!event.isComposing)hmMemoSave()"><button class="btn sm" type="button" onclick="hmMemoSave()">保存</button></div></div>`;
-  const cards=recent.map(([id])=>typeof memoCard==='function'?memoCard(id):hmMemoCard(id));
+  const cards=recent.map(([id])=>typeof memoCard==='function'?`<div class="memo">${memoCard(id)}</div>`:hmMemoCard(id));
   return sh('すぐメモ',null,{label:'すべて見る',href:'#/memo'})+input+(cards.length?objs(cards):'');
 }
 

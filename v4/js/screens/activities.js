@@ -78,8 +78,9 @@ route('a',id=>{
 
 const menuAct=id=>({icon:'more',label:'その他の操作',onclick:`actMenu('${id}')`});
 function actMenu(id){
+  const a=A[id],ins=!isSpan(a)&&a.type!=='支払い';
   openSheet({title:'操作',body:list([
-    row({lead:ico('edit'),t:'編集',onclick:`closeSheet();toast('編集はモックでは未対応です')`}),
+    row({lead:ico('edit'),t:ins?'時刻を編集':'編集',onclick:ins?`closeSheet();insTimeEd('${id}')`:`closeSheet();toast('編集はモックでは未対応です')`}),
     row({lead:ico('trash'),t:'削除',onclick:`deleteActivity('${id}')`})])});
 }
 function deleteActivity(id){
@@ -191,31 +192,90 @@ function paySplit(a){
   if(rest>0){const who=a.adv?E[a.adv[0]].n.split(' ').pop()+'さん':'ほかの人';segs.push({v:rest,cls:a.adv&&a.adv[2]==='未精算'?'owed':'other',label:a.adv?`${who}の分・${a.adv[2]}`:'ほかの人の分'})}
   return splitBar(segs,a.amt);
 }
-function momentView(id,a){
-  const day=dayOf(a);const d=day?day.date:TODAY;
+/* ---------- 記録の詳細(v4.3・新しいデータモデル): 種類ごとに形を分ける ----------
+   活動(期間): 主役のカプセル(種類の札+時刻の範囲+長さ)。その下に「この中の支払い」の白い行
+   支払い: 上に日の札(親が活動なら、その活動の1行)。主役は瞬間の時刻。自分の支出は半券
+   瞬間(起床など): 小さな主役(時刻+名前)だけ。時刻の編集と削除は「その他の操作」 */
+/** 長さ(終了-開始)。0時をまたぐ時は +24時間 */
+const durText=a=>{if(!isSpan(a))return '';const t=s=>{const[h,m]=s.split(':').map(Number);return h*60+m};let m=t(a.end)-t(a.time);if(m<0)m+=1440;const h=Math.floor(m/60),r=m%60;return h&&r?`${h}時間${r}分`:h?`${h}時間`:`${r}分`};
+/** もとの予定(この記録になった予定)。予定→記録の導線 */
+function origPlan(id){const ev=Object.entries(EV).find(([k,e])=>e.rec===id);if(!ev)return '';
+  return sh('元の予定')+objs([row({href:`#/ev/${ev[0]}`,lead:`<span class="ax-node plan" style="margin:0"></span>`,t:esc(ev[1].t),s:`${fmtMDW(ev[1].d)} ${ev[1].s||''}`,chev:1})])}
+/** 活動の中の支払い(子)の1行: 時刻・支払先・金額・割合の棒。押すとその支払い */
+function actPayRow(c){const p=A[c],px=p.x&&X[p.x];const sr=(p.roles||[]).find(r=>r[0]==='支払先');
+  return row({href:`#/a/${c}`,time:p.time,t:esc(placeName(sr)||p.title),v:`<span class="pv"><b class="num">${yen(p.amt)}</b>${px?payBar(p,px):''}</span>`,chev:1})}
+/** 活動の中に支払いを追加: 金額だけで支払いを、日付・時刻・親=この活動にして開く */
+function actPayAdd(id){const a=A[id];openQuickExpense();Object.assign(CQ,{date:dateOf(a),time:a.time,act:id});crQeRender()}
+
+/** 活動(期間)の詳細 */
+function actView(id,a,d){
   const [,icon]=AX_NODE[a.type]||['','activity'];
-  const pl=(a.roles||[]).find(r=>['支払先','場所','到着'].includes(r[0]));
-  const ppl=(a.roles||[]).filter(r=>r[1]&&E[r[1]]&&r[1]!=='me'&&!['支払先','場所','到着','出発'].includes(r[0])).map(r=>r[1]);
-  const meta=[pl?`<span>${IC.place}${esc(placeName(pl))}</span>`:'',a.pay?`<span>${IC.pay}${esc(a.pay)}</span>`:'',ppl.length?`<span>${knots(ppl)}${ppl.map(p=>esc(E[p].n.split(' ').pop())).join('、')}</span>`:''].join('');
-  const isPay=a.type==='支払い';
-  const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC[icon]}${esc(a.type)}</span><span class="tm">${esc(a.time||'')}</span></div><h1>${esc(a.title)}</h1>${a.amt!=null?`<div class="big">${yen(a.amt)}</div>`:''}${meta?`<div class="meta">${meta}</div>`:''}${isPay?paySplit(a):''}</section>`;
-  const x=a.x&&X[a.x];
+  const mv=a.type==='移動',dur=durText(a);
+  const dep=(a.roles||[]).find(r=>r[0]==='出発'),arr=(a.roles||[]).find(r=>r[0]==='到着');
+  /* 移動: 出発 カフェ ミナト 19:30 → 到着 自宅 20:05(主役の中)。駅名・店名は縁の詳細へ */
+  const stop=(r,t)=>`<span class="rs"><small>${esc(r[0])}</small>${r[1]&&E[r[1]]?`<a href="#/e/${r[1]}">${esc(E[r[1]].n)}</a>`:esc(placeName(r))} <b>${esc(t)}</b></span>`;
+  const rt=mv?`<div class="route">${dep?stop(dep,a.time):''}<i aria-hidden="true">→</i>${arr?stop(arr,a.end):''}</div>`:'';
+  const tm=mv?esc(dur):`${esc(timeText(a))}${dur?` <small>${esc(dur)}</small>`:''}`;
+  const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC[icon]}${esc(a.type)}</span><span class="tm">${tm}</span></div><h1>${esc(a.title)}</h1>${rt}</section>`;
+  /* この中の支払い: 子の支払いを白い1行ずつ。2件以上なら合計。「支払いを追加」は親=この活動(未対応は toast) */
+  const kids=(a.kids||[]).filter(c=>A[c]&&A[c].type==='支払い');
+  const sum=kids.reduce((s,c)=>s+(A[c].amt||0),0);
+  const pays=`<div class="dsec">`+sh('この中の支払い',kids.length||null,{label:'支払いを追加',icon:'plus',onclick:`actPayAdd('${id}')`})
+    +(kids.length?list([...kids.map(actPayRow),...(kids.length>1?[row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(sum)}</b>`})]:[])],'flat'):'')+`</div>`;
+  /* 交わった人・場所(リンク付き)。移動の出発・到着は主役の行に出しているので重ねない */
+  const rr=(a.roles||[]).filter(r=>!mv||!['出発','到着'].includes(r[0]));
+  return appbar('',{actions:[menuAct(id)]})
+    +pinView({later:[{day:d}],earlier:[],cap})
+    +pays
+    +(rr.length?sh('交わった人・場所',rr.length)+list(rr.map(r=>prop(r[0],eref(r[1],r[2])))):'')
+    +(a.body?sh('内容')+`<div class="list"><p class="ac-body">${esc(a.body)}</p></div>`:'')
+    +origPlan(id);
+}
+
+/** 支払いの詳細: 上に日の札(親が活動なら、その1行を日の札の下に)。主役は瞬間の時刻。自分の支出は半券 */
+function payView(id,a,d){
+  const pa=parentAct(a),x=a.x&&X[a.x];
+  const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC.pay}支払い</span><span class="tm">${esc(a.time||'')}</span></div><h1>${esc(a.title)}</h1>${a.amt!=null?`<div class="big">${yen(a.amt)}</div>`:''}${a.pay?`<div class="meta"><span>${IC.pay}${esc(a.pay)}</span></div>`:''}${paySplit(a)}</section>`;
   /* 子: 支払い → 自分の支出 を └ でぶら下げる。自分の支出は半券チケット(DESIGN v4 = 自分の支出の形) */
   const child=x?`<div class="hang">${ticket({href:`#/x/${a.x}`,t:'自分の支出',s:esc(catPath(x.cat)),amt:esc(yen(x.amt)),cls:'fill',chev:true})}</div>`:'';
-  const shop=(a.roles||[]).find(r=>r[0]==='支払先');
-  const ev=Object.entries(EV).find(([k,e])=>e.rec===id);
+  const later=[{day:d},...(pa?[{href:`#/a/${a.parent}`,time:timeText(pa),title:pa.title}]:[])];
+  /* 交わった人・場所 = 支払いの役割(支払先・支払者) + 親の活動の同席者(whoOf と同じ考え方) */
+  const roles=[...(a.roles||[])];
+  if(pa)(pa.roles||[]).forEach(r=>{if(r[1]&&r[1]!=='me'&&!['場所','出発','到着','支払先','支払者'].includes(r[0])&&!roles.some(q=>q[1]===r[1]))roles.push(r)});
+  const shop=roles.find(r=>r[0]==='支払先');
   const att=(EXTRA.attach||{})[id];
   return appbar('',{actions:[menuAct(id)]})
-    +pinView({later:[{day:d}],earlier:[],cap:cap+child})
+    +pinView({later,earlier:[],cap:cap+child})
     +(a.adv&&a.adv[2]==='未精算'?`<div class="suggest owe"><span class="pbar lg" aria-hidden="true"><i class="owed" style="flex:1"></i></span><span class="t">${esc(E[a.adv[0]].n.split(' ').pop())}さんの分 <b class="num">${yen(a.adv[1])}</b> 未精算</span><button class="btn sm" type="button" onclick="settle('${id}')">精算済みにする</button></div>`:'')
     +shopTodoSug(id,a)
-    +((a.roles||[]).length?sh('交わった人・場所',a.roles.length,shop&&!shop[1]?{label:'支払先を店として登録',onclick:`registerShop('${id}')`}:null)+list(a.roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
+    +(roles.length?sh('交わった人・場所',roles.length,shop&&!shop[1]?{label:'支払先を店として登録',onclick:`registerShop('${id}')`}:null)+list(roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
     +(a.items?sh('品目',itemGroups(a.items).length,{label:'追加',icon:'plus',onclick:`itAdd('${id}')`})+list([...itemsList(id,a.items),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(a.items.reduce((s,i)=>s+itemAmt(i),0))}</b>`})],'flat'):'')
     +(a.items&&ipPartner(a)?sh('負担')+list([row({cls:'plain',t:bpText(a),s:`自分 ${yen(a.x&&X[a.x]?X[a.x].amt:0)}、${esc(ipPartner(a))}さん ${yen(a.adv?a.adv[1]:0)}`,chev:1,onclick:`bpOpen('${id}')`})]):'')
-    +(a.body?sh('内容')+`<div class="list"><p style="padding:14px 16px;line-height:1.85">${esc(a.body)}</p></div>`:'')
-    +(ev?sh('元の予定')+objs([row({href:`#/ev/${ev[0]}`,lead:`<span class="ax-node plan" style="margin:0"></span>`,t:esc(ev[1].t),s:`${fmtMDW(ev[1].d)} ${ev[1].s||''}`,chev:1})]):'')
-    +(att?sh('添付',1)+`<div class="list" style="padding:12px"><img src="${att}" alt="レシートの写真" style="max-width:120px;border-radius:8px;display:block"></div>`:'');
+    +origPlan(id)
+    +(att?sh('添付',1)+`<div class="list ac-att"><img src="${att}" alt="レシートの写真"></div>`:'');
 }
+
+/** 瞬間の詳細(起床など): 小さな主役(時刻+名前)だけ。上に日の札。時刻の編集・削除は「その他の操作」 */
+function insView(id,a,d){
+  const cap=`<div class="ins-c"><span class="ins-tm num">${esc(a.time||'')}</span><span class="ins-t">${esc(a.title)}</span></div>`;
+  return appbar('',{actions:[menuAct(id)]})+pinView({later:[{day:d}],earlier:[],cap})+origPlan(id);
+}
+/** 時刻の編集(瞬間の記録) */
+function insTimeEd(id){const a=A[id];
+  openSheet({title:'時刻を編集',body:list([`<div class="row ins-f"><span class="t">時刻</span><input id="ins-t" type="time" value="${esc(a.time||'')}"></div>`],'flat'),
+    footer:`<button class="btn block" type="button" onclick="insTimeSave('${id}')">保存</button>`});
+}
+function insTimeSave(id){const a=A[id],v=(document.getElementById('ins-t')||{}).value;if(!v){toast('時刻を入れてください');return}
+  const old=a.time;a.time=v;closeSheet();save();rerender();toast('時刻を保存しました',()=>{a.time=old;save();rerender()});
+}
+
+function momentView(id,a){
+  const day=dayOf(a);const d=day?day.date:TODAY;
+  if(a.type==='支払い')return payView(id,a,d);
+  if(isSpan(a))return actView(id,a,d);
+  return insView(id,a,d);
+}
+
 function registerShop(aid){
   const a=A[aid];const r=a.roles.find(r=>r[0]==='支払先');const n=r[2];
   const id=uid('e');E[id]={n,i:n[0],t:['shop'],facts:[]};r[1]=id;save();rerender();
