@@ -26,7 +26,7 @@
   border-radius:12px 12px 0 0;background:var(--tint);font:600 13px/1.2 var(--font);color:var(--tx-2)}
 .obj-e .tab::before{content:"";width:8px;height:8px;margin-right:8px;border-radius:50%;background:var(--fc);flex:none}
 .obj-e .tab a{position:relative;padding:8px 2px}
-.obj-e .tab a::before{content:"";position:absolute;inset:-6px -4px}
+.obj-e .tab a::before{content:"";position:absolute;inset:-7px -4px}
 .obj-e .tab .sep{margin:0 6px;color:var(--tx-3)}
 .obj-e .hero{position:relative;display:flex;align-items:center;gap:14px;padding:16px 18px 18px 16px;border-radius:0 18px 18px 18px;
   background:var(--light),linear-gradient(180deg,var(--tint),var(--surface) 90%);box-shadow:var(--e1),var(--hl)}
