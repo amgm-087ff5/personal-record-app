@@ -4,54 +4,6 @@
    名前は cr 接頭辞。入力は oninput で状態へ書き戻し、構造が変わる時だけ描き直す。
    ===================================================================== */
 
-if(!document.getElementById('cr-style'))document.head.insertAdjacentHTML('beforeend',`<style id="cr-style">
-.cr-tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:8px var(--gutter) 4px}
-.cr-tile{display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:12px;min-height:132px;padding:16px 14px;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1),var(--hl);text-align:left;font:600 16px/1.3 var(--font);color:var(--tx);cursor:pointer}
-.cr-tile:active{background:var(--sunk)}
-.cr-tile small{font:var(--t-cap);font-weight:400;color:var(--tx-3)}
-.cr-tile .ico{width:44px;height:44px;border-radius:14px}
-.cr-tile .ico svg.i{width:24px;height:24px}
-.cr-prev{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px var(--gutter) 4px}
-.cr-prev small{font:var(--t-cap);color:var(--tx-3)}
-.cr-tn{display:flex;align-items:center;gap:8px;min-width:0}
-.cr-sug{padding:0 14px 12px;position:relative}
-.cr-sug:empty{display:none}
-.cr-sug .chips{padding:0}
-.cr-sug+.field::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--line)}
-.cr-cat{display:inline-flex;max-width:100%}
-.cr-cat .tag .dot{width:12px;height:4px;border-radius:2px}
-.cr-dup{background:transparent;box-shadow:inset 0 0 0 1px var(--tx-2);color:var(--tx)}
-.cr-wi{display:inline-flex;color:var(--tx-2)}
-.cr-wi svg.i{width:16px;height:16px}
-.cr-date{padding:4px var(--gutter) 0;font:var(--t-label);color:var(--tx-2)}
-.cr-dm{font:var(--t-cap);color:var(--tx-2)}
-#cr-bur .split{margin:12px var(--gutter) 0}
-.cr-th{width:40px;height:40px;flex:none;border-radius:var(--r-xs);object-fit:cover;background:var(--sunk);box-shadow:var(--e1)}
-.cr-head{display:flex;align-items:center;gap:12px;padding:4px var(--gutter) 10px}
-.cr-head .cr-th{width:56px;height:56px}
-.cr-back{display:inline-flex;align-items:center;gap:4px;margin:4px var(--gutter) 6px;color:var(--brand);font:500 15px/1 var(--font);height:44px}
-.cr-back svg.i{width:18px;height:18px}
-.cr-prog{display:flex;flex-direction:column;gap:8px;padding:4px var(--gutter) 12px}
-.cr-prog span{font:var(--t-label);color:var(--tx-2)}
-.cr-note{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-6px 14px 8px 66px;font:var(--t-cap);color:var(--tx-2)}
-.cr-dupbtn{display:flex;gap:8px;padding:0 14px 12px 66px;flex-wrap:wrap}
-.cr-it{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:52px;padding:6px 14px;position:relative}
-.cr-it+.cr-it::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--line)}
-.cr-it input,.cr-it select{height:40px;min-width:0;background:transparent;font:var(--t-body);color:var(--tx);outline:none}
-.cr-it .cr-n{flex:1;min-width:0}
-.cr-it .cr-pr{width:96px;text-align:right;font-variant-numeric:tabular-nums}
-.cr-it .cr-tx{width:70px}
-.cr-it .cr-del{width:44px;height:44px;display:grid;place-items:center;color:var(--tx-3);border-radius:var(--r-xs)}
-.cr-it .cr-del svg.i{width:18px;height:18px}
-.cr-it .cr-bur{display:flex;gap:6px}
-.cr-b{height:32px;min-width:48px;padding:0 10px;border-radius:8px;background:var(--sunk);color:var(--tx-2);font:500 13px/1 var(--font)}
-.cr-b[aria-pressed="true"]{background:var(--brand-soft);color:var(--brand);font-weight:600}
-.cr-sum{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:12px 14px;font:var(--t-label);color:var(--tx-2)}
-.cr-sum b{color:var(--tx);font-weight:600}
-.cr-diary textarea{min-height:240px}
-.cr-tot{display:flex;justify-content:space-between;align-items:center;padding:12px 14px}
-</style>`);
-
 /* ---------- 共通の小部品 ---------- */
 const crPeople=()=>Object.entries(E).filter(([k,e])=>k!=='me'&&e.t.some(t=>isUnder(t,'person')));
 const crPlaces=()=>Object.entries(E).filter(([k,e])=>e.t.some(t=>isUnder(t,'place')));
@@ -110,11 +62,11 @@ function crPanel(title,body,opt={}){
 }
 
 /* ---------- 登録 ---------- */
-CREATE.push({id:'receipt',label:'レシートで支払い',sub:'撮影・写真から',icon:'pay',color:'var(--ev)',primaryOn:['activities','ledger'],onclick:'openReceipt()'});
-CREATE.push({id:'happening',label:'出来事',sub:'会話・移動など',icon:'spark',color:'var(--ev)',primaryOn:[],onclick:'openNewHappening()'});
-CREATE.push({id:'event',label:'予定',sub:'これからの予定',icon:'future',color:'var(--plan)',primaryOn:['plan'],onclick:'openNewEvent()'});
-CREATE.push({id:'entity',label:'人・場所',sub:'人物・店・会社・物',icon:'kin',color:'var(--kin)',primaryOn:['entities'],onclick:'openNewEntity()'});
-CREATE.push({id:'diary',label:'今日の日記',sub:'',icon:'diary',color:'var(--ev)',primaryOn:[],onclick:'openDiary(TODAY)'});
+CREATE.push({id:'receipt',label:'レシートで支払い',icon:'pay',color:'var(--ev)',primaryOn:['activities','ledger'],onclick:'openReceipt()'});
+CREATE.push({id:'happening',label:'出来事',icon:'moment',color:'var(--ev)',primaryOn:[],onclick:'openNewHappening()'});
+CREATE.push({id:'event',label:'予定',icon:'future',color:'var(--plan)',primaryOn:['plan'],onclick:'openNewEvent()'});
+CREATE.push({id:'entity',label:'人・場所',icon:'kin',color:'var(--kin)',primaryOn:['entities'],onclick:'openNewEntity()'});
+CREATE.push({id:'diary',label:'今日の日記',icon:'diary',color:'var(--ev)',primaryOn:[],onclick:'openDiary(TODAY)'});
 
 /* ---------- 人・場所の候補(輪郭つき) ----------
    入力欄の下にチップで出す。datalist は要素を持てないため使わない */
@@ -299,8 +251,8 @@ let CRS={rc:null,idx:-1,mode:'batch',td:{},open:false};
 function openReceipt(){
   crBT=[];CRS={rc:null,idx:-1,mode:'batch',td:{},open:false};
   crPanel('レシートで支払い',`<div class="cr-tiles">
-    <label class="cr-tile"><input type="file" accept="image/*" capture="environment" hidden onchange="crAddFiles(this.files)">${ico('camera','var(--ev)')}<span>撮影する</span><small>レシート1枚</small></label>
-    <label class="cr-tile"><input type="file" accept="image/*" multiple hidden onchange="crAddFiles(this.files)">${ico('photo','var(--ev)')}<span>写真を選ぶ</span><small>最大${CR_MAXR}枚まで</small></label>
+    <label class="cr-tile"><input type="file" accept="image/*" capture="environment" hidden onchange="crAddFiles(this.files)">${ico('camera','var(--ev)')}<span>撮影する</span><small>1枚</small></label>
+    <label class="cr-tile"><input type="file" accept="image/*" multiple hidden onchange="crAddFiles(this.files)">${ico('photo','var(--ev)')}<span>写真を選ぶ</span><small>最大${CR_MAXR}枚</small></label>
   </div>
   <div class="btnrow"><button class="btn ghost block" type="button" onclick="crSamples()">サンプルのレシートで試す</button></div>`,{full:true,footer:''});
 }
@@ -382,8 +334,7 @@ function crBurCalc(){const rc=CRS.rc;const total=crTotal();let mine=0;
   rc.items.forEach(it=>{const p=itemAmt(it);if(it.b==='相手')return;mine+=it.b==='半分'?Math.floor(p/2):p});
   return {total,mine,adv:total-mine}}
 function crBurHtml(){const c=crBurCalc();
-  if(CRS.rc.with)return splitBar([{v:c.mine,cls:'me',label:'自分の支出'},{v:c.adv,cls:'owed',label:'相手の分・立替'}]);
-  return `<div class="cr-sum"><span>自分の負担 <b class="num">${yen(c.mine)}</b></span></div>`}
+  return ticket({t:'自分の支出',s:CRS.rc.with?`相手の分・立替 ${yen(c.adv)}`:'',amt:yen(c.mine)})}
 /** 金額だけ変わった時は本文を描き直さず、合計と負担だけ更新する */
 function crTotUpdate(){const t=document.getElementById('cr-tot');if(t)t.innerHTML=crTotHtml();const b=document.getElementById('cr-bur');if(b)b.innerHTML=crBurHtml()}
 function crItem(i,k,v){const it=CRS.rc.items[i];if(!it)return;
