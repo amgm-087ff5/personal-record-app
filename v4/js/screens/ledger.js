@@ -94,7 +94,7 @@ route('ledger',()=>{
   const roots=ROOTS(),ranked=roots.filter(r=>cur[r]>0).sort((a,b)=>cur[b]-cur[a]);
   const fixed=ldSum(x=>xFx(x)==='固定'),varia=ldSum(x=>xFx(x)==='変動'),nonDaily=ldSum(x=>xSp(x)==='非日常');
 
-  const nav=`<div class="ld-month"><button class="btn sm ghost" type="button" onclick="ldStep(-1)" ${ldM===0?'disabled':''}>前の月</button><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b><button class="btn sm ghost" type="button" onclick="ldStep(1)" ${isNow?'disabled':''}>次の月</button></div>`;
+  const nav=`<div class="toolbar">${periodNav({label:`${+ym.slice(5)}月`,sub:ym.slice(0,4),prev:{on:'ldStep(-1)',dis:ldM===0},next:{on:'ldStep(1)',dis:isNow}})}</div>`;
   const note=isNow?'':banner('info','この月の明細は10月だけ表示しています。');
 
   const bar=`<div class="ld-bar" role="img" aria-label="大分類の割合">${ranked.map(r=>`<i style="flex:${cur[r]} 1 0;background:${catColor(r)}"></i>`).join('')}</div>`;

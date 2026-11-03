@@ -7,6 +7,11 @@
 
 /* ---- 共通 ---- */
 .pl-root .sh .act{min-height:44px;display:inline-flex;align-items:center}
+/* 見た目が小さい押し面は ::before で当たり判定を44pxにする */
+.pl-root .chip::before,.pl-root .seg button::before{content:"";position:absolute;inset:-6px 0}
+.pl-root .lt-cta{position:relative}
+.pl-root .lt-cta::before{content:"";position:absolute;inset:-4px -6px}
+.pl-root .field .btn{height:44px}
 .pl-root .ref{position:relative}
 .pl-root a.ref::after{content:"";position:absolute;inset:-6px -2px}
 /* 期限切れの見出し = 赤(いま・遅れ) */
@@ -67,7 +72,7 @@
 /* ---- ToDoの詳細: 大きなチェック欄+題名 ---- */
 .pl-card{margin:4px var(--gutter) 0;padding:18px 18px 16px;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e2),var(--hl)}
 .pl-tk{display:flex;align-items:flex-start;gap:14px}
-.pl-tk h1{flex:1;min-width:0;font:var(--t-title);line-height:1.35;padding-top:1px}
+.pl-tk h1{flex:1;min-width:0;font:var(--t-title);line-height:1.35;padding-top:1px;text-wrap:balance}
 .pl-card .meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;padding-left:44px;font:var(--t-label);color:var(--tx-2)}
 /* 結び付きの行の先頭: 予定の形(点線の中抜きのカプセル) */
 .pl-ev-node{flex:none;width:18px;height:12px;border-radius:6px;background:var(--bg);outline:2px dashed var(--plan);outline-offset:-2px}

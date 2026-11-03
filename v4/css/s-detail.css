@@ -47,7 +47,7 @@
 
 /* 支払いのカプセルの中の割合の棒(自分 / ほかの人 / 立替・未精算の斜線) */
 .cap .split{margin-top:16px}
-.cap .split .bar{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px;background:rgba(255,255,255,.22)}
+.cap .split .bar{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px;background:color-mix(in srgb,var(--on-cap) 22%,transparent)}
 .cap .split .bar i{display:block;height:100%}
 .cap .split .bar i.me{background:var(--on-cap)}
 .cap .split .bar i.other{background:color-mix(in srgb,var(--on-cap) 45%,transparent)}

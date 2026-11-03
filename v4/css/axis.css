@@ -60,13 +60,16 @@ a.ax-row:active{background:var(--sunk)}
 .ax-time b{display:block;font:600 13px/21px var(--font);color:var(--tx-2)}
 .ax-time small{display:block;font:400 12px/1.2 var(--font);color:var(--tx-3)}
 /* 節: 軸の上の小さいカプセル。中心=行の1行目の中心(上14+行高21/2) */
-.ax-node{position:absolute;left:calc(var(--in) - 12px);top:16px;z-index:1;width:24px;height:17px;border-radius:9px;
+.ax-node{position:relative;flex:none;width:24px;height:17px;border-radius:9px;
   display:grid;place-items:center;background:var(--light),var(--ev);color:var(--on-cap);box-shadow:var(--hl-fill),0 0 0 3px var(--bg)}
 .ax-node svg.i{width:11px;height:11px}
+.ax-row>.ax-node{position:absolute;left:calc(var(--in) - 12px);top:16px;z-index:1}
+.ax-row>.ax-node.fact{left:calc(var(--in) - 6.5px);top:20px}
+.ax-row>.ax-node.todo{left:calc(var(--in) - 8.5px)}
 .ax-node.plan{background:var(--surface);box-shadow:0 0 0 3px var(--bg);outline:2px dashed var(--plan);outline-offset:-2px;color:var(--plan)}
 .ax-node.plan.late{outline-color:var(--late);color:var(--late)}
-.ax-node.fact{width:13px;height:13px;left:calc(var(--in) - 6.5px);top:20px;border-radius:3px;transform:rotate(45deg);background:var(--light),var(--tc,var(--kin))}
-.ax-node.todo{border-radius:5px;width:17px;left:calc(var(--in) - 8.5px);background:var(--surface);box-shadow:0 0 0 3px var(--bg),inset 0 0 0 2px var(--ev)}
+.ax-node.fact{width:13px;height:13px;border-radius:3px;transform:rotate(45deg);background:var(--light),var(--tc,var(--kin))}
+.ax-node.todo{border-radius:5px;width:17px;background:var(--surface);box-shadow:0 0 0 3px var(--bg),inset 0 0 0 2px var(--ev)}
 .ax-c{display:flex;align-items:flex-start;gap:10px;padding:14px 0 13px;min-width:0}
 .ax-c .main{flex:1;min-width:0}
 .ax-c .t{font:600 15px/21px var(--font);color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -102,14 +105,12 @@ a.ax-row:active{background:var(--sunk)}
 /* ---- 見出しの下の道具の段: 月の切替+絞り込み(1段) ---- */
 .toolbar{display:flex;align-items:center;gap:8px;padding:2px 0 12px var(--gutter)}
 .toolbar .chips{padding:0 var(--gutter) 0 0;flex:1;min-width:0}
-.mnav{flex:none;display:flex;align-items:center;height:36px;border-radius:var(--r-pill);background:var(--surface);box-shadow:var(--e1)}
-.mnav button{width:36px;height:36px;display:grid;place-items:center;color:var(--tx-2);border-radius:var(--r-pill);position:relative}
-.mnav button::before{content:"";position:absolute;inset:-4px}
-.mnav button:disabled{opacity:.3}
-.mnav button.nx svg{transform:scaleX(-1)}
-.mnav button svg.i{width:16px;height:16px}
-.mnav b{font:700 15px/1 var(--font);color:var(--tx);font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:4px;padding:0 2px}
-.mnav b small{font:500 12px/1 var(--font);color:var(--tx-3)}
+.pnav{flex:none;display:flex;align-items:center;height:36px;padding:0 2px;border-radius:var(--r-pill);background:var(--surface);box-shadow:var(--e1)}
+.pnav button{position:relative;height:36px;padding:0 10px;border-radius:var(--r-pill);font:500 13px/1 var(--font);color:var(--brand)}
+.pnav button::before{content:"";position:absolute;left:0;right:0;top:-4px;bottom:-4px}
+.pnav button:disabled{color:var(--tx-3);opacity:.5}
+.pnav b{font:700 15px/1 var(--font);color:var(--tx);display:flex;align-items:baseline;gap:4px;padding:0 4px;white-space:nowrap}
+.pnav b small{font:500 12px/1 var(--font);color:var(--tx-3)}
 
 /* 見出しの主ボタン(そのタブで一番よく作るもの) */
 .lt .lt-cta{height:36px;padding:0 14px;font-size:14px;background:var(--light),var(--me-fill);color:var(--on-me);box-shadow:var(--hl-fill),0 6px 14px -8px var(--me)}

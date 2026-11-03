@@ -58,3 +58,10 @@
 
 /* ---- 合計 ---- */
 .cr-tot{display:flex;justify-content:space-between;align-items:center;padding:12px 14px}
+
+/* ---- 作成シートの押し面: 見た目は小さくても、押せる高さは44px以上 ---- */
+#sheet .sheet-h .btn{height:44px;padding:0 16px}
+#sheet .chips .chip{height:44px}
+#sheet .seg button{min-height:44px}
+#sheet .toggle{position:relative}
+#sheet .toggle::before{content:"";position:absolute;inset:-8px -6px}

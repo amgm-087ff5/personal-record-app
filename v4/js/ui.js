@@ -126,6 +126,9 @@ const axGroup=(head,rows,o={})=>`<section class="axg ${o.future?'future':''} ${o
     o:{href,onclick,stub(半券の中身HTML),t(題名),s(補足HTML),amt(金額HTML),cls:'fill'(主役・塗り)|'lg'(詳細の最上部)|'', label} */
 const ticket=o=>{const tagN=o.href?'a':o.onclick?'button':'div';const attr=o.href?`href="${o.href}"`:o.onclick?`type="button" onclick="${o.onclick}"`:'';
   return `<${tagN} class="tkt-w ${o.cls||''}" ${attr} ${o.label?`aria-label="${esc(o.label)}"`:''}><span class="tkt"><span class="tkt-s">${o.stub||IC.expense||''}</span><span class="tkt-b"><span class="main">${o.t?`<span class="t">${o.t}</span>`:''}${o.s?`<span class="s">${o.s}</span>`:''}</span>${o.amt!=null?`<span class="amt num">${o.amt}</span>`:''}${o.chev?`<span class="chev">${IC.chev}</span>`:''}</span></span></${tagN}>`};
+/** v4: 期間の移動(タイムライン・予定・家計簿で同じ部品)。‹ › は「戻る・開く」の意味なので使わず、文字で「前の月/次の月」。
+    o:{label,sub,prev:{on,dis,text},next:{on,dis,text}} */
+const periodNav=o=>`<div class="pnav" role="group" aria-label="期間"><button type="button" ${o.prev.dis?'disabled':''} onclick="${o.prev.on}">${esc(o.prev.text||'前の月')}</button><b class="num">${o.label}${o.sub?`<small>${o.sub}</small>`:''}</b><button type="button" ${o.next.dis?'disabled':''} onclick="${o.next.on}">${esc(o.next.text||'次の月')}</button></div>`;
 /** 月の区切り(縁の時間軸) */
 const monthHeadAx=(ym,future)=>`<div class="dh2 month ${future?'future':''}"><span class="dcard"><span class="dt"><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b></span></span></div>`;
 const nowLine=()=>`<div class="now" aria-label="いま ${NOW}"><span class="tm">${NOW}</span><span class="dot"></span><span class="ln"></span></div>`;

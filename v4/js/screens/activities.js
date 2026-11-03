@@ -33,7 +33,7 @@ route('activities',()=>{
   const pm=+TODAY.slice(5,7)===1?12:+TODAY.slice(5,7)-1;
   const s=daySpent(TODAY);
   return largeTitle('タイムライン',{actions:[{text:'日記を書く',icon:'edit',primary:true,onclick:`openDiary('${TODAY}')`},{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"},{icon:'more',label:'このモックについて',onclick:'openAbout()'}]})
-    +`<div class="toolbar"><div class="mnav"><button type="button" aria-label="前の月" ${actMonth<=minM?'disabled':''} onclick="monthShift(-1)">${IC.back}</button><b>${+actMonth.slice(5)}月<small>${actMonth.slice(0,4)}</small></b><button type="button" class="nx" aria-label="次の月" ${actMonth>=maxM?'disabled':''} onclick="monthShift(1)">${IC.back}</button></div>${chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")}</div>`
+    +`<div class="toolbar">${periodNav({label:`${+actMonth.slice(5)}月`,sub:actMonth.slice(0,4),prev:{on:'monthShift(-1)',dis:actMonth<=minM},next:{on:'monthShift(1)',dis:actMonth>=maxM}})}${chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")}</div>`
     +`<div class="ax">`
     +(isNow&&upcoming.length&&actFilter==='all'?`<a href="#/plan">${axEdge(`明日以降の予定 ${upcoming.length}件${IC.chev}`)}</a>`:'')
     +(isNow?axGroup(dayHead(TODAY,{href:`#/day/${TODAY}`,diary:dayDiary(TODAY),empty:'今日の日記を書く',sum:s?`自分 ${yen(s)}`:''}),axDay(TODAY),{cls:'today'}):'')

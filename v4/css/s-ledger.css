@@ -4,11 +4,6 @@
    ===================================================================== */
 
 /* ---- 月の切り替え(見出しの下) ---- */
-.ld-month{display:flex;align-items:center;justify-content:center;gap:12px;padding:0 var(--gutter) 6px}
-.ld-month b{font:600 17px/1.4 var(--font);min-width:132px;text-align:center;font-variant-numeric:tabular-nums}
-.ld-month .btn{position:relative}
-.ld-month .btn::before{content:"";position:absolute;inset:-4px 0}
-.ld-month .btn[disabled]{opacity:.3;pointer-events:none}
 
 /* ---- 自分の支出の合計(v3の数値・前月比・内訳の棒。面は1枚) ---- */
 .ld-sum{padding:14px 16px 12px;display:flex;flex-direction:column;gap:10px}
