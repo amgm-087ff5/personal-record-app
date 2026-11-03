@@ -189,9 +189,8 @@ function momentView(id,a){
   const isPay=a.type==='支払い';
   const cap=`<section class="cap"><div class="kind">${IC[icon]}${esc(a.type)}<span class="tm">${esc(a.time||'')}</span></div><h1>${esc(a.title)}</h1>${a.amt!=null?`<div class="big">${yen(a.amt)}</div>`:''}${meta?`<div class="meta">${meta}</div>`:''}${isPay?paySplit(a):''}</section>`;
   const x=a.x&&X[a.x];
-  /* 子: 支払い → 自分の支出 を └ でぶら下げる */
-  /* 子: 自分の支出 = 自分の支出の詳細の最上部と同じ「帯」(同じもの=同じ見た目) */
-  const child=x?`<div class="hang"><a class="child band" href="#/x/${a.x}"><span class="grow"><div class="lbl">${IC.expense}自分の支出</div><div class="amt">${yen(x.amt)}</div></span><span class="cat-on">${esc(catPath(x.cat))}</span><span class="chev">${IC.chev}</span></a></div>`:'';
+  /* 子: 支払い → 自分の支出 を └ でぶら下げる。自分の支出は半券チケット(DESIGN v4 = 自分の支出の形) */
+  const child=x?`<div class="hang">${ticket({href:`#/x/${a.x}`,t:'自分の支出',s:esc(catPath(x.cat)),amt:esc(yen(x.amt)),cls:'fill',chev:true})}</div>`:'';
   const shop=(a.roles||[]).find(r=>r[0]==='支払先');
   const ev=Object.entries(EV).find(([k,e])=>e.rec===id);
   const att=(EXTRA.attach||{})[id];

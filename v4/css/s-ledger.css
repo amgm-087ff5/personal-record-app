@@ -1,73 +1,93 @@
-/* 画面: ledger — v3から移した規則(担当エージェントが書き直す) */
-.zm{margin:4px var(--gutter) 0}
-.zm-parent{display:flex;align-items:center;gap:10px;min-height:52px;padding:8px 12px;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1),var(--hl)}
-.zm-parent .t{font:500 15px/1.35 var(--font)}
-.zm-parent .s{font:var(--t-cap);color:var(--tx-3);margin-top:2px}
-.zm-parent .v{margin-left:auto;font:600 15px/1 var(--font);font-variant-numeric:tabular-nums;white-space:nowrap}
-.zm-bar{display:flex;height:14px;margin:12px 4px 0;border-radius:7px;overflow:hidden;gap:2px;background:var(--sunk)}
-.zm-bar i{display:block;height:100%}
-.zm-bar i.me{background:var(--brand)}
-.zm-bar i.other{background:var(--axis)}
-.zm-bar i.owed{background:repeating-linear-gradient(135deg,var(--warn) 0 4px,color-mix(in srgb,var(--warn) 45%,transparent) 4px 8px)}
-.zm-lens{display:block;width:calc(100% - 8px);height:30px;margin:0 4px}
-.zm-card{padding:18px 20px 20px;border-radius:var(--r-lg);color:#fff;
-  background:radial-gradient(130% 120% at 0% 0%,rgba(255,255,255,.2),rgba(255,255,255,0) 55%),var(--brand);
-  box-shadow:0 12px 28px -12px color-mix(in srgb,var(--brand) 80%,transparent),inset 0 1px 0 rgba(255,255,255,.3)}
-.zm-card .kind{display:flex;align-items:center;gap:8px;font:600 13px/1 var(--font);opacity:.92}
-.zm-card .kind svg.i{width:16px;height:16px}
-.zm-card .big{font:700 40px/1.1 var(--font);margin-top:8px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.zm-card .pct{font:var(--t-label);opacity:.9;margin-top:4px}
-.zm-card .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
-.zm-card .tags span{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:8px;background:rgba(255,255,255,.18);font:500 13px/1 var(--font)}
-.zm-card .tags span i{width:9px;height:9px;border-radius:3px;background:var(--cc);box-shadow:0 0 0 1.5px #fff}
-.zm-card{background:radial-gradient(130% 120% at 0% 0%,rgba(255,255,255,.2),rgba(255,255,255,0) 55%),var(--fill-brand)}
-.zm-bar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 4px,color-mix(in srgb,var(--owe) 40%,transparent) 4px 8px)}
-.zm-bar i.other{background:var(--axis)}
-.zm-card{border-radius:10px;background:var(--me);color:#fff}
-.zm-lens polygon{fill:var(--me)}
-.zm-card .tags span i{width:14px;height:6px;border-radius:3px}
-.zm-card{color:var(--on-me)}
-.ld-mini{background:none;padding:0;gap:6px;border-radius:0}
-.ld-mini button{height:36px;border-radius:var(--r-pill);border:1px solid var(--line-strong);background:var(--surface);color:var(--tx)}
-.ld-mini button[aria-pressed="true"]{background:var(--tx);border-color:var(--tx);color:var(--bg);box-shadow:none}
-.ld-seg .seg button{height:36px}
-.ld-chart{gap:10px}
-.ld-tr{display:grid;grid-template-columns:32px 1fr auto;align-items:center;gap:10px;font:var(--t-cap);color:var(--tx-2)}
-.ld-tr .tb{min-width:0}
-.ld-tr .ld-bar{height:12px;border-radius:3px}
+/* =====================================================================
+   画面: 家計簿(#/ledger, #/x/…, #/cats) — UI v4
+   色は tokens.css の変数だけ。1つの規則は1か所(js の style 注入はしない)。
+   ===================================================================== */
+
+/* ---- 月の切り替え(見出しの下) ---- */
+.ld-month{display:flex;align-items:center;justify-content:center;gap:12px;padding:0 var(--gutter) 6px}
+.ld-month b{font:600 17px/1.4 var(--font);min-width:132px;text-align:center;font-variant-numeric:tabular-nums}
+.ld-month .btn[disabled]{opacity:.3;pointer-events:none}
+
+/* ---- 自分の支出の合計(v3の数値・前月比・内訳の棒。面は1枚) ---- */
+.ld-sum{padding:14px 16px 12px;display:flex;flex-direction:column;gap:10px}
+.ld-lbl{font:var(--t-label);color:var(--tx-2)}
+.ld-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ld-big{font:700 34px/1.1 var(--font);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.ld-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;gap:2px;background:var(--sunk)}
+.ld-bar i{display:block;height:100%;min-width:0}
+/* 固定費・変動費・非日常(押すと絞り込み) */
+.ld-fig{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}
+.ld-fig button{display:flex;flex-direction:column;gap:2px;align-items:flex-start;padding:10px 14px;min-height:56px;text-align:left}
+.ld-fig button+button{border-left:1px solid var(--line)}
+.ld-fig button.on{background:var(--brand-soft)}
+.ld-fig .k{font:var(--t-cap);color:var(--tx-3)}
+.ld-fig .k.strong{color:var(--tx)}
+.ld-fig .v{font:600 15px/1.3 var(--font);font-variant-numeric:tabular-nums}
+
+/* ---- 推移(月ごとの横棒。今月は太い) ---- */
+.ld-chart{padding:12px 14px 10px;display:flex;flex-direction:column;gap:8px}
+.ld-tr{display:grid;grid-template-columns:32px 1fr auto;align-items:center;gap:8px;font:var(--t-cap);color:var(--tx-2)}
+.ld-tr .tb{min-width:0;position:relative}
+.ld-tr .ld-bar{height:12px;border-radius:3px;background:none;padding:0}
+.ld-tr .ld-bar i{border-radius:0}
 .ld-tr .v{font:500 13px/1 var(--font);color:var(--tx-2);min-width:72px;text-align:right}
 .ld-tr.on .mo,.ld-tr.on .v{color:var(--tx);font-weight:700}
-.ld-tr.on .ld-bar{height:16px}
-.prop .ld-mini button[aria-pressed="true"]{background:var(--tx);border-color:var(--tx);color:var(--bg);box-shadow:none;font-weight:600}
-.ld-seg .seg button[aria-pressed="true"]{background:var(--tx);border-color:var(--tx);color:var(--bg)}
-.ld-mini button{border:0;background:var(--sunk);color:var(--tx-2);height:32px;font-weight:500}
-.prop .ld-mini button[aria-pressed="true"],.ld-seg .seg button[aria-pressed="true"]{background:var(--tx);color:var(--bg)}
-.ld-mini button{position:relative}
-.ld-mini button::before{content:"";position:absolute;inset:-6px 0}
-.ld-seg .seg button{height:32px}
-div.ld-seg .seg button{height:32px}
-.prop .ld-mini button[aria-pressed="true"],.ld-seg .seg button[aria-pressed="true"]{background:var(--me-soft);color:var(--me);font-weight:600}
-.zm-card{background-color:var(--me-fill)}
-.zm-card{background:radial-gradient(130% 120% at 0% 0%,rgba(255,255,255,.2),rgba(255,255,255,0) 55%),var(--me-fill)}
-.zm-lens polygon{fill:var(--me-fill)}
-.zm-card{background:var(--light),var(--me-fill);color:#fff;box-shadow:0 10px 24px -12px color-mix(in srgb,var(--me-fill) 80%,transparent),var(--hl-fill)}
-.ld-tr .tb{position:relative}
-.ld-avg{position:absolute;top:-4px;bottom:-4px;width:0;border-left:1.5px dashed var(--tx-3);z-index:1}
+.ld-tr.on .ld-bar{height:14px}
+.ld-avg{position:absolute;top:-3px;bottom:-3px;width:0;border-left:1.5px dashed var(--tx-3);z-index:1}
 .ld-avgl{font:var(--t-cap);color:var(--tx-3)}
 .ld-avgl .tb span{display:block;white-space:nowrap;transform:translateX(calc(-100% + 4px));width:max-content}
-.zm-card{border-radius:10px}
-.ld-mini button{padding:0 14px}
-.ld-mini{flex-wrap:wrap}
-.ld-mini button[aria-pressed="true"],.field .ld-mini button[aria-pressed="true"],.prop .ld-mini button[aria-pressed="true"],.ld-seg .seg button[aria-pressed="true"]{background:var(--me-soft);border-color:transparent;color:var(--me);font-weight:600;box-shadow:none}
-.objs:has(.ld-exp){filter:drop-shadow(0 3px 6px rgba(60,100,180,.12))}
-.ld-exp{--st:56px;padding-left:0!important;gap:12px;box-shadow:none!important;border-radius:12px;overflow:hidden;
-  -webkit-mask:radial-gradient(circle 7px at var(--st) 0,#0000 97%,#000) top/100% 51% no-repeat,radial-gradient(circle 7px at var(--st) 100%,#0000 97%,#000) bottom/100% 51% no-repeat;
-  mask:radial-gradient(circle 7px at var(--st) 0,#0000 97%,#000) top/100% 51% no-repeat,radial-gradient(circle 7px at var(--st) 100%,#0000 97%,#000) bottom/100% 51% no-repeat}
-.ld-exp::before{content:"支出";display:grid!important;place-items:center;width:var(--st);flex:none;align-self:stretch;background:var(--me-soft);color:var(--me);font:700 12px/1 var(--font);letter-spacing:.06em;border-right:1.5px dashed color-mix(in srgb,var(--me) 40%,transparent);position:static!important;height:auto!important;margin:0!important;border-radius:0!important;opacity:1!important}
-.objs>.row.ld-exp::before{display:grid!important}
-.ld-exp .ld-pbar{margin-left:0}
-.objs>.row.ld-exp::before{content:"支出"!important;width:var(--st)!important;min-width:var(--st);align-self:stretch;height:auto!important;position:static!important;display:grid!important;place-items:center;background:var(--me-soft)!important;color:var(--me);font:700 12px/1 var(--font);box-sizing:border-box;flex:none;left:auto;top:auto;transform:none}
-.ld-exp .ld-pbar{margin-left:0}
-.ld-exp{position:relative}
-.ld-exp .ld-pbar{position:absolute;left:9px;bottom:10px;width:38px;margin:0}
-.objs>.row.ld-exp::before{padding-bottom:14px}
+
+/* ---- 内訳(切替はピル。行は詰める) ---- */
+.ld-seg .seg{margin-bottom:10px}
+.ld-seg .seg button{height:34px}
+.ld-row{min-height:52px;padding:8px 14px}
+.ld-row.on{background:var(--brand-soft)}
+.ld-row .ld-m{display:block;margin-top:4px}
+.ld-pct{color:var(--tx-3);font-weight:400;font-size:12px;margin-left:6px}
+/* 内訳の子カテゴリ(今月の絞り込みで出す): 字下げ+親からの細い線 */
+.ld-kid{padding-left:36px;background:linear-gradient(var(--line-strong),var(--line-strong)) 19px 0/1px 100% no-repeat}
+.ld-kid2{padding-left:58px;background:linear-gradient(var(--line-strong),var(--line-strong)) 19px 0/1px 100% no-repeat,linear-gradient(var(--line-strong),var(--line-strong)) 41px 0/1px 100% no-repeat}
+.ld-clear{padding:0 var(--gutter) 10px}
+.ld-clear .chip{height:32px}
+
+/* ---- 支出の一覧: 1件=1枚の半券チケット(白い面)。行の間は8px ---- */
+.ld-tix{display:flex;flex-direction:column;gap:8px;padding:0 var(--gutter)}
+/* 補足(店・カテゴリ・非日常)は行の中で折り返す(切らない) */
+.ld-tix .tkt-b .s{flex-wrap:wrap;white-space:normal;overflow:visible;row-gap:4px}
+.ld-tix .amt small{display:block;margin-top:3px;font:400 12px/1.2 var(--font);color:var(--tx-3);text-align:right}
+/* 支払いの棒(割り勘・立替の自分の区間) = 補足の中に小さく */
+.ld-pbar{display:inline-flex;width:32px;height:6px;border-radius:3px;overflow:hidden;flex:none;vertical-align:middle}
+.ld-pbar i{display:block;height:100%;min-width:0}
+.ld-pbar i.me{background:var(--me)}
+.ld-pbar i.rest{background:var(--axis)}
+.ld-pbar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 2px,color-mix(in srgb,var(--owe) 40%,transparent) 2px 4px)}
+
+/* ---- 支出の詳細: 親の支払いへの1行 + 半券チケット(主役) ---- */
+.ld-top{padding:6px var(--gutter) 0;display:flex;flex-direction:column;gap:8px}
+.ld-parent{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 2px;font:var(--t-label);color:var(--tx-2)}
+.ld-parent .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ld-parent .v{font:600 14px/1 var(--font);color:var(--tx);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ld-parent svg.i{width:16px;height:16px;color:var(--tx-3)}
+.ld-tap{width:100%;text-align:left}
+.ld-in{flex:1;min-width:0;height:44px;font:var(--t-body);color:var(--tx);outline:none;background:none;border:0}
+.ld-in::placeholder{color:var(--tx-3)}
+.ld-chk{color:var(--brand);display:grid;place-items:center}
+
+/* ---- 「区分」のピル(固定・変動 / 特別感 / 都度指定。詳細・編集・作成で共通) ---- */
+.ld-mini{display:inline-flex;flex-wrap:wrap;gap:6px}
+.ld-mini button{position:relative;height:36px;padding:0 14px;border-radius:var(--r-pill);border:0;background:var(--sunk);color:var(--tx-2);font:var(--t-label);font-weight:500}
+.ld-mini button::before{content:"";position:absolute;inset:-4px 0}
+.ld-mini button[aria-pressed="true"]{background:var(--me-soft);color:var(--me);font-weight:600}
+.ld-seg .seg button[aria-pressed="true"]{background:var(--me-soft);color:var(--me);border-color:transparent;font-weight:600}
+
+/* ---- カテゴリの色の印・色の選択 ---- */
+.ld-sq{width:14px;height:6px;border-radius:3px;background:var(--cc);flex:none}
+.ld-sw{display:flex;flex-wrap:wrap;padding:0}
+.ld-sw .sw{width:44px;height:44px;border-radius:50%;display:grid;place-items:center}
+.ld-sw .sw::before{content:"";width:32px;height:32px;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 1px var(--line-strong)}
+.ld-sw .sw[aria-pressed="true"]::before{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--brand)}
+
+/* ---- カテゴリの木(#/cats): 1枚の面。子は親の印の真下から出る細い縦線で繋ぐ ---- */
+.ld-tree .row{min-height:var(--row)}
+.ld-tree .ld-node+.ld-node>.row::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--line)}
+.ld-tree .ld-kids{margin-left:21px;border-left:1px solid var(--line-strong)}
