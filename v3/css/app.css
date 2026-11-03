@@ -1131,3 +1131,6 @@ a.ax-row:active .ax-c{background:var(--sunk);transform:scale(.99)}
 .mnav button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line-strong);background:var(--surface);color:var(--tx-2);display:flex;align-items:center;justify-content:center}
 .mnav button.nx svg{transform:rotate(180deg)}
 .mnav button:disabled{opacity:.3}
+/* v12.2: 余白は margin でなく padding で取る(軸の線は要素の内側にしか引けず、margin だと線が切れる) */
+.dh2{margin-top:0;margin-bottom:0;padding-top:30px;padding-bottom:10px}
+.dh2:first-child,.ax>a:first-child+.dh2{padding-top:10px}
