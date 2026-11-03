@@ -54,11 +54,11 @@ function crPanel(title,body,opt={}){
   if(crSheetOpen()&&h&&h.textContent===title){
     setSheetBody(body);
     if(opt.top){const b=document.getElementById('sheet-b');if(b)b.scrollTop=0}
-    if('footer' in opt)crFooter(opt.footer);
+    if('footer' in opt||opt.right)crFooter(opt.footer||sheetMainBtn(opt.right));
     return;
   }
-  openSheet({title,body,right:opt.right,full:opt.full});
-  crFooter(opt.footer||'');
+  openSheet({title,body,full:opt.full});
+  crFooter(opt.footer||sheetMainBtn(opt.right));
 }
 
 /* ---------- 登録 ---------- */

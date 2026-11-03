@@ -275,7 +275,10 @@ function renderNav(cur){
    openSheet({title, body, left:{label,onclick}, right:{label,onclick,primary}, footer, full})
    本文を描き直すときは setSheetBody(html) */
 let SHEET_STACK=0;
+/** v4: シートの主ボタンは下(親指の届く所)に1つ。上部の右は使わない(DESIGN.md v10)。right を下の主ボタンにする */
+const sheetMainBtn=r=>r&&r.primary!==false?`<button class="btn block" type="button" ${r.disabled?'disabled':''} onclick="${r.onclick}">${esc(r.label)}</button>`:'';
 function openSheet(o){
+  if(o.right&&o.right.primary!==false&&!o.footer){o={...o,footer:sheetMainBtn(o.right),right:null}}
   const sc=document.getElementById('scrim'),sh=document.getElementById('sheet');
   sh.className='sheet'+(o.full?' full':'');
   sh.setAttribute('aria-label',o.title||'');

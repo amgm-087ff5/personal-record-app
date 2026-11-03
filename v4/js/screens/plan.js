@@ -62,7 +62,7 @@ function plCalPane(){
     const dots=its.slice(0,4).map(it=>`<i class="pl-dot ${it.kind==='rec'?'rec':'plan'}${it.cat?' pay':''}"></i>`).join('');
     cells+=`<button class="pl-cell${sun?' sun':''}${d===plSel?' sel':''}${d===TODAY?' today':''}" type="button" aria-label="${fmtMDW(d)}${its.length?' '+its.length+'件':''}" aria-pressed="${d===plSel}" onclick="plSelect('${d}')"><span class="pl-dn num">${n}</span><span class="pl-bars">${dots}</span></button>`;
   }
-  const head=`<div class="pl-mh"><button class="pl-nav" type="button" onclick="plMove(-1)">前の月</button><b class="num">${y}年${m}月</b><button class="pl-nav" type="button" onclick="plMove(1)">次の月</button></div>`;
+  const head=`<div class="pl-mh">${periodNav({label:`${m}月`,sub:String(y),prev:{on:'plMove(-1)'},next:{on:'plMove(1)'}})}</div>`;
   const wd=`<div class="pl-wd">${WD.split('').map((w,i)=>`<span class="${i===0?'sun':''}">${w}</span>`).join('')}</div>`;
   const legend=`<div class="pl-legend"><span><i class="pl-dot plan"></i>予定</span><span><i class="pl-dot rec"></i>記録</span><span><i class="pl-dot plan pay"></i>支払い予定</span></div>`;
   return `<div class="list pl-cal">${head}${wd}<div class="pl-grid">${cells}</div>${legend}</div>`
@@ -101,10 +101,40 @@ function plStepDay(n){
   plYM=[+plSel.slice(0,4),+plSel.slice(5,7)];
   rerender();
 }
-/** 日表示: 前後の日へ送る+その日の面(月の下と同じ面)。時間グリッドは使わず、時刻は行の左に出す */
+/** 日表示: 時間グリッド(6:00–24:00)。重なりは列に分けて横に並べる(v2の日表示。v3から継続)。
+    v4: グリッドは1日=1枚の面の中。記録=塗りのカプセルの帯、予定=点線の中抜き */
+const plCatMark=c=>c?`<i class="pl-cat" style="--cc:${catColor(c)}"></i>`:'';
 function plDayPane(){
-  return `<div class="pl-dnav"><button class="pl-nav" type="button" onclick="plStepDay(-1)">前の日</button><button class="pl-nav" type="button" onclick="plStepDay(1)">次の日</button></div>`
-    +plDayAx(plSel);
+  const d=plSel, isToday=d===TODAY;
+  const H0=6,H1=24,PH=48;
+  const minOf=t=>{const [h,m]=String(t).split(':').map(Number);return h*60+m};
+  const hol=evOn(d).find(([k,e])=>e.hol);
+  const its=plItemsOn(d);
+  const allday=its.filter(x=>x.all);
+  const timed=its.filter(x=>!x.all).map(x=>{
+    const s=Math.max(minOf(x.time),H0*60);
+    const e=Math.min(Math.max(x.end?minOf(x.end):s+36,s+36),H1*60);
+    return {x,s,e};
+  }).sort((a,b)=>a.s-b.s);
+  const lanesEnd=[];
+  timed.forEach(b=>{let i=lanesEnd.findIndex(en=>en<=b.s);if(i<0){i=lanesEnd.length;lanesEnd.push(0)}lanesEnd[i]=b.e;b.i=i});
+  const N=Math.max(1,lanesEnd.length);
+  const blocks=timed.map(({x,s,e,i})=>{
+    const top=(s-H0*60)/60*PH, h=Math.max((e-s)/60*PH,44);
+    const isRec=x.kind==='rec';
+    const href=isRec?'#/a/'+x.k:'#/ev/'+x.k;
+    const tm=x.end?`${x.time}–${x.end}`:x.time;
+    return `<a class="pl-blk ${isRec?'rec':'plan'}" href="${href}" style="top:${top}px;height:${h}px;left:calc(52px + (100% - 52px) * ${i/N});width:calc((100% - 52px) / ${N} - 4px)"><b>${esc(x.t)}</b>${h>=48?`<span>${tm}</span>`:''}</a>`;
+  }).join('');
+  let grid='';
+  for(let h=H0;h<=H1;h++){const y=(h-H0)*PH;grid+=`<span class="pl-hl num" style="top:${y}px">${h}:00</span><i class="pl-hr" style="top:${y}px"></i>`}
+  const nowHtml=isToday?`<div class="pl-now" style="top:${(minOf(NOW)-H0*60)/60*PH}px"><span>${NOW}</span></div>`:'';
+  const alld=allday.map(x=>`<a class="pl-bar ${x.kind==='rec'?'rec':'plan'}" href="${x.kind==='rec'?'#/a/'+x.k:'#/ev/'+x.k}">${plCatMark(x.cat)}${esc(x.t)}</a>`).join('');
+  const s=daySpent(d);
+  return `<div class="toolbar pl-dtb">${periodNav({label:fmtMDW(d),sub:isToday?'今日':(hol?esc(hol[1].t):''),prev:{on:'plStepDay(-1)',text:'前の日'},next:{on:'plStepDay(1)',text:'次の日'}})}</div>`
+    +`<section class="pl-dpanel ${isToday?'today':''}">${dayHead(d,{href:'#/day/'+d,diary:dayDiary(d),sum:s?`自分 ${yen(s)}`:'',empty:hol?hol[1].t:''})}`
+    +(alld?`<div class="pl-allday">${alld}</div>`:'')
+    +`<div class="pl-tg" style="height:${(H1-H0)*PH+12}px">${grid}${blocks}${nowHtml}</div></section>`;
 }
 
 /* ---------- 3週間(今日から21日の時間軸) ---------- */

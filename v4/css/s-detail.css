@@ -23,8 +23,6 @@
   background:var(--light),var(--ev);box-shadow:var(--hl-fill),0 0 0 4px var(--bg)}
 .pin-cur>.node::after{content:"";position:absolute;left:100%;top:50%;width:6px;height:2px;margin-top:-1px;background:var(--ev)}
 /* 予定(未記録): 中抜きの点線の節 */
-.pin-cur.plan>.node,.pin-cur.fut>.node{background:var(--bg);outline:2px dashed var(--plan);outline-offset:-2px}
-.pin-cur.plan>.node::after,.pin-cur.fut>.node::after{background:var(--plan)}
 .pin-cur.late>.node{outline-color:var(--late)}
 .pin-cur.late>.node::after{background:var(--late)}
 
@@ -40,10 +38,6 @@
 .cap .meta span{display:inline-flex;align-items:center;gap:5px}
 .cap .meta svg.i{width:15px;height:15px}
 /* 予定のカプセル: 白い面+点線の輪郭(塗らない) */
-.cap.plan{color:var(--tx);background:var(--tl-card);box-shadow:var(--tl-sh);outline:2px dashed var(--plan);outline-offset:-2px}
-.cap.plan.late{outline-color:var(--late)}
-.cap.plan .kind,.cap.plan .meta{color:var(--tx-2);opacity:1}
-.cap.plan .meta svg.i{color:var(--tx-3)}
 
 /* 支払いのカプセルの中の割合の棒(自分 / ほかの人 / 立替・未精算の斜線) */
 .cap .split{margin-top:16px}
@@ -105,7 +99,7 @@
 .dp-date span{font:600 17px/1.3 var(--font);color:var(--tx);padding-bottom:4px}
 .dp-date small{display:block;font:var(--t-cap);color:var(--tx-3);margin-top:2px}
 .dp-text{display:block;width:100%;margin-top:18px;font:400 17px/1.95 var(--font);color:var(--tx);white-space:pre-wrap;text-align:left}
-.dp-text.none{font:var(--t-body);color:var(--tx-3);background:none;border:0;padding:0}
+.dp-text.none{font:var(--t-body);color:var(--tx-3);background:none;border:0;padding:0;min-height:44px}
 /* 写真: 小さく控えめに(空の箱は出さない。写真がある日だけ出る) */
 .dp-photos{display:flex;gap:8px;margin-top:14px;overflow-x:auto}
 .dp-ph{width:72px;height:72px;flex:none;border-radius:12px;display:block}
