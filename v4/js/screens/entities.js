@@ -61,7 +61,7 @@ function factEvents(id){
 route('e',id=>{
   const e=E[id];if(!e)return appbar('')+empty('people','この人・場所は見つかりません');
   const tc=threadColor(id);
-  const acts=actsOf(id).map(([k,a,role])=>({k,a,role,d:a.parent&&A[a.parent]?A[a.parent].date:null})).filter(x=>x.d).sort((x,y)=>(y.d+y.a.time).localeCompare(x.d+x.a.time));
+  const acts=actsOf(id).map(([k,a,role])=>({k,a,role,d:dateOf(a)||null})).filter(x=>x.d).sort((x,y)=>(y.d+y.a.time).localeCompare(x.d+x.a.time));
   const plans=Object.entries(EV).filter(([k,ev])=>!ev.rec&&!ev.hol&&ev.d>=TODAY&&((ev.who||[]).includes(id)||(ev.place&&ev.place[0]===id))).sort((a,b)=>b[1].d.localeCompare(a[1].d));
   const yearN=acts.filter(x=>x.d.startsWith(TODAY.slice(0,4))).length;
   const money=acts.filter(x=>x.a.type==='支払い').reduce((s,x)=>s+(x.a.x&&X[x.a.x]?X[x.a.x].amt:0),0);

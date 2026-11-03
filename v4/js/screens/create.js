@@ -26,16 +26,18 @@ function crPayment(o){
   const roles=[['支払先',shopId,o.shop||'(店なし)'],['支払者','me']];if(o.with)roles.push(['同席',o.with]);
   const amt=o.items.reduce((s,i)=>s+itemAmt(i),0);
   const aid=uid('p'),xid=uid('x');
+  /* 親: 選んだ活動(期間)の中、無ければ日の直下 */
+  const parent=o.act&&A[o.act]&&A[o.act].type!=='日記'?o.act:day;
   const mine=o.items.filter(i=>i.b!=='相手').map(i=>({n:i.n,price:i.b==='半分'?Math.floor(itemAmt(i)/2):itemAmt(i),b:i.b==='半分'?'1/2':'全額'}));
   const xamt=mine.reduce((s,i)=>s+i.price,0);
   const who=o.with?E[o.with].n.split(' ').pop():'相手';
-  A[aid]={type:'支払い',parent:day,time:o.time,title:o.title||(o.items.length===1?o.items[0].n:'買い物'),pay:o.pay||'現金',amt,roles,
+  A[aid]={type:'支払い',parent,time:o.time,title:o.title||(o.items.length===1?o.items[0].n:'買い物'),pay:o.pay||'現金',amt,roles,
     items:o.items.map(i=>{const r={n:i.n,price:itemAmt(i),tax:i.tax||10,b:i.b==='相手'?who:i.b};const ln=lnSave(i);if(ln)r.lines=ln;return r}),x:xamt?xid:undefined};
   if(o.with&&amt-xamt>0)A[aid].adv=[o.with,amt-xamt,'未精算'];
   if(xamt){X[xid]={pay:aid,amt:xamt,cat:o.cat||crGuessCat(shopId),memo:'',items:mine};
     /* カテゴリが都度指定の項目だけ、入力時に選んだ値を持つ */
     if(o.fx&&catFx(X[xid].cat)===null)X[xid].fx=o.fx;if(o.sp&&catSp(X[xid].cat)===null)X[xid].sp=o.sp}
-  A[day].kids.push(aid);
+  A[parent].kids.push(aid);
   EXTRA.attach=EXTRA.attach||{};EXTRA.hashes=EXTRA.hashes||{};
   if(o.img)EXTRA.attach[aid]=o.img;
   if(o.hash)EXTRA.hashes[aid]=o.hash;
@@ -61,12 +63,38 @@ function crPanel(title,body,opt={}){
   crFooter(opt.footer||sheetMainBtn(opt.right));
 }
 
+/* ---------- 支払いを入れる活動(期間)の選び方 ----------
+   候補 = その日の活動(期間。支払い・瞬間は除く)。既定 = 支払いの時刻を含む活動、無ければ「なし(日の直下)」。
+   st.act: undefined = 既定(時刻で決める) / '' = なし / 活動のid。日付が変わって合わなければ「なし」 */
+const crActCands=d=>actsOn(d).filter(([k,a])=>a.type!=='支払い'&&isSpan(a)).sort((x,y)=>x[1].time.localeCompare(y[1].time));
+function crActDefault(d,t){const h=crActCands(d).find(([k,a])=>a.time<=t&&t<=a.end);return h?h[0]:''}
+function crActResolve(st,d,t){if(st.act===undefined)return crActDefault(d,t);return st.act&&A[st.act]&&dateOf(A[st.act])===d?st.act:''}
+/** set: 選んだ時に実行する式(状態へ書き戻す。描き直さない) */
+function crActInner(st,d,t,set){const cur=crActResolve(st,d,t);
+  return `<label>活動の中</label><select aria-label="どの活動の中か" onchange="${set}">`
+    +`<option value="" ${cur===''?'selected':''}>なし(日の直下)</option>`
+    +crActCands(d).map(([k,a])=>`<option value="${k}" ${cur===k?'selected':''}>${esc(timeText(a))} ${esc(a.title||'')}</option>`).join('')+'</select>'}
+function crActField(st,d,t,set,id){return `<div class="field" id="${id}">${crActInner(st,d,t,set)}</div>`}
+/** 日付・時刻の入力のたびに、選択肢の中身だけ差し替える(入力欄の框は保つ) */
+function crActSync(id,st,d,t,set){const el=document.getElementById(id);if(el)el.innerHTML=crActInner(st,d,t,set)}
+
 /* ---------- 登録 ---------- */
 CREATE.push({id:'receipt',label:'レシートで支払い',icon:'pay',color:'var(--ev)',primaryOn:['activities','ledger'],onclick:'openReceipt()'});
 CREATE.push({id:'happening',label:'出来事',icon:'moment',color:'var(--ev)',primaryOn:[],onclick:'openNewHappening()'});
 CREATE.push({id:'event',label:'予定',icon:'future',color:'var(--plan)',primaryOn:['plan'],onclick:'openNewEvent()'});
 CREATE.push({id:'entity',label:'人・場所',icon:'kin',color:'var(--kin)',primaryOn:['entities'],onclick:'openNewEntity()'});
 CREATE.push({id:'diary',label:'今日の日記',icon:'diary',color:'var(--ev)',primaryOn:[],onclick:'openDiary(TODAY)'});
+CREATE.push({id:'memo',label:'メモ',icon:'memo',color:'var(--ev)',primaryOn:['memo'],onclick:'openNewMemo()'});
+
+/* ---------- メモ(1枚のシートで本文と保存) ---------- */
+let CM=null;
+function openNewMemo(){CM={body:''};crMemoRender()}
+function crMemoRender(){
+  crPanel('メモ',`<div class="list"><div class="field cr-memo"><textarea rows="5" placeholder="思いついたこと" oninput="CM.body=this.value">${esc(CM.body)}</textarea></div></div>`,{right:{label:'メモを保存',onclick:'crMemoSave()'}});
+}
+function crMemoSave(){const b=(CM.body||'').trim();if(!b){toast('本文を入れてください');return}
+  memoAdd(b);CM=null;closeSheet();save();rerender();toast('メモを保存しました');
+}
 
 /* ---------- 人・場所の候補(輪郭つき) ----------
    入力欄の下にチップで出す。datalist は要素を持てないため使わない */
@@ -96,7 +124,7 @@ function crAskHtml(st,cat,fn){
 }
 /* ---------- ＋支出(金額だけ) ---------- */
 let CQ={amt:'',shop:'',date:TODAY,root:'food',cat:'eatout'};
-function openQuickExpense(){CQ={amt:'',shop:'',date:TODAY,root:'food',cat:'eatout'};crQeRender()}
+function openQuickExpense(){CQ={amt:'',shop:'',date:TODAY,time:crNowHM(),root:'food',cat:'eatout'};crQeRender()}
 function crQeX(k,v){CQ[k]=CQ[k]===v?'':v;crQeRender()}
 function crQeChildren(root){return Object.keys(CATS).filter(k=>CATS[k].p===root)}
 function crQeRoot(k){CQ.root=k;const ks=crQeChildren(k);CQ.cat=ks.length?ks[0]:k;crQeRender()}
@@ -104,9 +132,10 @@ function crQeRender(){
   const kids=crQeChildren(CQ.root);
   const body=`<div class="list">
     <div class="field"><label>金額</label><input class="amt num" id="cr-qe-amt" inputmode="numeric" autofocus placeholder="¥0" value="${esc(CQ.amt)}" oninput="CQ.amt=this.value"></div>
-    <div class="field"><label>日付</label><input type="date" value="${CQ.date}" oninput="CQ.date=this.value"></div>
+    <div class="field"><label>日付</label><input type="date" value="${CQ.date}" oninput="CQ.date=this.value;crActSync('cr-qe-act',CQ,CQ.date,CQ.time,'CQ.act=this.value')"></div>
     <div class="field"><label>店</label><input value="${esc(CQ.shop)}" placeholder="店名を入力" oninput="CQ.shop=this.value;crSugUpdate('cr-sug-qe',this.value,'crQePick')"></div>
     <div class="cr-sug" id="cr-sug-qe">${crPlaceSug(CQ.shop,'crQePick')}</div>
+    ${crActField(CQ,CQ.date,CQ.time,'CQ.act=this.value','cr-qe-act')}
   </div>
   ${sh('カテゴリ')}
   ${chips(ROOTS().map(k=>[k,CATS[k].n]),CQ.root,"crQeRoot('$v')")}
@@ -118,8 +147,8 @@ function crQeRender(){
 function crQePick(k){CQ.shop=E[k].n;crQeRender()}
 function crQeSave(){
   const amt=+String(CQ.amt).replace(/[^\d]/g,'');if(!amt){toast('金額を入れてください');return}
-  const cat=CQ.cat;const shop=(CQ.shop||'').trim();
-  const aid=crPayment({date:CQ.date||TODAY,time:crNowHM(),shop,register:false,items:[{n:CATS[cat].n,price:amt,tax:10,b:'自分'}],cat,fx:CQ.fx,sp:CQ.sp,title:CATS[cat].n});
+  const cat=CQ.cat;const shop=(CQ.shop||'').trim();const time=crNowHM();const date=CQ.date||TODAY;
+  const aid=crPayment({date,time,shop,register:false,items:[{n:CATS[cat].n,price:amt,tax:10,b:'自分'}],cat,fx:CQ.fx,sp:CQ.sp,title:CATS[cat].n,act:crActResolve(CQ,date,time)});
   closeSheet();save();go('#/a/'+aid);toast('支払いを保存しました(自分の支出=全額)');
 }
 
@@ -154,32 +183,62 @@ function crEvSave(){
   CE=null;closeSheet();save();go('#/ev/'+id);toast('予定を追加しました');
 }
 
-/* ---------- 出来事 ---------- */
+/* ---------- 出来事(期間 / 瞬間) ----------
+   期間 = 種類 + 開始・終了(移動は出発地・到着地)。瞬間 = 種類 + 時刻1つ。どちらも日の kids に入る */
 let CH=null;
-function openNewHappening(date){CH={d:date||TODAY,type:'会話',t:'',time:crNowHM(),place:'',who:[],body:''};crHpRender()}
+const CH_SPAN=['食事','会話','作業','移動','買い物','その他'];
+const CH_INST=['起床','就寝','出発','到着','その他'];
+/** 時刻 hm に分を足す(23:59 まで) */
+function crPlusMin(hm,min){const [h,m]=hm.split(':').map(Number);const t=Math.min(h*60+m+min,23*60+59);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0')}
+function openNewHappening(date){const t=crNowHM();CH={d:date||TODAY,span:true,type:'食事',t:'',time:t,end:crPlusMin(t,60),from:'',place:'',who:[],body:''};crHpRender()}
+function crHpMode(v){CH.span=v==='span';CH.type=CH.span?'食事':'起床';crHpRender()}
 function crHpType(v){CH.type=v;crHpRender()}
 function crHpWho(k){CH.who=CH.who.includes(k)?CH.who.filter(x=>x!==k):[...CH.who,k];crHpRender()}
 function crHpRender(){
-  const mv=CH.type==='移動';
-  const body=`${seg([['会話','会話'],['移動','移動'],['出来事','出来事']],CH.type,"crHpType('$v')")}
+  const mv=CH.span&&CH.type==='移動';
+  const mode=seg([['span','期間'],['inst','瞬間']],CH.span?'span':'inst',"crHpMode('$v')");
+  const types=chips((CH.span?CH_SPAN:CH_INST).map(t=>[t,t]),CH.type,"crHpType('$v')");
+  const times=CH.span
+    ?`<div class="field"><label>開始</label><input type="time" value="${CH.time}" oninput="CH.time=this.value"></div>
+      <div class="field"><label>終了</label><input type="time" value="${CH.end}" oninput="CH.end=this.value"></div>`
+    :`<div class="field"><label>時刻</label><input type="time" value="${CH.time}" oninput="CH.time=this.value"></div>`;
+  const placeRows=!CH.span?'':mv
+    ?`<div class="field"><label>出発地</label><input value="${esc(CH.from)}" placeholder="出発地を入力" oninput="CH.from=this.value;crSugUpdate('cr-sug-hpf',this.value,'crHpPickFrom')"></div>
+      <div class="cr-sug" id="cr-sug-hpf">${crPlaceSug(CH.from,'crHpPickFrom')}</div>
+      <div class="field"><label>到着地</label><input value="${esc(CH.place)}" placeholder="到着地を入力" oninput="CH.place=this.value;crSugUpdate('cr-sug-hp',this.value,'crHpPick')"></div>
+      <div class="cr-sug" id="cr-sug-hp">${crPlaceSug(CH.place,'crHpPick')}</div>`
+    :`<div class="field"><label>場所</label><input value="${esc(CH.place)}" placeholder="場所を入力" oninput="CH.place=this.value;crSugUpdate('cr-sug-hp',this.value,'crHpPick')"></div>
+      <div class="cr-sug" id="cr-sug-hp">${crPlaceSug(CH.place,'crHpPick')}</div>`;
+  const body=`${mode}${sh('種類')}${types}
   <div class="list">
     <div class="field"><label>タイトル</label><input value="${esc(CH.t)}" placeholder="例: 進路の相談" oninput="CH.t=this.value"></div>
-    <div class="field"><label>時刻</label><input type="time" value="${CH.time}" oninput="CH.time=this.value"></div>
-    <div class="field"><label>${mv?'到着した場所':'場所'}</label><input value="${esc(CH.place)}" placeholder="場所を入力" oninput="CH.place=this.value;crSugUpdate('cr-sug-hp',this.value,'crHpPick')"></div>
-    <div class="cr-sug" id="cr-sug-hp">${crPlaceSug(CH.place,'crHpPick')}</div>
+    ${times}
+    ${placeRows}
   </div>
-  ${mv?'':`${sh('参加者')}<div class="chips" role="group">${crPeople().map(([k,e])=>`<button class="chip" type="button" aria-pressed="${CH.who.includes(k)}" onclick="crHpWho('${k}')">${knot(k,'sm')}${esc(e.n)}</button>`).join('')}</div>`}
+  ${CH.span?`${mv?'':`${sh('参加者')}<div class="chips" role="group">${crPeople().map(([k,e])=>`<button class="chip" type="button" aria-pressed="${CH.who.includes(k)}" onclick="crHpWho('${k}')">${knot(k,'sm')}${esc(e.n)}</button>`).join('')}</div>`}
   ${sh('内容')}
-  <div class="list"><div class="field"><textarea rows="3" placeholder="何があったか" oninput="CH.body=this.value">${esc(CH.body)}</textarea></div></div>`;
+  <div class="list"><div class="field"><textarea rows="3" placeholder="何があったか" oninput="CH.body=this.value">${esc(CH.body)}</textarea></div></div>`:''}`;
   crPanel('出来事を記録',body,{right:{label:'出来事を保存',onclick:'crHpSave()'}});
 }
 function crHpPick(k){CH.place=E[k].n;crHpRender()}
+function crHpPickFrom(k){CH.from=E[k].n;crHpRender()}
 function crHpSave(){
-  if(!CH.t.trim()){toast('タイトルを入れてください');return}
-  const day=crDay(CH.d);const aid=uid('c');const roles=CH.who.map(w=>['参加',w]);
-  const place=CH.place.trim();
-  if(place)roles.push([CH.type==='移動'?'到着':'場所',crFindEnt(place),place]);
-  A[aid]={type:CH.type,parent:day,time:CH.time,title:CH.t.trim(),roles,body:CH.body};
+  const day=crDay(CH.d);const aid=uid('c');
+  if(!CH.span){
+    if(!CH.time){toast('時刻を入れてください');return}
+    A[aid]={type:CH.type==='その他'?'出来事(瞬間)':CH.type,parent:day,time:CH.time,title:CH.type==='その他'?'出来事':CH.type,roles:[],kids:[]};
+  }else{
+    if(!CH.time||!CH.end){toast('開始と終了を入れてください');return}
+    if(CH.end<=CH.time){toast('終了は開始より後にしてください');return}
+    const roles=CH.who.map(w=>['参加',w]);
+    if(CH.type==='移動'){
+      const f=CH.from.trim(),t=CH.place.trim();
+      if(f)roles.push(['出発',crFindEnt(f),f]);
+      if(t)roles.push(['到着',crFindEnt(t),t]);
+    }else{const p=CH.place.trim();if(p)roles.push(['場所',crFindEnt(p),p])}
+    const tn=CH.type==='その他'?'出来事':CH.type;
+    A[aid]={type:tn,parent:day,time:CH.time,end:CH.end,title:CH.t.trim()||tn,roles,body:CH.body,kids:[]};
+  }
   A[day].kids.push(aid);CH=null;closeSheet();save();go('#/a/'+aid);toast('出来事を保存しました');
 }
 
@@ -290,7 +349,7 @@ function crCheckDup(b){
   if(savedSame){b.status='dup';b.dup={msg:'同じ写真を保存済み',aid:savedSame[0]};return}
   if(batchSame){b.status='dup';b.dup={msg:`同じ写真が${batchSame.id+1}枚目にあります`};return}
   const t=b.rc.items.reduce((s,i)=>s+itemAmt(i),0);
-  const same=Object.entries(A).find(([k,a])=>a.type==='支払い'&&a.amt===t&&a.time===b.rc.time&&A[a.parent]&&A[a.parent].date===b.rc.date);
+  const same=Object.entries(A).find(([k,a])=>a.type==='支払い'&&a.amt===t&&a.time===b.rc.time&&dateOf(a)===b.rc.date);
   if(same){b.status='dup';b.dup={msg:'同じ日時・金額の支払いあり',aid:same[0]}}
 }
 const CR_ST={scan:['読み取り中',''],ready:['確認待ち','brand'],ok:['確認済み','ok'],dup:['重複の疑い','cr-dup'],skip:['スキップ',''],saved:['保存済み','ok']};
@@ -367,9 +426,10 @@ function crReview(top){
     +list([
       `<div class="field"><label>店</label><input value="${esc(rc.shop)}" placeholder="店名" oninput="CRS.rc.shop=this.value;crSugUpdate('cr-sug-shop',this.value,'crShopPick')" onchange="crShopSet(this.value)"></div>`,
       `<div class="cr-sug" id="cr-sug-shop">${crPlaceSug(rc.shop,'crShopPick')}</div>`,
-      `<div class="field"><label>日付</label><input type="date" value="${rc.date}" oninput="CRS.rc.date=this.value"></div>`,
-      `<div class="field"><label>時刻</label><input type="time" value="${rc.time}" oninput="CRS.rc.time=this.value"></div>`,
-      `<div class="field"><label>支払い方法</label><select onchange="CRS.rc.pay=this.value">${CR_PAYS.map(p=>`<option ${rc.pay===p?'selected':''}>${esc(p)}</option>`).join('')}</select></div>`])
+      `<div class="field"><label>日付</label><input type="date" value="${rc.date}" oninput="CRS.rc.date=this.value;crActSync('cr-act',CRS.rc,CRS.rc.date,CRS.rc.time,'CRS.rc.act=this.value')"></div>`,
+      `<div class="field"><label>時刻</label><input type="time" value="${rc.time}" oninput="CRS.rc.time=this.value;crActSync('cr-act',CRS.rc,CRS.rc.date,CRS.rc.time,'CRS.rc.act=this.value')"></div>`,
+      `<div class="field"><label>支払い方法</label><select onchange="CRS.rc.pay=this.value">${CR_PAYS.map(p=>`<option ${rc.pay===p?'selected':''}>${esc(p)}</option>`).join('')}</select></div>`,
+      crActField(rc,rc.date,rc.time,'CRS.rc.act=this.value','cr-act')])
     +(shopNew?`<div class="suggest"><span class="t">${eref(null,rc.shop,'place')}を店として登録</span>${toggle(rc.register,'crToggleReg()')}</div>`:'')
     +sh('品目',rc.items.length,{label:'品目を追加',icon:'plus',onclick:'crAddItem()'})
     +IED.cr.html()
@@ -396,7 +456,7 @@ function crConfirm(){
 /** 1枚だけの保存 */
 function crPayFrom(rc,hash,img,todo){
   const items=rc.items.filter(i=>i.n&&i.price);
-  return crPayment({date:rc.date,time:rc.time,shop:rc.shop,register:rc.register,items,pay:rc.pay,with:rc.with||null,cat:rc.cat,fx:rc.fx,sp:rc.sp,hash,img,todo});
+  return crPayment({date:rc.date,time:rc.time,shop:rc.shop,register:rc.register,items,pay:rc.pay,with:rc.with||null,cat:rc.cat,fx:rc.fx,sp:rc.sp,hash,img,todo,act:crActResolve(rc,rc.date,rc.time)});
 }
 function crSaveSingle(){
   const rc=CRS.rc;if(!rc.items.some(i=>i.n&&i.price)){toast('品目を入れてください');return}
