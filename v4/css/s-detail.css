@@ -24,9 +24,16 @@
 .pin-cur.late>.node::after{background:var(--late)}
 
 /* カプセル(記録): 塗りのグラデ+左上の光+上端のハイライト(明るさで光を表す) */
-.cap{position:relative;padding:20px 22px 22px;border-radius:28px;background:var(--light),var(--ev);color:var(--on-cap);
-  box-shadow:var(--tl-sh),var(--hl-fill)}
-.cap .kind{display:flex;align-items:center;gap:8px;font:600 13px/1 var(--font);opacity:.9}
+/* 主役の塗り(UI v4.2 = v3の情報量 × v2の塗りと艶): 左上が明るい青灰の塗り+左上の光+斜めの光の帯(v2)+色を帯びた柔らかい影 */
+.cap{position:relative;overflow:hidden;padding:18px 22px 22px;border-radius:30px;color:var(--on-cap);
+  background:var(--light),linear-gradient(135deg,var(--ev-hi) 0%,var(--ev-lo) 100%);
+  box-shadow:0 18px 36px -18px color-mix(in srgb,var(--ev-lo) 70%,transparent),0 4px 10px -6px color-mix(in srgb,var(--ev-lo) 45%,transparent),var(--hl-fill)}
+.cap::before{content:"";position:absolute;inset:-40% -10% auto auto;width:80%;height:180%;pointer-events:none;background:var(--gloss)}
+.cap>*{position:relative}
+.cap .kind .lbl{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px 0 10px;border-radius:999px;background:rgba(255,255,255,.18);font:600 13px/1 var(--font)}
+.cap.plan::before{display:none}
+.cap.plan .kind .lbl{background:var(--sunk)}
+.cap .kind{display:flex;align-items:center;gap:8px;font:600 13px/1 var(--font)}
 .cap .kind svg.i{width:16px;height:16px}
 .cap .kind .tm{margin-left:auto;font:600 14px/1 var(--font);font-variant-numeric:tabular-nums}
 .cap h1{margin-top:12px;font:600 24px/1.25 var(--font);letter-spacing:-.01em}

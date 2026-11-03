@@ -23,7 +23,7 @@ svg.i{width:20px;height:20px;flex:none}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 /* ---------- App shell ---------- */
-#app{max-width:720px;margin:0 auto;min-height:100dvh;padding-bottom:calc(var(--nav-h) + 24px + env(safe-area-inset-bottom))}
+#app{max-width:720px;margin:0 auto;min-height:100dvh;padding-bottom:calc(var(--nav-h) + 34px + env(safe-area-inset-bottom))}
 .screen{animation:in .18s var(--ease)}
 @keyframes in{from{opacity:.4;transform:translateY(4px)}}
 
@@ -119,7 +119,10 @@ button.row{width:100%;text-align:left}
 .suggest .t{font:var(--t-label);color:var(--tx);flex:1}
 
 /* ---------- Bottom nav + FAB ---------- */
-.nav{position:fixed;left:0;right:0;bottom:0;z-index:40;height:calc(var(--nav-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(14px) saturate(1.4);border-top:1px solid var(--line);display:flex;justify-content:center}
+/* v4: 浮いた下部ナビ(v2の形 = 角丸の1枚のカード、v3の押しやすさ = 5枠のグリッド)。幅は最大700px、横と下は10px空く */
+.nav{position:fixed;left:max(10px,calc(50% - 350px));right:max(10px,calc(50% - 350px));bottom:calc(10px + env(safe-area-inset-bottom));z-index:40;height:var(--nav-h);border-radius:22px;--nav-sh:0 10px 30px -10px rgba(40,72,150,.28);box-shadow:var(--nav-sh);background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(14px) saturate(1.4);display:flex;justify-content:center}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .nav{--nav-sh:var(--e3)}}
+:root[data-theme="dark"] .nav{--nav-sh:var(--e3)}
 .nav-in{display:grid;grid-template-columns:repeat(5,1fr);width:100%;max-width:720px}
 .nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:500 12px/1 var(--font);color:var(--tx-3);position:relative}
 .nav a .pill{width:56px;height:30px;border-radius:var(--r-pill);display:grid;place-items:center;transition:background .2s}
@@ -178,7 +181,7 @@ button.row{width:100%;text-align:left}
 .meter i{display:block;height:100%;border-radius:3px}
 
 /* ---------- Feedback ---------- */
-.toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + 20px + env(safe-area-inset-bottom));z-index:80;transform:translate(-50%,20px);opacity:0;display:flex;align-items:center;gap:16px;min-height:48px;padding:0 8px 0 16px;max-width:calc(100% - 32px);width:max-content;border-radius:var(--r-sm);background:var(--tx);color:var(--surface);font:var(--t-label);box-shadow:var(--e3);transition:all .22s var(--ease);pointer-events:none}
+.toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + 34px + env(safe-area-inset-bottom));z-index:80;transform:translate(-50%,20px);opacity:0;display:flex;align-items:center;gap:16px;min-height:48px;padding:0 8px 0 16px;max-width:calc(100% - 32px);width:max-content;border-radius:var(--r-sm);background:var(--tx);color:var(--surface);font:var(--t-label);box-shadow:var(--e3);transition:all .22s var(--ease);pointer-events:none}
 .toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .toast button{color:var(--brand-soft);font-weight:600;height:40px;padding:0 10px}
 .empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;padding:40px 32px;color:var(--tx-2);font:var(--t-label)}
@@ -192,7 +195,7 @@ button.row{width:100%;text-align:left}
 /* ---------- Wide screens: ナビを左のレールに ---------- */
 @media (min-width:900px){
   body{padding-left:96px}
-  .nav{top:0;right:auto;width:96px;height:auto;border-top:0;border-right:1px solid var(--line);padding:24px 0}
+  .nav{top:0;bottom:auto;left:0;right:auto;width:96px;height:auto;border-radius:0;box-shadow:none;background:var(--surface);border-right:1px solid var(--line);padding:24px 0}
   .nav-in{grid-template-columns:1fr;grid-auto-rows:72px;align-content:start}
   .fab-slot{order:-1;height:96px} .fab{transform:none}
   .toast{bottom:24px}

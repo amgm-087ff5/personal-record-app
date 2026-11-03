@@ -32,7 +32,15 @@ route('activities',()=>{
   const allD=[...recordDates(),TODAY],minM=allD.sort()[0].slice(0,7),maxM=TODAY.slice(0,7);
   const pm=+TODAY.slice(5,7)===1?12:+TODAY.slice(5,7)-1;
   const s=daySpent(TODAY);
+  /* まとめカード(v2のB+v3の見出し): 数字は表示中の月の記録と今日。押せる数字は予定・ToDoへ */
+  const monthRec=Object.values(A).filter(a=>a.type!=='日記'&&a.parent&&A[a.parent]&&A[a.parent].date.startsWith(actMonth)).length;
+  const todayEv=evOn(TODAY).filter(([k,e])=>!e.hol).length;
   return largeTitle('タイムライン',{actions:[{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"},{icon:'more',label:'このモックについて',onclick:'openAbout()'}]})
+    +summaryCard({metrics:[
+        {v:`${monthRec}件`,l:`${+actMonth.slice(5)}月の記録`},
+        {v:`${todayEv}件`,l:'今日の予定',href:'#/plan'},
+        {v:`${todoTodayCount()}件`,l:'今日のToDo',href:'#/plan?view=todo'}],
+      actions:[{text:'レシートで支払い',icon:'camera',primary:true,onclick:'openReceipt()'},{text:'出来事',icon:'plus',onclick:'openNewHappening()'}]})
     +`<div class="mnav"><button type="button" aria-label="前の月" ${actMonth<=minM?'disabled':''} onclick="monthShift(-1)">${IC.back}</button><b>${actMonth.slice(0,4)}年${+actMonth.slice(5)}月</b><button type="button" class="nx" aria-label="次の月" ${actMonth>=maxM?'disabled':''} onclick="monthShift(1)">${IC.back}</button></div>`
     +chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")
     +`<div class="ax">`
@@ -188,7 +196,7 @@ function momentView(id,a){
   const ppl=(a.roles||[]).filter(r=>r[1]&&E[r[1]]&&r[1]!=='me'&&!['支払先','場所','到着','出発'].includes(r[0])).map(r=>r[1]);
   const meta=[pl?`<span>${IC.place}${esc(placeName(pl))}</span>`:'',a.pay?`<span>${IC.pay}${esc(a.pay)}</span>`:'',ppl.length?`<span>${knots(ppl)}${ppl.map(p=>esc(E[p].n.split(' ').pop())).join('、')}</span>`:''].join('');
   const isPay=a.type==='支払い';
-  const cap=`<section class="cap"><div class="kind">${IC[icon]}${esc(a.type)}<span class="tm">${esc(a.time||'')}</span></div><h1>${esc(a.title)}</h1>${a.amt!=null?`<div class="big">${yen(a.amt)}</div>`:''}${meta?`<div class="meta">${meta}</div>`:''}${isPay?paySplit(a):''}</section>`;
+  const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC[icon]}${esc(a.type)}</span><span class="tm">${esc(a.time||'')}</span></div><h1>${esc(a.title)}</h1>${a.amt!=null?`<div class="big">${yen(a.amt)}</div>`:''}${meta?`<div class="meta">${meta}</div>`:''}${isPay?paySplit(a):''}</section>`;
   const x=a.x&&X[a.x];
   /* 子: 支払い → 自分の支出 を └ でぶら下げる。自分の支出は半券チケット(DESIGN v4 = 自分の支出の形) */
   const child=x?`<div class="hang">${ticket({href:`#/x/${a.x}`,t:'自分の支出',s:esc(catPath(x.cat)),amt:esc(yen(x.amt)),cls:'fill',chev:true})}</div>`:'';

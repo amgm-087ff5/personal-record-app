@@ -43,7 +43,15 @@ route('plan',(id,q)=>{
     :planView==='day'?plDayPane()
     :planView==='list'?plListAx()
     :plCalPane();
-  return `<div class="pl-root">`+largeTitle('予定',{actions:[{text:'予定を追加',icon:'plus',primary:true,onclick:`openNewEvent('${plSel}')`}]})
+  /* まとめカード: 数字は今日・期限切れ・1週間(押すと該当の表示へ)。ボタン=予定を追加 / ToDo */
+  const todayEv=evOn(TODAY).filter(([k,e])=>!e.hol).length;
+  const week=new Set();for(let i=0;i<7;i++)evOn(addDays(TODAY,i)).forEach(([k,e])=>{if(!e.hol)week.add(k)});
+  return `<div class="pl-root">`+largeTitle('予定')
+    +summaryCard({metrics:[
+        {v:`${todayEv}件`,l:'今日の予定',href:'#/plan?view=day'},
+        {v:`${overdueCount()}件`,l:'期限切れToDo',href:'#/plan?view=todo'},
+        {v:`${week.size}件`,l:'1週間の予定',href:'#/plan?view=list'}],
+      actions:[{text:'予定を追加',icon:'plus',primary:true,onclick:`openNewEvent('${plSel}')`},{text:'ToDo',icon:'todo',onclick:'openNewTask()'}]})
     +seg([['month','月'],['day','日'],['list','3週間'],['todo','ToDo']],planView,"plSetView('$v')")
     +body+`</div>`;
 },{tab:'plan'});
