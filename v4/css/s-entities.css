@@ -20,18 +20,34 @@
   clip-path:polygon(12px 0,100% 0,100% 100%,12px 100%,0 50%)}
 .vtag::before{content:"";position:absolute;left:8px;top:50%;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--surface)}
 
-/* ---------- 詳細 /e/…: フォルダのタブ(タブ=種類、本体=縁の色の弱いグラデと光) ---------- */
-.obj-e{--fc:var(--th-person);--tint:color-mix(in srgb,var(--fc) 14%,var(--surface));position:relative;margin:12px var(--gutter) 0}
-.obj-e .tab{display:inline-flex;flex-wrap:wrap;align-items:center;min-height:36px;max-width:100%;margin-bottom:-1px;padding:0 16px;
-  border-radius:12px 12px 0 0;background:var(--tint);font:600 13px/1.2 var(--font);color:var(--tx-2)}
-.obj-e .tab::before{content:"";width:8px;height:8px;margin-right:8px;border-radius:50%;background:var(--fc);flex:none}
-.obj-e .tab a{position:relative;padding:8px 2px}
-.obj-e .tab a::before{content:"";position:absolute;inset:-7px -4px}
-.obj-e .tab .sep{margin:0 6px;color:var(--tx-3)}
-.obj-e .hero{position:relative;display:flex;align-items:center;gap:14px;padding:16px 18px 18px 16px;border-radius:0 18px 18px 18px;
-  background:var(--light),linear-gradient(180deg,var(--tint),var(--surface) 90%);box-shadow:var(--e1),var(--hl)}
-.obj-e h1{font:var(--t-title);font-size:22px;line-height:1.3;overflow-wrap:anywhere}
-.obj-e .also{margin-top:4px;font:var(--t-label);color:var(--tx-2)}
+/* ---------- 詳細 /e/…: フォルダのタブ+塗りの本体。縁の色 = --kin-fill(ダークは --kin-fill が暗め) ---------- */
+.obj-e{--fill:var(--kin-fill);--fill-hi:color-mix(in srgb,var(--kin-fill) 72%,var(--on-kin));position:relative;margin:12px var(--gutter) 0}
+/* タブ: 本体の左上と同じ塗り(白文字が4.5:1の濃さ)。右下の内側の丸みで本体につながる */
+.obj-e .tab{position:relative;display:inline-flex;flex-wrap:wrap;align-items:center;height:32px;max-width:100%;margin-bottom:-1px;padding:0 14px;
+  border-radius:14px 14px 0 0;background:var(--fill);color:var(--on-kin);font:700 13px/1 var(--font);letter-spacing:.02em}
+.obj-e .tab::before{content:"";width:8px;height:8px;margin-right:8px;border-radius:50%;background:var(--on-kin);flex:none}
+.obj-e .tab::after{content:"";position:absolute;right:-14px;bottom:0;width:14px;height:14px;background:radial-gradient(circle at 100% 0,transparent 13.5px,var(--fill) 14px)}
+.obj-e .tab a{position:relative;color:var(--on-kin)}
+.obj-e .tab a::before{content:"";position:absolute;inset:-16px -6px}   /* 当たり判定 44px */
+.obj-e .tab .sep{margin:0 6px;color:var(--on-kin);opacity:.7}
+/* 本体: 左上の光(--light)+斜めの光の帯+色を帯びた柔らかい影。内側の余白 18px */
+.obj-e .hero{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:18px;border-radius:0 18px 18px 18px;color:var(--on-kin);
+  background:var(--light),linear-gradient(135deg,var(--fill-hi) 0%,var(--fill) 100%);
+  box-shadow:var(--hl-fill),0 14px 30px -14px color-mix(in srgb,var(--fill) 55%,transparent)}
+.obj-e .hero::before{content:"";position:absolute;inset:-40% -10% auto auto;width:80%;height:180%;pointer-events:none;
+  background:linear-gradient(115deg,transparent 35%,color-mix(in srgb,var(--on-kin) 16%,transparent) 48%,transparent 62%)}
+.obj-e .hero>*{position:relative;z-index:1}
+/* 大きな輪郭: 白の面に縁の色の文字(塗りの上に白い輪郭) */
+.obj-e .hero .kn{--kc:var(--kin);background:var(--surface);color:var(--kin);box-shadow:var(--e1)}
+.obj-e h1{font:700 22px/1.3 var(--font);color:var(--on-kin);overflow-wrap:anywhere}
+/* 種類の値札: 塗りの上用の半透明の白+白文字。＋種類は破線の札(当たり判定 44px) */
+.obj-e .kinds{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.obj-e .vtag{background:color-mix(in srgb,var(--on-kin) 18%,transparent);color:var(--on-kin)}
+.obj-e .vtag::before{background:var(--on-kin)}
+.obj-e .vtag.add{overflow:visible;position:relative;border:0;border-radius:6px;padding:0 12px;clip-path:none;cursor:pointer;
+  background:transparent;outline:1.5px dashed color-mix(in srgb,var(--on-kin) 70%,transparent);outline-offset:-1.5px}
+.obj-e .vtag.add::before{display:none}
+.obj-e .vtag.add::after{content:"";position:absolute;inset:-8px -6px}
 
 /* 事実・関係: 1枚の属性の面(枠線) */
 .facts{display:grid;grid-template-columns:auto 1fr;margin:12px var(--gutter) 0;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--e1),var(--hl);overflow:hidden}

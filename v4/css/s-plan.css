@@ -9,8 +9,6 @@
 .pl-root .sh .act{min-height:44px;display:inline-flex;align-items:center}
 /* 見た目が小さい押し面は ::before で当たり判定を44pxにする */
 .pl-root .chip::before,.pl-root .seg button::before{content:"";position:absolute;inset:-6px 0}
-.pl-root .lt-cta{position:relative}
-.pl-root .lt-cta::before{content:"";position:absolute;inset:-4px -6px}
 .pl-root .field .btn{height:44px}
 .pl-root .ref{position:relative}
 .pl-root a.ref::after{content:"";position:absolute;inset:-6px -2px}

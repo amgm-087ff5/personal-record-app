@@ -77,10 +77,10 @@ route('e',id=>{
   if(fut.length)fut[fut.length-1].rows.push(nowLine());
   const pastGroups=enByMonth(past);
   const note=NOTES[id];
-  const rest=e.t.slice(1).map(t=>esc(TYPES[t].n));
   return appbar('',{actions:[{icon:'more',label:'その他の操作',onclick:"toast('編集はモックでは未対応です')"}]})
-    +`<section class="obj-e" style="--fc:${tc}"><div class="tab">${enTabPath(id)}</div>`
-    +`<div class="hero">${knot(id,'lg')}<div class="grow" style="min-width:0"><h1>${esc(e.n)}</h1>${rest.length?`<div class="also">ほか ${rest.join('・')}</div>`:''}</div></div></section>`
+    +`<section class="obj-e"><div class="tab">${enTabPath(id)}</div>`
+    +`<div class="hero">${knot(id,'lg')}<div class="grow" style="min-width:0"><h1>${esc(e.n)}</h1>`
+    +`<div class="kinds">${e.t.map(t=>vtag(TYPES[t].n)).join('')}<button class="vtag add" type="button" onclick="toast('種類の追加はモックでは未対応です')">＋種類</button></div></div></div></section>`
     +`<div class="stats"><div><b>${agoLabel(lastMet(id))}</b><span>最後に交わった</span></div><div><b>${yearN}回</b><span>今年</span></div>${money?`<div><b>${yen(money)}</b><span>${rootOf(id)==='person'?'一緒の時の自分の支出':'ここでの自分の支出'}</span></div>`:''}${owed?`<div><b style="color:var(--owe-text)">${yen(owed)}</b><span>立替・未精算</span></div>`:''}</div>`
     +(dl?`<dl class="facts">${dl}</dl>`:'')
     +(rare.length?`<details class="en-more"><summary>ほかの情報 ${rare.length}件</summary><dl class="facts">${rare.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}</dd>`).join('')}</dl></details>`:'')
