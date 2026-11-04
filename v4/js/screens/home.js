@@ -115,7 +115,7 @@ function hmMoney(){
   const mo=+TODAY.slice(5,7);
   const owed=Object.values(A).filter(a=>a.adv&&a.adv[2]==='未精算');
   const owedSum=owed.reduce((s,a)=>s+a.adv[1],0);
-  const owedS=owed.length?owed.map(a=>`${esc(E[a.adv[0]]?E[a.adv[0]].n:'')} ・ ${esc(a.title)}`).join('、'):'なし';
+  const owedS=owed.length?owed.map(a=>`${esc(E[a.adv[0]]?E[a.adv[0]].n:'')} ・ ${esc(a.x&&X[a.x]?xTitle(X[a.x]):payLabel(a))}`).join('、'):'なし';
   return sh('お金')+objs([
     ticket({href:'#/ledger',stub:`<b>${mo}</b>月`,t:`${mo}月の自分の支出`,amt:yen(tot)}),
     row({href:'#/ledger',cls:'hm-owe',t:'未精算の立替',s:owedS,v:yen(owedSum),amt:true,chev:1}),

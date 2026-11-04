@@ -10,17 +10,16 @@
 .tkt{display:flex;align-items:stretch;min-height:64px;border-radius:14px;background:var(--tl-card);overflow:hidden;
   -webkit-mask:radial-gradient(circle var(--nt) at var(--stub) 0,#0000 97%,#000) top/100% 51% no-repeat,radial-gradient(circle var(--nt) at var(--stub) 100%,#0000 97%,#000) bottom/100% 51% no-repeat;
           mask:radial-gradient(circle var(--nt) at var(--stub) 0,#0000 97%,#000) top/100% 51% no-repeat,radial-gradient(circle var(--nt) at var(--stub) 100%,#0000 97%,#000) bottom/100% 51% no-repeat}
-.tkt-s{width:var(--stub);flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 4px;
-  background:var(--me-soft);color:var(--me);font:600 12px/1.25 var(--font);text-align:center;font-variant-numeric:tabular-nums}
+.tkt-s{width:var(--stub);flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 4px;
+  background:var(--light),var(--me-fill);color:var(--on-me);font:600 12px/1.25 var(--font);text-align:center;font-variant-numeric:tabular-nums} /* v4.6: 半券(切り取る部分)だけ詳細画面と同じ濃い塗り */
 .tkt-s b{font:700 15px/1.1 var(--font)}
 .tkt-s svg.i{width:20px;height:20px}
-/* 半券の中身 = その支出の特別感(DESIGN v4): 日常=既定の淡い青+「日常」 / 非日常=--ev の淡い面+✦「非日常」 / 未設定=中立の面+淡い「未設定」。
+/* 半券の中身 = その支出の特別感(DESIGN v4.6): 日常=「日常」 / 非日常=キラキラのアイコン+「非日常」 / 未設定=淡い「未設定」。面はどれも同じ濃い塗り(色で区別しない)。
    日付は半券に持たせない(本体の補足に fmtMDW で出す)。塗り(.fill)は下の規則で白の半透明のまま、文字だけ変える */
 .tkt-s .sp{font:700 13px/1.2 var(--font)}
-.tkt-s .sp-star{font:700 12px/1 var(--font)}
+.tkt-s .sp-star{display:grid}.tkt-s .sp-star svg.i{width:16px;height:16px}
 .tkt-s .none{font:500 12px/1.25 var(--font)}
-.tkt-w.sp-n .tkt-s{background:var(--ev-soft);color:var(--tx)}
-.tkt-w.sp-x .tkt-s{background:var(--surface-2);color:var(--tx-3)}
+.tkt-s .none{opacity:.78}
 .tkt-b{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-left:2px dashed var(--line)}
 .tkt-b .main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .tkt-b .t{font:600 15px/1.35 var(--font);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

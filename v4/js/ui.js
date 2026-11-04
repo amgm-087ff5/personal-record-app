@@ -76,11 +76,13 @@ const rootOf=id=>{const e=E[id];return e&&e.t&&e.t[0]?typeAnc(e.t[0])[0]:'thing'
 const shapeOf=id=>ROOT_SHAPE[rootOf(id)]||'thing';
 const threadColor=id=>`var(--th-${shapeOf(id)})`;
 /** 縁の輪郭。人物=円 / 場所=ピン / 会社=建物 / 物=六角 / 書類=紙 */
-const knot=(id,size='')=>{const e=E[id];return `<span class="kn ${shapeOf(id)} ${id==='me'?'me':''} ${size}" title="${esc(e?e.n:'')}"><b>${esc(e?e.i:'?')}</b></span>`};
-const knots=ids=>ids.length?`<span class="knots">${ids.map(i=>knot(i,'sm')).join('')}</span>`:'';
+/** エンティティの印 = 緑のドット1つ(v4.6 ユーザー指示「新しいアイコン・文字を作るのをやめ、緑のドットでいい」)。種類ごとの輪郭・頭文字は使わない */
+const knot=(id,size='')=>{const e=E[id];return `<span class="kn-dot ${size}" title="${esc(e?e.n:'')}" aria-hidden="true"></span>`};
+/** 一覧・カードの中の関わったエンティティ: ドット+名前(ドットだけでは誰か分からないため名前も出す) */
+const knots=ids=>ids.length?`<span class="knots">${ids.map(i=>`<span class="kn-name">${knot(i,'sm')}${esc(E[i]?E[i].n:'')}</span>`).join('')}</span>`:'';
 /** 名前つき参照。未登録は斜線 */
-const eref=(id,name,shape='place')=>id&&E[id]?`<a class="ref" href="#/e/${id}">${knot(id)}${esc(E[id].n)}</a>`:`<span class="ref unreg"><span class="kn ${shape} unreg"><b>${esc((name||'?')[0])}</b></span>${esc(name||'未登録')}</span>`;
-const aref=id=>`<a class="ref" href="#/a/${id}">${IC[ACT_IC[A[id].type]]||IC.activity}${esc(A[id].title||fmtMD(A[id].date))}</a>`;
+const eref=(id,name,shape='place')=>id&&E[id]?`<a class="ref" href="#/e/${id}">${knot(id)}${esc(E[id].n)}</a>`:`<span class="ref unreg"><span class="kn-dot unreg" aria-hidden="true"></span>${esc(name||'未登録')}</span>`;
+const aref=id=>`<a class="ref" href="#/a/${id}">${IC[ACT_IC[A[id].type]]||IC.activity}${esc(A[id].type==='支払い'&&typeof payLabel==='function'?payLabel(A[id]):(A[id].title||fmtMD(A[id].date)))}</a>`;
 /** 12週の出会い(週ごとの登場数) */
 function encStrip(id){
   const end=new Date(TODAY+'T00:00');const c=Array(12).fill(0);
@@ -102,15 +104,19 @@ function momentRow(k,o={}){
   const a=A[k];
   if(INSTANT_TYPES.includes(a.type))return axRow({href:`#/a/${k}`,time:a.time,node:{cls:'at'},cls:'at',t:esc(a.title)});
   const [ncls,icon]=AX_NODE[a.type]||['','activity'];
-  const pl=(a.roles||[]).find(r=>['支払先','場所','到着'].includes(r[0]));
+  /* 支払い(日の直下の1件)は題名が「支払い · 支払先」なので、支払先を m に重ねない */
+  const isPay=a.type==='支払い';
+  const pl=isPay?null:(a.roles||[]).find(r=>['支払先','場所','到着'].includes(r[0]));
   const ppl=(a.roles||[]).filter(r=>r[1]&&E[r[1]]&&r[1]!=='me'&&r[1]!==o.exclude&&!['支払先','場所','到着','出発'].includes(r[0])).map(r=>r[1]);
   const x=a.x&&X[a.x];
   const dd=dateOf(a);
-  /* 活動の中の支払い(サブ)は、カードの中の1行。押すとその支払い */
-  const kids=(a.kids||[]).filter(c=>A[c]&&A[c].type==='支払い'&&!o.flat).map(c=>{const p=A[c],px=p.x&&X[p.x];
-    return `<span class="kid" role="link" tabindex="0" onclick="event.preventDefault();event.stopPropagation();go('#/a/${c}')"><span class="kid-i">${IC.pay}</span><span class="kid-t">${esc(p.title)}<small>${esc(p.time)}</small></span><span class="kid-a"><b>${yen(p.amt)}</b>${px&&px.amt!==p.amt?payBar(p,px):''}</span></span>`}).join('');
+  /* 活動の中の支払い(子)。v4.6: 自分の支出がある子は小さい半券チケット(押すと自分の支出の詳細)。
+     自分の支出が無い子(全部ほかの人の分など)は、支払いの1行のまま(押すと支払いの詳細) */
+  const kids=(a.kids||[]).filter(c=>A[c]&&A[c].type==='支払い'&&!o.flat).map(c=>{const p=A[c],x=p.x&&X[p.x];
+    if(x)return `<span class="kid kid-x" role="link" tabindex="0" onclick="event.preventDefault();event.stopPropagation();go('#/x/${p.x}')">${ticket({stub:spStub(xSp(x)),t:'自分の支出',s:x.amt!==p.amt?payBar(p,x):'',amt:yen(x.amt),cls:'sm'})}</span>`;
+    return `<span class="kid" role="link" tabindex="0" onclick="event.preventDefault();event.stopPropagation();go('#/a/${c}')"><span class="kid-i">${IC.pay}</span><span class="kid-t">${esc(payLabel(p))}<small>${esc(p.time)}</small></span><span class="kid-a"><b>${yen(p.amt)}</b></span></span>`}).join('');
   return axRow({href:`#/a/${k}`,time:o.showDate&&dd?{d:+dd.slice(8),t:a.time}:a.time,end:a.end,kids:kids?`<span class="kids">${kids}</span>`:'',node:{cls:ncls,icon},cls:(o.cls||'')+(a.type==='支払い'?' pay':'')+(a.end?' span':''),future:o.future,
-    t:esc(a.title),m:`${o.role?`<span class="role">${esc(o.role)}</span>`:''}${pl&&pl[1]!==o.exclude?`<span class="ell">${esc(placeName(pl))}</span>`:''}${knots(ppl)}`,
+    t:isPay?esc(payLabel(a)):esc(a.title),m:`${o.role?`<span class="role">${esc(o.role)}</span>`:''}${pl&&pl[1]!==o.exclude?`<span class="ell">${esc(placeName(pl))}</span>`:''}${knots(ppl)}`,
     amt:a.amt!=null?`<b>${yen(a.amt)}</b>${x&&x.amt!==a.amt?payBar(a,x):''}`:''});
 }
 /** 1つの支払いの棒: 自分(青) / ほかの人(灰) / 立替・未精算(琥珀の斜線) */
@@ -141,9 +147,9 @@ const ticket=o=>{const tagN=o.href?'a':o.onclick?'button':'div';const attr=o.hre
     o:{label,sub,prev:{on,dis,text},next:{on,dis,text}} */
 const periodNav=o=>`<div class="pnav" role="group" aria-label="期間"><button type="button" ${o.prev.dis?'disabled':''} onclick="${o.prev.on}">${esc(o.prev.text||'前の月')}</button><b class="num">${o.label}${o.sub?`<small>${o.sub}</small>`:''}</b><button type="button" ${o.next.dis?'disabled':''} onclick="${o.next.on}">${esc(o.next.text||'次の月')}</button></div>`;
 /** 半券の中身 = その支出の特別感(日常 / 非日常 / 未設定)。DESIGN v4.5 */
-const spStub=sp=>sp==='非日常'?`<span class="sp-star" aria-hidden="true">✦</span><b class="sp">非日常</b>`:sp==='日常'?`<b class="sp">日常</b>`:`<span class="none">未設定</span>`;
+const spStub=sp=>sp==='非日常'?`<span class="sp-star" aria-hidden="true">${IC.sparkle}</span><b class="sp">非日常</b>`:sp==='日常'?`<b class="sp">日常</b>`:`<span class="none">未設定</span>`;
 /** 半券の面の色の区別(ticket の cls)。日常は既定の面、非日常・未設定は別の面 */
-const spCls=sp=>sp==='非日常'?'sp-n':sp==='日常'?'':'sp-x';
+const spCls=sp=>''; /* v4.6: 半券の色は特別感で変えない(ユーザー指示「色は変えなくても良い」) */
 /** 月の区切り(縁の時間軸) */
 const monthHeadAx=(ym,future)=>`<div class="dh2 month ${future?'future':''}"><span class="dcard"><span class="dt"><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b></span></span></div>`;
 const nowLine=()=>`<div class="now" aria-label="いま ${NOW}"><span class="tm">${NOW}</span><span class="dot"></span><span class="ln"></span></div>`;
@@ -309,7 +315,7 @@ const NAV_IC={
   switch:'<svg class="i" viewBox="0 0 52 30" aria-hidden="true" fill="currentColor"><circle class="d d1" cx="19.5" cy="15" r="3.5"/><circle class="d d2" cx="32.5" cy="15" r="3.5"/></svg>',
 };
 const NAV_PAGES=[
-  [['home','ホーム'],['activities','記録'],null,['plan','予定'],['memo','メモ']],
+  [['home','ホーム'],['activities','アクティビティ'],null,['plan','予定'],['memo','メモ']],
   [['todo','ToDo'],['entities','エンティティ'],null,['ledger','家計簿'],['settings','設定']],
 ];
 const NAV_ALL=NAV_PAGES.flat().filter(Boolean);

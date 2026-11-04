@@ -91,3 +91,4 @@
 .ld-tree .row{min-height:var(--row)}
 .ld-tree .ld-node+.ld-node>.row::before{content:"";position:absolute;top:0;left:14px;right:0;height:1px;background:var(--line)}
 .ld-tree .ld-kids{margin-left:21px;border-left:1px solid var(--line-strong)}
+.ld-fig .sp-i{display:inline-grid;vertical-align:-2px;margin-right:3px}.ld-fig .sp-i svg.i{width:13px;height:13px} /* 非日常=キラキラのアイコン(半券と同じ) */

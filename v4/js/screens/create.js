@@ -31,7 +31,7 @@ function crPayment(o){
   const mine=o.items.filter(i=>i.b!=='相手').map(i=>({n:i.n,price:i.b==='半分'?Math.floor(itemAmt(i)/2):itemAmt(i),b:i.b==='半分'?'1/2':'全額'}));
   const xamt=mine.reduce((s,i)=>s+i.price,0);
   const who=o.with?E[o.with].n.split(' ').pop():'相手';
-  A[aid]={type:'支払い',parent,time:o.time,title:o.title||(o.items.length===1?o.items[0].n:'買い物'),pay:o.pay||'現金',amt,roles,
+  A[aid]={type:'支払い',parent,time:o.time,title:'支払い',pay:o.pay||'現金',amt,roles,
     items:o.items.map(i=>{const r={n:i.n,price:itemAmt(i),tax:i.tax||10,b:i.b==='相手'?who:i.b};const ln=lnSave(i);if(ln)r.lines=ln;return r}),x:xamt?xid:undefined};
   if(o.with&&amt-xamt>0)A[aid].adv=[o.with,amt-xamt,'未精算'];
   if(xamt){X[xid]={pay:aid,amt:xamt,cat:o.cat||crGuessCat(shopId),memo:'',items:mine};
@@ -150,7 +150,7 @@ function crQePick(k){CQ.shop=E[k].n;crQeRender()}
 function crQeSave(){
   const amt=+String(CQ.amt).replace(/[^\d]/g,'');if(!amt){toast('金額を入れてください');return}
   const cat=CQ.cat;const shop=(CQ.shop||'').trim();const time=crNowHM();const date=CQ.date||TODAY;
-  const aid=crPayment({date,time,shop,register:false,items:[{n:CATS[cat].n,price:amt,tax:10,b:'自分'}],cat,fx:CQ.fx,sp:CQ.sp,title:CATS[cat].n,act:crActResolve(CQ,date,time)});
+  const aid=crPayment({date,time,shop,register:false,items:[{n:CATS[cat].n,price:amt,tax:10,b:'自分'}],cat,fx:CQ.fx,sp:CQ.sp,act:crActResolve(CQ,date,time)});
   closeSheet();save();go('#/a/'+aid);toast('支払いを保存しました(自分の支出=全額)');
 }
 
@@ -261,7 +261,7 @@ function openNewEntity(type){CN={t:type||'person',n:'',f:{}};crEntRender()}
 const CR_ROOTS=['person','place','company','thing','doc','project'];
 function crPrev(){
   const root=typeAnc(CN.t)[0];const ini=(CN.n||'').trim()[0]||'?';
-  return `<span class="kn lg ${ROOT_SHAPE[root]||'thing'}"><b>${esc(ini)}</b></span><small>${esc(ROOT_LABEL[root]||'')}</small>`;
+  return `<span class="kn-dot lg" aria-hidden="true"></span><small>${esc(ROOT_LABEL[root]||'')}</small>`;
 }
 function crPrevUpdate(){const p=document.getElementById('cr-prev');if(p)p.innerHTML=crPrev()}
 function crEntRender(){

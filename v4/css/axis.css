@@ -239,3 +239,19 @@ a.ax-row:active .ax-c{background:var(--sunk);transform:scale(.99)}
 .ax-c .kid-a{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .ax-c .kid-a b{font:600 15px/1.2 var(--font);font-variant-numeric:tabular-nums;color:var(--tx)}
 .ax-c .kid:active{background:var(--sunk)}
+/* v4.6: 活動の中の自分の支出 = 小さい半券チケット(ticket.css の小型版。半券=特別感、本体=自分の支出+金額、割り勘なら割合の棒)。押すと自分の支出 */
+.ax-c .kid.kid-x{display:block;min-height:0;padding:0;margin-top:10px;cursor:pointer}
+.ax-c .kid-x+.kid-x{border-top:0;margin-top:8px}
+.ax-c .kid-x .tkt-w{--stub:50px;--nt:6px;filter:drop-shadow(0 1px 1px rgba(40,70,130,.08)) drop-shadow(0 3px 6px rgba(60,100,180,.10))}
+.ax-c .kid-x .tkt{min-height:52px;border-radius:12px}
+.ax-c .kid-x .tkt-s{gap:2px;padding:6px 2px;font:600 12px/1.2 var(--font)}
+.ax-c .kid-x .tkt-s .sp{font:700 12px/1.2 var(--font)}
+.ax-c .kid-x .tkt-s .sp-star svg.i{width:13px;height:13px}
+.ax-c .kid-x .tkt-s .none{font:500 12px/1.2 var(--font)}
+.ax-c .kid-x .tkt-b{padding:6px 10px;gap:8px}
+.ax-c .kid-x .tkt-b .main{gap:2px}
+.ax-c .kid-x .tkt-b .t{font:600 14px/1.3 var(--font)}
+.ax-c .kid-x .tkt-b .s{font-size:12px}
+.ax-c .kid-x .tkt-b .s .pbar{width:56px;height:5px;margin:0}
+.ax-c .kid-x .tkt-b .amt{font:700 15px/1.2 var(--font)}
+.ax-c .kid-x .tkt-b .chev{display:none}

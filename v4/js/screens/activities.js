@@ -37,7 +37,7 @@ route('activities',()=>{
   /* まとめカード(v2のB+v3の見出し): 数字は表示中の月の記録と今日。押せる数字は予定・ToDoへ */
   const monthRec=Object.values(A).filter(a=>a.type!=='日記'&&dateOf(a).startsWith(actMonth)).length;
   const todayEv=evOn(TODAY).filter(([k,e])=>!e.hol).length;
-  return largeTitle('タイムライン',{actions:[{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"}]})
+  return largeTitle('アクティビティ',{actions:[{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"}]})
     +summaryCard({metrics:[
         {v:`${monthRec}件`,l:`${+actMonth.slice(5)}月の記録`},
         {v:`${todayEv}件`,l:'今日の予定',href:'#/plan'},
@@ -202,8 +202,12 @@ const durText=a=>{if(!isSpan(a))return '';const t=s=>{const[h,m]=s.split(':').ma
 function origPlan(id){const ev=Object.entries(EV).find(([k,e])=>e.rec===id);if(!ev)return '';
   return sh('元の予定')+objs([row({href:`#/ev/${ev[0]}`,lead:`<span class="ax-node plan" style="margin:0"></span>`,t:esc(ev[1].t),s:`${fmtMDW(ev[1].d)} ${ev[1].s||''}`,chev:1})])}
 /** 活動の中の支払い(子)の1行: 時刻・支払先・金額・割合の棒。押すとその支払い */
-function actPayRow(c){const p=A[c],px=p.x&&X[p.x];const sr=(p.roles||[]).find(r=>r[0]==='支払先');
-  return row({href:`#/a/${c}`,time:p.time,t:esc(placeName(sr)||p.title),v:`<span class="pv"><b class="num">${yen(p.amt)}</b>${px?payBar(p,px):''}</span>`,chev:1})}
+function actPayRow(c){const p=A[c],px=p.x&&X[p.x];
+  return row({href:`#/a/${c}`,time:p.time,t:esc(payLabel(p)),v:`<span class="pv"><b class="num">${yen(p.amt)}</b>${px?payBar(p,px):''}</span>`,chev:1})}
+/** 活動の中の支払い1件の表示(v4.6)。自分の支出がある子=白い半券チケット(押すと自分の支出)+「支払いの詳細」の小さい行。無い子=支払いの1行 */
+function actKidHtml(c){const p=A[c],x=p.x&&X[p.x];
+  if(!x)return list([actPayRow(c)],'flat');
+  return `<div class="xk">${ticket({href:`#/x/${p.x}`,stub:spStub(xSp(x)),t:'自分の支出',s:esc(`支払い ${yen(p.amt)} · ${payeeOf(p)}`),amt:esc(yen(x.amt)),chev:true})}<a class="xk-link" href="#/a/${c}">支払いの詳細 ›</a></div>`}
 /** 活動の中に支払いを追加: 金額だけで支払いを、日付・時刻・親=この活動にして開く */
 function actPayAdd(id){const a=A[id];openQuickExpense();Object.assign(CQ,{date:dateOf(a),time:a.time,act:id});crQeRender()}
 
@@ -219,10 +223,11 @@ function actView(id,a,d){
   const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC[icon]}${esc(a.type)}</span><span class="tm">${tm}</span></div><h1>${esc(a.title)}</h1>${rt}</section>`;
   /* この中の支払い: 子の支払いを白い1行ずつ。2件以上なら合計。子が無い時は見出しも空の面も出さず、点線の1行「支払いを追加」だけ */
   const kids=(a.kids||[]).filter(c=>A[c]&&A[c].type==='支払い');
-  const sum=kids.reduce((s,c)=>s+(A[c].amt||0),0);
+  /* 自分の支出の合計(子のうち自分の支出があるもの)。2件以上の時だけ下に出す */
+  const mine=kids.reduce((s,c)=>s+(A[c].x&&X[A[c].x]?X[A[c].x].amt:0),0);
   const pays=kids.length
-    ?`<div class="dsec">`+sh('この中の支払い',kids.length,{label:'支払いを追加',icon:'plus',onclick:`actPayAdd('${id}')`})
-      +list([...kids.map(actPayRow),...(kids.length>1?[row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(sum)}</b>`})]:[])],'flat')+`</div>`
+    ?`<div class="dsec">`+sh('自分の支出',kids.length,{label:'支払いを追加',icon:'plus',onclick:`actPayAdd('${id}')`})
+      +kids.map(actKidHtml).join('')+(kids.length>1&&mine?`<div class="xk-sum"><span>自分の支出 合計</span><b class="num">${yen(mine)}</b></div>`:'')+`</div>`
     :`<button class="pay-add" type="button" onclick="actPayAdd('${id}')">${IC.plus}支払いを追加</button>`;
   /* 交わった人・場所(リンク付き)。移動の出発・到着は主役の行に出しているので重ねない */
   const rr=(a.roles||[]).filter(r=>!mv||!['出発','到着'].includes(r[0]));
@@ -237,7 +242,8 @@ function actView(id,a,d){
 /** 支払いの詳細: 上に日の札(親が活動なら、その1行を日の札の下に)。主役は瞬間の時刻。自分の支出は半券 */
 function payView(id,a,d){
   const pa=parentAct(a),x=a.x&&X[a.x];
-  const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC.pay}支払い</span><span class="tm">${esc(a.time||'')}</span></div><h1>${esc(a.title)}</h1>${a.amt!=null?`<div class="big">${yen(a.amt)}</div>`:''}${a.pay?`<div class="meta"><span>${IC.pay}${esc(a.pay)}</span></div>`:''}${paySplit(a)}</section>`;
+  /* 主役(v4.6): 種類の札「支払い」+時刻 / 題名=支払先 / 合計は普通の大きさの1行(割合の棒の上に1回だけ) / 補足=支払い方法 */
+  const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC.pay}支払い</span><span class="tm">${esc(a.time||'')}</span></div><h1>${esc(payeeOf(a)||a.title)}</h1>${a.amt!=null?`<div class="pay-sum"><span>合計</span><b class="num">${yen(a.amt)}</b></div>`:''}${a.pay?`<div class="meta"><span>${IC.pay}${esc(a.pay)}</span></div>`:''}${paySplit(a)}</section>`;
   /* 子: 支払い → 自分の支出 を └ でぶら下げる。自分の支出は半券チケット(DESIGN v4 = 自分の支出の形) */
   const child=x?`<div class="hang">${ticket({href:`#/x/${a.x}`,stub:spStub(xSp(x)),t:'自分の支出',s:esc(catPath(x.cat)),amt:esc(yen(x.amt)),cls:'fill',chev:true})}</div>`:'';
   const later=[{day:d},...(pa?[{href:`#/a/${a.parent}`,time:timeText(pa),title:pa.title}]:[])];
@@ -251,7 +257,7 @@ function payView(id,a,d){
     +(a.adv&&a.adv[2]==='未精算'?`<div class="suggest owe"><span class="pbar lg" aria-hidden="true"><i class="owed" style="flex:1"></i></span><span class="t"><span class="nm">${esc(E[a.adv[0]].n.split(' ').pop())}さんの分 <b class="num">${yen(a.adv[1])}</b></span><span class="st">未精算</span></span><button class="btn sm" type="button" onclick="settle('${id}')">精算済みにする</button></div>`:'')
     +shopTodoSug(id,a)
     +(roles.length?sh('関わったエンティティ',roles.length,shop&&!shop[1]?{label:'支払先を店として登録',onclick:`registerShop('${id}')`}:null)+list(roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
-    +(a.items?sh('品目',itemGroups(a.items).length,{label:'追加',icon:'plus',onclick:`itAdd('${id}')`})+list([...itemsList(id,a.items),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(a.items.reduce((s,i)=>s+itemAmt(i),0))}</b>`})],'flat'):'')
+    +(a.items?sh('品目',itemGroups(a.items).length,{label:'追加',icon:'plus',onclick:`itAdd('${id}')`})+list(itemsList(id,a.items),'flat'):'')
     +(a.items&&ipPartner(a)?sh('負担')+list([row({cls:'plain',t:bpText(a),s:`自分 ${yen(a.x&&X[a.x]?X[a.x].amt:0)}、${esc(ipPartner(a))}さん ${yen(a.adv?a.adv[1]:0)}`,chev:1,onclick:`bpOpen('${id}')`})]):'')
     +origPlan(id)
     +(att?sh('添付',1)+`<div class="list ac-att"><img src="${att}" alt="レシートの写真"></div>`:'');
@@ -309,7 +315,7 @@ route('i',rid=>{
   const whole=a.split&&a.split.mode==='whole';
   const mine=payShares(a)[+ix];
   return appbar('品目',{actions:[{icon:'edit',label:'編集',onclick:`itOpen('${id}',${ix})`}]})
-    +`<section class="it-hero"><div class="it-n">${esc(it.n)}</div><div class="it-a num">${yen(amt)}</div><div class="it-m">${esc(a.title)} ・ 税${it.tax||8}%${it.memo?' ・ '+esc(it.memo):''}</div></section>`
+    +`<section class="it-hero"><div class="it-n">${esc(it.n)}</div><div class="it-a num">${yen(amt)}</div><div class="it-m">${esc(payLabel(a))} ・ 税${it.tax||8}%${it.memo?' ・ '+esc(it.memo):''}</div></section>`
     +(am?sh('内訳')+list([row({cls:'plain',t:'本体',v:`<span class="num">${yen(am[0])}</span>`}),...it.lines.slice(1).map((l,j)=>row({cls:'plain',t:esc(lnName(l))+(l.k==='pct'?` <span class="faint">${Math.abs(lnV(l))}%</span>`:''),v:`<span class="num" style="color:${am[j+1]<0?'var(--late)':'inherit'}">${am[j+1]<0?'−':'＋'}${yen(Math.abs(am[j+1]))}</span>`})),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(amt)}</b>`})],'flat'):'')
     +(pt?sh('負担')+(whole?`<div class="it-note">全体で割る設定です。この品目の自分の分は ${yen(mine)}（負担画面で変更）</div>`
       :`<div class="it-bs" role="group" aria-label="負担">${bs.map(v=>`<button class="cr-b" type="button" aria-pressed="${it.b===v}" onclick="itSetB('${id}',${ix},'${v}')">${esc(v)}</button>`).join('')}</div><div class="it-note">自分の分 ${yen(mine)}</div>`):'')

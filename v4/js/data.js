@@ -39,19 +39,19 @@ const A={
   d1027:{type:'日記',date:'2026-10-27',dd:'27',dw:'火',body:'',kids:['p4']},
   w1:{type:'起床',parent:'d1030',time:'07:40',title:'起床'},
   l1:{type:'食事',parent:'d1030',time:'12:00',end:'13:10',title:'花子さんとランチ',roles:[['場所','aoba'],['同席','hanako']],kids:['p1']},
-  p1:{type:'支払い',parent:'l1',time:'13:05',title:'昼食代',pay:'現金',amt:4580,roles:[['支払先','aoba'],['支払者','me']],
+  p1:{type:'支払い',parent:'l1',time:'13:05',title:'支払い',pay:'現金',amt:4580,roles:[['支払先','aoba'],['支払者','me']],
       items:[{n:'醤油らーめん',price:1100,lines:[{n:'',k:'amt',v:1000},{n:'大盛り',k:'amt',v:100}],b:'自分',tax:10},{n:'塩らーめん',price:1200,b:'花子',tax:10},{n:'餃子',price:680,b:'半分',tax:10},
              {n:'生ビール',price:800,b:'自分',tax:10,memo:'1杯目'},{n:'生ビール',price:800,b:'花子',tax:10,memo:'花子さんの分'}],x:'x1',adv:['hanako',2340,'未精算']},
   c1:{type:'会話',parent:'d1030',time:'15:00',end:'17:00',title:'転職の相談',roles:[['参加','hanako'],['場所','minato']],body:'A社を辞めるか迷っているとのこと。年内に決めたいらしい。',kids:['p16']},
-  p16:{type:'支払い',parent:'c1',time:'15:05',title:'カフェ代',pay:'現金',amt:1100,roles:[['支払先','minato'],['支払者','me']],
+  p16:{type:'支払い',parent:'c1',time:'15:05',title:'支払い',pay:'現金',amt:1100,roles:[['支払先','minato'],['支払者','me']],
       items:[{n:'カフェラテ',price:550,b:'自分',tax:10},{n:'カフェラテ',price:550,b:'自分',tax:10,memo:'花子さんの分(おごり)'}],x:'x16'},
   m1:{type:'移動',parent:'d1030',time:'19:30',end:'20:05',title:'帰宅',roles:[['出発','minato'],['到着','home']]},
   h1:{type:'出来事',parent:'d1029',time:'14:00',end:'15:30',title:'物件の内見',roles:[['プロジェクト','proj1']]},
   s2:{type:'買い物',parent:'d1029',time:'18:25',end:'18:50',title:'夕食の買い物',roles:[['場所','super']],kids:['p2']},
-  p2:{type:'支払い',parent:'s2',time:'18:40',title:'買い物',pay:'カード ••1234',amt:2684,roles:[['支払先','super'],['支払者','me']],
+  p2:{type:'支払い',parent:'s2',time:'18:40',title:'支払い',pay:'カード ••1234',amt:2684,roles:[['支払先','super'],['支払者','me']],
       items:[{n:'牛乳',price:238,b:'自分',tax:8},{n:'卵',price:268,b:'自分',tax:8,memo:'特売'},{n:'卵',price:268,b:'自分',tax:8},{n:'鶏もも肉',price:612,lines:[{n:'',k:'amt',v:680},{n:'値引き',k:'pct',v:-10}],b:'自分',tax:8},{n:'キッチンペーパー',price:398,b:'自分',tax:10},{n:'その他',price:900,b:'自分',tax:8}],x:'x2'},
-  p3:{type:'支払い',parent:'d1028',time:'08:20',title:'朝のパン',pay:'現金',amt:620,roles:[['支払先',null,'ベーカリー木漏れ日'],['支払者','me']],items:[{n:'クロワッサン',price:280,b:'自分',tax:8},{n:'カレーパン',price:340,b:'自分',tax:8}],x:'x3'},
-  p4:{type:'支払い',parent:'d1027',time:'20:05',title:'日用品',pay:'カード ••1234',amt:1280,roles:[['支払先','drug'],['支払者','me']],items:[{n:'洗剤',price:680,b:'自分',tax:10},{n:'歯ブラシ',price:600,b:'自分',tax:10}],x:'x4'},
+  p3:{type:'支払い',parent:'d1028',time:'08:20',title:'支払い',pay:'現金',amt:620,roles:[['支払先',null,'ベーカリー木漏れ日'],['支払者','me']],items:[{n:'クロワッサン',price:280,b:'自分',tax:8},{n:'カレーパン',price:340,b:'自分',tax:8}],x:'x3'},
+  p4:{type:'支払い',parent:'d1027',time:'20:05',title:'支払い',pay:'カード ••1234',amt:1280,roles:[['支払先','drug'],['支払者','me']],items:[{n:'洗剤',price:680,b:'自分',tax:10},{n:'歯ブラシ',price:600,b:'自分',tax:10}],x:'x4'},
 };
 const X={
   x1:{pay:'p1',amt:2240,cat:'eatout',memo:'花子さんとランチ',items:[{n:'醤油らーめん',price:1100,b:'全額'},{n:'餃子',price:340,b:'1/2'},{n:'生ビール',price:800,b:'全額',memo:'1杯目'}]},
@@ -87,7 +87,7 @@ const COLORS=['#5E6E91','#3E9AA0','#D0607F','#6FB07A','#4C8BC9','#7FC8E8','#F2A7
 ].forEach(([d,date,dw,pid,title,shopName,shopId,amt,xid,cat,sp])=>{
   if(A[d])A[d].kids.push(pid);else A[d]={type:'日記',date,dd:String(+date.slice(8)),dw,body:'',kids:[pid]};
   const roles=[['支払先',shopId,shopName],['支払者','me']];if(pid==='p8')roles.push(['同席','hanako']);
-  A[pid]={type:'支払い',parent:d,time:'19:00',title,pay:'カード ••1234',amt,roles,items:[{n:title,price:amt,b:'自分',tax:10}],x:xid};
+  A[pid]={type:'支払い',parent:d,time:'19:00',title:'支払い',pay:'カード ••1234',amt,roles,items:[{n:title,price:amt,b:'自分',tax:10}],x:xid};
   X[xid]={pay:pid,amt,cat,sp,memo:'',items:[{n:title,price:amt,b:'全額'}]};
 });
 /* 過去の月: 大分類ごとの合計 */
@@ -178,6 +178,12 @@ const tdOpen=k=>!TD[k].done;
 const catSp=k=>{for(const c of catAnc(k).reverse())if(CATS[c].sp!==undefined)return setv(CATS[c].sp);return null};
 const xSp=x=>x.sp!==undefined?setv(x.sp):catSp(x.cat);
 const shopOf=x=>{const r=A[x.pay].roles[0];return r[1]?E[r[1]].n:r[2]};
+/* 支払いの題名は行動名「支払い」に統一(v4.6)。何に払ったかは支払先と品目で示す */
+const payeeOf=a=>{const r=(a&&a.roles||[]).find(r=>r[0]==='支払先');return r?(r[1]&&E[r[1]]?E[r[1]].n:(r[2]||'')):''};
+/** 「支払い · らーめん青葉」(支払先があれば付ける) */
+const payLabel=a=>{const p=payeeOf(a);return p?`支払い · ${p}`:'支払い'};
+/** 家計簿の支出の題名: 親の活動があれば活動の題名(例「花子さんとランチ」)、無ければ支払先 */
+const xTitle=x=>{const a=A[x.pay],pa=parentAct(a);return pa?pa.title:(payeeOf(a)||'支払い')};
 const whoOf=x=>{const a=A[x.pay],pa=parentAct(a);const w=[...a.roles,...(pa&&pa.roles||[])].filter(r=>r[1]&&!['支払先','支払者','場所','出発','到着'].includes(r[0])).map(r=>E[r[1]].n).filter((v,i,a)=>a.indexOf(v)===i);return w.length?w:['ひとり']};
 const xDate=x=>dayOf(A[x.pay]).date;
 const propsOf=k=>typeAnc(k).flatMap(t=>(TYPE_PROPS[t]||[]).map(p=>[p,t]));
