@@ -47,13 +47,12 @@
 .ax-row.plan .ax-c{border:0}
 .ax-row.plan .mo-card{outline:0}
 .pl-root .cap.plan{outline:0}
-.hm-root .hm-next{outline:0}
 .pl-dot.plan,.pl-blk.plan,.pl-bar.plan,.pl-ev-node{outline:0}
 .pl-root .pin-cur.plan>.node{outline:0}
 /* 点線の面を置くための基準位置(絶対配置の子の基準) */
 .ax-row.plan .ax-c,.pl-dot,.pl-bar,.pl-ev-node{position:relative}
 /* 予定の面の中の淡い色(4〜6%): 面は白のまま、ごく薄く予定の色を足す */
-.pl-root .cap.plan,.hm-root .hm-next,.pl-blk.plan,.pl-bar.plan{background:color-mix(in srgb,var(--plan) 5%,var(--surface))}
+.pl-root .cap.plan,.pl-blk.plan,.pl-bar.plan{background:color-mix(in srgb,var(--plan) 5%,var(--surface))}
 
 /* ---- 2. 未来側の軸の線: 旧 repeating-linear-gradient の破線 → 丸い点 ---- */
 .ax .future,.ax-row.future::before{--rail-c:var(--pd-dots)}
