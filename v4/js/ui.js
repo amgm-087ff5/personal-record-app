@@ -326,9 +326,22 @@ let NAV_PG=0,NAV_KEY=null,NAV_CUR='home';
 const navPageOf=k=>NAV_PAGES.findIndex(p=>p.some(t=>t&&t[0]===k));
 /* 切替のつまみ: 1枚目を表示中に2枚目のタブへお知らせ(期限切れのToDo)がある時は、右上に赤い点と読み上げ */
 const navSwInfo=pg=>{const dot=pg===0&&NAV_PAGES[1].some(t=>t&&navBadge(t[0])>0);return {dot,label:`ナビを切り替え(${pg+1}/2)${dot?'(2枚目にお知らせ)':''}`}};
-const navItem=(t,cur)=>t?`<a href="#/${t[0]}"${t[0]===cur?' aria-current="page"':''}><span class="pill">${NAV_IC[t[0]]}</span>${t[1]}${navBadge(t[0])?`<span class="badge">${navBadge(t[0])}</span>`:''}</a>`:`<div class="fab-slot"><button class="fab" type="button" aria-label="作成" onclick="openCreate()">${IC.plus}</button></div>`;
-/* 狭い幅の枠は [タブ][タブ][＋][タブ][タブ] の5列。タブは枠(.nav-cell)の中で入れ替わり、＋と枠は動かない */
-const navCell=(t,cur)=>`<div class="nav-cell">${navItem(t,cur)}</div>`;
+const navItem=(t,cur,hid)=>t?`<a href="#/${t[0]}"${t[0]===cur?' aria-current="page"':''}${hid?' tabindex="-1" aria-hidden="true" inert':''}><span class="pill">${NAV_IC[t[0]]}</span>${t[1]}${navBadge(t[0])?`<span class="badge">${navBadge(t[0])}</span>`:''}</a>`:`<div class="fab-slot"><button class="fab" type="button" aria-label="作成" onclick="openCreate()">${IC.plus}</button></div>`;
+/* 狭い幅: 窓(.nav-cell)は [左2][＋][右2] の4つ。各窓の中に1枚目と2枚目のタブを縦に積んだ帯(.nav-strip。高さ=タブ2つ分)を置く。
+   1枚目を表示=帯 translateY(0)、2枚目=translateY(-50%)(タブ1つ分上)。窓は overflow:hidden。見えていない側のタブは inert・tabindex=-1・aria-hidden。
+   ＋と切替のつまみは動かさない。窓ごとに 0/25/50/75ms ずらして帯をすべらせる(CSS の transition。inline の transition-delay) */
+const NAV_SLOTS=[0,1,3,4];
+const navWin=k=>`<div class="nav-cell"><div class="nav-strip" style="transition-delay:${k*25}ms"></div></div>`;
+/* 帯の中身と向きを今の枚目に合わせる。帯の要素は残すので、向きの変化だけが動きになる */
+function navPaint(cur){
+  document.querySelectorAll('#nav .nav-strip').forEach((s,k)=>{
+    const sl=NAV_SLOTS[k];
+    s.dataset.pg=NAV_PG;
+    s.innerHTML=navItem(NAV_PAGES[0][sl],cur,NAV_PG!==0)+navItem(NAV_PAGES[1][sl],cur,NAV_PG!==1);
+  });
+  const sw=document.querySelector('#nav .nav-sw');
+  if(sw){const i=navSwInfo(NAV_PG);sw.dataset.pg=NAV_PG;sw.setAttribute('aria-label',i.label);sw.classList.toggle('dot',i.dot)}
+}
 function renderNav(cur){
   NAV_CUR=cur;
   /* 画面(ハッシュ)が変わった時だけ、今の画面のタブがある枚目に合わせる。同じ画面の描き直しでは手動の枚目を保つ */
@@ -339,32 +352,17 @@ function renderNav(cur){
     nav.innerHTML=`<div class="nav-in">${navItem(null)}${NAV_ALL.map(t=>navItem(t,cur)).join('')}</div>`;
     return;
   }
-  /* 切替は枠の外のつまみ(カードの右上の縁に乗る)。枠は [タブ][タブ][＋][タブ][タブ] の5列で左右対称 */
-  const sw=navSwInfo(NAV_PG),p=NAV_PAGES[NAV_PG];
-  nav.innerHTML=`<div class="nav-in">${navCell(p[0],cur)}${navCell(p[1],cur)}${navItem(null)}${navCell(p[3],cur)}${navCell(p[4],cur)}</div><button class="nav-sw${sw.dot?' dot':''}" type="button" data-pg="${NAV_PG}" aria-label="${sw.label}" onclick="navSwitch()">${NAV_IC.switch}</button>`;
+  /* 帯が無い時(初回・幅が広い表示から戻った時)は作るだけで動かさない。あとは帯の向きを変えて、動きにする(自動の枚目表示も同じ) */
+  if(!nav.querySelector('.nav-strip')){
+    nav.innerHTML=`<div class="nav-in">${navWin(0)}${navWin(1)}${navItem(null)}${navWin(2)}${navWin(3)}</div><button class="nav-sw" type="button" onclick="navSwitch()">${NAV_IC.switch}</button>`;
+  }
+  navPaint(cur);
 }
-/* 2枚を切り替える。ナビ全体は横にすべらせず、左右の4つのタブだけが枠の中で上下に入れ替わる(＋は動かさない)。
-   今のタブは上へ12px動いて消え、次のタブは下から12px上がって出る(.22s ease-out)。左から 0/30/60/90ms ずらす。
-   reduced-motion では動かさず、その場で入れ替える */
-const NAV_SLOTS=[0,1,3,4];
+/* 2枚を切り替える。ナビ全体も枠も＋も動かさず、各窓の帯だけが上下にすべる(.26s ease-out・フェードしない)。
+   動きを減らす設定では CSS の transition が止まり、その場で切り替わる */
 function navSwitch(){
   NAV_PG=NAV_PG?0:1;
-  const sw=document.querySelector('#nav .nav-sw');
-  if(sw){const i=navSwInfo(NAV_PG);sw.dataset.pg=NAV_PG;sw.setAttribute('aria-label',i.label);sw.classList.toggle('dot',i.dot)}
-  const cells=document.querySelectorAll('#nav .nav-cell');
-  if(cells.length!==4)return;
-  const p=NAV_PAGES[NAV_PG];
-  const still=matchMedia('(prefers-reduced-motion: reduce)').matches;
-  cells.forEach((c,k)=>{
-    const old=c.querySelector('a:not(.nav-leave)');
-    const tpl=document.createElement('div');tpl.innerHTML=navItem(p[NAV_SLOTS[k]],NAV_CUR);
-    const nw=tpl.firstElementChild;
-    if(still||!c.animate){c.innerHTML='';c.appendChild(nw);return}
-    const d=k*30;
-    if(old){old.classList.add('nav-leave');old.animate([{transform:'translateY(0)',opacity:1},{transform:'translateY(-12px)',opacity:0}],{duration:220,delay:d,easing:'ease-out',fill:'forwards'}).onfinish=()=>old.remove()}
-    c.appendChild(nw);
-    nw.animate([{transform:'translateY(12px)',opacity:0},{transform:'translateY(0)',opacity:1}],{duration:220,delay:d,easing:'ease-out',fill:'backwards'});
-  });
+  navPaint(NAV_CUR);
 }
 /* 横スワイプ(pointer と touch。横に30px以上・縦より大きい)で切り替え。同じジェスチャの2つ目のイベントは起点を消して無視する */
 let navSX=null,navSY=0;
