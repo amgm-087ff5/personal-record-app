@@ -239,7 +239,7 @@ function payView(id,a,d){
   const pa=parentAct(a),x=a.x&&X[a.x];
   const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC.pay}支払い</span><span class="tm">${esc(a.time||'')}</span></div><h1>${esc(a.title)}</h1>${a.amt!=null?`<div class="big">${yen(a.amt)}</div>`:''}${a.pay?`<div class="meta"><span>${IC.pay}${esc(a.pay)}</span></div>`:''}${paySplit(a)}</section>`;
   /* 子: 支払い → 自分の支出 を └ でぶら下げる。自分の支出は半券チケット(DESIGN v4 = 自分の支出の形) */
-  const child=x?`<div class="hang">${ticket({href:`#/x/${a.x}`,t:'自分の支出',s:esc(catPath(x.cat)),amt:esc(yen(x.amt)),cls:'fill',chev:true})}</div>`:'';
+  const child=x?`<div class="hang">${ticket({href:`#/x/${a.x}`,stub:spStub(xSp(x)),t:'自分の支出',s:esc(catPath(x.cat)),amt:esc(yen(x.amt)),cls:'fill',chev:true})}</div>`:'';
   const later=[{day:d},...(pa?[{href:`#/a/${a.parent}`,time:timeText(pa),title:pa.title}]:[])];
   /* 交わった人・場所 = 支払いの役割(支払先・支払者) + 親の活動の同席者(whoOf と同じ考え方) */
   const roles=[...(a.roles||[])];

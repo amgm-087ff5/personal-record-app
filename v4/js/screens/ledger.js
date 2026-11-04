@@ -75,14 +75,14 @@ function ldRows(tot,fixed,nonDaily){
   return out;
 }
 
-/** 支出の1件 = 半券チケット1枚。半券に日と曜日、本体に支払先・カテゴリ・金額。
+
+/** 支出の1件 = 半券チケット1枚。半券に特別感、本体に日付・支払先・カテゴリ・金額。
     支払いが割り勘・立替なら、自分の区間の棒を補足に小さく出す */
 function ldTicket(k,x){
-  const p=A[x.pay],d=xDate(x),rest=p.amt-x.amt,owed=p.adv&&p.adv[2]==='未精算';
+  const p=A[x.pay],d=xDate(x),rest=p.amt-x.amt,owed=p.adv&&p.adv[2]==='未精算',sp=xSp(x);
   const pbar=rest>0?`<span class="ld-pbar" aria-hidden="true"><i class="me" style="flex:${x.amt}"></i><i class="${owed?'owed':'rest'}" style="flex:${rest}"></i></span>`:'';
-  const nd=xSp(x)==='非日常';
-  return ticket({href:`#/x/${k}`,stub:`<b>${+d.slice(8)}</b>${wdOf(d)}`,t:esc(p.title),
-    s:`${esc(shopOf(x))} ${catTag(x.cat)}${nd?' '+tag('✦ 非日常'):''}${pbar?' '+pbar:''}`,
+  return ticket({href:`#/x/${k}`,cls:spCls(sp),stub:spStub(sp),t:esc(p.title),
+    s:`${fmtMDW(d)} · ${esc(shopOf(x))} ${catTag(x.cat)}${pbar?' '+pbar:''}`,
     amt:`${yen(x.amt)}${x.amt!==p.amt?`<small>支払い ${yen(p.amt)}</small>`:''}`});
 }
 
@@ -112,7 +112,7 @@ route('ledger',()=>{
     const ups=Object.entries(EV).filter(([k,e])=>e.pay&&e.rep).map(([k,e])=>[k,e,nextOn(e)]).sort((a,b)=>a[2].localeCompare(b[2]));
     if(ups.length)upcoming=sh('これからの固定費',`${ups.length}件`)+`<div class="ax">`+axGroup('',ups.map(([k,e,d])=>axRow({href:`#/ev/${k}`,time:md(d),node:{cls:'plan',icon:'pay'},future:true,t:esc(e.t),m:esc(catPath(e.pay.cat)),amt:`<b>${yen(e.pay.amt)}</b>`})).join(''),{future:true})+`</div>`;
 
-    /* 支出: 日付の区切りは置かず、日付・曜日は半券が持つ。新しい順 */
+    /* 支出: 日付の区切りは置かず、日付は本体の補足に出す。新しい順 */
     const fl=Object.entries(X).filter(([k,x])=>ldMatch(x))
       .sort((a,b)=>xDate(b[1]).localeCompare(xDate(a[1]))||(A[b[1].pay].time||'').localeCompare(A[a[1].pay].time||''));
     const clear=ldFilter?`<div class="ld-clear">${chips([['x',`${AX_NAME[ldFilter.ax]}: ${ldFilterName()} ×`]],'x','ldClear()')}</div>`:'';
@@ -149,8 +149,8 @@ route('x',id=>{
   const owed=p.adv&&p.adv[2]==='未精算';
   /* 最上部: 親の支払いへの参照(1行)+ 自分の分の半券チケット(主役・塗り) */
   const parent=`<a class="ld-parent" href="#/a/${x.pay}">${ico('pay','var(--tx-2)')}<span class="grow">${esc(p.title)}、${esc(shopOf(x))}</span><span class="v num">${yen(p.amt)}</span>${IC.chev}</a>`;
-  const top=`<div class="ld-top">${parent}${ticket({cls:'lg fill',label:`自分の支出 ${yen(x.amt)}`,stub:`${IC.expense}自分の支出`,
-    t:yen(x.amt),s:`支払い ${yen(p.amt)} の ${pct}%${owed?' '+tag('未精算',{cls:'warn'}):''}`})}</div>`;
+  const top=`<div class="ld-top">${parent}${ticket({cls:'lg fill',label:`自分の支出 ${yen(x.amt)}`,stub:spStub(xSp(x)),
+    t:yen(x.amt),s:`${fmtMDW(date)} · 支払い ${yen(p.amt)} の ${pct}%${owed?' '+tag('未精算',{cls:'warn'}):''}`})}</div>`;
   const over=tag('この支出だけ',{cls:'brand'});
   return appbar('',{actions:[{icon:'more',label:'その他の操作',onclick:`ldMenu('${id}')`}]})
     +top

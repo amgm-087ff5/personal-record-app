@@ -140,6 +140,10 @@ const ticket=o=>{const tagN=o.href?'a':o.onclick?'button':'div';const attr=o.hre
 /** v4: 期間の移動(タイムライン・予定・家計簿で同じ部品)。‹ › は「戻る・開く」の意味なので使わず、文字で「前の月/次の月」。
     o:{label,sub,prev:{on,dis,text},next:{on,dis,text}} */
 const periodNav=o=>`<div class="pnav" role="group" aria-label="期間"><button type="button" ${o.prev.dis?'disabled':''} onclick="${o.prev.on}">${esc(o.prev.text||'前の月')}</button><b class="num">${o.label}${o.sub?`<small>${o.sub}</small>`:''}</b><button type="button" ${o.next.dis?'disabled':''} onclick="${o.next.on}">${esc(o.next.text||'次の月')}</button></div>`;
+/** 半券の中身 = その支出の特別感(日常 / 非日常 / 未設定)。DESIGN v4.5 */
+const spStub=sp=>sp==='非日常'?`<span class="sp-star" aria-hidden="true">✦</span><b class="sp">非日常</b>`:sp==='日常'?`<b class="sp">日常</b>`:`<span class="none">未設定</span>`;
+/** 半券の面の色の区別(ticket の cls)。日常は既定の面、非日常・未設定は別の面 */
+const spCls=sp=>sp==='非日常'?'sp-n':sp==='日常'?'':'sp-x';
 /** 月の区切り(縁の時間軸) */
 const monthHeadAx=(ym,future)=>`<div class="dh2 month ${future?'future':''}"><span class="dcard"><span class="dt"><b>${ym.slice(0,4)}年${+ym.slice(5)}月</b></span></span></div>`;
 const nowLine=()=>`<div class="now" aria-label="いま ${NOW}"><span class="tm">${NOW}</span><span class="dot"></span><span class="ln"></span></div>`;
@@ -302,7 +306,7 @@ const NAV_IC={
   /* 歯車=設定: 中心の穴は抜く */
   settings:navSvg('<path fill-rule="evenodd" d="M19.60 12.00 L22.10 13.44 L21.65 15.30 L18.77 15.45 L18.15 16.47 L17.37 17.37 L18.12 20.16 L16.49 21.16 L14.35 19.23 L13.19 19.51 L12.00 19.60 L10.56 22.10 L8.70 21.65 L8.55 18.77 L7.53 18.15 L6.63 17.37 L3.84 18.12 L2.84 16.49 L4.77 14.35 L4.49 13.19 L4.40 12.00 L1.90 10.56 L2.35 8.70 L5.23 8.55 L5.85 7.53 L6.63 6.63 L5.88 3.84 L7.51 2.84 L9.65 4.77 L10.81 4.49 L12.00 4.40 L13.44 1.90 L15.30 2.35 L15.45 5.23 L16.47 5.85 L17.37 6.63 L20.16 5.88 L21.16 7.51 L19.23 9.65 L19.51 10.81ZM8.7 12a3.3 3.3 0 1 0 6.6 0a3.3 3.3 0 1 0 -6.6 0Z"/>'),
   /* 2つの点=切替(いまの枚目は濃く、もう一方は淡い。出し分けはCSS) */
-  switch:navSvg('<circle class="d d1" cx="7.5" cy="12" r="3"/><circle class="d d2" cx="16.5" cy="12" r="3"/>'),
+  switch:'<svg class="i" viewBox="0 0 52 30" aria-hidden="true" fill="currentColor"><circle class="d d1" cx="19.5" cy="15" r="3.5"/><circle class="d d2" cx="32.5" cy="15" r="3.5"/></svg>',
 };
 const NAV_PAGES=[
   [['home','ホーム'],['activities','記録'],null,['plan','予定'],['memo','メモ']],
@@ -317,6 +321,8 @@ const navPageOf=k=>NAV_PAGES.findIndex(p=>p.some(t=>t&&t[0]===k));
 /* 切替のつまみ: 1枚目を表示中に2枚目のタブへお知らせ(期限切れのToDo)がある時は、右上に赤い点と読み上げ */
 const navSwInfo=pg=>{const dot=pg===0&&NAV_PAGES[1].some(t=>t&&navBadge(t[0])>0);return {dot,label:`ナビを切り替え(${pg+1}/2)${dot?'(2枚目にお知らせ)':''}`}};
 const navItem=(t,cur)=>t?`<a href="#/${t[0]}"${t[0]===cur?' aria-current="page"':''}><span class="pill">${NAV_IC[t[0]]}</span>${t[1]}${navBadge(t[0])?`<span class="badge">${navBadge(t[0])}</span>`:''}</a>`:`<div class="fab-slot"><button class="fab" type="button" aria-label="作成" onclick="openCreate()">${IC.plus}</button></div>`;
+/* 狭い幅の枠は [タブ][タブ][＋][タブ][タブ] の5列。タブは枠(.nav-cell)の中で入れ替わり、＋と枠は動かない */
+const navCell=(t,cur)=>`<div class="nav-cell">${navItem(t,cur)}</div>`;
 function renderNav(cur){
   NAV_CUR=cur;
   /* 画面(ハッシュ)が変わった時だけ、今の画面のタブがある枚目に合わせる。同じ画面の描き直しでは手動の枚目を保つ */
@@ -328,17 +334,31 @@ function renderNav(cur){
     return;
   }
   /* 切替は枠の外のつまみ(カードの右上の縁に乗る)。枠は [タブ][タブ][＋][タブ][タブ] の5列で左右対称 */
-  const sw=navSwInfo(NAV_PG);
-  nav.innerHTML=`<div class="nav-in"><div class="nav-view"><div class="nav-track" style="--pg:${NAV_PG}">${NAV_PAGES.map((p,i)=>`<div class="nav-pg"${i===NAV_PG?'':' inert'}>${p.map(t=>navItem(t,cur)).join('')}</div>`).join('')}</div></div></div><button class="nav-sw${sw.dot?' dot':''}" type="button" data-pg="${NAV_PG}" aria-label="${sw.label}" onclick="navSwitch()">${NAV_IC.switch}</button>`;
+  const sw=navSwInfo(NAV_PG),p=NAV_PAGES[NAV_PG];
+  nav.innerHTML=`<div class="nav-in">${navCell(p[0],cur)}${navCell(p[1],cur)}${navItem(null)}${navCell(p[3],cur)}${navCell(p[4],cur)}</div><button class="nav-sw${sw.dot?' dot':''}" type="button" data-pg="${NAV_PG}" aria-label="${sw.label}" onclick="navSwitch()">${NAV_IC.switch}</button>`;
 }
-/* 2枚を切り替える。描き直さずに横にすべらせる(.2s。reduced-motion は全体の規則で動かない) */
+/* 2枚を切り替える。ナビ全体は横にすべらせず、左右の4つのタブだけが枠の中で上下に入れ替わる(＋は動かさない)。
+   今のタブは上へ12px動いて消え、次のタブは下から12px上がって出る(.22s ease-out)。左から 0/30/60/90ms ずらす。
+   reduced-motion では動かさず、その場で入れ替える */
+const NAV_SLOTS=[0,1,3,4];
 function navSwitch(){
   NAV_PG=NAV_PG?0:1;
-  const tr=document.querySelector('#nav .nav-track');if(!tr)return;
-  tr.style.setProperty('--pg',NAV_PG);
-  tr.querySelectorAll('.nav-pg').forEach((p,i)=>i===NAV_PG?p.removeAttribute('inert'):p.setAttribute('inert',''));
   const sw=document.querySelector('#nav .nav-sw');
   if(sw){const i=navSwInfo(NAV_PG);sw.dataset.pg=NAV_PG;sw.setAttribute('aria-label',i.label);sw.classList.toggle('dot',i.dot)}
+  const cells=document.querySelectorAll('#nav .nav-cell');
+  if(cells.length!==4)return;
+  const p=NAV_PAGES[NAV_PG];
+  const still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  cells.forEach((c,k)=>{
+    const old=c.querySelector('a:not(.nav-leave)');
+    const tpl=document.createElement('div');tpl.innerHTML=navItem(p[NAV_SLOTS[k]],NAV_CUR);
+    const nw=tpl.firstElementChild;
+    if(still||!c.animate){c.innerHTML='';c.appendChild(nw);return}
+    const d=k*30;
+    if(old){old.classList.add('nav-leave');old.animate([{transform:'translateY(0)',opacity:1},{transform:'translateY(-12px)',opacity:0}],{duration:220,delay:d,easing:'ease-out',fill:'forwards'}).onfinish=()=>old.remove()}
+    c.appendChild(nw);
+    nw.animate([{transform:'translateY(12px)',opacity:0},{transform:'translateY(0)',opacity:1}],{duration:220,delay:d,easing:'ease-out',fill:'backwards'});
+  });
 }
 /* 横スワイプ(pointer と touch。横に30px以上・縦より大きい)で切り替え。同じジェスチャの2つ目のイベントは起点を消して無視する */
 let navSX=null,navSY=0;
