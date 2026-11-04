@@ -394,8 +394,10 @@ function crTotHtml(){const rc=CRS.rc,t=crTotal();
 function crBurCalc(){const rc=CRS.rc;const total=crTotal();let mine=0;
   rc.items.forEach(it=>{const p=itemAmt(it);if(it.b==='相手')return;mine+=it.b==='半分'?Math.floor(p/2):p});
   return {total,mine,adv:total-mine}}
-function crBurHtml(){const c=crBurCalc();
-  return ticket({t:'自分の支出',s:CRS.rc.with?`相手の分・立替 ${yen(c.adv)}`:'',amt:yen(c.mine)})}
+/** 受け取る前の支出の特別感: カテゴリに既定値があればそれ、無ければ入力欄で選んだ値(crAskHtml の rc.sp。crPayment と同じ) */
+const rcSp=rc=>{const v=catSp(rc.cat);return v!==null?v:(rc.sp||null)};
+function crBurHtml(){const c=crBurCalc(),sp=rcSp(CRS.rc);
+  return ticket({cls:spCls(sp),stub:spStub(sp),t:'自分の支出',s:CRS.rc.with?`相手の分・立替 ${yen(c.adv)}`:'',amt:yen(c.mine)})}
 /** 金額だけ変わった時は本文を描き直さず、合計と負担だけ更新する */
 function crTotUpdate(){const t=document.getElementById('cr-tot');if(t)t.innerHTML=crTotHtml();const b=document.getElementById('cr-bur');if(b)b.innerHTML=crBurHtml()}
 function crItem(i,k,v){const it=CRS.rc.items[i];if(!it)return;

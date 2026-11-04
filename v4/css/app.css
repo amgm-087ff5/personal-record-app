@@ -120,25 +120,24 @@ button.row{width:100%;text-align:left}
 
 /* ---------- Bottom nav + FAB ---------- */
 /* 2枚のナビ(1枚目=毎日 / 2枚目=整理)。枠 = [タブ][タブ][＋][タブ][タブ] の5列(左右対称・＋は中央)。
-   浮いた角丸22のカード(v4.2)。切替は枠の外のつまみ(右上の縁に乗る)。切替は横にすべる(.2s)。 */
+   浮いた角丸22のカード(v4.2)。切替は枠の外のつまみ(カードの上に浮く)。切替はタブだけが上下に入れ替わる(.22s)。 */
 .nav{position:fixed;left:max(10px,calc(50% - 350px));right:max(10px,calc(50% - 350px));bottom:calc(10px + env(safe-area-inset-bottom));z-index:40;height:var(--nav-h);border-radius:22px;--nav-sh:0 10px 30px -10px rgba(40,72,150,.28);box-shadow:var(--nav-sh);background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(14px) saturate(1.4);display:flex;justify-content:center;touch-action:pan-y}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .nav{--nav-sh:var(--e3)}}
 :root[data-theme="dark"] .nav{--nav-sh:var(--e3)}
-.nav-in{display:flex;align-items:stretch;width:100%;max-width:720px;height:100%}
-/* 横だけ切る(＋の上の張り出しを残す) */
-.nav-view{flex:1;min-width:0;height:100%;overflow-x:clip;overflow-y:visible}
-.nav-track{display:flex;width:100%;height:100%;transform:translateX(calc(var(--pg,0) * -100%));transition:transform .2s var(--ease)}
-.nav-pg{flex:0 0 100%;min-width:0;height:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) 64px repeat(2,minmax(0,1fr));align-items:center}
+.nav-in{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) 64px repeat(2,minmax(0,1fr));align-items:stretch;width:100%;max-width:720px;height:100%}
+/* タブの枠。切替では枠の中でタブだけが上下に入れ替わる(枠と＋は動かない)。.nav-leave は消えていくタブ */
+.nav-cell{position:relative;min-width:0;height:100%}
+.nav .nav-leave{position:absolute;inset:0;pointer-events:none}
 .nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:100%;min-width:0;font:500 12px/1 var(--font);color:var(--tx-3);position:relative;white-space:nowrap}
 .nav a .pill{width:56px;height:30px;border-radius:var(--r-pill);display:grid;place-items:center;transition:background .2s}
 .nav a[aria-current="page"]{color:var(--brand)}
 .nav a[aria-current="page"] .pill{background:var(--brand-soft);color:var(--brand)}
 .nav .badge{position:absolute;top:6px;left:calc(50% + 8px);min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--danger);color:#fff;font:600 12px/16px var(--font);text-align:center}
-/* 切替のつまみ: カードの右上の縁に半分乗る小さいピル。面=カードと同じ(--surface)、影=カードと同じ(--nav-sh)。
-   押し面は ::before で44×44(カードの上へ広げ、下のタブとは重ねない) */
-.nav-sw{position:absolute;right:14px;top:-11px;z-index:1;width:40px;height:22px;display:grid;place-items:center;color:var(--tx-2);background:var(--surface);border:0;border-radius:var(--r-pill);box-shadow:var(--nav-sh);padding:0;cursor:pointer}
-.nav-sw::before{content:"";position:absolute;left:50%;top:-33px;width:44px;height:44px;transform:translateX(-50%)}
-.nav-sw svg.i{width:24px;height:24px}
+/* 切替のつまみ: カードの右上の上に浮く 52×30 のピル(中心はカードの上端から24px上)。面=カードと同じ(--surface)、影=カードと同じ(--nav-sh)。
+   押し面は ::before で 48×48(中心をピルに合わせ、カードの上端でぴたりと止まる。下のタブの当たり判定とは重ならない) */
+.nav-sw{position:absolute;right:14px;top:-39px;z-index:1;width:52px;height:30px;display:grid;place-items:center;color:var(--tx-2);background:var(--surface);border:0;border-radius:var(--r-pill);box-shadow:var(--nav-sh);padding:0;cursor:pointer}
+.nav-sw::before{content:"";position:absolute;left:50%;top:50%;width:48px;height:48px;transform:translate(-50%,-50%)}
+.nav-sw svg.i{width:52px;height:30px}
 .nav-sw .d{transition:opacity .2s}
 .nav-sw .d2,.nav-sw[data-pg="1"] .d1{opacity:.35}
 .nav-sw[data-pg="1"] .d2{opacity:1}
