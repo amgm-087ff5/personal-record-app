@@ -72,7 +72,7 @@ const CATS={
   gift:{n:'贈り物',c:'#F2C6D3',fx:'ask',sp:'非日常'},
 };
 const COLORS=['#8796B5','#7FB5B9','#DC97AA','#9CC7A3','#8DB0DD','#B3D8EA','#F2C6D3','#A9B4C6'];
-/* 10月のほかの支払い(タイムラインには出さない架空データ) */
+/* 10月のほかの支払い(架空データ)。支払いも瞬間のアクティビティなので、日の kids に入れてタイムラインにも出す(家計簿と食い違わない) */
 [['d1025','2026-10-25','日','p5','電車','JR 青葉台駅',null,1280,'x5','train'],
  ['d1022','2026-10-22','木','p6','映画','シネマ青葉',null,2000,'x6','hobby'],
  ['d1015','2026-10-15','木','p7','買い物',null,'super',3120,'x7','cook'],
@@ -94,8 +94,8 @@ const COLORS=['#8796B5','#7FB5B9','#DC97AA','#9CC7A3','#8DB0DD','#B3D8EA','#F2C6
  ['d1028','2026-10-28','水','p23','夕食の買い物',null,'super',980,'x23','cook','日常','18:40'],
  ['d1031','2026-10-31','土','p24','カフェラテ',null,'minato',480,'x24','cafe','日常','08:40'],
 ].forEach(([d,date,dw,pid,title,shopName,shopId,amt,xid,cat,sp,time='19:00'])=>{
-  /* 架空の支払いは日の kids に入れない(記録のタイムライン・今日の流れに出さない)。日の付け先(parent)だけ持つ */
   if(!A[d])A[d]={type:'日記',date,dd:String(+date.slice(8)),dw,body:'',kids:[]};
+  if(!A[d].kids.includes(pid))A[d].kids.push(pid);
   const roles=[['支払先',shopId,shopName],['支払者','me']];if(pid==='p8')roles.push(['同席','hanako']);
   A[pid]={type:'支払い',parent:d,time,title:'支払い',pay:'カード ••1234',amt,roles,items:[{n:title,price:amt,b:'自分',tax:10}],x:xid};
   X[xid]={pay:pid,amt,cat,sp,memo:'',items:[{n:title,price:amt,b:'全額'}]};

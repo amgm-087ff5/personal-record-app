@@ -43,15 +43,15 @@ function hmRecRow(k,a,cls){
     +`<span class="hm-c"><span class="hm-ct">${esc(t)}</span>${a.end?`<span class="hm-cs num">${esc(timeText(a))}</span>`:''}</span></a>`;
 }
 /** いまの線: 時刻の上に「いま」、横に細い白い線 */
-const hmNowRow=()=>`<div class="hm-tr now" role="separator" aria-label="いま ${NOW}">`
+const hmNowRow=()=>`<div class="hm-tr hm-nowr" role="separator" aria-label="いま ${NOW}">`
   +`<span class="hm-tc num"><b class="hm-nt">いま</b>${NOW}</span><span class="hm-rl" aria-hidden="true"></span>`
   +`<span class="hm-c"><span class="hm-line" aria-hidden="true"></span></span></div>`;
 /** これからの予定(小さい行・点線の軸)。進行中の予定もここに入る */
 function hmPlanRow(k,e){
   const ing=e.s<=NOW;
-  return `<a class="hm-tr fut" href="#/ev/${k}">`
+  return `<a class="hm-tr hm-fut" href="#/ev/${k}">`
     +`<span class="hm-tc num">${esc(e.s)}</span><span class="hm-rl" aria-hidden="true"></span>`
-    +`<span class="hm-c"><span class="hm-ct soft">${esc(e.t)}</span>`
+    +`<span class="hm-c"><span class="hm-ct hm-soft">${esc(e.t)}</span>`
     +`<span class="hm-cs num">${esc(e.s)}–${esc(e.e)}${ing?'<b class="hm-ing">進行中</b>':''}</span></span></a>`;
 }
 /** 次の予定: 大きな札(時刻の行の中に入れ込む)。題名は 20px まで */
@@ -61,7 +61,7 @@ function hmNextRow(k,e){
     placeOf(e)?`<span class="hm-mi">${IC.place}${esc(placeOf(e))}</span>`:'',
     ppl.length?`<span class="hm-mi">${ppl.map(p=>`<span class="hm-who"><i class="hm-dot" aria-hidden="true"></i>${esc(E[p].n)}</span>`).join('')}</span>`:'',
   ].join('');
-  return `<div class="hm-tr fut next">`
+  return `<div class="hm-tr hm-fut hm-next">`
     +`<span class="hm-tc num">${esc(e.s)}</span><span class="hm-rl" aria-hidden="true"></span>`
     +`<span class="hm-c"><a class="hm-nx" href="#/ev/${k}">`
     +`<span class="hm-r1"><span class="hm-lbl">次の予定</span><b class="hm-left num">${esc(hmLeft(e.s))}</b></span>`
@@ -80,10 +80,10 @@ function hmTimeline(){
   const nx=hmNextEv(), nxk=nx?nx[0]:null;
   const rows=[];
   const more=past.length-3;
-  if(more>0)rows.push(`<div class="hm-tr past"><span class="hm-tc"></span><span class="hm-rl" aria-hidden="true"></span><a class="hm-more-l" href="#/day/${TODAY}">これより前 ${more}件</a></div>`);
-  past.slice(-3).forEach(([k,a])=>rows.push(hmRecRow(k,a,'past')));
+  if(more>0)rows.push(`<div class="hm-tr hm-past"><span class="hm-tc"></span><span class="hm-rl" aria-hidden="true"></span><a class="hm-more-l" href="#/day/${TODAY}">これより前 ${more}件</a></div>`);
+  past.slice(-3).forEach(([k,a])=>rows.push(hmRecRow(k,a,'hm-past')));
   rows.push(hmNowRow());
-  fut.forEach(([k,a])=>rows.push(hmRecRow(k,a,'fut')));
+  fut.forEach(([k,a])=>rows.push(hmRecRow(k,a,'hm-fut')));
   plans.forEach(([k,e])=>rows.push(k===nxk?hmNextRow(k,e):hmPlanRow(k,e)));
   return `<div class="hm-tl">${rows.join('')}</div>`;
 }
@@ -124,15 +124,14 @@ function hmMoney(){
   const rate=prevW?Math.round((thisW-prevW)/prevW*100):null;
   return `<section class="hm-tile hm-wide hm-money">`
     +`<div class="hm-th"><h2>支出</h2><a class="hm-more" href="#/ledger">家計簿 ›</a></div>`
-    +`<div class="hm-sp-top"><div><span class="hm-k">今日</span><b class="hm-big num">${yen(today)}</b></div>`
+    +`<div class="hm-sp-top"><div><span class="hm-k">今日 <span class="hm-note">固定費を除く</span></span><b class="hm-big num">${yen(today)}</b></div>`
     +`<div class="hm-sp-cmp"><span class="hm-sub num">先週の土曜 ${yen(sat)}</span>${tag(diffTxt)}</div></div>`
     +`<div class="hm-chart" role="group" aria-label="直近8日間の支出">${cols}</div>`
     +`<div class="hm-wk"><div><span class="hm-k">この7日間 ${md(hmAdd(TODAY,-6))}〜${md(TODAY)}</span><b class="hm-amt2 num">${yen(thisW)}</b></div>`
     +`<div class="hm-wk-b"><span class="hm-sub num">前の7日間 ${yen(prevW)}</span>${rate==null?'':tag(`${rate>=0?'+':'−'}${Math.abs(rate)}%`)}</div></div>`
     +`<form class="hm-qe" onsubmit="hmQeGo();return false"><input id="hm-qe-amt" class="num" inputmode="numeric" placeholder="¥ 金額" aria-label="金額" autocomplete="off">`
-    +`<button class="hm-qe-b" type="submit">記録</button><button class="hm-qe-more" type="button" onclick="openQuickExpense()">詳しく</button></form>`
-    +`<p class="hm-cap">家賃などの固定費は除く</p>`
-    +`</section>`;
+    +`<button class="hm-qe-b" type="submit">記録</button><button class="hm-qe-more" type="button" onclick="openQuickExpense({stay:true})">詳しく</button></form>`
+        +`</section>`;
 }
 /** 入力した金額で支払いのシートを開く(カテゴリを選んで保存するだけ)。保存後はホームに留まる */
 function hmQeGo(){
