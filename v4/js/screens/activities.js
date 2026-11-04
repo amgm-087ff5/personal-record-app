@@ -1,11 +1,37 @@
 /* =====================================================================
-   タイムライン — アプリの背骨。上が未来、下が過去、「いま」が境目。
+   タイムライン — アプリの背骨。上が過去、下が未来、「いま」が境目(v4.7 ユーザー指示「上が過去で下に未来」)。
    ルート: #/activities , #/a/{id}(出来事の詳細=その点の前後を切り取った軸), #/day/{date}(日のページ)
    ===================================================================== */
 
 let actFilter='all';let actMonth=TODAY.slice(0,7);
-const monthShift=n=>{const [y,m]=actMonth.split('-').map(Number);const d=new Date(y,m-1+n,1);actMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');rerender()};
+const monthShift=n=>{const [y,m]=actMonth.split('-').map(Number);const d=new Date(y,m-1+n,1);actMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');landWant=actMonth===TODAY.slice(0,7)?'now':'bottom';rerender()};
 const ACT_FILTERS=[['all','すべて'],['予定','予定'],['支払い','支払い'],['会話','会話'],['移動','移動']];
+/* ---------- 開いた時・月の切替の位置合わせ(上=過去・下=未来。開いた時は「いま」の線を上に) ----------
+   ui.js の render は描画の後に scrollTo(0,…) するので、位置合わせは次の tick に回す。
+   開いた時 = hashchange(描画の後に走る)と初回の描画の後。絞り込みや削除など同じ画面の描き直しは位置を保つ(landWant は月の切替だけ) */
+let landWant=null;
+/** 要素を囲むスクロール枠(幅が広い時は左の一覧)。無ければ null(窓)。 */
+function scrollBoxOf(el){let b=el.parentElement;while(b&&b!==document.body&&!(/(auto|scroll)/.test(getComputedStyle(b).overflowY)&&b.scrollHeight>b.clientHeight))b=b.parentElement;return b&&b!==document.body?b:null}
+/** 要素の上端を、その枠の上から top px の位置へ(瞬時)。end なら枠の一番下へ */
+function landTo(el,{top=12,end=false}={}){
+  const s=scrollBoxOf(el),box=s||window;
+  if(end){box.scrollTo({top:s?s.scrollHeight:document.documentElement.scrollHeight,behavior:'instant'});return}
+  const off=s?s.getBoundingClientRect().top-s.scrollTop:-scrollY;
+  box.scrollTo({top:el.getBoundingClientRect().top-off-top,behavior:'instant'});
+}
+/** アクティビティの位置合わせ: now=いまの線を上から12px / bottom=月の一番下 */
+function actLand(want){
+  const ax=document.querySelector('#app .ax');if(!ax)return;
+  if(want==='bottom'){landTo(ax,{end:true});return}
+  const n=document.querySelector('#app .ax .now');if(n)landTo(n,{top:12});
+}
+/** 画面を開いた時の位置: アクティビティは今月なら「いま」を上に・前の月なら一番下 / 今日の日のページは「いま」を上に(sticky の見出しの分 68px) */
+function landOnOpen(){
+  if(CUR.name==='activities')setTimeout(()=>actLand(actMonth===TODAY.slice(0,7)?'now':'bottom'),0);
+  else if(CUR.name==='day'&&CUR.id===TODAY)setTimeout(()=>{const n=document.querySelector('#app .ax .now');if(n)landTo(n,{top:68})},0);
+}
+addEventListener('hashchange',landOnOpen);
+document.addEventListener('DOMContentLoaded',landOnOpen); /* 初回の描画(index.html 末尾の render)の後 */
 const dayOfDate=d=>Object.entries(A).find(([k,a])=>a.type==='日記'&&a.date===d);
 const kidsOf=d=>{const day=dayOfDate(d);return day?day[1].kids.filter(k=>A[k]).map(k=>[k,A[k]]):[]};
 /** その日の全部の記録(活動の中の支払いも) */
@@ -15,18 +41,20 @@ const planVisible=()=>actFilter==='all'||actFilter==='予定';
 const daySpentAll=d=>allOf(d).reduce((s,[k,a])=>s+(a.x&&X[a.x]?X[a.x].amt:0),0);
 const daySpent=d=>{const ps=allOf(d).filter(([k,a])=>a.x&&X[a.x]);return ps.length>=2?ps.reduce((s,[k,a])=>s+X[a.x].amt,0):0};
 const dayDiary=d=>{const day=dayOfDate(d);return day&&day[1].body};
-/** その日の項目(記録+未記録の予定)を時刻の新しい順に */
+/** その日の項目(記録+未記録の予定)を時刻の古い順(上=過去・下=未来) */
 function dayItems(d){
   const items=actFilter==='予定'?[]:(actFilter==='支払い'?allOf(d):kidsOf(d)).filter(([k,a])=>passFilter(a)).map(([k,a])=>({time:a.time||'',kind:'rec',k}));
   if(planVisible())evOn(d).filter(([k,e])=>!e.rec&&!e.hol).forEach(([k,e])=>items.push({time:e.all?'00:00':e.s,kind:'plan',k}));
-  return items.sort((a,b)=>b.time.localeCompare(a.time));
+  return items.sort((a,b)=>a.time.localeCompare(b.time));
 }
 const isFuturePlan=it=>it.kind==='plan'&&!EV[it.k].all&&EV[it.k].d===TODAY&&EV[it.k].s>NOW;
 const itemHtml=(it,o={})=>it.kind==='rec'?momentRow(it.k,o):planRowAx(it.k,{...o,late:!o.future&&!isFuturePlan(it)});
 function recordDates(){const ds=new Set(Object.values(A).filter(a=>a.type==='日記'&&a.date<TODAY&&a.kids&&descOf(Object.keys(A).find(id=>A[id]===a)).some(k=>A[k]&&passFilter(A[k]))).map(a=>a.date));
   if(planVisible())Object.values(EV).forEach(e=>{if(!e.rec&&!e.hol&&e.d<TODAY&&e.d>=TODAY.slice(0,8)+'01')ds.add(e.d)});
-  return [...ds].sort().reverse()}
-const axDay=(d,o={})=>{const items=dayItems(d);return d===TODAY?items.filter(isFuturePlan).map(it=>itemHtml(it,{future:true})).join('')+nowLine()+items.filter(it=>!isFuturePlan(it)).map(it=>itemHtml(it)).join(''):items.map(it=>itemHtml(it)).join('')};
+  return [...ds].sort()}
+/** 日の行(上=過去・下=未来)。今日は 過ぎた記録・過ぎた予定 → いまの線 → これからの予定 */
+const axDay=(d,o={})=>{const items=dayItems(d);if(d!==TODAY)return items.map(it=>itemHtml(it)).join('');
+  return items.filter(it=>!isFuturePlan(it)).map(it=>itemHtml(it)).join('')+nowLine()+items.filter(it=>isFuturePlan(it)).map(it=>itemHtml(it,{future:true})).join('')};
 
 route('activities',()=>{
   const upcoming=Object.entries(EV).filter(([k,e])=>!e.hol&&!e.rec&&e.d>TODAY).sort((a,b)=>a[1].d.localeCompare(b[1].d));
@@ -37,6 +65,9 @@ route('activities',()=>{
   /* まとめカード(v2のB+v3の見出し): 数字は表示中の月の記録と今日。押せる数字は予定・ToDoへ */
   const monthRec=Object.values(A).filter(a=>a.type!=='日記'&&dateOf(a).startsWith(actMonth)).length;
   const todayEv=evOn(TODAY).filter(([k,e])=>!e.hol).length;
+  /* 月の切替の後の位置(前の月=一番下・今月=いまを上)。開いた時の位置は landOnOpen */
+  const want=landWant;landWant=null;
+  if(want)setTimeout(()=>actLand(want),0);
   return largeTitle('アクティビティ',{actions:[{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"}]})
     +summaryCard({metrics:[
         {v:`${monthRec}件`,l:`${+actMonth.slice(5)}月の記録`},
@@ -46,10 +77,17 @@ route('activities',()=>{
     +`<div class="mnav"><button type="button" aria-label="前の月" ${actMonth<=minM?'disabled':''} onclick="monthShift(-1)">${IC.back}</button><b>${actMonth.slice(0,4)}年${+actMonth.slice(5)}月</b><button type="button" class="nx" aria-label="次の月" ${actMonth>=maxM?'disabled':''} onclick="monthShift(1)">${IC.back}</button></div>`
     +chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")
     +`<div class="ax">`
-    +(isNow&&upcoming.length&&actFilter==='all'?`<a href="#/plan">${axEdge(`明日以降の予定 ${upcoming.length}件${IC.chev}`)}</a>`:'')
-    +(isNow?dayHead(TODAY,{href:`#/day/${TODAY}`,diary:dayDiary(TODAY),empty:'今日の日記を書く',sum:s?`自分 ${yen(s)}`:''})+axDay(TODAY):'')
+    +(actMonth<=minM?axEdge('これより前の記録 なし',true):'')
     +dates.map(d=>{const sp=daySpent(d);return dayHead(d,{href:`#/day/${d}`,diary:dayDiary(d),sum:sp?`自分 ${yen(sp)}`:''})+axDay(d)}).join('')
+    +(isNow?dayHead(TODAY,{href:`#/day/${TODAY}`,diary:dayDiary(TODAY),empty:'今日の日記を書く',sum:s?`自分 ${yen(s)}`:''})+axDay(TODAY):'')
     +(!isNow&&!dates.length?`<div class="it-note" style="text-align:center;padding:32px 0">この月の記録はありません</div>`:'')
+    /* 下=未来: 明日から2週間の予定を日ごとにそのまま続ける(リンクだけにせず、時間の流れとして見せる) */
+    +(isNow&&planVisible()?(()=>{const out=[];for(let i=1;i<=14;i++){const d=addDays(TODAY,i);const evs=evOn(d).filter(([k,e])=>!e.rec);if(!evs.length)continue;
+        const hol=evs.find(([k,e])=>e.hol);const rows=evs.filter(([k,e])=>!e.hol).map(([k])=>planRowAx(k,{future:true})).join('');
+        out.push(dayHead(d,{href:`#/day/${d}`,future:true,empty:hol?hol[1].t:''})+rows)}
+      const later=upcoming.filter(([k,e])=>e.d>addDays(TODAY,14)).length;
+      return out.join('')+`<a href="#/plan">`+axEdge(later?`これより先の予定 ${later}件${IC.chev}`:`予定 › 月で見る${IC.chev}`)+`</a>`})():'')
+    +(isNow?'<div class="ax-room" aria-hidden="true"></div>':'')
     +`</div>`;
 },{tab:'activities'});
 
@@ -59,14 +97,15 @@ route('day',d=>{
   const items=dayItems(d);const sp=daySpent(d);
   const people=new Set(items.flatMap(i=>i.kind==='rec'?(A[i.k].roles||[]).map(r=>r[1]).filter(x=>x&&x!=='me'):[]));
   const dl=[...new Set([...Object.values(A).filter(x=>x.type==='日記').map(x=>x.date),TODAY])].sort();const pi=dl.indexOf(d);const prev=dl.filter(x=>x<d).pop(),next=dl.find(x=>x>d);
-  return appbar('',{actions:[...(next?[{icon:'up',label:'次の日(未来へ)',onclick:`go('#/day/${next}')`}]:[]),...(prev?[{icon:'down',label:'前の日(過去へ)',onclick:`go('#/day/${prev}')`}]:[]),{icon:'edit',label:'日記を書く',onclick:`openDiary('${d}')`}]})
+  const html=appbar('',{actions:[...(next?[{icon:'up',label:'次の日(未来へ)',onclick:`go('#/day/${next}')`}]:[]),...(prev?[{icon:'down',label:'前の日(過去へ)',onclick:`go('#/day/${prev}')`}]:[]),{icon:'edit',label:'日記を書く',onclick:`openDiary('${d}')`}]})
     +`<section class="dp"><div class="dp-date"><b>${+d.slice(8)}</b><span>${WD[w]}曜日<small>${d.slice(0,4)}年${+d.slice(5,7)}月${d===TODAY?'・今日':''}</small></span></div>`
     +(a&&a.body?`<p class="dp-text">${esc(a.body)}</p>`:`<button class="dp-text none" type="button" onclick="openDiary('${d}')" style="text-align:left">この日のことを書く…</button>`)
     +(a&&a.photos?`<div class="dp-photos">${Array.from({length:a.photos},(_,i)=>photoThumb(d,i)).join('')}</div>`:'')
     +`</section>`
     +`<div class="stats"><div><b>${items.filter(i=>i.kind==='rec').length}件</b><span>出来事</span></div>${sp?`<div><b>${yen(sp)}</b><span>自分の支出</span></div>`:''}</div>`+(people.size?sh('この日に交わった縁',people.size)+`<div class="dp-kin">${[...people].map(p=>eref(p)).join('')}</div>`:'')
     +sh('この日の時間軸')
-    +(items.length?`<div class="ax">${axDay(d)}</div>`:empty('activity','この日の出来事はまだありません',{label:'出来事を追加',onclick:`openNewHappening('${d}')`}));
+    +(items.length?`<div class="ax">${axDay(d)}${d===TODAY?'<div class="ax-room" aria-hidden="true"></div>':''}</div>`:empty('activity','この日の出来事はまだありません',{label:'出来事を追加',onclick:`openNewHappening('${d}')`}));
+  return html;
 },{tab:'activities'});
 
 /* ---------- 出来事の詳細: その点の前後を切り取った軸 ---------- */

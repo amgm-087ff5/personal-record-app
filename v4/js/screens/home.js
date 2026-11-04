@@ -56,7 +56,7 @@ function hmNext(){
     +`<h1>${esc(e.t)}</h1><div class="meta">${meta}</div></a>`;
 }
 
-/* ---------- 2. 今日の残り: これからの予定と、過ぎて未記録の予定、今日の記録(時刻順・上が未来) ---------- */
+/* ---------- 2. 今日の残り: 過ぎた記録・過ぎた予定(記録待ち) → いまの線 → これからの予定(時刻の古い順・上が過去・下が未来) ---------- */
 function hmRest(){
   const nx=hmNextEv(), nk=nx&&nx[0];
   const items=[];
@@ -65,9 +65,9 @@ function hmRest(){
     items.push({time:e.all?'00:00':e.s,fut,html:planRowAx(k,{future:fut,late})});
   });
   kidsOf(TODAY).forEach(([k,a])=>items.push({time:a.time||'',fut:false,html:momentRow(k)}));
-  items.sort((a,b)=>b.time.localeCompare(a.time));
+  items.sort((a,b)=>a.time.localeCompare(b.time));
   if(!items.length)return sh('今日の残り')+empty('schedule','予定・記録 なし');
-  const body=items.filter(x=>x.fut).map(x=>x.html).join('')+nowLine()+items.filter(x=>!x.fut).map(x=>x.html).join('');
+  const body=items.filter(x=>!x.fut).map(x=>x.html).join('')+nowLine()+items.filter(x=>x.fut).map(x=>x.html).join('');
   return sh('今日の残り',items.length)+`<div class="ax">${axGroup('',body,{future:false,cls:'today'})}</div>`;
 }
 
