@@ -407,13 +407,8 @@ const EXTRA={};
 const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 
 /* ---------- このモックについて ---------- */
-function openAbout(){
-  openSheet({title:'このモックについて',body:`
-    ${sh('概要')}${list([prop('版',window.BUILD||'不明'),prop('データ','架空。操作はこのブラウザに保存'),prop('今日','2026年10月31日(土) として表示')])}
-    ${sh('表示')}${list([row({t:'テーマ',v:`<select class="input" style="height:36px;width:auto" onchange="setTheme(this.value)"><option value="">端末に合わせる</option><option value="light">ライト</option><option value="dark">ダーク</option></select>`})])}
-    ${sh('データ')}<div class="btnrow"><button class="btn danger" type="button" onclick="resetData()">${IC.trash}データを初期状態に戻す</button></div>
-    ${sh('ほかの版')}${list([row({t:'UI v3',href:'../v3/',chev:true}),row({t:'UI v2',href:'../',chev:true})])}`});
-}
+/** このモックについて=設定の画面(テーマ・データ・版は設定に移した) */
+function openAbout(){go('#/settings')}
 function setTheme(v){if(v)document.documentElement.dataset.theme=v;else delete document.documentElement.dataset.theme;try{localStorage.setItem('prmock-theme',v)}catch(e){}}
 try{const t=localStorage.getItem('prmock-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}
 

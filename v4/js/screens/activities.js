@@ -41,7 +41,7 @@ route('activities',()=>{
     +summaryCard({metrics:[
         {v:`${monthRec}件`,l:`${+actMonth.slice(5)}月の記録`},
         {v:`${todayEv}件`,l:'今日の予定',href:'#/plan'},
-        {v:`${todoTodayCount()}件`,l:'今日のToDo',href:'#/plan?view=todo'}],
+        {v:`${todoTodayCount()}件`,l:'今日のToDo',href:'#/todo'}],
       actions:[{text:'レシートで支払い',icon:'camera',primary:true,onclick:'openReceipt()'},{text:'出来事',icon:'plus',onclick:'openNewHappening()'}]})
     +`<div class="mnav"><button type="button" aria-label="前の月" ${actMonth<=minM?'disabled':''} onclick="monthShift(-1)">${IC.back}</button><b>${actMonth.slice(0,4)}年${+actMonth.slice(5)}月</b><button type="button" class="nx" aria-label="次の月" ${actMonth>=maxM?'disabled':''} onclick="monthShift(1)">${IC.back}</button></div>`
     +chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")
@@ -227,7 +227,7 @@ function actView(id,a,d){
   return appbar('',{actions:[menuAct(id)]})
     +pinView({later:[{day:d}],earlier:[],cap})
     +pays
-    +(rr.length?sh('交わった人・場所',rr.length)+list(rr.map(r=>prop(r[0],eref(r[1],r[2])))):'')
+    +(rr.length?sh('関わったエンティティ',rr.length)+list(rr.map(r=>prop(r[0],eref(r[1],r[2])))):'')
     +(a.body?sh('内容')+`<div class="list"><p class="ac-body">${esc(a.body)}</p></div>`:'')
     +origPlan(id);
 }
@@ -248,7 +248,7 @@ function payView(id,a,d){
     +pinView({later,earlier:[],cap:cap+child})
     +(a.adv&&a.adv[2]==='未精算'?`<div class="suggest owe"><span class="pbar lg" aria-hidden="true"><i class="owed" style="flex:1"></i></span><span class="t">${esc(E[a.adv[0]].n.split(' ').pop())}さんの分 <b class="num">${yen(a.adv[1])}</b> 未精算</span><button class="btn sm" type="button" onclick="settle('${id}')">精算済みにする</button></div>`:'')
     +shopTodoSug(id,a)
-    +(roles.length?sh('交わった人・場所',roles.length,shop&&!shop[1]?{label:'支払先を店として登録',onclick:`registerShop('${id}')`}:null)+list(roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
+    +(roles.length?sh('関わったエンティティ',roles.length,shop&&!shop[1]?{label:'支払先を店として登録',onclick:`registerShop('${id}')`}:null)+list(roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
     +(a.items?sh('品目',itemGroups(a.items).length,{label:'追加',icon:'plus',onclick:`itAdd('${id}')`})+list([...itemsList(id,a.items),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(a.items.reduce((s,i)=>s+itemAmt(i),0))}</b>`})],'flat'):'')
     +(a.items&&ipPartner(a)?sh('負担')+list([row({cls:'plain',t:bpText(a),s:`自分 ${yen(a.x&&X[a.x]?X[a.x].amt:0)}、${esc(ipPartner(a))}さん ${yen(a.adv?a.adv[1]:0)}`,chev:1,onclick:`bpOpen('${id}')`})]):'')
     +origPlan(id)

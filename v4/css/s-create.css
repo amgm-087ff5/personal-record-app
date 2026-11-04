@@ -9,7 +9,7 @@
 .cr-tile .ico{width:44px;height:44px;border-radius:14px}
 .cr-tile .ico svg.i{width:24px;height:24px}
 
-/* ---- 人・場所の追加: 種類の輪郭の見本 ---- */
+/* ---- エンティティの追加: 種類の輪郭の見本 ---- */
 .cr-prev{display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px var(--gutter) 4px}
 .cr-prev small{font:var(--t-cap);color:var(--tx-3)}
 

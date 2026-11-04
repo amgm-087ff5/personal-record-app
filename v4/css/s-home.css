@@ -63,3 +63,4 @@
 /* ---- 5. お金: 半券(自分の支出)と未精算の行 ---- */
 .hm-root .hm-owe .v{font:600 15px/1.4 var(--font)}
 .hm-root .hm-owe .chev{color:var(--tx-3)}
+.hm-root .ax{padding-left:6px} /* 時刻の文字の左端を画面の左の余白(20px)に揃える(整列) */

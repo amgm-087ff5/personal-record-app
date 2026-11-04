@@ -326,7 +326,7 @@ route('ev',id=>{
   ].join('');
   return '<div class="pl-root">'+appbar('',{actions:[{icon:'more',label:'操作',onclick:"toast('編集はモックでは未対応です')"}]})
     +axis
-    +(kin.length?sh('会う人・場所',kin.length,unreg?{label:'場所として登録',onclick:`plRegisterPlace('${id}')`}:null)+list(kin):'')
+    +(kin.length?sh('関わるエンティティ',kin.length,unreg?{label:'場所として登録',onclick:`plRegisterPlace('${id}')`}:null)+list(kin):'')
     +`<div class="mt"></div>`+list([props])
     +(tasks.length?sh('この予定のToDo',tasks.length)+objs(tasks.map(plEvTaskRow)):'')
     +sh(e.rep&&rec?'前回の記録':'記録')
