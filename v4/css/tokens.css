@@ -103,7 +103,7 @@
   --me-fill:#3560BC;
   --kin-fill:var(--kin);
   --late-fill:var(--late);
-  --gloss:linear-gradient(115deg,rgba(255,255,255,0) 35%,rgba(255,255,255,.16) 48%,rgba(255,255,255,0) 62%);
+  --gloss:none; /* v4.6: 斜めの光の帯は使わない(ユーザー指示)。丸いグラデーション --light だけ */
   --light:radial-gradient(130% 120% at 0% 0%,rgba(255,255,255,.15),rgba(255,255,255,0) 55%);
   --hl-fill:inset 0 1px 0 rgba(255,255,255,.35);
   --plan-ln:color-mix(in srgb,var(--plan) 45%,transparent);

@@ -4,16 +4,11 @@
    .en-* / .obj-e / .objs.en-tree だけを書き換える。色は tokens.css の変数だけを使う。
    ===================================================================== */
 
-/* ---------- 縁の輪郭: プロジェクト = 旗(ポールと切り込みのある布)。
-   他の輪郭(人=円、場所=ピン、会社=建物、物=六角、書類=紙)と形で区別する。
-   形は mask で作る(clip-path だと旗のポールが切れるため)。色は縁の色(--kin 系) ---------- */
-.kn.proj{--kc:var(--th-proj);--ks:var(--th-proj-s);border-radius:0;
-  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 2h2v20H3zM5.2 3H21l-4.2 9 4.2 9H5.2z'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat;
-  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 2h2v20H3zM5.2 3H21l-4.2 9 4.2 9H5.2z'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat}
-/* 文字は布の中央(切り込みの手前)に寄せる */
-.kn.proj>b{transform:translateX(-.2em)}
-
 /* ---------- 一覧 /entities ---------- */
+/* 行: ドット+名前+種類(1行目と種類の行)。左右は20px(--gutter)。ドットの中心は名前の1行目の中心に合わせる(名前の行の高さ20px、ドット10px → 上から5px) */
+.objs>.en-row{align-items:flex-start;padding:14px var(--gutter)}
+.en-row .t{font:500 15px/20px var(--font)}
+.en-row>.kn-dot{margin-top:5px}
 .en-search{margin:0 var(--gutter) 12px;position:relative}
 .en-search svg.i{position:absolute;left:12px;top:14px;color:var(--tx-3)}
 .en-search input{padding-left:40px}
@@ -40,16 +35,12 @@
 .obj-e .tab a{position:relative;color:var(--on-kin)}
 .obj-e .tab a::before{content:"";position:absolute;inset:-16px -6px}   /* 当たり判定 44px */
 .obj-e .tab .sep{margin:0 6px;color:var(--on-kin);opacity:.7}
-/* 本体: 左上の光(--light)+斜めの光の帯+色を帯びた柔らかい影。内側の余白 18px */
+/* 本体: 左上の光(--light)+色を帯びた柔らかい影。内側の余白 18px。中は名前と種類の値札だけ(印のドットは置かない) */
 .obj-e .hero{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:18px;border-radius:0 18px 18px 18px;color:var(--on-kin);
   background:var(--light),linear-gradient(135deg,var(--fill-hi) 0%,var(--fill) 100%);
   box-shadow:var(--hl-fill),0 14px 30px -14px color-mix(in srgb,var(--fill) 55%,transparent)}
-.obj-e .hero::before{content:"";position:absolute;inset:-40% -10% auto auto;width:80%;height:180%;pointer-events:none;
-  background:linear-gradient(115deg,transparent 35%,color-mix(in srgb,var(--on-kin) 16%,transparent) 48%,transparent 62%)}
 .obj-e .hero>*{position:relative;z-index:1}
-/* 大きな輪郭: 白の面に縁の色の文字(塗りの上に白い輪郭) */
-.obj-e .hero .kn{--kc:var(--kin);background:var(--surface);color:var(--kin);box-shadow:var(--e1)}
-.obj-e h1{font:700 22px/1.3 var(--font);color:var(--on-kin);overflow-wrap:anywhere}
+.obj-e h1{font:700 24px/1.3 var(--font);color:var(--on-kin);overflow-wrap:anywhere}
 /* 種類の値札: 塗りの上用の半透明の白+白文字。＋種類は破線の札(当たり判定 44px) */
 .obj-e .kinds{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .obj-e .vtag{background:var(--fill);color:var(--on-kin);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--on-kin) 22%,transparent)}

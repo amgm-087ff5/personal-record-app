@@ -224,28 +224,8 @@ button.row{width:100%;text-align:left}
    時間と縁 — 固有の部品
    ===================================================================== */
 
-/* ---------- 縁の輪郭(knot): 種類の根で形が決まる ---------- */
-.kn{--kc:var(--th-person);--ks:var(--th-person-s);width:36px;height:36px;flex:none;display:grid;place-items:center;
-  background:var(--ks);color:var(--kc);font:600 15px/1 var(--font);position:relative}
-.kn>b{font:inherit}
-.kn.person{border-radius:50%}
-.kn.place{--kc:var(--th-place);--ks:var(--th-place-s);border-radius:50% 50% 50% 3px;transform:rotate(-45deg)}
-.kn.place>b{transform:rotate(45deg)}
-.kn.org{--kc:var(--th-org);--ks:var(--th-org-s);border-radius:5px}
-.kn.org::after{content:"";position:absolute;left:22%;right:22%;bottom:0;height:3px;background:var(--kc);opacity:.35;border-radius:2px 2px 0 0}
-.kn.thing{--kc:var(--th-thing);--ks:var(--th-thing-s);clip-path:polygon(25% 3%,75% 3%,100% 50%,75% 97%,25% 97%,0 50%)}
-.kn.doc{--kc:var(--th-doc);--ks:var(--th-doc-s);border-radius:3px;clip-path:polygon(0 0,70% 0,100% 30%,100% 100%,0 100%)}
-.kn.sm{width:22px;height:22px;font-size:12px}
-.kn.lg{width:72px;height:72px;font-size:30px}
-.kn.me{--kc:var(--tx-2);--ks:var(--sunk)}
-/* 出来事に交わった縁(重ねて並べる) */
-.knots{display:inline-flex;align-items:center;vertical-align:middle}
-.knots .kn{box-shadow:0 0 0 2px var(--bg)}
-.knots .kn+.kn{margin-left:-5px}
-.knots .kn.place+.kn,.knots .kn+.kn.place{margin-left:-2px}
 /* 名前つき参照 */
 .ref{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:2px 12px 2px 3px;border-radius:var(--r-pill);background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);font:500 14px/1.2 var(--font);color:var(--tx);max-width:100%}
-.ref .kn{width:24px;height:24px;font-size:12px}
 .ref.unreg{box-shadow:inset 0 0 0 1.5px var(--line-strong);border:0;background:repeating-linear-gradient(135deg,#0000 0 6px,var(--sunk) 6px 8px);color:var(--tx-2);padding-left:12px}
 a.ref:active{background:var(--sunk)}
 
@@ -340,9 +320,6 @@ a.dh:active .c{background:var(--sunk)}
    改訂(11/01): 塗りとコントラスト / 1つの面=1つのオブジェクト / 詳細の最上部
    ===================================================================== */
 /* 縁の輪郭は塗りつぶし(誰・どこが一目で分かる) */
-.kn{background:var(--kc);color:#fff}
-.kn.me{--kc:var(--tx-2)}
-.ref .kn{box-shadow:none}
 /* 記録の節は塗り。予定は中抜き(まだ起きていない) */
 
 .dh .tick{background:var(--tx)}
@@ -394,11 +371,6 @@ a.dh:active .c{background:var(--sunk)}
 .dh .tick{width:22px;height:4px;border-radius:2px;background:var(--tx);box-shadow:0 0 0 3px var(--bg)}
 .dh .tick.today{background:var(--me)}
 /* 縁の輪郭: 青緑(縁)、自分は青。会社=建物 */
-.kn{background:var(--kin);color:#fff}
-.kn.me{background:var(--me)}
-.kn.org{border-radius:3px 3px 2px 2px;clip-path:polygon(0 22%,45% 22%,45% 0,100% 0,100% 100%,0 100%)}
-.kn.org::after{display:none}
-.kn.unreg{background:transparent;color:var(--kin);box-shadow:inset 0 0 0 2px var(--kin)}
 .ref.unreg{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line-strong);padding-left:3px;color:var(--tx-2)}
 /* カプセル(出来事の詳細) = 出来事の色の塗り */
 
@@ -450,7 +422,6 @@ a.dh:active .c{background:var(--sunk)}
 
 /* ---- ダーク: 塗りの上の文字色をトークンにする ---- */
 
-.kn{color:var(--on-kin)} .kn.me{color:var(--on-me)} .kn.unreg{color:var(--kin)}
 
 .btn{color:var(--on-me)} .btn.tonal,.btn.ghost{color:var(--me)} .btn.danger{color:var(--late)}
 .nav .badge{color:var(--on-late)}
@@ -548,7 +519,6 @@ a.ref:active{background:none;text-decoration:underline}
 
 .btn.tonal,.btn.ghost{background:transparent}.btn.tonal{background:var(--me-soft)}
 .btn.danger{background:var(--late-soft)}
-.kn{background:var(--kin-fill)} .kn.me{background:var(--me-fill)} .kn.unreg{background:transparent}
 .nav .badge{background:var(--late-fill)}
 
 /* ダーク = 夜の空(黒ではなく深い紺)。嗜好「夜景・ライトアップ」 */
@@ -564,7 +534,6 @@ a.ref:active{background:none;text-decoration:underline}
 /* 塗りの光(全ての塗りの面で共通): 左上からの柔らかい光+上端のハイライト+色を帯びた影 */
 
 .btn:not(.tonal):not(.ghost):not(.danger),.fab,.action.primary{background:var(--light),var(--me-fill);box-shadow:0 6px 16px -8px color-mix(in srgb,var(--me-fill) 80%,transparent),var(--hl-fill)}
-.kn:not(.unreg){background:var(--light),var(--kin-fill)} .kn.me{background:var(--light),var(--me-fill)}
 
 /* 形 = 種類。出来事=カプセル(丸み30) / 自分の支出=帯(棒の区間なので角は小さい10) / 縁=輪郭 / 操作=角丸10のボタン・＋は角丸の正方形 */
 
@@ -668,14 +637,11 @@ body{background-color:var(--bg);background-image:var(--bg-grad);background-attac
 .objs>.row{position:relative}
 .objs>.row::before{content:"";display:block;position:absolute;left:0;top:50%;width:4px;height:26px;margin-top:-13px;border-radius:0 4px 4px 0;background:var(--tab)}
 
-.objs>.row:has(.kn)::before{background:var(--kin)}
-.objs>.row:not(:has(.kn))::before{background:var(--tab);opacity:.7}
 .objs>.row.ind::after{display:none}
 .list{background:var(--surface)}
-.objs>.row:not(:has(.kn))::before{display:none}
 
 /* ===== v13.1: v2の「形の言語」に戻す。帯のタブは廃止(線+アイコンの二重表示をやめる)/ 日付カードは固定しない / 節とカードの縦位置を揃える ===== */
-.objs>.row::before,.objs>.row:has(.kn)::before{display:none!important}
+.objs>.row::before{display:none!important}
 
 /* 支払い = カプセル+レシートのギザギザ(下の縁) */
 
@@ -698,3 +664,12 @@ a.row:active,button.row:active,.btn:active,.chip:active,a.ax-row:active,a.dh2:ac
 .check[aria-checked="true"]{background:var(--light),var(--ev);border-color:var(--ev);box-shadow:var(--hl-fill)}
 .check svg.i{width:16px;height:16px}
 .check.lg{width:30px;height:30px;border-radius:9px}
+
+/* ---------- v4.6: エンティティの印 = 緑のドット(種類ごとの輪郭・頭文字はやめた) ---------- */
+.kn-dot{display:inline-block;flex:none;width:10px;height:10px;border-radius:50%;background:var(--kin);vertical-align:middle}
+.kn-dot.sm{width:8px;height:8px}
+.kn-dot.lg{width:14px;height:14px}
+.knots{display:inline-flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
+.kn-name{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.ref .kn-dot{margin-left:8px}
+.kn-dot.unreg{background:none;box-shadow:inset 0 0 0 1.5px var(--kin)} /* 未登録=中抜きのドット */

@@ -81,8 +81,8 @@ function ldRows(tot,fixed,nonDaily){
 function ldTicket(k,x){
   const p=A[x.pay],d=xDate(x),rest=p.amt-x.amt,owed=p.adv&&p.adv[2]==='未精算',sp=xSp(x);
   const pbar=rest>0?`<span class="ld-pbar" aria-hidden="true"><i class="me" style="flex:${x.amt}"></i><i class="${owed?'owed':'rest'}" style="flex:${rest}"></i></span>`:'';
-  return ticket({href:`#/x/${k}`,cls:spCls(sp),stub:spStub(sp),t:esc(p.title),
-    s:`${fmtMDW(d)} · ${esc(shopOf(x))} ${catTag(x.cat)}${pbar?' '+pbar:''}`,
+  return ticket({href:`#/x/${k}`,cls:spCls(sp),stub:spStub(sp),t:esc(xTitle(x)),
+    s:`${fmtMDW(d)}${xTitle(x)!==shopOf(x)?` · ${esc(shopOf(x))}`:''} ${catTag(x.cat)}${pbar?' '+pbar:''}`, /* 題名=支払先の時は支払先を2回出さない */
     amt:`${yen(x.amt)}${x.amt!==p.amt?`<small>支払い ${yen(p.amt)}</small>`:''}`});
 }
 
@@ -99,7 +99,7 @@ route('ledger',()=>{
 
   const bar=`<div class="ld-bar" role="img" aria-label="大分類の割合">${ranked.map(r=>`<i style="flex:${cur[r]} 1 0;background:${catColor(r)}"></i>`).join('')}</div>`;
   const figBtn=(l,ax,k,v,cls='')=>`<button type="button" class="${ldFilter&&ldFilter.ax===ax&&ldFilter.k===k?'on':''}" onclick="ldPick('${ax}','${k}',1)"><span class="k ${cls}">${l}</span><span class="v num">${yen(v)}</span></button>`;
-  const figs=isNow?`<div class="ld-fig">${figBtn('固定費','fx','固定',fixed)}${figBtn('変動費','fx','変動',varia)}${tot-fixed-varia>0?figBtn('固定・変動 未指定','fx','未指定',tot-fixed-varia):''}${figBtn('✦ 非日常','sp','非日常',nonDaily,'strong')}</div>`:'';
+  const figs=isNow?`<div class="ld-fig">${figBtn('固定費','fx','固定',fixed)}${figBtn('変動費','fx','変動',varia)}${tot-fixed-varia>0?figBtn('固定・変動 未指定','fx','未指定',tot-fixed-varia):''}${figBtn(`<span class="sp-i">${IC.sparkle}</span>非日常`,'sp','非日常',nonDaily,'strong')}</div>`:'';
   const summary=list([`<div class="ld-sum"><div class="ld-lbl">自分の支出</div><div class="ld-r"><span class="ld-big num">${yen(tot)}</span>${diff!=null?tag(`前月比 ${diff>0?'+':''}${diff}%`):''}</div>${bar}</div>${figs}${isNow?`<div class="sc-foot">${sumActs([{text:'レシートで支払い',icon:'camera',primary:true,onclick:'openReceipt()'},{text:'金額だけ',icon:'plus',onclick:'openQuickExpense()'}])}</div>`:''}`]);
 
   const chart=list([`<div class="ld-chart">${ldChart(months)}</div>`]);
@@ -148,7 +148,7 @@ route('x',id=>{
   const p=A[x.pay],date=xDate(x),pct=Math.round(x.amt/p.amt*100);
   const owed=p.adv&&p.adv[2]==='未精算';
   /* 最上部: 親の支払いへの参照(1行)+ 自分の分の半券チケット(主役・塗り) */
-  const parent=`<a class="ld-parent" href="#/a/${x.pay}">${ico('pay','var(--tx-2)')}<span class="grow">${esc(p.title)}、${esc(shopOf(x))}</span><span class="v num">${yen(p.amt)}</span>${IC.chev}</a>`;
+  const parent=`<a class="ld-parent" href="#/a/${x.pay}">${ico('pay','var(--tx-2)')}<span class="grow">${esc(payLabel(p))}</span><span class="v num">${yen(p.amt)}</span>${IC.chev}</a>`;
   const top=`<div class="ld-top">${parent}${ticket({cls:'lg fill',label:`自分の支出 ${yen(x.amt)}`,stub:spStub(xSp(x)),
     t:yen(x.amt),s:`${fmtMDW(date)} · 支払い ${yen(p.amt)} の ${pct}%${owed?' '+tag('未精算',{cls:'warn'}):''}`})}</div>`;
   const over=tag('この支出だけ',{cls:'brand'});

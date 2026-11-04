@@ -359,7 +359,7 @@ function recordEvent(id){
   if(e.pay){
     const xid=uid('x');
     const roles=[['支払先',placeId,placeName||e.t],['支払者','me'],...(e.who||[]).map(w=>['同席',w])];
-    A[aid]={type:'支払い',parent:day,time:e.s||'09:00',title:e.t,pay:'カード ••1234',amt:e.pay.amt,roles,
+    A[aid]={type:'支払い',parent:day,time:e.s||'09:00',title:'支払い',pay:'カード ••1234',amt:e.pay.amt,roles,
       items:[{n:e.t,price:e.pay.amt,b:'自分',tax:10}],x:xid};
     X[xid]={pay:aid,amt:e.pay.amt,cat:e.pay.cat,memo:'',items:[{n:e.t,price:e.pay.amt,b:'全額'}]};
   }else{

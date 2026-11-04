@@ -26,7 +26,6 @@
 
 /* 縁の参照(小さい輪郭+名前)。文字の列の中に置く。押し面は ::before で44px近くまで広げる */
 .memo .ref{position:relative;display:inline-flex;align-items:center;gap:6px;min-height:28px;max-width:100%;padding:0;border:0;border-radius:0;background:none;box-shadow:none;font:var(--t-label);color:var(--tx-2)}
-.memo .ref .kn{box-shadow:none}
 .memo .ref svg.i{width:14px;height:14px}
 /* app.css の .ref::before(top:50%・高さ44・margin-top:-22)を打ち消し、縁の参照の上下に8pxずつ広げるだけにする */
 .memo a.ref::before{content:"";position:absolute;top:-8px;bottom:-8px;left:-6px;right:-6px;height:auto;margin:0}

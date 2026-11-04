@@ -81,7 +81,7 @@ route('e',id=>{
   const note=NOTES[id];
   return appbar('',{actions:[{icon:'more',label:'その他の操作',onclick:"toast('編集はモックでは未対応です')"}]})
     +`<section class="obj-e"><div class="tab">${enTabPath(id)}</div>`
-    +`<div class="hero">${knot(id,'lg')}<div class="grow" style="min-width:0"><h1>${esc(e.n)}</h1>`
+    +`<div class="hero"><div class="grow" style="min-width:0"><h1>${esc(e.n)}</h1>`
     +`<div class="kinds">${e.t.map(t=>vtag(TYPES[t].n)).join('')}<button class="vtag add" type="button" onclick="toast('種類の追加はモックでは未対応です')">＋種類</button></div></div></div></section>`
     +`<div class="stats"><div><b>${agoLabel(lastMet(id))}</b><span>最後に交わった</span></div><div><b>${yearN}回</b><span>今年</span></div>${money?`<div><b>${yen(money)}</b><span>${rootOf(id)==='person'?'一緒の時の自分の支出':'ここでの自分の支出'}</span></div>`:''}${owed?`<div><b style="color:var(--owe-text)">${yen(owed)}</b><span>立替・未精算</span></div>`:''}</div>`
     +(dl?`<dl class="facts">${dl}</dl>`:'')
@@ -135,8 +135,7 @@ function enTreeRows(){
     const kids=Object.keys(TYPES).filter(c=>TYPES[c].p===k);
     const open=(d<2)!==enFlipped.has(k);
     const props=propsOf(k).map(p=>p[0]).join('・')||'なし';
-    const root=typeAnc(k)[0];
-    const lead=`${kids.length?`<span class="en-tg" role="button" aria-label="${open?'閉じる':'開く'}" onclick="event.stopPropagation();enToggle('${k}')">${open?IC.down:IC.chev}</span>`:'<span class="en-tg"></span>'}${d===0?`<span class="kn sm ${ROOT_SHAPE[root]||'thing'}"><b>${esc(TYPES[k].n[0])}</b></span>`:''}`;
+    const lead=`${kids.length?`<span class="en-tg" role="button" aria-label="${open?'閉じる':'開く'}" onclick="event.stopPropagation();enToggle('${k}')">${open?IC.down:IC.chev}</span>`:'<span class="en-tg"></span>'}${d===0?'<span class="kn-dot sm" aria-hidden="true"></span>':''}`;
     out.push(`<button type="button" class="row ${d?'ind':''}" style="--d:${d}" onclick="enEditType('${k}')">${lead}<span class="grow"><div class="t ell">${vtag(TYPES[k].n)}</div><div class="s ell">項目 ${esc(props)}</div></span><span class="v faint">${enCount(k)}</span></button>`);
     if(open)kids.forEach(c=>walk(c,d+1));
   };

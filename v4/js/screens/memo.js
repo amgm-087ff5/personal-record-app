@@ -25,7 +25,7 @@ const memoRef=(k,link=true)=>!E[k]?'':link
   :`<span class="ref">${knot(k,'sm')}${esc(E[k].n)}</span>`;
 
 /** 結び付いた記録の参照(aref と同じ形。押すと記録。カードを開く操作には伝えない) */
-const memoRecRef=id=>`<a class="ref" href="#/a/${id}" onclick="event.stopPropagation()">${IC[ACT_IC[A[id].type]]||IC.activity}${esc(A[id].title||fmtMD(A[id].date))}</a>`;
+const memoRecRef=id=>`<a class="ref" href="#/a/${id}" onclick="event.stopPropagation()">${IC[ACT_IC[A[id].type]]||IC.activity}${esc(A[id].type==='支払い'?payLabel(A[id]):(A[id].title||fmtMD(A[id].date)))}</a>`;
 
 /** 1件のメモ = 角を折った紙1枚。押すと編集のシート。o.withDate: ピン留めの群のように日付をまたぐ時は日付も出す */
 function memoCard(id,o={}){
