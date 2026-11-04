@@ -35,10 +35,10 @@ function ldAxisSet(a){ldAxis=a;ldFilter=null;rerender()}
 function ldClear(){ldFilter=null;rerender()}
 function ldStep(d){ldM=Math.min(ldMonths().length-1,Math.max(0,ldM+d));ldFilter=null;rerender()}
 
-/** 推移: 月ごとの「自分の支出の棒」を縦に並べる(区間=カテゴリ)。上=新しい月 */
+/** 推移: 月ごとの「自分の支出の棒」を縦に並べる(区間=カテゴリ)。上=古い月・下=新しい月(上から下へ時間が進む) */
 function ldChart(months){
   const roots=ROOTS(),tots=months.map(m=>ldTotal(m[2])),max=Math.max(...tots),past=tots.slice(0,-1),avg=Math.round(past.reduce((x,y)=>x+y,0)/past.length);
-  return months.map((m,i)=>[m,i]).reverse().map(([m,i])=>{
+  return months.map((m,i)=>[m,i]).map(([m,i])=>{
     const cur=i===months.length-1;
     const segs=roots.filter(r=>m[2][r]>0).sort((a,b)=>m[2][b]-m[2][a]);
     return `<div class="ld-tr ${cur?'on':''}"><span class="mo">${m[1]}</span><span class="tb"><i class="ld-avg" style="left:${(avg/max*100).toFixed(1)}%"></i><span class="ld-bar" style="width:${(tots[i]/max*100).toFixed(1)}%">${segs.map(r=>`<i style="flex:${m[2][r]} 1 0;background:${catColor(r)}"></i>`).join('')}</span></span><span class="v num">${yen(tots[i])}</span></div>`;

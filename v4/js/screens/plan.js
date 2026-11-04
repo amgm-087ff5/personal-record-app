@@ -109,7 +109,7 @@ function plMove(n){
   rerender();
 }
 
-/** 1日の面: 日の札+その日の記録と予定の行(時間の新しい順 = 上が未来)。今日は「いま」の線で未来と過去を分ける。月の下と日表示で同じ */
+/** 1日の面: 日の札+その日の記録と予定の行(時間の古い順 = 上が過去・下が未来)。今日は「いま」の線で過去と未来を分ける。月の下と日表示で同じ */
 function plDayAx(d){
   const future=d>TODAY;
   const hol=evOn(d).find(([k,e])=>e.hol);
@@ -121,9 +121,9 @@ function plDayAx(d){
     const late=!fut&&!(d===TODAY&&e.all);
     return {time:e.all?'00:00':e.s,fut,html:planRowAx(k,{future:fut,late})};
   });
-  const items=[...recs,...plans].sort((a,b)=>b.time.localeCompare(a.time));
+  const items=[...recs,...plans].sort((a,b)=>a.time.localeCompare(b.time));
   const body=d===TODAY
-    ?items.filter(x=>x.fut).map(x=>x.html).join('')+nowLine()+items.filter(x=>!x.fut).map(x=>x.html).join('')
+    ?items.filter(x=>!x.fut).map(x=>x.html).join('')+nowLine()+items.filter(x=>x.fut).map(x=>x.html).join('')
     :items.map(x=>x.html).join('');
   return `<div class="ax">${axGroup(head,body||`<div class="pl-none">予定・記録 なし</div>`,{future,cls:d===TODAY?'today':''})}</div>`;
 }
@@ -172,26 +172,24 @@ function plDayPane(){
 
 /* ---------- 3週間(今日から21日の時間軸) ---------- */
 function plListAx(){
-  /* タイムラインの未来側と同じ向き: 上=遠い未来、下=いま(DESIGN.md §4)。日ごとに1枚の面 */
+  /* 今日から21日を上から下へ(上=過去・下=未来)。今日の面は 過ぎた項目 → いまの線 → これからの項目。日ごとに1枚の面 */
   let html='', n=0;
-  for(let i=20;i>=0;i--){
+  for(let i=0;i<=20;i++){
     const d=addDays(TODAY,i);
-    const its=plItemsOn(d).slice().sort((a,b)=>b.time.localeCompare(a.time));
+    const its=plItemsOn(d);
     if(!its.length&&d!==TODAY)continue;
     n+=its.length;
     const hol=evOn(d).find(([k,e])=>e.hol);
-    let body='',nowDone=d!==TODAY;
-    for(const x of its){
-      if(!nowDone&&(x.all||x.time<=NOW)){body+=nowLine();nowDone=true}
-      if(x.kind==='rec'){body+=momentRow(x.k);continue}
-      const e=EV[x.k];const fut=d>TODAY||(!e.all&&e.s>NOW);
-      body+=planRowAx(x.k,{future:fut,late:!fut});
-    }
-    if(!nowDone)body+=nowLine();
+    const rows=its.map(x=>{
+      if(x.kind==='rec')return {fut:false,html:momentRow(x.k)};
+      const e=EV[x.k],fut=d>TODAY||(!e.all&&e.s>NOW);
+      return {fut,html:planRowAx(x.k,{future:fut,late:!fut&&!(d===TODAY&&e.all)})};
+    });
+    const body=rows.filter(r=>!r.fut).map(r=>r.html).join('')+(d===TODAY?nowLine():'')+rows.filter(r=>r.fut).map(r=>r.html).join('');
     html+=axGroup(dayHead(d,{href:'#/day/'+d,future:d>TODAY,empty:hol?hol[1].t:''}),body,{future:d>TODAY,cls:d===TODAY?'today':''});
   }
   return n
-    ?sh('いまから3週間',n)+`<div class="ax">${axEdge('3週間より先 › 月')}${html}</div>`
+    ?sh('いまから3週間',n)+`<div class="ax">${html}${axEdge('3週間より先 › 月')}</div>`
     :sh('いまから3週間')+empty('schedule','予定 なし');
 }
 

@@ -1,0 +1,60 @@
+/* =====================================================================
+   予定の点線(UI v4 · 第6回「予定の点線はもっとスタイリッシュなデザインで」)
+   旧: outline 2px dashed。角で破線が潰れ、太く、角丸と合わなかった。
+   新: 角丸に沿う、丸い端の短い破線。形は SVG の rect の破線をマスクにして作る。
+       線は stroke-width 2.5 のうち内側の半分(約1.25px)だけ要素の中に見える。短い破線(3 6)+丸い端の細いステッチ(v4.7 本体調整)。
+       色は background(予定 --plan / 遅れ --late)。色の値は tokens.css の1か所だけ。
+   未来側の軸の線: 丸い点(直径2px・間隔7px。軸の線の幅 2px に合わせた)。
+   このファイルは最後に読み込む。axis.css・s-plan.css・s-detail.css・s-home.css の点線
+   (outline と繰り返しの線)は、その担当の作業中のため消さず、ここで上書きする。
+   ===================================================================== */
+
+:root{
+  /* 形(マスク): rx = 要素の角丸、dash = 破線の「長さ 間隔」。ライトもダークも同じ形 */
+  --pd-m-cap: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3Crect%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%20rx%3D%2730%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%272.5%27%20stroke-dasharray%3D%273%206%27%20stroke-linecap%3D%27round%27/%3E%3C/svg%3E");
+  --pd-m-mo: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3Crect%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%20rx%3D%2720%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%272.5%27%20stroke-dasharray%3D%273%206%27%20stroke-linecap%3D%27round%27/%3E%3C/svg%3E");
+  --pd-m-card: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3Crect%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%20rx%3D%2716%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%272.5%27%20stroke-dasharray%3D%273%206%27%20stroke-linecap%3D%27round%27/%3E%3C/svg%3E");
+  --pd-m-blk: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3Crect%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%20rx%3D%2712%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%272.5%27%20stroke-dasharray%3D%273%206%27%20stroke-linecap%3D%27round%27/%3E%3C/svg%3E");
+  --pd-m-bar: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3Crect%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%20rx%3D%2722%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%272.5%27%20stroke-dasharray%3D%273%206%27%20stroke-linecap%3D%27round%27/%3E%3C/svg%3E");
+  --pd-m-node: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3Crect%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%20rx%3D%2710%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%272.5%27%20stroke-dasharray%3D%272%204%27%20stroke-linecap%3D%27round%27/%3E%3C/svg%3E");
+  --pd-m-pin: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3Crect%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%20rx%3D%279%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%272.5%27%20stroke-dasharray%3D%272%204%27%20stroke-linecap%3D%27round%27/%3E%3C/svg%3E");
+  --pd-m-ev: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3Crect%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%20rx%3D%276%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%272.5%27%20stroke-dasharray%3D%272%204%27%20stroke-linecap%3D%27round%27/%3E%3C/svg%3E");
+  --pd-m-dot: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%27100%25%27%20height%3D%27100%25%27%3E%3Crect%20x%3D%270%27%20y%3D%270%27%20width%3D%27100%25%27%20height%3D%27100%25%27%20rx%3D%273%27%20fill%3D%27none%27%20stroke%3D%27black%27%20stroke-width%3D%272.5%27%20stroke-dasharray%3D%271.5%203%27%20stroke-linecap%3D%27round%27/%3E%3C/svg%3E");
+  /* 未来側の軸の線: 丸い点の連なり(タイル 2px x 7px、点は中心・半径1px) */
+  --pd-dots:radial-gradient(circle at 50% 50%,var(--plan) 1px,#0000 1.3px) 0 0/2px 7px repeat-y;
+}
+
+/* ---- 1. 点線の面: 色 = background、形 = マスク(::after / ::before の空いた所だけ) ---- */
+.ax-node.plan::after,.ax-row.plan .ax-c::after,.ax-row.plan .mo-card::after,.cap.plan::after,
+.pl-blk.plan::after,.pl-bar.plan::after,.pl-dot.plan::after,.pl-ev-node::after,
+.pl-root .pin-cur.plan>.node::before{
+  content:"";position:absolute;inset:0;pointer-events:none;background:var(--plan);
+  -webkit-mask:var(--pd-m) 0 0/100% 100% no-repeat;mask:var(--pd-m) 0 0/100% 100% no-repeat}
+.ax-node.plan::after{--pd-m:var(--pd-m-node)}
+.ax-row.plan .ax-c::after{--pd-m:var(--pd-m-card)}
+.ax-row.plan .mo-card::after{--pd-m:var(--pd-m-mo)}
+.cap.plan::after{--pd-m:var(--pd-m-cap)}
+.pl-blk.plan::after{--pd-m:var(--pd-m-blk)}
+.pl-bar.plan::after{--pd-m:var(--pd-m-bar)}
+.pl-dot.plan::after{--pd-m:var(--pd-m-dot)}
+.pl-ev-node::after{--pd-m:var(--pd-m-ev)}
+.pl-root .pin-cur.plan>.node::before{--pd-m:var(--pd-m-pin)}
+/* 遅れ(.late)は同じ形の赤。遅れの行は、節が late の行のカードも赤 */
+.ax-node.plan.late::after,.ax-row.plan:has(.ax-node.late) .ax-c::after,.cap.plan.late::after,
+.pl-root .pin-cur.plan.late>.node::before{background:var(--late)}
+/* 点線の枠の余り(旧 outline / 旧 border)は消す */
+.ax-node.plan{outline:0}
+.ax-row.plan .ax-c{border:0}
+.ax-row.plan .mo-card{outline:0}
+.pl-root .cap.plan{outline:0}
+.hm-root .hm-next{outline:0}
+.pl-dot.plan,.pl-blk.plan,.pl-bar.plan,.pl-ev-node{outline:0}
+.pl-root .pin-cur.plan>.node{outline:0}
+/* 点線の面を置くための基準位置(絶対配置の子の基準) */
+.ax-row.plan .ax-c,.pl-dot,.pl-bar,.pl-ev-node{position:relative}
+/* 予定の面の中の淡い色(4〜6%): 面は白のまま、ごく薄く予定の色を足す */
+.pl-root .cap.plan,.hm-root .hm-next,.pl-blk.plan,.pl-bar.plan{background:color-mix(in srgb,var(--plan) 5%,var(--surface))}
+
+/* ---- 2. 未来側の軸の線: 旧 repeating-linear-gradient の破線 → 丸い点 ---- */
+.ax .future,.ax-row.future::before{--rail-c:var(--pd-dots)}
+.now::before,.ax-edge::before,.dh2.future::before,.pin:has(>.pin-cur.fut)::before{background:var(--pd-dots)}

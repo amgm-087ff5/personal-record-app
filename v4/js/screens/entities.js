@@ -16,6 +16,13 @@ const vtag=label=>`<span class="vtag">${esc(label)}</span>`;
 const enTabPath=id=>typeAnc(E[id].t[0]).map(a=>`<a href="#/types">${esc(TYPES[a].n)}</a>`).join('<span class="sep">›</span>');
 /** 同じ月の項目を1つの面にまとめる(入力は時間順) */
 const enByMonth=items=>items.reduce((out,x)=>{const g=out[out.length-1];if(g&&g.ym===x.ym)g.rows.push(x.html);else out.push({ym:x.ym,rows:[x.html]});return out},[]);
+/** 予定の並びの鍵(繰り返しは次の日付)。上=過去・下=未来の昇順に使う */
+const evKey=ev=>(ev.rep?nextOn(ev):ev.d)+' '+(ev.all?'00:00':(ev.s||''));
+/** 前の月(YYYY-MM) */
+const ymPrev=ym=>{const [y,m]=ym.split('-').map(Number);const d=new Date(y,m-2,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
+/** 「これより前を見る」を押した縁(その縁の過去を全部出す) */
+const enPastAll=new Set();
+function enPastAllOn(id){enPastAll.add(id);rerender()}
 
 /* ---------- 一覧: 種類ごと・最後に交わった順 ---------- */
 route('entities',()=>{
@@ -61,8 +68,8 @@ function factEvents(id){
 route('e',id=>{
   const e=E[id];if(!e)return appbar('')+empty('people','エンティティ なし');
   const tc=threadColor(id);
-  const acts=actsOf(id).map(([k,a,role])=>({k,a,role,d:dateOf(a)||null})).filter(x=>x.d).sort((x,y)=>(y.d+y.a.time).localeCompare(x.d+x.a.time));
-  const plans=Object.entries(EV).filter(([k,ev])=>!ev.rec&&!ev.hol&&ev.d>=TODAY&&((ev.who||[]).includes(id)||(ev.place&&ev.place[0]===id)||(ev.ent||[]).includes(id))).sort((a,b)=>b[1].d.localeCompare(a[1].d));
+  const acts=actsOf(id).map(([k,a,role])=>({k,a,role,d:dateOf(a)||null})).filter(x=>x.d).sort((x,y)=>(x.d+x.a.time).localeCompare(y.d+y.a.time));
+  const plans=Object.entries(EV).filter(([k,ev])=>!ev.rec&&!ev.hol&&ev.d>=TODAY&&((ev.who||[]).includes(id)||(ev.place&&ev.place[0]===id)||(ev.ent||[]).includes(id))).sort((a,b)=>evKey(a[1]).localeCompare(evKey(b[1])));
   /* ToDo: このエンティティに結び付いた未完了のもの(期限の近い順)。人・場所にも同じ節が出る */
   const todos=Object.keys(TD).filter(k=>tdOpen(k)&&(TD[k].ent||[]).includes(id)).sort((a,b)=>(TD[a].due||'9999').localeCompare(TD[b].due||'9999'));
   const yearN=acts.filter(x=>x.d.startsWith(TODAY.slice(0,4))).length;
@@ -72,12 +79,22 @@ route('e',id=>{
   const since=f=>{const m=(f.ver||'').match(/(\d{4})-(\d{2})〜/);return m?`${m[1]}年${+m[2]}月から`:''};
   const dl=facts.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}${since(f)?`<span class="since">${since(f)}</span>`:''}</dd>`).join('')
     +relsOf(id).map(([rel,other,period,sym])=>`<dt>${esc(rel)}</dt><dd><span class="rel-dir" title="${sym?'お互い':'一方向'}">${sym?'⟷':'→'}</span>${eref(other)}${period?`<span class="since">${esc(period.replace(/(\d{4})-(\d{2})〜/,(m,y,mo)=>`${y}年${+mo}月から`))}</span>`:''}</dd>`).join('');
-  /* 糸の時間軸: 予定(点線) → いま → 出会い・事実の変化を新しい順に。月ごとの面にまとめる */
-  const past=[...acts.map(x=>({key:x.d+' '+(x.a.time||''),ym:x.d.slice(0,7),html:momentRow(x.k,{exclude:id,showDate:true,role:x.role})})),
-    ...factEvents(id).map(f=>({key:f.ym+'-00',ym:f.ym,html:axRow({time:'',node:{cls:'fact'},t:f.t,m:f.m})}))].sort((a,b)=>b.key.localeCompare(a.key));
-  const fut=enByMonth(plans.map(([k,ev])=>({ym:(ev.rep?nextOn(ev):ev.d).slice(0,7),html:planRowAx(k,{future:true,showDate:true,exclude:id})})));
-  if(fut.length)fut[fut.length-1].rows.push(nowLine());
-  const pastGroups=enByMonth(past);
+  /* 糸の時間軸(v4.7 上=過去・下=未来。いまの線で過去と未来が分かれる): 最近の2か月(前の月と今月)の記録と事実の変化 → いまの線 → これからの予定。
+     これより前は一番上の「これより前を見る」で全部。月ごとの面にまとめ、今月の面にいまの線 */
+  const pastAll=[...acts.map(x=>({key:x.d+' '+(x.a.time||''),ym:x.d.slice(0,7),html:momentRow(x.k,{exclude:id,showDate:true,role:x.role})})),
+    ...factEvents(id).map(f=>({key:f.ym+'-00',ym:f.ym,html:axRow({time:'',node:{cls:'fact'},t:f.t,m:f.m})}))].sort((a,b)=>a.key.localeCompare(b.key));
+  const cur=TODAY.slice(0,7),from=ymPrev(cur);
+  const past=enPastAll.has(id)?pastAll:pastAll.filter(x=>x.ym>=from);
+  const futAll=plans.map(([k,ev])=>({ym:evKey(ev).slice(0,7),html:planRowAx(k,{future:true,showDate:true,exclude:id})}));
+  const pastG=enByMonth(past),futG=enByMonth(futAll);
+  const rowsOf=(gs,ym)=>{const g=gs.find(x=>x.ym===ym);return g?g.rows.join(''):''};
+  const yms=[...new Set([...pastG.map(g=>g.ym),...futG.map(g=>g.ym),...(past.length||futAll.length?[cur]:[])])].sort();
+  const faces=yms.map(ym=>{const p=rowsOf(pastG,ym),f=rowsOf(futG,ym);
+    return ym>cur?axGroup(monthHeadAx(ym,true),p+f,{future:true}):axGroup(monthHeadAx(ym),ym===cur?p+nowLine()+f:p)}).join('');
+  const older=pastAll.length-past.length;
+  const top=!pastAll.length?axEdge('記録 なし',true)
+    :older?axEdge(`<button type="button" class="ax-more" onclick="enPastAllOn('${id}')">これより前を見る${IC.chev}</button>`,true)
+    :axEdge('これより前の記録 なし',true);
   const note=NOTES[id];
   return appbar('',{actions:[{icon:'more',label:'その他の操作',onclick:"toast('編集はモックでは未対応です')"}]})
     +`<section class="obj-e"><div class="tab">${enTabPath(id)}</div>`
@@ -90,12 +107,7 @@ route('e',id=>{
       :`<button class="en-paper en-memo en-empty" type="button" onclick="enNewNote('${id}')"><span class="h">${IC.lines}エンティティのメモを書く</span></button>`)
     +(todos.length?sh('ToDo',todos.length)+objs(todos.map(enTaskRow)):'')
     +sh('このエンティティの時間軸')
-    +`<div class="ax thread" style="--tc:${tc}">`
-    +(()=>{/* いまの月は1枚の面: 予定(点線) → いまの線 → 済んだ記録。同じ月を2枚に分けない */
-      const lf=fut[fut.length-1],fp=pastGroups[0];const join=lf&&fp&&lf.ym===fp.ym;
-      return fut.map((g,i)=>join&&i===fut.length-1?axGroup(monthHeadAx(g.ym,true),g.rows.join('')+fp.rows.join('')):axGroup(monthHeadAx(g.ym,true),g.rows.join(''),{future:true})).join('')
-        +(pastGroups.length?pastGroups.slice(join?1:0).map(g=>axGroup(monthHeadAx(g.ym),g.rows.join(''))).join(''):axEdge('記録 なし',true))})()
-    +(pastGroups.length?axEdge('これより前の記録 なし',true):'')
+    +`<div class="ax thread" style="--tc:${tc}">`+top+faces
     +`</div>`;
 },{tab:'entities'});
 
