@@ -63,16 +63,16 @@ const X={
 const DAYS=['d1030','d1029','d1028','d1027'];
 /* カテゴリ: 階層 = 種類の軸。sp = 特別感の既定(子は親から継承、支出ごとに上書き可) */
 const CATS={
-  house:{n:'住居',c:'#5E6E91',fx:'固定',sp:'日常'}, rent:{n:'家賃',p:'house'},
-  comm:{n:'通信',c:'#3E9AA0',fx:'固定',sp:'日常'}, phone:{n:'スマホ',p:'comm'}, sub:{n:'サブスク',p:'comm'},
-  food:{n:'食費',c:'#D0607F',fx:'変動',sp:'日常'}, cook:{n:'自炊',p:'food'}, eatout:{n:'外食',p:'food'}, cafe:{n:'カフェ・軽食',p:'food'},
-  daily:{n:'日用品',c:'#6FB07A',fx:'変動',sp:'日常'},
-  trans:{n:'交通費',c:'#4C8BC9',fx:'変動',sp:'日常'}, train:{n:'電車',p:'trans'}, taxi:{n:'タクシー',p:'trans',sp:'非日常'},
-  fun:{n:'娯楽',c:'#7FC8E8',fx:'変動',sp:'日常'}, hobby:{n:'趣味',p:'fun'}, travel:{n:'旅行',p:'fun',sp:'非日常'},
-  gift:{n:'贈り物',c:'#F2A7C0',fx:'ask',sp:'非日常'},
+  house:{n:'住居',c:'#8796B5',fx:'固定',sp:'日常'}, rent:{n:'家賃',p:'house'},
+  comm:{n:'通信',c:'#7FB5B9',fx:'固定',sp:'日常'}, phone:{n:'スマホ',p:'comm'}, sub:{n:'サブスク',p:'comm'},
+  food:{n:'食費',c:'#DC97AA',fx:'変動',sp:'日常'}, cook:{n:'自炊',p:'food'}, eatout:{n:'外食',p:'food'}, cafe:{n:'カフェ・軽食',p:'food'},
+  daily:{n:'日用品',c:'#9CC7A3',fx:'変動',sp:'日常'},
+  trans:{n:'交通費',c:'#8DB0DD',fx:'変動',sp:'日常'}, train:{n:'電車',p:'trans'}, taxi:{n:'タクシー',p:'trans',sp:'非日常'},
+  fun:{n:'娯楽',c:'#B3D8EA',fx:'変動',sp:'日常'}, hobby:{n:'趣味',p:'fun'}, travel:{n:'旅行',p:'fun',sp:'非日常'},
+  gift:{n:'贈り物',c:'#F2C6D3',fx:'ask',sp:'非日常'},
 };
-const COLORS=['#5E6E91','#3E9AA0','#D0607F','#6FB07A','#4C8BC9','#7FC8E8','#F2A7C0','#8A9BB8'];
-/* 10月のほかの支払い(タイムラインには出さない架空データ) */
+const COLORS=['#8796B5','#7FB5B9','#DC97AA','#9CC7A3','#8DB0DD','#B3D8EA','#F2C6D3','#A9B4C6'];
+/* 10月のほかの支払い(架空データ)。支払いも瞬間のアクティビティなので、日の kids に入れてタイムラインにも出す(家計簿と食い違わない) */
 [['d1025','2026-10-25','日','p5','電車','JR 青葉台駅',null,1280,'x5','train'],
  ['d1022','2026-10-22','木','p6','映画','シネマ青葉',null,2000,'x6','hobby'],
  ['d1015','2026-10-15','木','p7','買い物',null,'super',3120,'x7','cook'],
@@ -84,10 +84,20 @@ const COLORS=['#5E6E91','#3E9AA0','#D0607F','#6FB07A','#4C8BC9','#7FC8E8','#F2A7
  ['d1027','2026-10-27','火','p13','家賃','大家(振込)',null,85000,'x13','rent'],
  ['d1010','2026-10-10','土','p14','スマホ料金','モバイル通信',null,3280,'x14','phone'],
  ['d1015','2026-10-15','木','p15','動画サブスク','動画配信',null,990,'x15','sub'],
-].forEach(([d,date,dw,pid,title,shopName,shopId,amt,xid,cat,sp])=>{
-  if(A[d])A[d].kids.push(pid);else A[d]={type:'日記',date,dd:String(+date.slice(8)),dw,body:'',kids:[pid]};
+ /* 10/17〜10/31 の変動費(家計簿・ホームの支出用。固定費は除く)。12番目の値は時刻 */
+ ['d1017','2026-10-17','土','p17','ランチ','イタリアン 木の実',null,2840,'x17','eatout','日常','12:40'],
+ ['d1019','2026-10-19','月','p18','洗剤・シャンプー',null,'drug',1120,'x18','daily','日常','19:40'],
+ ['d1020','2026-10-20','火','p19','カフェラテ',null,'minato',980,'x19','cafe','日常','15:10'],
+ ['d1022','2026-10-22','木','p20','カフェラテ',null,'minato',540,'x20','cafe','日常','14:10'],
+ ['d1023','2026-10-23','金','p21','夕食の買い物',null,'super',3760,'x21','cook','日常','18:50'],
+ ['d1024','2026-10-24','土','p22','ランチ','そば処 山の手',null,2160,'x22','eatout','日常','12:30'],
+ ['d1028','2026-10-28','水','p23','夕食の買い物',null,'super',980,'x23','cook','日常','18:40'],
+ ['d1031','2026-10-31','土','p24','カフェラテ',null,'minato',480,'x24','cafe','日常','08:40'],
+].forEach(([d,date,dw,pid,title,shopName,shopId,amt,xid,cat,sp,time='19:00'])=>{
+  if(!A[d])A[d]={type:'日記',date,dd:String(+date.slice(8)),dw,body:'',kids:[]};
+  if(!A[d].kids.includes(pid))A[d].kids.push(pid);
   const roles=[['支払先',shopId,shopName],['支払者','me']];if(pid==='p8')roles.push(['同席','hanako']);
-  A[pid]={type:'支払い',parent:d,time:'19:00',title:'支払い',pay:'カード ••1234',amt,roles,items:[{n:title,price:amt,b:'自分',tax:10}],x:xid};
+  A[pid]={type:'支払い',parent:d,time,title:'支払い',pay:'カード ••1234',amt,roles,items:[{n:title,price:amt,b:'自分',tax:10}],x:xid};
   X[xid]={pay:pid,amt,cat,sp,memo:'',items:[{n:title,price:amt,b:'全額'}]};
 });
 /* 過去の月: 大分類ごとの合計 */

@@ -36,7 +36,7 @@
 .pl-cell.sun .pl-dn{font-weight:600}
 .pl-cell.today .pl-dn{color:var(--me);font-weight:700}
 /* 選んだ日 = 数字だけ青の塗り(自分の操作) */
-.pl-cell.sel .pl-dn{background:var(--me);color:var(--on-me)}
+.pl-cell.sel .pl-dn{background:var(--light),var(--me);color:var(--on-me)} /* v4.9: ベタ→グラデ */
 .pl-bars{display:flex;justify-content:center;align-items:center;gap:2px;height:6px}
 /* 件数の印: 記録=塗りのカプセル / 予定=点線のカプセル / 支払い=角を四角く(帯=お金の形) */
 .pl-dot{display:block;flex:none;width:10px;height:6px;border-radius:999px;box-sizing:border-box}
