@@ -9,7 +9,7 @@
   --surface-2:#F4F6FA;
   --sunk:#E5E9F0;
   --line:#E4E8EF;
-  --line-strong:#D0D7E1;
+  --line-strong:#DDE2EA; /* v4.9: 線を細く薄く(ユーザー指示) */
   --tx:#34405A;
   --tx-2:#4F5C74;
   --tx-3:#6A768C;
@@ -45,7 +45,7 @@
   --th-proj:var(--kin);
   --th-proj-s:var(--kin-soft);
   --axis:#D8DEE8;
-  --axis-past:#B9C3D2;
+  --axis-past:#CCD4DF; /* v4.9: 線を薄く */
   --now:var(--late);
   --plan:#7A8496;
   --warn:#C76A12;
@@ -125,7 +125,7 @@
   --surface-2:#1E283B;
   --sunk:#0E1522;
   --line:#28324A;
-  --line-strong:#3A4662;
+  --line-strong:#323C55; /* v4.9: ダークの線も薄く */
   --tx:#E4E9F1;
   --tx-2:#B8C1CF;
   --tx-3:#8E99AB;
@@ -158,7 +158,7 @@
   --th-doc:#A6AEBD;
   --th-doc-s:#242A34;
   --axis:#2E3747;
-  --axis-past:#4A566B;
+  --axis-past:#3D475A; /* v4.9 */
   --now:#FF6B60;
   --plan:#8D97A8;
   --warn:#EFA35A;
@@ -217,7 +217,7 @@
   --surface-2:#1E283B;
   --sunk:#0E1522;
   --line:#28324A;
-  --line-strong:#3A4662;
+  --line-strong:#323C55; /* v4.9 */
   --tx:#E4E9F1;
   --tx-2:#B8C1CF;
   --tx-3:#8E99AB;
@@ -250,7 +250,7 @@
   --th-doc:#A6AEBD;
   --th-doc-s:#242A34;
   --axis:#2E3747;
-  --axis-past:#4A566B;
+  --axis-past:#3D475A; /* v4.9 */
   --now:#FF6B60;
   --plan:#8D97A8;
   --warn:#EFA35A;

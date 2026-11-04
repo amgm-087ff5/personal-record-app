@@ -430,7 +430,7 @@ function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(!s
   if(s.EXTRA&&typeof EXTRA!=='undefined')Object.assign(EXTRA,s.EXTRA);
   Object.values(A).forEach(a=>(a.items||[]).forEach(itemMigrate));
   /* v4.4: 茶色の系統の旧カテゴリ色(テラコッタ・マスタード)と近すぎた色を、保存データでも置き換える */
-  const RECOLOR={'#E07A4F':'#D0607F','#E3B341':'#7FC8E8','#9AB3D6':'#7FC8E8','#D9789B':'#F2A7C0'};
+  const RECOLOR={'#E07A4F':'#DC97AA','#E3B341':'#B3D8EA','#9AB3D6':'#B3D8EA','#D9789B':'#F2C6D3','#5E6E91':'#8796B5','#3E9AA0':'#7FB5B9','#D0607F':'#DC97AA','#6FB07A':'#9CC7A3','#4C8BC9':'#8DB0DD','#7FC8E8':'#B3D8EA','#F2A7C0':'#F2C6D3','#8A9BB8':'#A9B4C6'}; /* v4.9: カテゴリの色を落ち着いた淡い色に(チカチカしない) */
   Object.values(CATS).forEach(c=>{if(c.c&&RECOLOR[c.c.toUpperCase()])c.c=RECOLOR[c.c.toUpperCase()]});
   /* 旧データの移行: 以前は「設定なし」が暗黙に 変動/日常 だった。大分類は明示の値に置き換える(以後 'none' = 設定しない) */
   for(const k of Object.keys(CATS)){const c=CATS[k];if(c.fx==='none')c.fx='ask';if(c.sp==='none')c.sp='ask';if(!c.p){if(c.fx===undefined)c.fx='変動';if(c.sp===undefined)c.sp='日常'}}

@@ -63,15 +63,15 @@ const X={
 const DAYS=['d1030','d1029','d1028','d1027'];
 /* カテゴリ: 階層 = 種類の軸。sp = 特別感の既定(子は親から継承、支出ごとに上書き可) */
 const CATS={
-  house:{n:'住居',c:'#5E6E91',fx:'固定',sp:'日常'}, rent:{n:'家賃',p:'house'},
-  comm:{n:'通信',c:'#3E9AA0',fx:'固定',sp:'日常'}, phone:{n:'スマホ',p:'comm'}, sub:{n:'サブスク',p:'comm'},
-  food:{n:'食費',c:'#D0607F',fx:'変動',sp:'日常'}, cook:{n:'自炊',p:'food'}, eatout:{n:'外食',p:'food'}, cafe:{n:'カフェ・軽食',p:'food'},
-  daily:{n:'日用品',c:'#6FB07A',fx:'変動',sp:'日常'},
-  trans:{n:'交通費',c:'#4C8BC9',fx:'変動',sp:'日常'}, train:{n:'電車',p:'trans'}, taxi:{n:'タクシー',p:'trans',sp:'非日常'},
-  fun:{n:'娯楽',c:'#7FC8E8',fx:'変動',sp:'日常'}, hobby:{n:'趣味',p:'fun'}, travel:{n:'旅行',p:'fun',sp:'非日常'},
-  gift:{n:'贈り物',c:'#F2A7C0',fx:'ask',sp:'非日常'},
+  house:{n:'住居',c:'#8796B5',fx:'固定',sp:'日常'}, rent:{n:'家賃',p:'house'},
+  comm:{n:'通信',c:'#7FB5B9',fx:'固定',sp:'日常'}, phone:{n:'スマホ',p:'comm'}, sub:{n:'サブスク',p:'comm'},
+  food:{n:'食費',c:'#DC97AA',fx:'変動',sp:'日常'}, cook:{n:'自炊',p:'food'}, eatout:{n:'外食',p:'food'}, cafe:{n:'カフェ・軽食',p:'food'},
+  daily:{n:'日用品',c:'#9CC7A3',fx:'変動',sp:'日常'},
+  trans:{n:'交通費',c:'#8DB0DD',fx:'変動',sp:'日常'}, train:{n:'電車',p:'trans'}, taxi:{n:'タクシー',p:'trans',sp:'非日常'},
+  fun:{n:'娯楽',c:'#B3D8EA',fx:'変動',sp:'日常'}, hobby:{n:'趣味',p:'fun'}, travel:{n:'旅行',p:'fun',sp:'非日常'},
+  gift:{n:'贈り物',c:'#F2C6D3',fx:'ask',sp:'非日常'},
 };
-const COLORS=['#5E6E91','#3E9AA0','#D0607F','#6FB07A','#4C8BC9','#7FC8E8','#F2A7C0','#8A9BB8'];
+const COLORS=['#8796B5','#7FB5B9','#DC97AA','#9CC7A3','#8DB0DD','#B3D8EA','#F2C6D3','#A9B4C6'];
 /* 10月のほかの支払い(タイムラインには出さない架空データ) */
 [['d1025','2026-10-25','日','p5','電車','JR 青葉台駅',null,1280,'x5','train'],
  ['d1022','2026-10-22','木','p6','映画','シネマ青葉',null,2000,'x6','hobby'],
