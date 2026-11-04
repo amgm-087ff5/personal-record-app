@@ -37,7 +37,7 @@ route('activities',()=>{
   /* まとめカード(v2のB+v3の見出し): 数字は表示中の月の記録と今日。押せる数字は予定・ToDoへ */
   const monthRec=Object.values(A).filter(a=>a.type!=='日記'&&dateOf(a).startsWith(actMonth)).length;
   const todayEv=evOn(TODAY).filter(([k,e])=>!e.hol).length;
-  return largeTitle('タイムライン',{actions:[{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"},{icon:'more',label:'このモックについて',onclick:'openAbout()'}]})
+  return largeTitle('タイムライン',{actions:[{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"}]})
     +summaryCard({metrics:[
         {v:`${monthRec}件`,l:`${+actMonth.slice(5)}月の記録`},
         {v:`${todayEv}件`,l:'今日の予定',href:'#/plan'},
@@ -71,7 +71,7 @@ route('day',d=>{
 
 /* ---------- 出来事の詳細: その点の前後を切り取った軸 ---------- */
 route('a',id=>{
-  const a=A[id];if(!a)return appbar('')+empty('activity','この記録は削除されたか、見つかりません');
+  const a=A[id];if(!a)return appbar('')+empty('activity','記録 なし');
   if(a.type==='日記'){setTimeout(()=>location.replace('#/day/'+a.date));return ''}
   return momentView(id,a);
 },{tab:'activities'});
@@ -217,11 +217,13 @@ function actView(id,a,d){
   const rt=mv?`<div class="route">${dep?stop(dep,a.time):''}<i aria-hidden="true">→</i>${arr?stop(arr,a.end):''}</div>`:'';
   const tm=mv?esc(dur):`${esc(timeText(a))}${dur?` <small>${esc(dur)}</small>`:''}`;
   const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC[icon]}${esc(a.type)}</span><span class="tm">${tm}</span></div><h1>${esc(a.title)}</h1>${rt}</section>`;
-  /* この中の支払い: 子の支払いを白い1行ずつ。2件以上なら合計。「支払いを追加」は親=この活動(未対応は toast) */
+  /* この中の支払い: 子の支払いを白い1行ずつ。2件以上なら合計。子が無い時は見出しも空の面も出さず、点線の1行「支払いを追加」だけ */
   const kids=(a.kids||[]).filter(c=>A[c]&&A[c].type==='支払い');
   const sum=kids.reduce((s,c)=>s+(A[c].amt||0),0);
-  const pays=`<div class="dsec">`+sh('この中の支払い',kids.length||null,{label:'支払いを追加',icon:'plus',onclick:`actPayAdd('${id}')`})
-    +(kids.length?list([...kids.map(actPayRow),...(kids.length>1?[row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(sum)}</b>`})]:[])],'flat'):'')+`</div>`;
+  const pays=kids.length
+    ?`<div class="dsec">`+sh('この中の支払い',kids.length,{label:'支払いを追加',icon:'plus',onclick:`actPayAdd('${id}')`})
+      +list([...kids.map(actPayRow),...(kids.length>1?[row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(sum)}</b>`})]:[])],'flat')+`</div>`
+    :`<button class="pay-add" type="button" onclick="actPayAdd('${id}')">${IC.plus}支払いを追加</button>`;
   /* 交わった人・場所(リンク付き)。移動の出発・到着は主役の行に出しているので重ねない */
   const rr=(a.roles||[]).filter(r=>!mv||!['出発','到着'].includes(r[0]));
   return appbar('',{actions:[menuAct(id)]})
@@ -246,7 +248,7 @@ function payView(id,a,d){
   const att=(EXTRA.attach||{})[id];
   return appbar('',{actions:[menuAct(id)]})
     +pinView({later,earlier:[],cap:cap+child})
-    +(a.adv&&a.adv[2]==='未精算'?`<div class="suggest owe"><span class="pbar lg" aria-hidden="true"><i class="owed" style="flex:1"></i></span><span class="t">${esc(E[a.adv[0]].n.split(' ').pop())}さんの分 <b class="num">${yen(a.adv[1])}</b> 未精算</span><button class="btn sm" type="button" onclick="settle('${id}')">精算済みにする</button></div>`:'')
+    +(a.adv&&a.adv[2]==='未精算'?`<div class="suggest owe"><span class="pbar lg" aria-hidden="true"><i class="owed" style="flex:1"></i></span><span class="t"><span class="nm">${esc(E[a.adv[0]].n.split(' ').pop())}さんの分 <b class="num">${yen(a.adv[1])}</b></span><span class="st">未精算</span></span><button class="btn sm" type="button" onclick="settle('${id}')">精算済みにする</button></div>`:'')
     +shopTodoSug(id,a)
     +(roles.length?sh('関わったエンティティ',roles.length,shop&&!shop[1]?{label:'支払先を店として登録',onclick:`registerShop('${id}')`}:null)+list(roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
     +(a.items?sh('品目',itemGroups(a.items).length,{label:'追加',icon:'plus',onclick:`itAdd('${id}')`})+list([...itemsList(id,a.items),row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(a.items.reduce((s,i)=>s+itemAmt(i),0))}</b>`})],'flat'):'')
@@ -301,7 +303,7 @@ function photoThumb(d,i){
 /* ---------- 品目の詳細(v12): 1品目=1ページ。見る→同じ画面で直せる ---------- */
 route('i',rid=>{
   const [id,ix]=(rid||'').split('/'),a=A[id],it=a&&a.items&&a.items[+ix];
-  if(!it)return appbar('')+empty('activity','この品目は見つかりません');
+  if(!it)return appbar('')+empty('activity','品目 なし');
   const pt=ipPartner(a),amt=itemAmt(it),am=it.lines&&it.lines.length>1?lnAmts(it.lines):null;
   const bs=['自分','半分',...(pt?[pt]:[])];
   const whole=a.split&&a.split.mode==='whole';

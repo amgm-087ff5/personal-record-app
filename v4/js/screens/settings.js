@@ -33,7 +33,7 @@ route('settings',()=>{
     +sh('このモックについて')
     +list([
       prop('版',esc(window.BUILD||'不明')),
-      prop('今日','2026年10月31日(土)'),
+      prop('今日',`${TODAY.slice(0,4)}年${+TODAY.slice(5,7)}月${+TODAY.slice(8)}日(${wdOf(TODAY)})`),
       row({href:'../v3/',t:'UI v3',chev:true}),
       row({href:'../',t:'UI v2',chev:true})])
     +`</div>`;

@@ -125,7 +125,7 @@ function plDayAx(d){
   const body=d===TODAY
     ?items.filter(x=>x.fut).map(x=>x.html).join('')+nowLine()+items.filter(x=>!x.fut).map(x=>x.html).join('')
     :items.map(x=>x.html).join('');
-  return `<div class="ax">${axGroup(head,body||`<div class="pl-none">予定も記録もありません</div>`,{future,cls:d===TODAY?'today':''})}</div>`;
+  return `<div class="ax">${axGroup(head,body||`<div class="pl-none">予定・記録 なし</div>`,{future,cls:d===TODAY?'today':''})}</div>`;
 }
 
 /* ---------- 日 ---------- */
@@ -191,8 +191,8 @@ function plListAx(){
     html+=axGroup(dayHead(d,{href:'#/day/'+d,future:d>TODAY,empty:hol?hol[1].t:''}),body,{future:d>TODAY,cls:d===TODAY?'today':''});
   }
   return n
-    ?sh('いまから3週間',n)+`<div class="ax">${axEdge('3週間より先は月で見る')}${html}</div>`
-    :sh('いまから3週間')+empty('schedule','3週間の予定はありません');
+    ?sh('いまから3週間',n)+`<div class="ax">${axEdge('3週間より先 › 月')}${html}</div>`
+    :sh('いまから3週間')+empty('schedule','予定 なし');
 }
 
 /* ---------- ToDo ---------- */
@@ -229,7 +229,7 @@ function plTodoPane(){
     const xs=openSel.filter(f);
     if(xs.length)body+=plSec(title,xs.length,cls)+objs(xs.map(plTodoRow));
   }
-  if(!openSel.length&&!doneSel.length)body+=empty('todo','ToDoはありません');
+  if(!openSel.length&&!doneSel.length)body+=empty('todo','ToDo なし');
   if(doneSel.length){
     body+=plSec('完了',doneSel.length,'',{label:plShowDone?'閉じる':'表示',onclick:'plToggleDone()'})+(plShowDone?objs(doneSel.map(plDoneRow)):'');
   }
@@ -296,7 +296,7 @@ function plSaveTask(){
 /* ---------- 予定の詳細: 時間軸の上の1点(主役) ---------- */
 route('ev',id=>{
   const e=EV[id];
-  if(!e)return appbar('予定')+empty('schedule','この予定は削除されたか、見つかりません');
+  if(!e)return appbar('予定')+empty('schedule','予定 なし');
   const rec=e.rec&&A[e.rec];
   const unreg=e.place&&!e.place[0]&&e.place[1];
   const tasks=Object.keys(TD).filter(k=>TD[k].ev===id);
@@ -376,7 +376,7 @@ function recordEvent(id){
 /* ---------- ToDoの詳細 ---------- */
 route('task',id=>{
   const t=TD[id];
-  if(!t)return appbar('ToDo')+empty('todo','このToDoは削除されたか、見つかりません');
+  if(!t)return appbar('ToDo')+empty('todo','ToDo なし');
   const ev=t.ev&&EV[t.ev];
   const subs=t.sub||[];
   const listOpts=Object.entries(LISTS).map(([k,L])=>`<option value="${k}" ${k===t.list?'selected':''}>${esc(L.n)}</option>`).join('');

@@ -163,7 +163,7 @@ a.ax-row:active .ax-c{background:var(--sunk);transform:scale(.99)}
 .dh2:first-child,.ax>a:first-child+.dh2{margin-top:10px}
 .dh2 .dcard,.dh2.today .dcard{display:flex;align-items:center;gap:14px;padding:10px 16px 10px 10px;background:var(--surface);border-radius:16px;box-shadow:none;border:1px solid var(--line);-webkit-backdrop-filter:none;backdrop-filter:none}
 .dh2.today .dcard{border-color:var(--me)}
-.dh2 .dnum{flex:none;width:52px;height:56px;border-radius:14px;background:#E3EEFF;color:#2D59B8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.dh2 .dnum{flex:none;width:52px;height:56px;border-radius:14px;background:var(--date-soft);color:var(--date-ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
 .dh2 .dnum b{font:700 24px/1 var(--font);font-variant-numeric:tabular-nums}
 .dh2 .dnum small{font:600 12px/1 var(--font);letter-spacing:.04em}
 .dh2.today .dnum{background:var(--me);color:#fff}
@@ -171,8 +171,8 @@ a.ax-row:active .ax-c{background:var(--sunk);transform:scale(.99)}
 .dh2 .dt{display:flex;align-items:baseline;gap:8px}
 .dh2 .dt b{font:700 15px/1.3 var(--font)}
 .dh2.month .dnum{display:none}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dh2 .dnum{background:#1E2A44;color:#A9CCFF} :root:not([data-theme="light"]) .dh2.today .dnum{background:var(--me-fill);color:#fff}}
-:root[data-theme="dark"] .dh2 .dnum{background:#1E2A44;color:#A9CCFF}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dh2.today .dnum{background:var(--me-fill);color:#fff}}
+:root[data-theme="dark"] .dh2.today .dnum{background:var(--me-fill);color:#fff} /* 設定でダークを選んだ時も、端末のダークと同じ今日の札 */
 .mnav{display:flex;align-items:center;justify-content:center;gap:18px;padding:4px var(--gutter) 8px}
 .mnav b{font:700 16px/1 var(--font);min-width:110px;text-align:center}
 .mnav button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line-strong);background:var(--surface);color:var(--tx-2);display:flex;align-items:center;justify-content:center}

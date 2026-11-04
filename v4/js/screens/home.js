@@ -28,7 +28,7 @@ function hmHero(){
     {l:'今日の支出',v:yen(hmSpend())},
   ];
   return `<section class="hm-hero">`
-    +`<button class="hm-more" type="button" aria-label="このモックについて" onclick="openAbout()">${IC.more}</button>`
+    
     +`<a class="hm-hero-a" href="#/day/${TODAY}">`
       +`<div class="hm-date"><span class="hm-n num">${+TODAY.slice(8)}</span><span class="hm-dw"><b>${+TODAY.slice(5,7)}月</b> ${wdOf(TODAY)}曜</span></div>`
       +`<div class="hm-nums">${nums.map(n=>`<span class="hm-num"><i>${n.l}</i><b class="num">${n.v}</b></span>`).join('')}</div>`
@@ -43,7 +43,7 @@ function hmHero(){
 /* ---------- 1. 次の予定(予定の詳細の主役と同じ形: 点線の中抜きのカプセル) ---------- */
 function hmNext(){
   const n=hmNextEv();
-  if(!n)return sh('次の予定')+empty('schedule','今日、これから予定はありません');
+  if(!n)return sh('次の予定')+empty('schedule','これからの予定 なし');
   const [k,e]=n;
   const ppl=(e.who||[]).filter(w=>E[w]);
   const meta=[
@@ -66,7 +66,7 @@ function hmRest(){
   });
   kidsOf(TODAY).forEach(([k,a])=>items.push({time:a.time||'',fut:false,html:momentRow(k)}));
   items.sort((a,b)=>b.time.localeCompare(a.time));
-  if(!items.length)return sh('今日の残り')+empty('schedule','今日の残りの予定や記録はありません');
+  if(!items.length)return sh('今日の残り')+empty('schedule','予定・記録 なし');
   const body=items.filter(x=>x.fut).map(x=>x.html).join('')+nowLine()+items.filter(x=>!x.fut).map(x=>x.html).join('');
   return sh('今日の残り',items.length)+`<div class="ax">${axGroup('',body,{future:false,cls:'today'})}</div>`;
 }
@@ -85,7 +85,7 @@ function hmTodoRow(k){
 function hmTodo(){
   const ks=hmTodoKeys();
   const n=ks.length;
-  if(!n)return sh('今日のToDo')+empty('todo','今日のToDoはありません');
+  if(!n)return sh('今日のToDo')+empty('todo','今日のToDo なし');
   return sh('今日のToDo',n,n>5?{label:'すべて見る',href:'#/todo'}:null)
     +objs(ks.slice(0,5).map(hmTodoRow));
 }

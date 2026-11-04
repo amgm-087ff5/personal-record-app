@@ -79,8 +79,10 @@ function crActField(st,d,t,set,id){return `<div class="field" id="${id}">${crAct
 function crActSync(id,st,d,t,set){const el=document.getElementById(id);if(el)el.innerHTML=crActInner(st,d,t,set)}
 
 /* ---------- 登録 ---------- */
-CREATE.push({id:'receipt',label:'レシートで支払い',icon:'pay',color:'var(--ev)',primaryOn:['activities','ledger'],onclick:'openReceipt()'});
-CREATE.push({id:'happening',label:'出来事',icon:'moment',color:'var(--ev)',primaryOn:[],onclick:'openNewHappening()'});
+/* 主の行(青の塗り)= タブごとに「そのタブで一番よく作るもの」1つだけ。
+   ホーム・家計簿・設定=レシートで支払い / 記録=出来事 / 予定=予定 / メモ=メモ / ToDo=ToDo(plan.js) / エンティティ=エンティティ */
+CREATE.push({id:'receipt',label:'レシートで支払い',icon:'pay',color:'var(--ev)',primaryOn:['home','ledger','settings'],onclick:'openReceipt()'});
+CREATE.push({id:'happening',label:'出来事',icon:'moment',color:'var(--ev)',primaryOn:['activities'],onclick:'openNewHappening()'});
 CREATE.push({id:'event',label:'予定',icon:'future',color:'var(--plan)',primaryOn:['plan'],onclick:'openNewEvent()'});
 CREATE.push({id:'entity',label:'エンティティ',icon:'kin',color:'var(--kin)',primaryOn:['entities'],onclick:'openNewEntity()'});
 CREATE.push({id:'diary',label:'今日の日記',icon:'diary',color:'var(--ev)',primaryOn:[],onclick:'openDiary(TODAY)'});

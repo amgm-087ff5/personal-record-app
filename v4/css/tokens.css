@@ -30,7 +30,7 @@
   --c-note-soft:#E3F2E9;
   --c-type:#56627A;
   --c-type-soft:#ECEFF4;
-  --c-expense:#33437A;
+  --c-expense:#3D4F8F;
   --c-expense-soft:#E7EAF4;
   --th-person:var(--kin);
   --th-person-s:#E6EDFB;
@@ -49,7 +49,7 @@
   --now:var(--late);
   --plan:#7A8496;
   --warn:#C76A12;
-  --warn-soft:#FCEFDF;
+  --warn-soft:#FFF5D6;
   --danger:var(--late);
   --danger-soft:#FBE7E7;
   --ok:#2E8A57;
@@ -89,8 +89,8 @@
   --late:#D3393B;
   --late-soft:#FBE6E6;
   --owe:#B86A0E;
-  --owe-text:#94550A;
-  --owe-soft:#FBEEDC;
+  --owe-text:#34405A;
+  --owe-soft:#F4F6FA;
   --ev-c:var(--ev);
   --on-me:#fff;
   --on-kin:#fff;
@@ -116,6 +116,8 @@
   --tl-bg2:#EAF1FD;
   --bg-grad:linear-gradient(180deg,#F4F7FD 0%,#EAF1FD 55%,#F4F7FD 100%);
   --tab:var(--axis);
+  --date-soft:#E3EEFF;
+  --date-ink:#2D59B8;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#121A2A;
@@ -160,7 +162,7 @@
   --now:#FF6B60;
   --plan:#8D97A8;
   --warn:#EFA35A;
-  --warn-soft:#3A2814;
+  --warn-soft:#1E283B;
   --danger:#F07A7A;
   --danger-soft:#3B1A1A;
   --ok:#6CC290;
@@ -183,8 +185,8 @@
   --late:#FF6B66;
   --late-soft:#3B1A1A;
   --owe:#E9A24E;
-  --owe-text:#F0B46A;
-  --owe-soft:#3A2814;
+  --owe-text:#E4E9F1;
+  --owe-soft:#1E283B;
   --ev-c:var(--ev);
   --on-me:#fff;
   --on-kin:#fff;
@@ -206,6 +208,8 @@
   --tl-bg1:var(--bg);
   --tl-bg2:var(--bg);
   --bg-grad:none;
+  --date-soft:#1E2A44;
+  --date-ink:#A9CCFF;
 }}
 :root[data-theme="dark"]{
   --bg:#121A2A;
@@ -250,7 +254,7 @@
   --now:#FF6B60;
   --plan:#8D97A8;
   --warn:#EFA35A;
-  --warn-soft:#3A2814;
+  --warn-soft:#1E283B;
   --danger:#F07A7A;
   --danger-soft:#3B1A1A;
   --ok:#6CC290;
@@ -273,8 +277,8 @@
   --late:#FF6B66;
   --late-soft:#3B1A1A;
   --owe:#E9A24E;
-  --owe-text:#F0B46A;
-  --owe-soft:#3A2814;
+  --owe-text:#E4E9F1;
+  --owe-soft:#1E283B;
   --ev-c:var(--ev);
   --on-me:#fff;
   --on-kin:#fff;
@@ -296,4 +300,6 @@
   --tl-bg1:var(--bg);
   --tl-bg2:var(--bg);
   --bg-grad:none;
+  --date-soft:#1E2A44;
+  --date-ink:#A9CCFF;
 }

@@ -257,11 +257,14 @@ function render(keepScroll){
     const isRoot=CUR.name===rootName;const ly=app.querySelector('.pane-l')?.scrollTop||0;const sameRoot=app.dataset.root===rootName;
     const left=safe(ROUTES[rootName].fn,null,isRoot?CUR.q:{});
     const right=isRoot?'':safe(r.fn,CUR.id,CUR.q);
-    app.innerHTML=`<section class="pane-l">${left}</section><main class="pane-r screen" id="screen">${right}</main>`;app.dataset.root=rootName;
+    /* 右(詳細)が無い一覧だけの時は1列(css の #app.solo で中央寄せ 720px)。記録(タイムライン)は v3 の見た目のまま2列 */
+    const solo=!right&&rootName!=='activities';
+    app.classList.toggle('solo',solo);
+    app.innerHTML=`<section class="pane-l">${left}</section>${solo?'':`<main class="pane-r screen" id="screen">${right}</main>`}`;app.dataset.root=rootName;
     if(sameRoot)app.querySelector('.pane-l').scrollTop=ly;
     app.querySelectorAll(`.pane-l a[href="${location.hash}"]`).forEach(a=>a.classList.add('sel'));
   }else{
-    app.innerHTML=`<main class="screen" id="screen">${safe(r.fn,CUR.id,CUR.q)}</main>`;delete app.dataset.root;
+    app.innerHTML=`<main class="screen" id="screen">${safe(r.fn,CUR.id,CUR.q)}</main>`;delete app.dataset.root;app.classList.remove('solo');
   }
   if(r.tab)lastTab=r.tab;
   renderNav(r.tab||lastTab);
@@ -311,6 +314,8 @@ const navBadge=k=>k==='todo'?(typeof overdueCount==='function'?overdueCount():0)
 const WIDE_NAV=matchMedia('(min-width:900px)');
 let NAV_PG=0,NAV_KEY=null,NAV_CUR='home';
 const navPageOf=k=>NAV_PAGES.findIndex(p=>p.some(t=>t&&t[0]===k));
+/* 切替のつまみ: 1枚目を表示中に2枚目のタブへお知らせ(期限切れのToDo)がある時は、右上に赤い点と読み上げ */
+const navSwInfo=pg=>{const dot=pg===0&&NAV_PAGES[1].some(t=>t&&navBadge(t[0])>0);return {dot,label:`ナビを切り替え(${pg+1}/2)${dot?'(2枚目にお知らせ)':''}`}};
 const navItem=(t,cur)=>t?`<a href="#/${t[0]}"${t[0]===cur?' aria-current="page"':''}><span class="pill">${NAV_IC[t[0]]}</span>${t[1]}${navBadge(t[0])?`<span class="badge">${navBadge(t[0])}</span>`:''}</a>`:`<div class="fab-slot"><button class="fab" type="button" aria-label="作成" onclick="openCreate()">${IC.plus}</button></div>`;
 function renderNav(cur){
   NAV_CUR=cur;
@@ -322,7 +327,9 @@ function renderNav(cur){
     nav.innerHTML=`<div class="nav-in">${navItem(null)}${NAV_ALL.map(t=>navItem(t,cur)).join('')}</div>`;
     return;
   }
-  nav.innerHTML=`<div class="nav-in"><div class="nav-view"><div class="nav-track" style="--pg:${NAV_PG}">${NAV_PAGES.map((p,i)=>`<div class="nav-pg"${i===NAV_PG?'':' inert'}>${p.map(t=>navItem(t,cur)).join('')}</div>`).join('')}</div></div><button class="nav-sw" type="button" data-pg="${NAV_PG}" aria-label="ナビを切り替え(${NAV_PG+1}/2)" onclick="navSwitch()">${NAV_IC.switch}</button></div>`;
+  /* 切替は枠の外のつまみ(カードの右上の縁に乗る)。枠は [タブ][タブ][＋][タブ][タブ] の5列で左右対称 */
+  const sw=navSwInfo(NAV_PG);
+  nav.innerHTML=`<div class="nav-in"><div class="nav-view"><div class="nav-track" style="--pg:${NAV_PG}">${NAV_PAGES.map((p,i)=>`<div class="nav-pg"${i===NAV_PG?'':' inert'}>${p.map(t=>navItem(t,cur)).join('')}</div>`).join('')}</div></div></div><button class="nav-sw${sw.dot?' dot':''}" type="button" data-pg="${NAV_PG}" aria-label="${sw.label}" onclick="navSwitch()">${NAV_IC.switch}</button>`;
 }
 /* 2枚を切り替える。描き直さずに横にすべらせる(.2s。reduced-motion は全体の規則で動かない) */
 function navSwitch(){
@@ -331,7 +338,7 @@ function navSwitch(){
   tr.style.setProperty('--pg',NAV_PG);
   tr.querySelectorAll('.nav-pg').forEach((p,i)=>i===NAV_PG?p.removeAttribute('inert'):p.setAttribute('inert',''));
   const sw=document.querySelector('#nav .nav-sw');
-  if(sw){sw.dataset.pg=NAV_PG;sw.setAttribute('aria-label',`ナビを切り替え(${NAV_PG+1}/2)`)}
+  if(sw){const i=navSwInfo(NAV_PG);sw.dataset.pg=NAV_PG;sw.setAttribute('aria-label',i.label);sw.classList.toggle('dot',i.dot)}
 }
 /* 横スワイプ(pointer と touch。横に30px以上・縦より大きい)で切り替え。同じジェスチャの2つ目のイベントは起点を消して無視する */
 let navSX=null,navSY=0;
@@ -398,6 +405,9 @@ function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(!s
   for(const [k,o] of Object.entries({A,X,E,EV,TD,TYPES,CATS,NOTES,MEMOS,LISTS,TYPE_PROPS})){if(s[k]){for(const kk of Object.keys(o))delete o[kk];Object.assign(o,s[k])}}
   if(s.EXTRA&&typeof EXTRA!=='undefined')Object.assign(EXTRA,s.EXTRA);
   Object.values(A).forEach(a=>(a.items||[]).forEach(itemMigrate));
+  /* v4.4: 茶色の系統の旧カテゴリ色(テラコッタ・マスタード)と近すぎた色を、保存データでも置き換える */
+  const RECOLOR={'#E07A4F':'#D0607F','#E3B341':'#7FC8E8','#9AB3D6':'#7FC8E8','#D9789B':'#F2A7C0'};
+  Object.values(CATS).forEach(c=>{if(c.c&&RECOLOR[c.c.toUpperCase()])c.c=RECOLOR[c.c.toUpperCase()]});
   /* 旧データの移行: 以前は「設定なし」が暗黙に 変動/日常 だった。大分類は明示の値に置き換える(以後 'none' = 設定しない) */
   for(const k of Object.keys(CATS)){const c=CATS[k];if(c.fx==='none')c.fx='ask';if(c.sp==='none')c.sp='ask';if(!c.p){if(c.fx===undefined)c.fx='変動';if(c.sp===undefined)c.sp='日常'}}
   }catch(e){}}

@@ -50,8 +50,7 @@
 .pl-dnav{display:flex;align-items:center;justify-content:space-between;height:44px;margin:0 var(--gutter)}
 
 /* ---- ToDo: 行56px・チェック欄・押し面44px ---- */
-/* 絞り込みのピルは足りなければ折り返す(途中で切らない) */
-.pl-root .chips{flex-wrap:wrap;overflow:visible}
+/* 絞り込みのチップは app.css の .chips(1段の横スクロール)に合わせる */
 .pl-todo{min-height:var(--row);padding:10px 14px;gap:14px}
 .pl-todo .t{font:500 15px/1.4 var(--font);color:var(--tx)}
 .pl-todo .s{margin-top:3px}
@@ -82,10 +81,12 @@
 /* 残り時間: 囲まない(ピルは操作)。赤にしない(赤は遅れ) */
 .pl-root .cap .meta .cd{font:600 15px/1.2 var(--font);color:var(--tx-2)}
 
-/* ---- 日表示: 時間グリッド(v2の日表示を継続)。1日=1枚の面の中に置く ---- */
+/* ---- 日表示: 日付の札+その下に時間グリッド。外側の面は作らない(札の中に面を重ねない) ---- */
 .pl-dtb{justify-content:center;padding-right:var(--gutter)}
-.pl-dpanel{margin:0 var(--gutter);background:var(--tl-card);border-radius:18px;box-shadow:var(--tl-sh);padding-bottom:12px}
-.pl-dpanel .dh2{border-bottom:1px solid var(--line)}
+.pl-dpanel{margin:0 var(--gutter)}
+/* 日の札は面の中の札ではなく、グリッドの上の1枚。固定しない(sticky を外す) */
+.pl-dpanel .dh2{position:relative;top:auto;padding:0;background:none;backdrop-filter:none}
+.pl-dpanel .dh2::before{display:none}
 .pl-cat{display:inline-block;width:8px;height:4px;border-radius:2px;background:var(--cc,var(--tx-3));margin-right:6px;vertical-align:middle}
 .pl-allday{display:flex;flex-direction:column;gap:6px;padding:10px 14px 0}
 .pl-bar{display:block;height:44px;padding:0 12px;border-radius:22px;font:500 14px/44px var(--font);color:var(--tx-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
