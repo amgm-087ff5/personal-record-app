@@ -19,7 +19,7 @@
 
 /* 作成のボタン2つ(左=主の塗り、右=副の淡い塗り)。高さ48 */
 .sc-acts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:12px}
-.sc-acts .btn{height:48px;width:100%;padding:0 12px;font-size:15px;min-width:0}
+.sc-acts .btn{height:48px;width:100%;padding:0 12px;font-size:14px;gap:6px;min-width:0;white-space:nowrap}
 .sc-acts .btn svg.i{width:18px;height:18px;flex:none}
 
 /* 家計簿: 自分の支出のカードの下段(面は増やさない。カードの中の区切り線だけ) */

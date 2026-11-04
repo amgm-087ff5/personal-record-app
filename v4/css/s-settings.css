@@ -1,0 +1,18 @@
+/* =====================================================================
+   設定 /settings — 節ごとの面(.list)。見た目は app.css の .list / .row をそのまま使い、
+   ここは テーマの切替・危険の行・確認のシートの配置だけを決める。色は tokens.css の変数だけ。
+   ===================================================================== */
+.set{padding-bottom:24px}
+
+/* テーマ: 名前の行の下に、選択を示す3択(全幅・押し面44px) */
+.set-theme{flex-wrap:wrap;align-items:stretch;gap:10px;padding:12px 14px}
+.set-theme .t{width:100%;font:500 15px/1.4 var(--font);color:var(--tx)}
+.set-theme .seg{flex:1 1 100%;margin:0;padding:3px}
+.set-theme .seg button{height:44px}
+
+/* データを初期状態に戻す: 危険の行(文字と ›・アイコンを --danger) */
+.set-danger .t{color:var(--danger)}
+
+/* 確認のシート: 「やめる」と「初期状態に戻す」を横並び(押し面48px) */
+.set-cf{display:flex;gap:8px;width:100%}
+.set-cf .btn{flex:1;height:48px}

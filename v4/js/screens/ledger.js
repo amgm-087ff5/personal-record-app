@@ -116,7 +116,7 @@ route('ledger',()=>{
     const fl=Object.entries(X).filter(([k,x])=>ldMatch(x))
       .sort((a,b)=>xDate(b[1]).localeCompare(xDate(a[1]))||(A[b[1].pay].time||'').localeCompare(A[a[1].pay].time||''));
     const clear=ldFilter?`<div class="ld-clear">${chips([['x',`${AX_NAME[ldFilter.ax]}: ${ldFilterName()} ×`]],'x','ldClear()')}</div>`:'';
-    spend=sh('支出',`${fl.length}件`)+clear+(fl.length?`<div class="ld-tix">${fl.map(([k,x])=>ldTicket(k,x)).join('')}</div>`:empty('expense','該当する支出はありません'));
+    spend=sh('支出',`${fl.length}件`)+clear+(fl.length?`<div class="ld-tix">${fl.map(([k,x])=>ldTicket(k,x)).join('')}</div>`:empty('expense','該当の支出 なし'));
   }
 
   return largeTitle('家計簿',{actions:[
@@ -144,7 +144,7 @@ function ldMenu(id){
 
 route('x',id=>{
   const x=X[id];
-  if(!x)return appbar('')+empty('expense','この支出は見つかりません');
+  if(!x)return appbar('')+empty('expense','支出 なし');
   const p=A[x.pay],date=xDate(x),pct=Math.round(x.amt/p.amt*100);
   const owed=p.adv&&p.adv[2]==='未精算';
   /* 最上部: 親の支払いへの参照(1行)+ 自分の分の半券チケット(主役・塗り) */

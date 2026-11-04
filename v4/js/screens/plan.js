@@ -1,6 +1,7 @@
 /* =====================================================================
-   予定 — 月 / 日 / 3週間(時間軸) / ToDo / 予定の詳細 / ToDoの詳細
-   ルート: #/plan(?view=month|day|list|todo), #/ev/{id}, #/task/{id}
+   予定 — 月 / 日 / 3週間(時間軸) / 予定の詳細 ・ ToDo(独立タブ) / ToDoの詳細
+   ルート: #/plan(?view=month|day|list), #/todo, #/ev/{id}, #/task/{id}
+   (ToDoは予定から独立。#/plan?view=todo は #/todo へ移す)
    見た目は css/s-plan.css。軸の一覧は axGroup(日の面)で作る(DESIGN.md v4)
    ===================================================================== */
 
@@ -37,24 +38,48 @@ function plSec(title,n,cls='',act){
 }
 
 /* ---------- 予定タブ ---------- */
+/** 今日から7日間の予定の件数(同じ予定の同じ日は1件。繰り返しは日付ごと) */
+function plCountWeek(pred){const s=new Set();for(let i=0;i<7;i++){const d=addDays(TODAY,i);evOn(d).forEach(([k,e])=>{if(!e.hol&&pred(e))s.add(k+'@'+d)})}return s.size}
+
 route('plan',(id,q)=>{
-  if(q.view)planView=['month','day','list','todo'].includes(q.view)?q.view:(q.view==='cal'?'month':planView);
-  const body=planView==='todo'?plTodoPane()
-    :planView==='day'?plDayPane()
+  /* ToDoは独立したタブ。古い #/plan?view=todo は #/todo へ移す(移すと hashchange で描き直す) */
+  if(q.view==='todo'){location.replace('#/todo');return '<div class="pl-root"></div>'}
+  if(q.view)planView=['month','day','list'].includes(q.view)?q.view:(q.view==='cal'?'month':planView);
+  const body=planView==='day'?plDayPane()
     :planView==='list'?plListAx()
     :plCalPane();
-  /* まとめカード: 数字は今日・期限切れ・1週間(押すと該当の表示へ)。ボタン=予定を追加 / ToDo */
+  /* まとめカード(予定だけ): 数字=今日の予定 / 1週間の予定 / 支払い予定(1週間)。ボタン=予定を追加(主のみ) */
   const todayEv=evOn(TODAY).filter(([k,e])=>!e.hol).length;
-  const week=new Set();for(let i=0;i<7;i++)evOn(addDays(TODAY,i)).forEach(([k,e])=>{if(!e.hol)week.add(k)});
+  const week=plCountWeek(e=>true), pay=plCountWeek(e=>!!e.pay);
   return `<div class="pl-root">`+largeTitle('予定')
     +summaryCard({metrics:[
         {v:`${todayEv}件`,l:'今日の予定',href:'#/plan?view=day'},
-        {v:`${overdueCount()}件`,l:'期限切れToDo',href:'#/plan?view=todo'},
-        {v:`${week.size}件`,l:'1週間の予定',href:'#/plan?view=list'}],
-      actions:[{text:'予定を追加',icon:'plus',primary:true,onclick:`openNewEvent('${plSel}')`},{text:'ToDo',icon:'todo',onclick:'openNewTask()'}]})
-    +seg([['month','月'],['day','日'],['list','3週間'],['todo','ToDo']],planView,"plSetView('$v')")
+        {v:`${week}件`,l:'1週間の予定',href:'#/plan?view=list'},
+        {v:`${pay}件`,l:'支払い予定',href:'#/plan?view=list'}],
+      actions:[{text:'予定を追加',icon:'plus',primary:true,onclick:`openNewEvent('${plSel}')`}]})
+    +seg([['month','月'],['day','日'],['list','3週間']],planView,"plSetView('$v')")
     +body+`</div>`;
 },{tab:'plan'});
+
+/* ---------- ToDo(独立したタブ #/todo) ---------- */
+route('todo',()=>{
+  /* まとめカード: 数字=期限切れ / 今日(今日が期限のもの) / 全部の未完了。押すと下の絞り込みを切り替える。主ボタン=ToDoを追加 */
+  const all=Object.values(TD).filter(t=>!t.done).length;
+  const today=Object.values(TD).filter(t=>!t.done&&t.due===TODAY).length;
+  return '<div class="pl-root">'+largeTitle('ToDo')
+    +summaryCard({metrics:[
+        {v:`${overdueCount()}件`,l:'期限切れ',onclick:"plTodoView='today';rerender()"},
+        {v:`${today}件`,l:'今日',onclick:"plTodoView='today';rerender()"},
+        {v:`${all}件`,l:'全部の未完了',onclick:"plTodoView='all';rerender()"}],
+      actions:[{text:'ToDoを追加',icon:'plus',primary:true,onclick:'plFocusQuick()'}]})
+    +plTodoPane()+'</div>';
+},{tab:'todo'});
+/** まとめカードの「ToDoを追加」: 下の入力欄にフォーカス(無ければ作成シート) */
+function plFocusQuick(){
+  const el=document.getElementById('pl-qa');
+  if(!el){openNewTask();return}
+  el.scrollIntoView({block:'center'});el.focus();
+}
 
 /* ---------- 月 ---------- */
 function plCalPane(){
@@ -100,7 +125,7 @@ function plDayAx(d){
   const body=d===TODAY
     ?items.filter(x=>x.fut).map(x=>x.html).join('')+nowLine()+items.filter(x=>!x.fut).map(x=>x.html).join('')
     :items.map(x=>x.html).join('');
-  return `<div class="ax">${axGroup(head,body||`<div class="pl-none">予定も記録もありません</div>`,{future,cls:d===TODAY?'today':''})}</div>`;
+  return `<div class="ax">${axGroup(head,body||`<div class="pl-none">予定・記録 なし</div>`,{future,cls:d===TODAY?'today':''})}</div>`;
 }
 
 /* ---------- 日 ---------- */
@@ -166,8 +191,8 @@ function plListAx(){
     html+=axGroup(dayHead(d,{href:'#/day/'+d,future:d>TODAY,empty:hol?hol[1].t:''}),body,{future:d>TODAY,cls:d===TODAY?'today':''});
   }
   return n
-    ?sh('いまから3週間',n)+`<div class="ax">${axEdge('3週間より先は月で見る')}${html}</div>`
-    :sh('いまから3週間')+empty('schedule','3週間の予定はありません');
+    ?sh('いまから3週間',n)+`<div class="ax">${axEdge('3週間より先 › 月')}${html}</div>`
+    :sh('いまから3週間')+empty('schedule','予定 なし');
 }
 
 /* ---------- ToDo ---------- */
@@ -204,7 +229,7 @@ function plTodoPane(){
     const xs=openSel.filter(f);
     if(xs.length)body+=plSec(title,xs.length,cls)+objs(xs.map(plTodoRow));
   }
-  if(!openSel.length&&!doneSel.length)body+=empty('todo','ToDoはありません');
+  if(!openSel.length&&!doneSel.length)body+=empty('todo','ToDo なし');
   if(doneSel.length){
     body+=plSec('完了',doneSel.length,'',{label:plShowDone?'閉じる':'表示',onclick:'plToggleDone()'})+(plShowDone?objs(doneSel.map(plDoneRow)):'');
   }
@@ -252,7 +277,7 @@ function toggleTask(k){
 }
 
 /* ---------- 新規ToDo ---------- */
-CREATE.push({id:'task',label:'ToDo',sub:'やること・買う物',icon:'todo',color:'var(--tx-2)',primaryOn:['plan'],onclick:'openNewTask()'});
+CREATE.push({id:'task',label:'ToDo',sub:'やること・買う物',icon:'todo',color:'var(--tx-2)',primaryOn:['todo'],onclick:'openNewTask()'});
 function openNewTask(){
   openSheet({title:'ToDoを追加',body:`<div class="list">
     <div class="field"><label for="pl-nt-t">タイトル</label><input id="pl-nt-t" placeholder="例: 牛乳を買う"></div>
@@ -271,7 +296,7 @@ function plSaveTask(){
 /* ---------- 予定の詳細: 時間軸の上の1点(主役) ---------- */
 route('ev',id=>{
   const e=EV[id];
-  if(!e)return appbar('予定')+empty('schedule','この予定は削除されたか、見つかりません');
+  if(!e)return appbar('予定')+empty('schedule','予定 なし');
   const rec=e.rec&&A[e.rec];
   const unreg=e.place&&!e.place[0]&&e.place[1];
   const tasks=Object.keys(TD).filter(k=>TD[k].ev===id);
@@ -301,7 +326,7 @@ route('ev',id=>{
   ].join('');
   return '<div class="pl-root">'+appbar('',{actions:[{icon:'more',label:'操作',onclick:"toast('編集はモックでは未対応です')"}]})
     +axis
-    +(kin.length?sh('会う人・場所',kin.length,unreg?{label:'場所として登録',onclick:`plRegisterPlace('${id}')`}:null)+list(kin):'')
+    +(kin.length?sh('関わるエンティティ',kin.length,unreg?{label:'場所として登録',onclick:`plRegisterPlace('${id}')`}:null)+list(kin):'')
     +`<div class="mt"></div>`+list([props])
     +(tasks.length?sh('この予定のToDo',tasks.length)+objs(tasks.map(plEvTaskRow)):'')
     +sh(e.rep&&rec?'前回の記録':'記録')
@@ -351,7 +376,7 @@ function recordEvent(id){
 /* ---------- ToDoの詳細 ---------- */
 route('task',id=>{
   const t=TD[id];
-  if(!t)return appbar('ToDo')+empty('todo','このToDoは削除されたか、見つかりません');
+  if(!t)return appbar('ToDo')+empty('todo','ToDo なし');
   const ev=t.ev&&EV[t.ev];
   const subs=t.sub||[];
   const listOpts=Object.entries(LISTS).map(([k,L])=>`<option value="${k}" ${k===t.list?'selected':''}>${esc(L.n)}</option>`).join('');
@@ -361,7 +386,8 @@ route('task',id=>{
     t.pay&&A[t.pay]?row({t:aref(t.pay)}):'',
   ].filter(Boolean);
   const sub=[t.due?'期限 '+fmtMDW(t.due):'期限なし',t.done?'完了 '+fmtMD(t.done):''].filter(Boolean);
-  return '<div class="pl-root">'+appbar('ToDo')
+  /* 戻り先は ToDo の一覧(予定ではない) */
+  return `<div class="pl-root"><header class="appbar"><button class="iconbtn" type="button" aria-label="ToDoへ戻る" onclick="go('#/todo')">${IC.back}</button><div class="title">ToDo</div></header>`
     +`<div class="pl-card"><div class="pl-tk">${checkbox(!!t.done,`toggleTask('${id}')`,true)}<h1 class="${t.done?'pl-done-t':''}">${esc(t.t)}</h1></div>${sub.length?`<div class="meta">${sub.map(x=>`<span>${x}</span>`).join('')}</div>`:''}</div>`
     +`<div class="mt"></div>`+list([
       prop('期限',`<input class="input" type="date" aria-label="期限" value="${t.due||''}" onchange="plSetDue('${id}',this.value)">`),
@@ -372,7 +398,7 @@ route('task',id=>{
     +(links.length?sh('結び付き')+list(links):'')
     +(subs.length?sh('サブタスク',subs.filter(x=>x[1]).length+'/'+subs.length)+list(subs.map((x,i)=>row({cls:'plain',lead:checkbox(x[1],`plSubToggle('${id}',${i})`),t:`<span class="${x[1]?'pl-done-t':''}">${esc(x[0])}</span>`}))):'')
     +(t.memo?sh('メモ')+list([row({cls:'plain',wrap:true,t:esc(t.memo)})]):'')+'</div>';
-},{tab:'plan'});
+},{tab:'todo'});
 function plSetDue(k,v){if(v)TD[k].due=v;else delete TD[k].due;save();rerender()}
 function plSetList(k,v){TD[k].list=v;save();rerender()}
 function plTogPri(k){if(TD[k].pri)delete TD[k].pri;else TD[k].pri=1;save();rerender()}

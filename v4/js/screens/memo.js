@@ -54,8 +54,8 @@ function memoComposer(){
     +`<div class="en-paper mw"><textarea id="memo-body" class="mw-body" rows="2" placeholder="思いついたことを書く" aria-label="メモの本文" oninput="memoDraft.body=this.value;memoGrow(this)" onkeydown="if(event.key==='Enter'&&(event.metaKey||event.ctrlKey))memoSave()">${esc(d.body)}</textarea>`
     +(d.links.length?`<div class="mw-links">${d.links.map(k=>memoRef(k,false)).join('')}</div>`:'')
     +`</div>`
-    +(memoPick?`<div class="chips memo-pick" role="group" aria-label="縁">${memoEnts().map(k=>`<button class="chip" type="button" aria-pressed="${d.links.includes(k)}" onclick="memoPickLink('${k}')">${knot(k,'sm')}${esc(E[k].n)}</button>`).join('')}</div>`:'')
-    +`<div class="memo-acts"><button class="btn tonal" type="button" aria-pressed="${memoPick}" onclick="memoTogglePick()">縁を付ける</button>`
+    +(memoPick?`<div class="chips memo-pick" role="group" aria-label="エンティティ">${memoEnts().map(k=>`<button class="chip" type="button" aria-pressed="${d.links.includes(k)}" onclick="memoPickLink('${k}')">${knot(k,'sm')}${esc(E[k].n)}</button>`).join('')}</div>`:'')
+    +`<div class="memo-acts"><button class="btn tonal" type="button" aria-pressed="${memoPick}" onclick="memoTogglePick()">エンティティを付ける</button>`
     +`<button class="btn memo-save" type="button" onclick="memoSave()">保存</button></div>`
     +`</section>`;
 }
@@ -96,7 +96,7 @@ function memoSheetBody(){
   const s=memoSheet;
   return `<div class="memo-ed">`
     +`<div class="en-paper mw"><textarea class="mw-body" aria-label="メモの本文" oninput="memoSheet.body=this.value">${esc(s.body)}</textarea></div>`
-    +sh('縁')
+    +sh('エンティティ')
     +`<div class="chips memo-pick">${memoEnts().map(k=>`<button class="chip" type="button" aria-pressed="${s.links.includes(k)}" onclick="memoSheetLink('${k}')">${knot(k,'sm')}${esc(E[k].n)}</button>`).join('')}</div>`
     +`<div class="list mt">${row({t:'ピン留め',v:toggle(s.pin,'memoSheetPin()')})}</div>`
     +`<div class="memo-ed-del"><button class="btn danger block" type="button" onclick="memoDel('${s.id}')">メモを削除</button></div>`
@@ -130,12 +130,12 @@ route('memo',()=>{
   const body=[
     pinned.length?grp('ピン留め',pinned.length,pinned.map(k=>memoCard(k,{withDate:true})).join('')):'',
     ...days.map(g=>grp(relDay(g.d),g.ids.length+'件',g.ids.map(k=>memoCard(k)).join(''))),
-    notes.length?grp('縁のメモ',notes.length,notes.map(noteCard).join('')):''].join('');
+    notes.length?grp('エンティティのメモ',notes.length,notes.map(noteCard).join('')):''].join('');
   const hasAny=all.length>0||Object.keys(NOTES).some(k=>E[k]);
   return `<div class="memo">`
     +largeTitle('メモ',{actions:[{label:'メモを探す',icon:'search',onclick:'memoSearchToggle()'}]})
     +(memoSearchOpen?`<div class="memo-search">${IC.search}<input id="memo-q" class="input" type="search" placeholder="メモを探す" aria-label="メモを探す" value="${esc(memoQ)}" oninput="memoFilter(this.value)"></div>`:'')
     +memoComposer()
-    +(hasAny?`<div id="memo-list">${body}<p class="memo-none" id="memo-none" ${body?'hidden':''}>見つかりません</p></div>`:empty('memo','メモはまだありません'))
+    +(hasAny?`<div id="memo-list">${body}<p class="memo-none" id="memo-none" ${body?'hidden':''}>該当 なし</p></div>`:empty('memo','メモ なし'))
     +`</div>`;
 },{tab:'memo'});

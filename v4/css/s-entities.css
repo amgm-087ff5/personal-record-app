@@ -1,15 +1,25 @@
 /* =====================================================================
-   画面: 人・場所(縁)・メモ・種類 — UI v4(DESIGN.md「# UI v4」の意味表)
+   画面: エンティティ(縁)・メモ・種類 — UI v4(DESIGN.md「# UI v4」の意味表)
    形は1か所で定義する。app.css / axis.css の規則は上書きせず、このルートの
    .en-* / .obj-e / .objs.en-tree だけを書き換える。色は tokens.css の変数だけを使う。
    ===================================================================== */
+
+/* ---------- 縁の輪郭: プロジェクト = 旗(ポールと切り込みのある布)。
+   他の輪郭(人=円、場所=ピン、会社=建物、物=六角、書類=紙)と形で区別する。
+   形は mask で作る(clip-path だと旗のポールが切れるため)。色は縁の色(--kin 系) ---------- */
+.kn.proj{--kc:var(--th-proj);--ks:var(--th-proj-s);border-radius:0;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 2h2v20H3zM5.2 3H21l-4.2 9 4.2 9H5.2z'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 2h2v20H3zM5.2 3H21l-4.2 9 4.2 9H5.2z'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat}
+/* 文字は布の中央(切り込みの手前)に寄せる */
+.kn.proj>b{transform:translateX(-.2em)}
 
 /* ---------- 一覧 /entities ---------- */
 .en-search{margin:0 var(--gutter) 12px;position:relative}
 .en-search svg.i{position:absolute;left:12px;top:14px;color:var(--tx-3)}
 .en-search input{padding-left:40px}
-/* 種類ごとの見出し: 値札+件数 */
+/* 種類ごとの見出し: 値札+件数。まとまりの間は32px以上(近接) */
 .en-gh{display:flex;align-items:center;gap:8px;padding:18px var(--gutter) 8px}
+.en-g+.en-g .en-gh{padding-top:32px}
 .en-gh .vtag::before{background:var(--bg)}
 .en-gh .n{font:var(--t-cap);color:var(--tx-3)}
 .en-ago{display:flex;flex-direction:column;align-items:flex-end;gap:3px;font:var(--t-label);color:var(--tx-2);white-space:nowrap}

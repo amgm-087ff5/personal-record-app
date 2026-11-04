@@ -1,8 +1,9 @@
 /* =====================================================================
    ホーム — 毎日最初に見る統合ページ(route home)。見た目は css/s-home.css
-   順: 1 大見出し+今日の日記 / 2 次の予定(点線の中抜きのカプセル) / 3 今日の残り(軸)
-       / 4 今日のToDo / 5 すぐメモ / 6 お金
-   今日・いまは data.js の TODAY と ui.js の NOW。予定・ToDo・メモの操作は各担当の関数を使う
+   順: 0 ヒーロー(今日の大きな面: 日付・今日の数字3つ・日記の導線) / 1 次の予定 / 2 今日の残り(軸)
+       / 3 今日のToDo / 4 すぐメモ / 5 お金
+   見出しはヒーローが担う(他のタブの小さい大見出しは置かない)。今日・いまは data.js の TODAY と ui.js の NOW。
+   予定・ToDo・メモの操作は各担当の関数を使う
    ===================================================================== */
 
 const hmMin=s=>{const [h,m]=String(s).split(':').map(Number);return h*60+m};
@@ -12,21 +13,37 @@ const hmLeft=s=>{const diff=hmMin(s)-hmMin(NOW);return `あと${diff<60?diff+'�
 const hmTodayPlans=()=>evOn(TODAY).filter(([k,e])=>!e.hol&&!plRecordedOn(e,TODAY));
 /** いまより後で一番近い、時刻のある今日の予定 */
 const hmNextEv=()=>{const xs=hmTodayPlans().filter(([k,e])=>!e.all&&e.s>NOW).sort((a,b)=>a[1].s.localeCompare(b[1].s));return xs[0]||null};
+/** 今日のToDo(期限が今日以前・未完了。期限切れを含む)のid */
+const hmTodoKeys=()=>Object.keys(TD).filter(k=>!TD[k].done&&TD[k].due&&TD[k].due<=TODAY).sort((a,b)=>TD[a].due.localeCompare(TD[b].due));
+/** 今日の自分の支出の合計(支払いの日が今日。自分の取り分 X を使う。無ければ支払い額) */
+const hmSpend=()=>Object.values(A).filter(a=>a.type==='支払い'&&dateOf(a)===TODAY).reduce((s,a)=>s+((a.x&&X[a.x])?X[a.x].amt:(a.amt||0)),0);
 
-/* ---------- 1. 大見出し+今日の日付と日記 ---------- */
-function hmDay(){
+/* ---------- 0. ヒーロー: 今日の大きな面(青の塗り+光+艶)。押すと日のページ。日記の導線を1つ ---------- */
+function hmHero(){
   const dk=dayOfDate(TODAY), diary=dk&&dk[1].body;
-  const t=`${fmtMD(TODAY)} ${wdOf(TODAY)}曜`;
-  const r=diary
-    ?row({href:'#/day/'+TODAY,cls:'hm-day',t,s:esc(diary),chev:1})
-    :row({onclick:'openDiary(TODAY)',cls:'hm-day',t,s:'今日の日記を書く',chev:1});
-  return `<div class="hm-date">${list([r])}</div>`;
+  const evN=evOn(TODAY).filter(([k,e])=>!e.hol).length;
+  const nums=[
+    {l:'今日の予定',v:`${evN}<small>件</small>`},
+    {l:'ToDo',v:`${hmTodoKeys().length}<small>件</small>`},
+    {l:'今日の支出',v:yen(hmSpend())},
+  ];
+  return `<section class="hm-hero">`
+    
+    +`<a class="hm-hero-a" href="#/day/${TODAY}">`
+      +`<div class="hm-date"><span class="hm-n num">${+TODAY.slice(8)}</span><span class="hm-dw"><b>${+TODAY.slice(5,7)}月</b> ${wdOf(TODAY)}曜</span></div>`
+      +`<div class="hm-nums">${nums.map(n=>`<span class="hm-num"><i>${n.l}</i><b class="num">${n.v}</b></span>`).join('')}</div>`
+    +`</a>`
+    +`<div class="hm-foot">`
+      +(diary?`<span class="hm-diary-t">${esc(diary.split('\n')[0])}</span>`:'<span class="hm-diary-t"></span>')
+      +`<button class="hm-diary-btn" type="button" onclick="openDiary(TODAY)">${diary?'日記を開く':'日記を書く'}</button>`
+    +`</div>`
+    +`</section>`;
 }
 
-/* ---------- 2. 次の予定(予定の詳細の主役と同じ形: 点線の中抜きのカプセル) ---------- */
+/* ---------- 1. 次の予定(予定の詳細の主役と同じ形: 点線の中抜きのカプセル) ---------- */
 function hmNext(){
   const n=hmNextEv();
-  if(!n)return sh('次の予定')+empty('schedule','今日、これから予定はありません');
+  if(!n)return sh('次の予定')+empty('schedule','これからの予定 なし');
   const [k,e]=n;
   const ppl=(e.who||[]).filter(w=>E[w]);
   const meta=[
@@ -39,7 +56,7 @@ function hmNext(){
     +`<h1>${esc(e.t)}</h1><div class="meta">${meta}</div></a>`;
 }
 
-/* ---------- 3. 今日の残り: これからの予定と、過ぎて未記録の予定、今日の記録(時刻順・上が未来) ---------- */
+/* ---------- 2. 今日の残り: これからの予定と、過ぎて未記録の予定、今日の記録(時刻順・上が未来) ---------- */
 function hmRest(){
   const nx=hmNextEv(), nk=nx&&nx[0];
   const items=[];
@@ -49,12 +66,12 @@ function hmRest(){
   });
   kidsOf(TODAY).forEach(([k,a])=>items.push({time:a.time||'',fut:false,html:momentRow(k)}));
   items.sort((a,b)=>b.time.localeCompare(a.time));
-  if(!items.length)return sh('今日の残り')+empty('schedule','今日の残りの予定や記録はありません');
+  if(!items.length)return sh('今日の残り')+empty('schedule','予定・記録 なし');
   const body=items.filter(x=>x.fut).map(x=>x.html).join('')+nowLine()+items.filter(x=>!x.fut).map(x=>x.html).join('');
   return sh('今日の残り',items.length)+`<div class="ax">${axGroup('',body,{future:false,cls:'today'})}</div>`;
 }
 
-/* ---------- 4. 今日のToDo(期限が今日以前・未完了。期限切れを含む。最大5件) ---------- */
+/* ---------- 3. 今日のToDo(最大5件。すべて見るは #/todo) ---------- */
 function hmTodoRow(k){
   const t=TD[k], over=t.due&&t.due<TODAY;
   const linked=t.ev&&EV[t.ev]?EV[t.ev].t:'';
@@ -66,14 +83,14 @@ function hmTodoRow(k){
     t:esc(t.t)+(t.pri?'<span class="hm-pri">!</span>':''),s:`<span class="hm-s">${parts}</span>`,href:'#/task/'+k,chev:1});
 }
 function hmTodo(){
-  const ks=Object.keys(TD).filter(k=>!TD[k].done&&TD[k].due&&TD[k].due<=TODAY).sort((a,b)=>TD[a].due.localeCompare(TD[b].due));
+  const ks=hmTodoKeys();
   const n=ks.length;
-  if(!n)return sh('今日のToDo')+empty('todo','今日のToDoはありません');
-  return sh('今日のToDo',n,n>5?{label:'すべて見る',href:'#/plan?view=todo'}:null)
+  if(!n)return sh('今日のToDo')+empty('todo','今日のToDo なし');
+  return sh('今日のToDo',n,n>5?{label:'すべて見る',href:'#/todo'}:null)
     +objs(ks.slice(0,5).map(hmTodoRow));
 }
 
-/* ---------- 5. すぐメモ(1行入力+保存。最近のメモ2件) ---------- */
+/* ---------- 4. すぐメモ(1行入力+保存。最近のメモ2件) ---------- */
 /** memoCard は担当(メモ)が作る共通部品。まだ無い時は本文だけの簡単な表示 */
 function hmMemoCard(id){
   const m=MEMOS[id];
@@ -92,7 +109,7 @@ function hmMemo(){
   return sh('すぐメモ',null,{label:'すべて見る',href:'#/memo'})+input+(cards.length?objs(cards):'');
 }
 
-/* ---------- 6. お金(今月の自分の支出 / 未精算の立替) ---------- */
+/* ---------- 5. お金(今月の自分の支出 / 未精算の立替) ---------- */
 function hmMoney(){
   const tot=ldTotal(ldMap());
   const mo=+TODAY.slice(5,7);
@@ -105,9 +122,8 @@ function hmMoney(){
   ]);
 }
 
-route('home',()=>`<div class="hm-root">`
-  +largeTitle('ホーム',{actions:[{icon:'more',label:'このモックについて',onclick:'openAbout()'}]})
-  +hmDay()
+route('home',()=>`<div class="hm-root"><h1 class="sr">ホーム</h1>`
+  +hmHero()
   +hmNext()
   +hmRest()
   +hmTodo()
