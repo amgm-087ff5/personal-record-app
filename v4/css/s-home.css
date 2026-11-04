@@ -1,67 +1,114 @@
 /* =====================================================================
-   画面: ホーム(route home) — UI v4.4
-   0 ヒーロー(今日の大きな面: 青の塗り+左上の光+斜めの艶+色を帯びた影、角丸30) / 1 次の予定 / 2 今日の残り(軸)
-   / 3 今日のToDo / 4 すぐメモ / 5 お金
-   整列: 左右は --gutter(20px)。ブロックの間は 40px(.sh の上32px + 下の .sh の margin-top 8px)、ブロックの中は 8〜12px。
-   色は tokens.css の変数だけ。押し面は44px以上(見た目が小さい所は ::before で当たり判定を広げる)。
+   ホーム(route home) — UI v4.8 作り直し。見た目はここ。構成は js/screens/home.js
+   1 見出し(面にしない・大きな日付)/ 2 主役の面(青の塗り・角丸28・色を帯びた影)/ 3 記録待ち / 4 タイルの格子(2列)
+   整列: 左右の余白は --gutter(20px)。見出し・主役の面・タイルの左端は同じ 20px。
+   近接: 1つのまとまりの間は 28px、まとまりの中は 8〜12px。タイルの中は 8〜16px。
+   反復: タイルは全部 角丸20・白い面・同じ影・内側16px。押し面は 44px 以上。
+   色は tokens.css の変数だけ(白は --tx-inv、半透明は color-mix で作る)。12px 未満の文字はない。
    ===================================================================== */
 
-.hm-root .sh .act{min-height:44px;display:inline-flex;align-items:center}
-.hm-root .ax{margin-top:0}
-/* ブロックの間を 40px に(節の上 32px は全画面共通の .sh のまま。その上に 8px を足す) */
-.hm-root>.sh{margin-top:8px}
+.hm-root{padding-bottom:8px}
 
-/* ---- 0. ヒーロー: ホームだけの特別な入口。見出しの役割(他のタブの小さい大見出しは無い) ---- */
-.hm-root .hm-hero{position:relative;overflow:hidden;margin:20px var(--gutter) 0;padding:26px 24px;border-radius:30px;color:var(--tx-inv);
-  background:var(--light),linear-gradient(135deg,var(--me-fill) 0%,var(--fill-brand) 100%);
-  box-shadow:0 18px 36px -18px color-mix(in srgb,var(--fill-brand) 70%,transparent),0 4px 10px -6px color-mix(in srgb,var(--fill-brand) 45%,transparent),var(--hl-fill)}
-/* 右上の「このモックについて」(44px の押し面。ヒーローの中に置く) */
-.hm-root .hm-more{position:absolute;top:8px;right:8px;z-index:2;width:44px;height:44px;display:grid;place-items:center;border-radius:50%;color:var(--tx-inv)}
-.hm-root .hm-more:active{background:rgba(255,255,255,.18)}
-.hm-root .hm-more svg.i{width:22px;height:22px}
-/* 日付と数字は押すと日のページ。押した時に 98.5% に縮む */
-.hm-root .hm-hero-a{position:relative;z-index:1;display:block;color:inherit;transition:transform .12s var(--ease)}
-.hm-root .hm-hero-a:active{transform:scale(.985)}
-.hm-root .hm-date{display:flex;align-items:flex-end;gap:12px;padding-right:44px}
-.hm-root .hm-n{font:700 64px/.9 var(--font);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-.hm-root .hm-dw{font:700 20px/1.2 var(--font);padding-bottom:2px;white-space:nowrap}
-.hm-root .hm-nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:22px;padding-top:14px;border-top:1px solid rgba(255,255,255,.28)}
-.hm-root .hm-num{display:flex;flex-direction:column;gap:6px;min-width:0}
-.hm-root .hm-num i{font:600 13px/1.3 var(--font);font-style:normal;color:var(--tx-inv)}
-.hm-root .hm-num b{font:700 22px/1.1 var(--font);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hm-root .hm-num small{margin-left:2px;font:600 14px/1 var(--font)}
-/* 日記の導線(ヒーローの中に1つ)。白い押し面44px */
-.hm-root .hm-foot{position:relative;z-index:1;display:flex;align-items:center;gap:12px;margin-top:16px}
-.hm-root .hm-diary-t{flex:1;min-width:0;font:500 14px/1.4 var(--font);color:var(--tx-inv);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hm-root .hm-diary-btn{flex:none;height:44px;padding:0 18px;margin-left:auto;border-radius:999px;background:var(--tx-inv);color:var(--me-fill);font:700 15px/1 var(--font)}
-.hm-root .hm-diary-btn:active{background:var(--me-soft)}
+/* ---- 1. 見出し: 大きな日付(面にしない)と右上の日記のピル ---- */
+.hm-root .hm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:24px var(--gutter) 0}
+.hm-root .hm-date{display:flex;align-items:baseline;gap:10px;min-width:0}
+.hm-root .hm-d{font:800 34px/1.1 var(--font);letter-spacing:-.01em;color:var(--tx);white-space:nowrap}
+.hm-root .hm-w{font:600 15px/1.2 var(--font);color:var(--tx-2);white-space:nowrap}
+/* 日記のピル: 見た目は36px、押し面は ::before で44px */
+.hm-root .hm-pill{position:relative;flex:none;height:36px;padding:0 16px;display:inline-flex;align-items:center;border-radius:999px;background:var(--me-soft);color:var(--me);font:600 14px/1 var(--font);white-space:nowrap}
+.hm-root .hm-pill::before{content:"";position:absolute;inset:-4px -6px}
+.hm-root .hm-pill:active{filter:brightness(.96)}
 
-/* ---- 1. 次の予定: 予定の詳細の主役と同じ形(点線の中抜きのカプセル)。s-plan.css の .pl-root .cap.plan と同じ見た目 ---- */
-.hm-root .hm-next{display:block;margin:4px var(--gutter) 0;color:var(--tx);background:var(--surface);box-shadow:none;outline:2px dashed var(--plan);outline-offset:-2px}
-.hm-root .hm-next:active{background:var(--sunk)}
-.hm-root .hm-next .kind{color:var(--tx-2)}
-.hm-root .hm-next .kind .tm{color:var(--tx-2)}
-.hm-root .hm-next .meta{color:var(--tx-2);opacity:1}
-.hm-root .hm-next .meta .cd{font:600 15px/1.2 var(--font);color:var(--tx-2)}
+/* ---- 2. 主役の面: 青の塗り(左上の丸いグラデのみ・斜めの光なし)・白文字・色を帯びた柔らかい影 ---- */
+.hm-root .hm-main{position:relative;margin:16px var(--gutter) 0;padding:22px 22px 20px;border-radius:28px;color:var(--tx-inv);
+  background:var(--light),var(--me-fill);
+  box-shadow:0 18px 32px -18px color-mix(in srgb,var(--me-fill) 70%,transparent),0 4px 12px -6px color-mix(in srgb,var(--me-fill) 45%,transparent),var(--hl-fill)}
+/* 次の予定(押すと予定の詳細)。押した時は少し沈む */
+.hm-root .hm-nx{display:block;color:inherit;transition:transform .12s var(--ease)}
+a.hm-nx:active{transform:scale(.985)}
+.hm-root .hm-r1{display:flex;align-items:baseline;justify-content:space-between;gap:12px;min-width:0}
+.hm-root .hm-lbl{font:600 13px/1.4 var(--font);color:color-mix(in srgb,var(--tx-inv) 84%,transparent)}
+.hm-root .hm-left{font:700 26px/1.2 var(--font);white-space:nowrap;font-variant-numeric:tabular-nums}
+.hm-root .hm-title{display:block;margin-top:10px;font:700 24px/1.3 var(--font);overflow-wrap:anywhere}
+.hm-root .hm-time{display:block;margin-top:6px;font:600 15px/1.4 var(--font);color:color-mix(in srgb,var(--tx-inv) 92%,transparent)}
+.hm-root .hm-meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font:500 14px/1.4 var(--font);color:color-mix(in srgb,var(--tx-inv) 92%,transparent)}
+.hm-root .hm-mi{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.hm-root .hm-mi svg.i{width:16px;height:16px}
+.hm-root .hm-who{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+/* エンティティの印は緑のドット。白い塗りの上なので、白の半透明のドットにする */
+.hm-root .hm-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:color-mix(in srgb,var(--tx-inv) 80%,transparent)}
 
-/* ---- 3. 今日のToDo: 行60px・チェック欄・押し面44px ---- */
-.hm-root .hm-todo{min-height:60px;padding:14px 16px;gap:14px}
-.hm-root .hm-todo .t{font:500 15px/1.4 var(--font);color:var(--tx)}
-.hm-root .hm-todo .s{margin-top:3px}
-.hm-root .hm-todo .chev{color:var(--tx-3)}
-.hm-root .hm-s{display:flex;align-items:center;min-width:0;overflow:hidden}
-.hm-root .hm-s span+span{margin-left:8px}
-.hm-root .hm-s .tag{height:20px;padding:0 6px}
+/* 今日の流れ: 横長の帯(高さ36px・6:00〜24:00) */
+.hm-root .hm-flow{margin-top:22px}
+.hm-root .hm-flow-l{font:600 13px/1.4 var(--font);color:color-mix(in srgb,var(--tx-inv) 84%,transparent)}
+.hm-root .hm-track{position:relative;margin-top:12px;padding-top:18px}
+.hm-root .hm-band{position:relative;height:36px;border-radius:12px;background:color-mix(in srgb,var(--tx-inv) 16%,transparent)}
+/* 短冊: 記録=白い塗り / 予定=白い破線の枠。押し面は上下に広げて44px */
+.hm-root .hm-bar{position:absolute;top:4px;bottom:4px;min-width:6px;border-radius:8px}
+.hm-root .hm-bar::before{content:"";position:absolute;inset:-8px -4px}
+.hm-root .hm-bar.rec{background:var(--tx-inv)}
+.hm-root .hm-bar.rec.inst{min-width:6px;width:6px;border-radius:3px}
+.hm-root .hm-bar.plan{border:1.5px dashed color-mix(in srgb,var(--tx-inv) 75%,transparent);background:none}
+/* いま: 細い白い線 + 上の時刻 */
+.hm-root .hm-now{position:absolute;top:18px;bottom:0;width:0;z-index:2;pointer-events:none}
+.hm-root .hm-now::before{content:"";position:absolute;left:-1px;top:0;bottom:0;width:2px;border-radius:1px;background:var(--tx-inv)}
+.hm-root .hm-now b{position:absolute;top:-18px;left:0;transform:translateX(-50%);font:700 12px/1 var(--font);color:var(--tx-inv);white-space:nowrap;font-variant-numeric:tabular-nums}
+.hm-root .hm-ticks{position:relative;height:16px;margin-top:6px}
+.hm-root .hm-ticks span{position:absolute;top:0;transform:translateX(-50%);font:500 12px/1 var(--font);color:color-mix(in srgb,var(--tx-inv) 70%,transparent)}
+.hm-root .hm-ticks span.first{transform:none}
+.hm-root .hm-ticks span.last{transform:translateX(-100%)}
+
+/* ---- 3. 記録待ち: 白い面1枚(中の行は面を持たない)。赤い破線のカプセル(plan-dash の形)+記録にする ---- */
+.hm-root .hm-pend{margin:28px var(--gutter) 0;padding:16px 16px 6px;border-radius:20px;background:var(--surface);box-shadow:var(--e1),var(--hl)}
+.hm-root .hm-pend-h{font:600 13px/1.4 var(--font);color:var(--tx-2);margin-bottom:4px}
+.hm-root .hm-pr{display:flex;align-items:center;gap:12px;min-height:56px}
+.hm-root .hm-pr+.hm-pr{border-top:1px solid var(--line)}
+/* .cap.plan の見た目(plan-dash.css の破線の形)を使い、面(背景・影)は持たせない */
+.hm-root .hm-cap{flex:none;display:block;width:30px;height:18px;padding:0;background:none;box-shadow:none;border-radius:30px;overflow:visible}
+.hm-root .hm-pr-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.hm-root .hm-pr-t{font:600 15px/1.35 var(--font);color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hm-root .hm-pr-s{font:500 13px/1.3 var(--font);color:var(--tx-2)}
+.hm-root .hm-rec{flex:none;height:44px;padding:0 16px;border-radius:999px;background:var(--me-fill);color:var(--on-me);font:700 14px/1 var(--font);white-space:nowrap}
+.hm-root .hm-rec:active{filter:brightness(.94)}
+
+/* ---- 4. タイルの格子: 2列・間12px・左右20px(本体の余白と揃う) ---- */
+.hm-root .hm-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin:28px var(--gutter) 0}
+.hm-root .hm-tile{display:flex;flex-direction:column;gap:8px;min-width:0;padding:16px;border-radius:20px;background:var(--surface);color:var(--tx);box-shadow:var(--e1),var(--hl)}
+a.hm-tile{transition:transform .12s var(--ease)}
+a.hm-tile:active{transform:scale(.985)}
+.hm-root .hm-wide{grid-column:1/-1}
+.hm-root .hm-k{font:600 13px/1.4 var(--font);color:var(--tx-2)}
+.hm-root .hm-amt{font:700 22px/1.2 var(--font);color:var(--tx);font-variant-numeric:tabular-nums;white-space:nowrap}
+.hm-root .hm-sub{font:500 13px/1.4 var(--font);color:var(--tx-2);min-width:0;overflow:hidden;white-space:nowrap}
+.hm-root .hm-sub .knots{font:500 13px/1.4 var(--font)}
+.hm-root .hm-sub .kn-name{color:var(--tx-2)}
+/* タイルの見出し行(ToDo・すぐメモ) */
+.hm-root .hm-th{display:flex;align-items:center;gap:8px;min-height:32px}
+.hm-root .hm-th h2{font:700 18px/1.3 var(--font);color:var(--tx)}
+.hm-root .hm-cnt{font:500 13px/1.3 var(--font);color:var(--tx-3)}
+.hm-root .hm-more{margin-left:auto;min-height:44px;display:inline-flex;align-items:center;padding:0 2px;font:600 14px/1 var(--font);color:var(--me);white-space:nowrap}
+.hm-root .hm-none{font:500 14px/1.5 var(--font);color:var(--tx-3);padding:4px 0}
+
+/* ToDo の行: 48px・チェック欄(全画面共通の .check)・題名と期限 */
+.hm-root .hm-tl{display:flex;flex-direction:column}
+.hm-root .hm-tr{display:flex;align-items:center;gap:12px;min-height:48px}
+.hm-root .hm-tr+.hm-tr{border-top:1px solid var(--line)}
+.hm-root .hm-tt{flex:1;min-width:0;min-height:48px;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.hm-root .hm-tt-t{display:block;font:500 15px/1.35 var(--font);color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hm-root .hm-tt-s{display:flex;align-items:center;gap:8px;min-width:0;font:500 13px/1.3 var(--font);color:var(--tx-2);overflow:hidden;white-space:nowrap}
+.hm-root .hm-tt-s .ell{min-width:0}
+.hm-root .hm-od{flex:none;padding:2px 8px;border-radius:999px;background:var(--late-soft);color:var(--late);font:600 12px/1.4 var(--font)}
 .hm-root .hm-pri{margin-left:4px;color:var(--me);font-weight:700}
 
-/* ---- 4. すぐメモ: 入力の面+保存(押し面44px) ---- */
-.hm-root .hm-memo-in .field{min-height:52px}
-.hm-root .hm-memo-in .field input{height:44px}
-.hm-root .hm-memo-in .field .btn{height:44px;padding:0 16px}
-.hm-root .hm-memo .t{font:500 15px/1.5 var(--font);color:var(--tx);white-space:normal}
-.hm-root .hm-memo .s{margin-top:3px}
+/* 今月の支出・未精算: 同じ高さ(格子の伸び)。中の行の間は 8px */
+.hm-root .hm-tile .hm-amt{margin-top:2px}
 
-/* ---- 5. お金: 半券(自分の支出)と未精算の行 ---- */
-.hm-root .hm-owe .v{font:600 15px/1.4 var(--font)}
-.hm-root .hm-owe .chev{color:var(--tx-3)}
-.hm-root .ax{padding-left:6px} /* 時刻の文字の左端を画面の左の余白(20px)に揃える(整列) */
+/* すぐメモ: 入力(へこんだ面)+保存、最新のメモ1件 */
+.hm-root .hm-memo{display:flex;align-items:center;gap:8px;min-height:52px;padding:4px 4px 4px 14px;border-radius:14px;background:var(--sunk)}
+.hm-root .hm-memo input{flex:1;min-width:0;height:44px;font:var(--t-body);color:var(--tx);outline:none}
+.hm-root .hm-memo input::placeholder{color:var(--tx-3)}
+.hm-root .hm-save{flex:none;height:44px;padding:0 16px;border-radius:12px;background:var(--me-fill);color:var(--on-me);font:700 15px/1 var(--font)}
+.hm-root .hm-save:active{filter:brightness(.94)}
+.hm-root .hm-last{display:flex;flex-direction:column;gap:4px;width:100%;min-height:44px;padding:8px 0 0;text-align:left;border-top:1px solid var(--line)}
+.hm-root .hm-last-b{font:500 15px/1.5 var(--font);color:var(--tx);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.hm-root .hm-last-t{font:500 13px/1.3 var(--font);color:var(--tx-3)}
