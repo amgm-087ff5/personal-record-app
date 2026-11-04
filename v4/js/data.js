@@ -3,7 +3,8 @@ const TYPES={
   person:{n:'人物'}, colleague:{n:'同僚',p:'person'}, split:{n:'割り勘メンバー',p:'person'},
   place:{n:'場所'}, shop:{n:'店',p:'place'}, food:{n:'飲食店',p:'shop'}, ramen:{n:'ラーメン屋',p:'food'}, cafe:{n:'カフェ',p:'food'}, bakery:{n:'パン屋',p:'food'},
   super:{n:'スーパー',p:'shop'}, drug:{n:'ドラッグストア',p:'shop'}, home:{n:'住まい',p:'place'}, work:{n:'作業場所',p:'place'},
-  company:{n:'会社'}, thing:{n:'物'}, doc:{n:'書類'}
+  company:{n:'会社'}, thing:{n:'物'}, doc:{n:'書類'},
+  project:{n:'プロジェクト'}, work_proj:{n:'仕事',p:'project'}, life_proj:{n:'生活',p:'project'}
 };
 const E={
   me:{n:'自分',i:'自',t:['person'],facts:[]},
@@ -21,6 +22,7 @@ const E={
   super:{n:'スーパー青葉台',i:'ス',t:['super'],facts:[{k:'営業',v:'9:00–23:00'}]},
   drug:{n:'ドラッグ桜',i:'桜',t:['drug'],facts:[{k:'住所',v:'青葉区桜台5'}]},
   home:{n:'自宅',i:'家',t:['home'],facts:[{k:'住所',v:'青葉区…'}]},
+  proj1:{n:'引っ越し準備',i:'引',t:['project','life_proj'],facts:[{k:'期間',v:'2026-10〜2026-12'},{k:'状況',v:'進行中'}],rels:[['一緒に','hanako','',1]]},
 };
 const NOTES={
   hanako:{upd:'10/28 21:04',ver:7,body:[['好み','甘い物が好き。辛い物は苦手。お酒はビールなら飲む。'],['最近のこと','転職を考えている。{e:acorp} は2018年から。10/30に {a:c1} で話した。']],subs:[['誕生日プレゼント候補','更新 10/12'],['好きな店','リンク 3']]},
@@ -32,7 +34,7 @@ const NOTES={
    親子: 日記(日) › 活動 › 子(支払い)。活動を記録していない支払い(振込・ネット購入)は日の直下に置く */
 const A={
   d1030:{type:'日記',date:'2026-10-30',dd:'30',dw:'金',body:'花子さんとラーメン。午後はミナトで作業、夜は早めに帰宅。',photos:3,kids:['w1','l1','c1','m1']},
-  d1029:{type:'日記',date:'2026-10-29',dd:'29',dw:'木',body:'雨。在宅で仕事。',kids:['s2']},
+  d1029:{type:'日記',date:'2026-10-29',dd:'29',dw:'木',body:'雨。在宅で仕事。',kids:['h1','s2']},
   d1028:{type:'日記',date:'2026-10-28',dd:'28',dw:'水',body:'朝パンを買って出社。',kids:['p3']},
   d1027:{type:'日記',date:'2026-10-27',dd:'27',dw:'火',body:'',kids:['p4']},
   w1:{type:'起床',parent:'d1030',time:'07:40',title:'起床'},
@@ -44,6 +46,7 @@ const A={
   p16:{type:'支払い',parent:'c1',time:'15:05',title:'カフェ代',pay:'現金',amt:1100,roles:[['支払先','minato'],['支払者','me']],
       items:[{n:'カフェラテ',price:550,b:'自分',tax:10},{n:'カフェラテ',price:550,b:'自分',tax:10,memo:'花子さんの分(おごり)'}],x:'x16'},
   m1:{type:'移動',parent:'d1030',time:'19:30',end:'20:05',title:'帰宅',roles:[['出発','minato'],['到着','home']]},
+  h1:{type:'出来事',parent:'d1029',time:'14:00',end:'15:30',title:'物件の内見',roles:[['プロジェクト','proj1']]},
   s2:{type:'買い物',parent:'d1029',time:'18:25',end:'18:50',title:'夕食の買い物',roles:[['場所','super']],kids:['p2']},
   p2:{type:'支払い',parent:'s2',time:'18:40',title:'買い物',pay:'カード ••1234',amt:2684,roles:[['支払先','super'],['支払者','me']],
       items:[{n:'牛乳',price:238,b:'自分',tax:8},{n:'卵',price:268,b:'自分',tax:8,memo:'特売'},{n:'卵',price:268,b:'自分',tax:8},{n:'鶏もも肉',price:612,lines:[{n:'',k:'amt',v:680},{n:'値引き',k:'pct',v:-10}],b:'自分',tax:8},{n:'キッチンペーパー',price:398,b:'自分',tax:10},{n:'その他',price:900,b:'自分',tax:8}],x:'x2'},
@@ -100,6 +103,7 @@ const MEMOS={
   q3:{body:'カフェ ミナトは窓側に電源あり。午後は混む',at:'2026-10-30 16:40',links:['minato'],rec:'c1'},
   q2:{body:'年末調整の書類、会社のポータルから出す',at:'2026-10-29 21:15',links:[],pin:1},
   q1:{body:'洗剤の詰め替えは大きいサイズの方が安い',at:'2026-10-27 20:10',links:['drug']},
+  q5:{body:'引っ越し業者は3社から見積もりを取る',at:'2026-10-31 09:30',links:['proj1']},
 };
 /* 予定(=これからのアクティビティ)。終わると記録(rec)に結び付く */
 const TODAY='2026-10-31';
@@ -114,6 +118,7 @@ const EV={
   e7:{t:'スマホ料金',d:'2026-10-10',all:1,rep:'毎月10日',pay:{amt:3280,cat:'phone'},rec:'p14'},
   e8:{t:'文化の日',d:'2026-11-03',all:1,hol:1},
   e10:{t:'動画サブスク',d:'2026-10-15',all:1,rep:'毎月15日',pay:{amt:990,cat:'sub'},rec:'p15'},
+  e11:{t:'不動産屋と打ち合わせ',d:'2026-11-07',s:'14:00',e:'15:00',place:[null,'不動産ファースト'],ent:['proj1']},
 };
 /* ToDo: 完了状態を持つ。対象エンティティ・予定・支払い(購入)に結び付く */
 const LISTS={inbox:{n:'受信箱'},life:{n:'生活'},shop:{n:'買い物',shop:'super'}};
@@ -128,8 +133,10 @@ const TD={
   t6:{t:'食器用洗剤',list:'shop',ev:'e2'},
   t5:{t:'卵',list:'shop',ev:'e2',done:'2026-10-29',pay:'p2'},
   t10:{t:'スマホの料金プランを見直す',list:'inbox',memo:'通信費(固定費)を下げたい'},
+  t11:{t:'不動産屋に連絡',due:'2026-11-02',list:'life',ent:['proj1']},
+  t12:{t:'転居の届け出を出す',due:'2026-11-30',list:'life',ent:['proj1']},
 };
-const TYPE_PROPS={person:['電話','誕生日','住所'],colleague:['部署'],split:['略称'],place:['住所'],shop:['営業時間','定休日'],company:['所在地'],thing:['購入日'],doc:['発行元','期限']};
+const TYPE_PROPS={person:['電話','誕生日','住所'],colleague:['部署'],split:['略称'],place:['住所'],shop:['営業時間','定休日'],company:['所在地'],thing:['購入日'],doc:['発行元','期限'],project:['期間','状況']};
 
 /* 純粋なヘルパー */
 const yen=n=>'¥'+n.toLocaleString('ja-JP');

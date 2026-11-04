@@ -82,7 +82,7 @@ function crActSync(id,st,d,t,set){const el=document.getElementById(id);if(el)el.
 CREATE.push({id:'receipt',label:'レシートで支払い',icon:'pay',color:'var(--ev)',primaryOn:['activities','ledger'],onclick:'openReceipt()'});
 CREATE.push({id:'happening',label:'出来事',icon:'moment',color:'var(--ev)',primaryOn:[],onclick:'openNewHappening()'});
 CREATE.push({id:'event',label:'予定',icon:'future',color:'var(--plan)',primaryOn:['plan'],onclick:'openNewEvent()'});
-CREATE.push({id:'entity',label:'人・場所',icon:'kin',color:'var(--kin)',primaryOn:['entities'],onclick:'openNewEntity()'});
+CREATE.push({id:'entity',label:'エンティティ',icon:'kin',color:'var(--kin)',primaryOn:['entities'],onclick:'openNewEntity()'});
 CREATE.push({id:'diary',label:'今日の日記',icon:'diary',color:'var(--ev)',primaryOn:[],onclick:'openDiary(TODAY)'});
 CREATE.push({id:'memo',label:'メモ',icon:'memo',color:'var(--ev)',primaryOn:['memo'],onclick:'openNewMemo()'});
 
@@ -96,7 +96,7 @@ function crMemoSave(){const b=(CM.body||'').trim();if(!b){toast('本文を入れ
   memoAdd(b);CM=null;closeSheet();save();rerender();toast('メモを保存しました');
 }
 
-/* ---------- 人・場所の候補(輪郭つき) ----------
+/* ---------- エンティティの候補(輪郭つき) ----------
    入力欄の下にチップで出す。datalist は要素を持てないため使わない */
 function crPlaceSug(q,pick){
   const s=(q||'').trim();
@@ -255,8 +255,8 @@ function crDiaSave(){const id=crDay(CD.d);A[id].body=CD.body;CD=null;closeSheet(
 /* ---------- エンティティ ---------- */
 let CN=null;
 function openNewEntity(type){CN={t:type||'person',n:'',f:{}};crEntRender()}
-/** 種類の根(人物・場所・会社・物・書類)の輪郭と頭文字。名前の入力のたびにこの要素だけ描き直す */
-const CR_ROOTS=['person','place','company','thing','doc'];
+/** 種類の根(人物・場所・会社・物・書類・プロジェクト)の輪郭と頭文字。名前の入力のたびにこの要素だけ描き直す */
+const CR_ROOTS=['person','place','company','thing','doc','project'];
 function crPrev(){
   const root=typeAnc(CN.t)[0];const ini=(CN.n||'').trim()[0]||'?';
   return `<span class="kn lg ${ROOT_SHAPE[root]||'thing'}"><b>${esc(ini)}</b></span><small>${esc(ROOT_LABEL[root]||'')}</small>`;
@@ -268,11 +268,11 @@ function crEntRender(){
   const props=propsOf(CN.t).map(([p])=>`<div class="field"><label>${esc(p)}</label><input value="${esc(CN.f[p]||'')}" placeholder="任意" oninput="CN.f['${p}']=this.value"></div>`).join('');
   const body=`<div class="cr-prev" id="cr-prev">${crPrev()}</div>
   <div class="list">
-    <div class="field"><label>名前</label><input value="${esc(CN.n)}" placeholder="${isP?'例: 鈴木 一郎':'例: 本屋 ひだまり'}" oninput="CN.n=this.value;crPrevUpdate()"></div>
+    <div class="field"><label>名前</label><input value="${esc(CN.n)}" placeholder="${isP?'例: 鈴木 一郎':isUnder(CN.t,'project')?'例: 引っ越し準備':'例: 本屋 ひだまり'}" oninput="CN.n=this.value;crPrevUpdate()"></div>
     <div class="field"><label>種類</label><select onchange="CN.t=this.value;crEntRender()">${types}</select></div>
     ${props}
   </div>`;
-  crPanel('人・場所を追加',body,{right:{label:'追加',onclick:'crEntSave()'}});
+  crPanel('エンティティを追加',body,{right:{label:'追加',onclick:'crEntSave()'}});
 }
 function crEntSave(){
   const n=CN.n.trim();if(!n){toast('名前を入れてください');return}

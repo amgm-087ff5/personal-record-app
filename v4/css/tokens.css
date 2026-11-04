@@ -42,6 +42,8 @@
   --th-thing-s:#E2F2E8;
   --th-doc:var(--kin);
   --th-doc-s:#EDEFF3;
+  --th-proj:var(--kin);
+  --th-proj-s:var(--kin-soft);
   --axis:#D8DEE8;
   --axis-past:#B9C3D2;
   --now:var(--late);
@@ -70,7 +72,7 @@
   --t-body:400 15px/1.55 var(--font);
   --t-label:500 13px/1.4 var(--font);
   --t-cap:400 12px/1.4 var(--font);
-  --gutter:16px;
+  --gutter:20px;
   --row:56px;
   --tap:44px;
   --nav-h:64px;

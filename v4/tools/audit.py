@@ -14,8 +14,8 @@ import sys, asyncio, re, glob, os, colorsys
 from playwright.async_api import async_playwright
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else 'file://' + os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'index.html'))
-ROUTES = ['/home', '/memo', '/activities', '/day/2026-10-30', '/day/2026-10-31', '/a/p1', '/a/p16', '/a/c1', '/a/l1', '/a/m1', '/a/w1', '/i/p1/0', '/plan', '/plan?view=day', '/plan?view=todo',
-          '/ev/e1', '/ev/e5', '/task/t1', '/entities', '/e/hanako', '/e/aoba', '/e/acorp', '/n/hanako', '/notes', '/types', '/ledger', '/x/x1', '/x/x2', '/cats']
+ROUTES = ['/home', '/memo', '/activities', '/day/2026-10-30', '/day/2026-10-31', '/a/p1', '/a/p16', '/a/c1', '/a/l1', '/a/m1', '/a/w1', '/i/p1/0', '/plan', '/plan?view=day', '/todo',
+          '/ev/e1', '/ev/e5', '/task/t1', '/entities', '/e/hanako', '/e/aoba', '/e/acorp', '/e/proj1', '/n/hanako', '/notes', '/types', '/ledger', '/x/x1', '/x/x2', '/cats', '/settings']
 
 JS = r"""() => {
   const vis = el => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el);

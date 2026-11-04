@@ -1,5 +1,5 @@
 /* =====================================================================
-   人・場所(縁) — 時間をまたいで続くもの。
+   エンティティ(縁) — 時間をまたいで続くもの(人・場所・会社・物・書類・プロジェクト)。
    一覧 = 種類ごと(値札)に、最後に交わった順 / 詳細 = フォルダのタブ+その縁の糸で切り取った時間軸
    ルート: #/entities , #/e/{id} , #/n/{id}(メモ) , #/notes(メモの一覧) , #/types(種類)
    見た目は css/s-entities.css(値札・フォルダのタブ・角を折った紙)
@@ -33,13 +33,13 @@ route('entities',()=>{
     v:`<span class="en-ago">${agoLabel(d)}${encStrip(k)}</span>`});
   const groups=keys.map(g=>{const rs=shown.filter(x=>x.g===g);
     return `<section class="en-g"><div class="en-gh">${vtag(TYPES[g].n)}<span class="n">${rs.length}件</span></div><div class="objs">${rs.map(rowOf).join('')}</div></section>`}).join('');
-  return largeTitle('人・場所',{actions:[
-      {text:'縁を追加',icon:'plus',primary:true,onclick:'openNewEntity()'},
+  return largeTitle('エンティティ',{actions:[
+      {text:'追加',icon:'plus',primary:true,onclick:'openNewEntity()'},
       {label:'メモ',icon:'lines',onclick:"go('#/notes')"},
       {label:'種類',icon:'type',onclick:"go('#/types')"}]})
     +`<div class="en-search">${IC.search}<input class="input" type="search" placeholder="名前で探す" aria-label="名前で探す" oninput="enFilter(this.value)"></div>`
     +chips(kinds,enKind,"enKind='$v';rerender()")
-    +`<div id="en-groups">${groups||empty('people','この種類の縁はまだありません')}</div>`;
+    +`<div id="en-groups">${groups||empty('people','この種類のエンティティはまだありません')}</div>`;
 },{tab:'entities'});
 function enFilter(v){
   v=v.trim();document.querySelectorAll('#en-groups .en-g').forEach(g=>{let n=0;g.querySelectorAll('.row').forEach(r=>{const hit=!v||r.querySelector('.t').textContent.includes(v);r.hidden=!hit;if(hit)n++});g.hidden=!n});
@@ -59,10 +59,12 @@ function factEvents(id){
   return out;
 }
 route('e',id=>{
-  const e=E[id];if(!e)return appbar('')+empty('people','この人・場所は見つかりません');
+  const e=E[id];if(!e)return appbar('')+empty('people','このエンティティは見つかりません');
   const tc=threadColor(id);
   const acts=actsOf(id).map(([k,a,role])=>({k,a,role,d:dateOf(a)||null})).filter(x=>x.d).sort((x,y)=>(y.d+y.a.time).localeCompare(x.d+x.a.time));
-  const plans=Object.entries(EV).filter(([k,ev])=>!ev.rec&&!ev.hol&&ev.d>=TODAY&&((ev.who||[]).includes(id)||(ev.place&&ev.place[0]===id))).sort((a,b)=>b[1].d.localeCompare(a[1].d));
+  const plans=Object.entries(EV).filter(([k,ev])=>!ev.rec&&!ev.hol&&ev.d>=TODAY&&((ev.who||[]).includes(id)||(ev.place&&ev.place[0]===id)||(ev.ent||[]).includes(id))).sort((a,b)=>b[1].d.localeCompare(a[1].d));
+  /* ToDo: このエンティティに結び付いた未完了のもの(期限の近い順)。人・場所にも同じ節が出る */
+  const todos=Object.keys(TD).filter(k=>tdOpen(k)&&(TD[k].ent||[]).includes(id)).sort((a,b)=>(TD[a].due||'9999').localeCompare(TD[b].due||'9999'));
   const yearN=acts.filter(x=>x.d.startsWith(TODAY.slice(0,4))).length;
   const money=acts.filter(x=>x.a.type==='支払い').reduce((s,x)=>s+(x.a.x&&X[x.a.x]?X[x.a.x].amt:0),0);
   const owed=Object.values(A).filter(a=>a.adv&&a.adv[0]===id&&a.adv[2]==='未精算').reduce((s,a)=>s+a.adv[1],0);
@@ -86,7 +88,8 @@ route('e',id=>{
     +(rare.length?`<details class="en-more"><summary>ほかの情報 ${rare.length}件</summary><dl class="facts">${rare.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}</dd>`).join('')}</dl></details>`:'')
     +(note?`<a class="en-paper en-memo" href="#/n/${id}"><span class="h">${IC.lines}メモ<span class="grow"></span><span class="faint">更新 ${esc(note.upd)}</span></span><p>${esc((note.body[0]?note.body[0][1]:'').replace(/\{[ea]:\w+\}/g,''))}</p></a>`
       :`<button class="en-paper en-memo en-empty" type="button" onclick="enNewNote('${id}')"><span class="h">${IC.lines}メモを書く</span></button>`)
-    +sh('この縁の時間軸')
+    +(todos.length?sh('ToDo',todos.length)+objs(todos.map(enTaskRow)):'')
+    +sh('このエンティティの時間軸')
     +`<div class="ax thread" style="--tc:${tc}">`
     +(()=>{/* いまの月は1枚の面: 予定(点線) → いまの線 → 済んだ記録。同じ月を2枚に分けない */
       const lf=fut[fut.length-1],fp=pastGroups[0];const join=lf&&fp&&lf.ym===fp.ym;
@@ -95,6 +98,10 @@ route('e',id=>{
     +(pastGroups.length?axEdge('これより前の記録はありません',true):'')
     +`</div>`;
 },{tab:'entities'});
+
+/** 詳細のToDo節の1行(チェックで完了。押すとそのToDo) */
+function enTaskRow(k){const t=TD[k];
+  return row({cls:'en-todo',wrap:true,lead:checkbox(false,`toggleTask('${k}')`),href:'#/task/'+k,t:esc(t.t)+(t.pri?'<span class="pl-pri">!</span>':''),s:t.due?relDay(t.due):'',chev:1})}
 
 /* ---------- メモ: 縁に綴じた文章(角を折った紙) ---------- */
 function enNewNote(id){NOTES[id]={upd:`${+TODAY.slice(5,7)}/${+TODAY.slice(8)} ${NOW}`,ver:1,body:[],subs:[]};save();go('#/n/'+id)}

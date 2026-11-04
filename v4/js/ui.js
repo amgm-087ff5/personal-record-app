@@ -70,8 +70,8 @@ const NOW='13:20'; /* モックの「いま」(2026-10-31 13:20) */
 const ico=(icon,c='var(--tx-2)')=>`<span class="ico" style="--ic:${c}">${IC[icon]||''}</span>`;
 
 /* ---- 縁(エンティティ) ---- */
-const ROOT_SHAPE={person:'person',place:'place',company:'org',thing:'thing',doc:'doc'};
-const ROOT_LABEL={person:'人物',place:'場所',company:'会社',thing:'物',doc:'書類'};
+const ROOT_SHAPE={person:'person',place:'place',company:'org',thing:'thing',doc:'doc',project:'proj'};
+const ROOT_LABEL={person:'人物',place:'場所',company:'会社',thing:'物',doc:'書類',project:'プロジェクト'};
 const rootOf=id=>{const e=E[id];return e&&e.t&&e.t[0]?typeAnc(e.t[0])[0]:'thing'};
 const shapeOf=id=>ROOT_SHAPE[rootOf(id)]||'thing';
 const threadColor=id=>`var(--th-${shapeOf(id)})`;
@@ -250,7 +250,7 @@ function render(keepScroll){
   CUR=parseHash();const r=ROUTES[CUR.name]||ROUTES.activities;
   const y=scrollY;
   const safe=(fn,id,q)=>{try{return fn(id,q)}catch(e){console.error(e);return appbar('表示できません')+banner('warn',`この画面を表示できませんでした。<br><small>${esc(e.message)}</small>`)}};
-  const ROOT={home:'home',activities:'activities',plan:'plan',memo:'memo',entities:'entities',ledger:'ledger'};
+  const ROOT={home:'home',activities:'activities',plan:'plan',memo:'memo',todo:'todo',entities:'entities',ledger:'ledger',settings:'settings'};
   const wide=innerWidth>=1100;const rootName=ROOT[r.tab||lastTab]||'home';
   const app=document.getElementById('app');
   if(wide){
@@ -273,22 +273,81 @@ const rerender=()=>render(true);
 addEventListener('hashchange',()=>{closeSheet(true);render()});
 addEventListener('scroll',()=>{const b=document.querySelector('.appbar');if(b)b.classList.toggle('scrolled',scrollY>4)},{passive:true});
 
-/* ---------- 下部ナビ ---------- */
-/* v4.3: ホーム(毎日最初に見る)とメモを追加(11/04 ユーザー指示)。6タブ+中央の＋。
-   幅412で1枠約56pxのため、タイムラインのタブ名は「記録」(画面の見出しはタイムラインのまま) */
-const TABS=[
-  ['home','ホーム','home'],
-  ['activities','記録','axis'],
-  ['plan','予定','future'],
-  null,
-  ['memo','メモ','memo'],
-  ['entities','人・場所','kin'],
-  ['ledger','家計簿','share'],
+/* ---------- 下部ナビ ----------
+   v4.4(11/04 ユーザー指示): 2枚のナビ。
+   1枚目(毎日): ホーム・記録・＋・予定・メモ / 2枚目(整理): ToDo・エンティティ・＋・家計簿・設定
+   枠 = [タブ][タブ][＋][タブ][タブ][切替]。＋は2枚とも同じ位置。切替は2つの点(いまの枚目=塗り)。
+   ナビの上で横に30px以上スワイプしても切り替わる。今いる画面のタブがある枚目を、画面が変わった時に出す。
+   幅900px以上は左のレールに8つ全部(枚目なし)。 */
+const navSvg=d=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">${d}</svg>`;
+/* 面系(塗り)。抜き(穴)は evenodd で表す。キーは下のタブのキーと同じ */
+const NAV_IC={
+  /* 家=ホーム: 屋根と壁の面、戸口は抜く */
+  home:navSvg('<path fill-rule="evenodd" d="M12 2.8 2.9 10.1a1 1 0 0 0-.4.8v8.9a1.7 1.7 0 0 0 1.7 1.7h15.6a1.7 1.7 0 0 0 1.7-1.7v-8.9a1 1 0 0 0-.4-.8Z M9.8 21.5v-5a1.2 1.2 0 0 1 1.2-1.2h2a1.2 1.2 0 0 1 1.2 1.2v5Z"/>'),
+  /* 時間の軸=記録: 軸の上に塗りの区間と点(既存の記録の形を面に) */
+  activities:navSvg('<rect x="3" y="2" width="2.6" height="20" rx="1.3"/><rect x="8" y="3.5" width="13" height="6" rx="3"/><rect x="8" y="13" width="8.5" height="6" rx="3"/><circle cx="4.3" cy="19" r="2.4"/>'),
+  /* カプセル=予定: 中抜きの形を塗りに */
+  plan:navSvg('<rect x="2" y="6" width="20" height="12" rx="6"/>'),
+  /* 角を折った紙=メモ: 折り返しと文字の行は抜く */
+  memo:navSvg('<path fill-rule="evenodd" d="M6 2.5h8.3l5.2 5.2V20a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 20V4A1.5 1.5 0 0 1 6 2.5Z M14.3 2.5v5.2h5.2Z M8.2 11.2h7.6v1.8H8.2Z M8.2 15h4.6v1.8H8.2Z"/>'),
+  /* 箱の中のチェック=ToDo: チェックは抜く */
+  todo:navSvg('<path fill-rule="evenodd" d="M8 3h8a5 5 0 0 1 5 5v8a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5Z M6.6 12.4l1.9-1.9 1.8 1.8 5.1-5.1 1.9 1.9-7 7Z"/>'),
+  /* 人の輪郭+ピン=エンティティ(縁の形と同じ) */
+  entities:navSvg('<circle cx="8.5" cy="7.5" r="4"/><path d="M1.5 21.5a7 7 0 0 1 14 0Z"/><path fill-rule="evenodd" d="M18 2.8a4.7 4.7 0 0 1 4.7 4.7c0 3.3-4.7 9.2-4.7 9.2s-4.7-5.9-4.7-9.2A4.7 4.7 0 0 1 18 2.8Zm0 3.1a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2Z"/>'),
+  /* 棒の一部=家計簿: 3本の棒と台 */
+  ledger:navSvg('<rect x="3" y="11" width="4.2" height="9.5" rx="1.2"/><rect x="9.9" y="4" width="4.2" height="16.5" rx="1.2"/><rect x="16.8" y="8" width="4.2" height="12.5" rx="1.2"/><rect x="2" y="20.6" width="20" height="1.6" rx=".8"/>'),
+  /* 歯車=設定: 中心の穴は抜く */
+  settings:navSvg('<path fill-rule="evenodd" d="M19.60 12.00 L22.10 13.44 L21.65 15.30 L18.77 15.45 L18.15 16.47 L17.37 17.37 L18.12 20.16 L16.49 21.16 L14.35 19.23 L13.19 19.51 L12.00 19.60 L10.56 22.10 L8.70 21.65 L8.55 18.77 L7.53 18.15 L6.63 17.37 L3.84 18.12 L2.84 16.49 L4.77 14.35 L4.49 13.19 L4.40 12.00 L1.90 10.56 L2.35 8.70 L5.23 8.55 L5.85 7.53 L6.63 6.63 L5.88 3.84 L7.51 2.84 L9.65 4.77 L10.81 4.49 L12.00 4.40 L13.44 1.90 L15.30 2.35 L15.45 5.23 L16.47 5.85 L17.37 6.63 L20.16 5.88 L21.16 7.51 L19.23 9.65 L19.51 10.81ZM8.7 12a3.3 3.3 0 1 0 6.6 0a3.3 3.3 0 1 0 -6.6 0Z"/>'),
+  /* 2つの点=切替(いまの枚目は濃く、もう一方は淡い。出し分けはCSS) */
+  switch:navSvg('<circle class="d d1" cx="7.5" cy="12" r="3"/><circle class="d d2" cx="16.5" cy="12" r="3"/>'),
+};
+const NAV_PAGES=[
+  [['home','ホーム'],['activities','記録'],null,['plan','予定'],['memo','メモ']],
+  [['todo','ToDo'],['entities','エンティティ'],null,['ledger','家計簿'],['settings','設定']],
 ];
-const navBadge=k=>k==='plan'?(typeof overdueCount==='function'?overdueCount():0):0;
+const NAV_ALL=NAV_PAGES.flat().filter(Boolean);
+/* 期限切れのToDoの件数は ToDo のタブに付ける */
+const navBadge=k=>k==='todo'?(typeof overdueCount==='function'?overdueCount():0):0;
+const WIDE_NAV=matchMedia('(min-width:900px)');
+let NAV_PG=0,NAV_KEY=null,NAV_CUR='home';
+const navPageOf=k=>NAV_PAGES.findIndex(p=>p.some(t=>t&&t[0]===k));
+const navItem=(t,cur)=>t?`<a href="#/${t[0]}"${t[0]===cur?' aria-current="page"':''}><span class="pill">${NAV_IC[t[0]]}</span>${t[1]}${navBadge(t[0])?`<span class="badge">${navBadge(t[0])}</span>`:''}</a>`:`<div class="fab-slot"><button class="fab" type="button" aria-label="作成" onclick="openCreate()">${IC.plus}</button></div>`;
 function renderNav(cur){
-  document.getElementById('nav').innerHTML=`<div class="nav-in">${TABS.map(t=>t?`<a href="#/${t[0]}" ${t[0]===cur?'aria-current="page"':''}><span class="pill">${IC[t[2]]}</span>${t[1]}${navBadge(t[0])?`<span class="badge">${navBadge(t[0])}</span>`:''}</a>`:`<div class="fab-slot"><button class="fab" type="button" aria-label="作成" onclick="openCreate()">${IC.plus}</button></div>`).join('')}</div>`;
+  NAV_CUR=cur;
+  /* 画面(ハッシュ)が変わった時だけ、今の画面のタブがある枚目に合わせる。同じ画面の描き直しでは手動の枚目を保つ */
+  const key=CUR.name+'/'+(CUR.id||'');
+  if(key!==NAV_KEY){NAV_KEY=key;const p=navPageOf(cur);if(p>=0)NAV_PG=p}
+  const nav=document.getElementById('nav');
+  if(WIDE_NAV.matches){
+    nav.innerHTML=`<div class="nav-in">${navItem(null)}${NAV_ALL.map(t=>navItem(t,cur)).join('')}</div>`;
+    return;
+  }
+  nav.innerHTML=`<div class="nav-in"><div class="nav-view"><div class="nav-track" style="--pg:${NAV_PG}">${NAV_PAGES.map((p,i)=>`<div class="nav-pg"${i===NAV_PG?'':' inert'}>${p.map(t=>navItem(t,cur)).join('')}</div>`).join('')}</div></div><button class="nav-sw" type="button" data-pg="${NAV_PG}" aria-label="ナビを切り替え(${NAV_PG+1}/2)" onclick="navSwitch()">${NAV_IC.switch}</button></div>`;
 }
+/* 2枚を切り替える。描き直さずに横にすべらせる(.2s。reduced-motion は全体の規則で動かない) */
+function navSwitch(){
+  NAV_PG=NAV_PG?0:1;
+  const tr=document.querySelector('#nav .nav-track');if(!tr)return;
+  tr.style.setProperty('--pg',NAV_PG);
+  tr.querySelectorAll('.nav-pg').forEach((p,i)=>i===NAV_PG?p.removeAttribute('inert'):p.setAttribute('inert',''));
+  const sw=document.querySelector('#nav .nav-sw');
+  if(sw){sw.dataset.pg=NAV_PG;sw.setAttribute('aria-label',`ナビを切り替え(${NAV_PG+1}/2)`)}
+}
+/* 横スワイプ(pointer と touch。横に30px以上・縦より大きい)で切り替え。同じジェスチャの2つ目のイベントは起点を消して無視する */
+let navSX=null,navSY=0;
+const navEl=document.getElementById('nav');
+const navDown=(x,y)=>{navSX=x;navSY=y};
+const navUp=(x,y)=>{
+  if(navSX===null)return;
+  const dx=x-navSX,dy=y-navSY;navSX=null;
+  if(!WIDE_NAV.matches&&Math.abs(dx)>=30&&Math.abs(dx)>Math.abs(dy))navSwitch();
+};
+navEl.addEventListener('pointerdown',e=>navDown(e.clientX,e.clientY));
+navEl.addEventListener('pointerup',e=>navUp(e.clientX,e.clientY));
+navEl.addEventListener('pointercancel',()=>{navSX=null});
+navEl.addEventListener('touchstart',e=>navDown(e.touches[0].clientX,e.touches[0].clientY),{passive:true});
+navEl.addEventListener('touchend',e=>navUp(e.changedTouches[0].clientX,e.changedTouches[0].clientY),{passive:true});
+WIDE_NAV.addEventListener('change',()=>renderNav(NAV_CUR));
 
 /* ---------- シート ----------
    openSheet({title, body, left:{label,onclick}, right:{label,onclick,primary}, footer, full})
