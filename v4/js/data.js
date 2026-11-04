@@ -84,10 +84,20 @@ const COLORS=['#8796B5','#7FB5B9','#DC97AA','#9CC7A3','#8DB0DD','#B3D8EA','#F2C6
  ['d1027','2026-10-27','火','p13','家賃','大家(振込)',null,85000,'x13','rent'],
  ['d1010','2026-10-10','土','p14','スマホ料金','モバイル通信',null,3280,'x14','phone'],
  ['d1015','2026-10-15','木','p15','動画サブスク','動画配信',null,990,'x15','sub'],
-].forEach(([d,date,dw,pid,title,shopName,shopId,amt,xid,cat,sp])=>{
-  if(A[d])A[d].kids.push(pid);else A[d]={type:'日記',date,dd:String(+date.slice(8)),dw,body:'',kids:[pid]};
+ /* 10/17〜10/31 の変動費(家計簿・ホームの支出用。固定費は除く)。12番目の値は時刻 */
+ ['d1017','2026-10-17','土','p17','ランチ','イタリアン 木の実',null,2840,'x17','eatout','日常','12:40'],
+ ['d1019','2026-10-19','月','p18','洗剤・シャンプー',null,'drug',1120,'x18','daily','日常','19:40'],
+ ['d1020','2026-10-20','火','p19','カフェラテ',null,'minato',980,'x19','cafe','日常','15:10'],
+ ['d1022','2026-10-22','木','p20','カフェラテ',null,'minato',540,'x20','cafe','日常','14:10'],
+ ['d1023','2026-10-23','金','p21','夕食の買い物',null,'super',3760,'x21','cook','日常','18:50'],
+ ['d1024','2026-10-24','土','p22','ランチ','そば処 山の手',null,2160,'x22','eatout','日常','12:30'],
+ ['d1028','2026-10-28','水','p23','夕食の買い物',null,'super',980,'x23','cook','日常','18:40'],
+ ['d1031','2026-10-31','土','p24','カフェラテ',null,'minato',480,'x24','cafe','日常','08:40'],
+].forEach(([d,date,dw,pid,title,shopName,shopId,amt,xid,cat,sp,time='19:00'])=>{
+  /* 架空の支払いは日の kids に入れない(記録のタイムライン・今日の流れに出さない)。日の付け先(parent)だけ持つ */
+  if(!A[d])A[d]={type:'日記',date,dd:String(+date.slice(8)),dw,body:'',kids:[]};
   const roles=[['支払先',shopId,shopName],['支払者','me']];if(pid==='p8')roles.push(['同席','hanako']);
-  A[pid]={type:'支払い',parent:d,time:'19:00',title:'支払い',pay:'カード ••1234',amt,roles,items:[{n:title,price:amt,b:'自分',tax:10}],x:xid};
+  A[pid]={type:'支払い',parent:d,time,title:'支払い',pay:'カード ••1234',amt,roles,items:[{n:title,price:amt,b:'自分',tax:10}],x:xid};
   X[xid]={pay:pid,amt,cat,sp,memo:'',items:[{n:title,price:amt,b:'全額'}]};
 });
 /* 過去の月: 大分類ごとの合計 */

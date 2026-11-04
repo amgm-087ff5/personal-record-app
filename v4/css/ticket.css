@@ -20,7 +20,7 @@
 .tkt-s .sp-star{display:grid}.tkt-s .sp-star svg.i{width:16px;height:16px}
 .tkt-s .none{font:500 12px/1.25 var(--font)}
 .tkt-s .none{opacity:.78}
-.tkt-b{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-left:2px dashed var(--line)}
+.tkt-b{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-left:1.5px dashed var(--line)} /* v4.9 */
 .tkt-b .main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .tkt-b .t{font:600 15px/1.35 var(--font);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tkt-b .s{display:flex;align-items:center;gap:6px;min-width:0;font:400 13px/1.35 var(--font);color:var(--tx-3);overflow:hidden;white-space:nowrap}

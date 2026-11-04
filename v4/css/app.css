@@ -238,7 +238,7 @@ a.ref:active{background:var(--sunk)}
 /* 日の区切り: 軸を横切る見出し */
 .dh{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:var(--tcol) var(--rail) 1fr;align-items:center;min-height:56px;
   background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(10px) saturate(1.3)}
-.dh::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - 1px);top:0;bottom:0;width:2px;background:var(--rail-c,var(--axis-past))}
+.dh::before{content:"";position:absolute;left:calc(var(--tcol) + var(--rail)/2 - .75px);top:0;bottom:0;width:1.5px;background:var(--rail-c,var(--axis-past)) /* v4.9: 軸を細く */}
 .dh .d{padding-left:8px;text-align:right;padding-right:6px;line-height:1}
 .dh .d b{display:block;font:700 22px/1 var(--font);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .dh .d i{display:block;font:500 12px/1 var(--font);font-style:normal;color:var(--tx-3);margin-top:3px}
@@ -259,7 +259,7 @@ a.dh:active .c{background:var(--sunk)}
 .focus-card{grid-column:2/4;margin:0 var(--gutter) 0 calc(var(--rail) + 4px);position:relative}
 
 .mo-card{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e2),var(--hl);padding:16px 18px 16px;position:relative}
-.mo-card::before{content:"";position:absolute;left:-12px;top:34px;width:12px;height:2px;background:var(--tx)}
+.mo-card::before{content:"";position:absolute;left:-12px;top:34px;width:12px;height:1.5px;background:var(--line-strong)} /* v4.9: 濃い墨色→薄い線 */
 
 .mo-card .kind{display:flex;align-items:center;gap:6px;font:var(--t-label);color:var(--tx-2)}
 .mo-card .kind svg.i{width:15px;height:15px}
@@ -336,7 +336,7 @@ a.dh:active .c{background:var(--sunk)}
 .objs>.row{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--e1),var(--hl)}
 .objs>.row::before{display:none}
 .objs>.row.ind{margin-left:calc(var(--d,0)*20px);position:relative}
-.objs>.row.ind::after{content:"";position:absolute;left:-12px;top:-8px;height:calc(50% + 8px);width:9px;border-left:2px solid var(--line-strong);border-bottom:2px solid var(--line-strong);border-bottom-left-radius:6px}
+.objs>.row.ind::after{content:"";position:absolute;left:-12px;top:-8px;height:calc(50% + 8px);width:9px;border-left:1.5px solid var(--line);border-bottom:1.5px solid var(--line); /* v4.9 */border-bottom-left-radius:6px}
 
 /* ---------- 出来事の詳細: 細い軸に掛かったカプセル(時刻列なし) ---------- */
 
@@ -372,8 +372,8 @@ a.dh:active .c{background:var(--sunk)}
 /* いま: 点を付けない横線 */
 
 /* 日の区切り: 軸を横切る短い太線 */
-.dh .tick{width:22px;height:4px;border-radius:2px;background:var(--tx);box-shadow:0 0 0 3px var(--bg)}
-.dh .tick.today{background:var(--me)}
+.dh .tick{width:22px;height:4px;border-radius:2px;background:var(--tx-3);box-shadow:0 0 0 3px var(--bg)}
+.dh .tick.today{background:var(--light),var(--me)} /* v4.9 */
 /* 縁の輪郭: 青緑(縁)、自分は青。会社=建物 */
 .ref.unreg{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line-strong);padding-left:3px;color:var(--tx-2)}
 /* カプセル(出来事の詳細) = 出来事の色の塗り */
@@ -444,7 +444,7 @@ a.dh:active .c{background:var(--sunk)}
 /* 1つの支払いの棒(一覧の行・精算) */
 .pbar{display:flex;width:64px;height:6px;margin:4px 0 0 auto;border-radius:3px;overflow:hidden;gap:1px;background:var(--sunk)}
 .pbar i{display:block;height:100%;min-width:0}
-.pbar i.me{background:var(--me)} .pbar i.other{background:var(--axis)}
+.pbar i.me{background:var(--light),var(--me)} /* v4.9: ベタ→グラデ */ .pbar i.other{background:var(--axis)}
 .pbar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 2px,color-mix(in srgb,var(--owe) 40%,transparent) 2px 4px)}
 .pbar.lg{width:28px;height:10px;margin:0;border-radius:3px}
 .pbar.lg i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 3px,color-mix(in srgb,var(--owe) 40%,transparent) 3px 6px)}
@@ -467,7 +467,7 @@ a.ref:active{background:none;text-decoration:underline}
 /* 作成: 操作の一覧。面(オブジェクト)にしない。主ボタンだけ青の塗り */
 .actions{grid-template-columns:1fr;gap:0;padding:4px var(--gutter)}
 .action{flex-direction:row;align-items:center;gap:14px;min-height:56px;padding:6px 4px;border-radius:0;background:none;box-shadow:none;border-top:1px solid var(--line)}
-.action.primary{min-height:56px;margin-bottom:8px;padding:6px 14px;border-radius:var(--r-sm);border-top:0;background:var(--me)}
+.action.primary{min-height:56px;margin-bottom:8px;padding:6px 14px;border-radius:var(--r-sm);border-top:0;background:var(--light),var(--me)} /* v4.9 */
 .action.primary+.action{border-top:0}
 .action .t{font:500 15px/1.3 var(--font)}
 /* 家計簿の推移: 月ごとの自分の支出の棒 */
@@ -519,7 +519,7 @@ a.ref:active{background:none;text-decoration:underline}
 
 /* 塗りの上の文字は白。ダークでも塗りを白文字が読める濃さにする(黒い文字を載せない) */
 
-.btn,.fab,.action.primary{background-color:var(--me-fill)}
+.btn,.fab,.action.primary{background:var(--light),var(--me-fill)} /* v4.9: ベタ→グラデ(下の .btn 規則と同じ) */
 
 .btn.tonal,.btn.ghost{background:transparent}.btn.tonal{background:var(--me-soft)}
 .btn.danger{background:var(--late-soft)}
@@ -639,7 +639,7 @@ body{background-color:var(--bg);background-image:var(--bg-grad);background-attac
 
 /* 帯のタブ: 記録=青灰(出来事の色)、縁の行=青緑(縁の色)、予定にはつけない */
 .objs>.row{position:relative}
-.objs>.row::before{content:"";display:block;position:absolute;left:0;top:50%;width:4px;height:26px;margin-top:-13px;border-radius:0 4px 4px 0;background:var(--tab)}
+.objs>.row::before{content:"";display:block;position:absolute;left:0;top:50%;width:3px;height:26px;margin-top:-13px;border-radius:0 3px 3px 0;background:var(--tab);opacity:.75} /* v4.9: 4px→3px */
 
 .objs>.row.ind::after{display:none}
 .list{background:var(--surface)}
@@ -663,7 +663,7 @@ a.row:active,button.row:active,.btn:active,.chip:active,a.ax-row:active,a.dh2:ac
 .btn.sm::before,.ref::before,.sh .act::before{content:"";position:absolute;left:0;right:0;top:50%;height:44px;margin-top:-22px}
 
 /* ---------- ToDoのチェック欄(1か所で定義。意味表: 角丸の正方形の枠=ToDo、塗り=完了=出来事の青灰) ---------- */
-.check{position:relative;width:24px;height:24px;flex:none;border-radius:7px;border:2px solid var(--tx-3);background:var(--surface);display:grid;place-items:center;color:var(--on-cap)}
+.check{position:relative;width:24px;height:24px;flex:none;border-radius:7px;border:1.5px solid var(--tx-3) /* v4.9 */;background:var(--surface);display:grid;place-items:center;color:var(--on-cap)}
 .check::before{content:"";position:absolute;inset:-10px}
 .check[aria-checked="true"]{background:var(--light),var(--ev);border-color:var(--ev);box-shadow:var(--hl-fill)}
 .check svg.i{width:16px;height:16px}

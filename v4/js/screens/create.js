@@ -126,7 +126,8 @@ function crAskHtml(st,cat,fn){
 }
 /* ---------- ＋支出(金額だけ) ---------- */
 let CQ={amt:'',shop:'',date:TODAY,root:'food',cat:'eatout'};
-function openQuickExpense(){CQ={amt:'',shop:'',date:TODAY,time:crNowHM(),root:'food',cat:'eatout'};crQeRender()}
+/* o.stay: ホームの入力欄から開いた時は、保存後に元の画面に留まる(記録の画面へ移動しない) */
+function openQuickExpense(o){CQ={amt:'',shop:'',date:TODAY,time:crNowHM(),root:'food',cat:'eatout',stay:!!(o&&o.stay)};crQeRender()}
 function crQeX(k,v){CQ[k]=CQ[k]===v?'':v;crQeRender()}
 function crQeChildren(root){return Object.keys(CATS).filter(k=>CATS[k].p===root)}
 function crQeRoot(k){CQ.root=k;const ks=crQeChildren(k);CQ.cat=ks.length?ks[0]:k;crQeRender()}
@@ -151,7 +152,9 @@ function crQeSave(){
   const amt=+String(CQ.amt).replace(/[^\d]/g,'');if(!amt){toast('金額を入れてください');return}
   const cat=CQ.cat;const shop=(CQ.shop||'').trim();const time=crNowHM();const date=CQ.date||TODAY;
   const aid=crPayment({date,time,shop,register:false,items:[{n:CATS[cat].n,price:amt,tax:10,b:'自分'}],cat,fx:CQ.fx,sp:CQ.sp,act:crActResolve(CQ,date,time)});
-  closeSheet();save();go('#/a/'+aid);toast('支払いを保存しました(自分の支出=全額)');
+  closeSheet();save();
+  if(CQ.stay){rerender();toast('支払いを保存しました')}
+  else{go('#/a/'+aid);toast('支払いを保存しました(自分の支出=全額)')}
 }
 
 /* ---------- 予定 ---------- */

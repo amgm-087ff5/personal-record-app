@@ -102,4 +102,4 @@
 /* ---------- 種類 /types: 木構造(縦のガイド線+字下げ)。ラベルは値札 ---------- */
 .en-tg{width:44px;height:44px;margin:-8px 0 -8px -8px;display:grid;place-items:center;color:var(--tx-3);flex:none}
 .en-tg svg.i{width:16px;height:16px}
-.objs.en-tree>.row.ind::after{content:"";display:block;position:absolute;left:-12px;top:-8px;bottom:-8px;width:0;border:0;border-left:2px solid var(--line-strong);border-radius:0}
+.objs.en-tree>.row.ind::after{content:"";display:block;position:absolute;left:-12px;top:-8px;bottom:-8px;width:0;border:0;border-left:1.5px solid var(--line);border-radius:0} /* v4.9 */

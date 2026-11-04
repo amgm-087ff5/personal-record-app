@@ -30,7 +30,7 @@
 .ld-tr .v{font:500 13px/1 var(--font);color:var(--tx-2);min-width:72px;text-align:right}
 .ld-tr.on .mo,.ld-tr.on .v{color:var(--tx);font-weight:700}
 .ld-tr.on .ld-bar{height:14px}
-.ld-avg{position:absolute;top:-3px;bottom:-3px;width:0;border-left:1.5px dashed var(--tx-3);z-index:1}
+.ld-avg{position:absolute;top:-3px;bottom:-3px;width:0;border-left:1.5px dashed color-mix(in srgb,var(--tx-3) 60%,transparent); /* v4.9 */z-index:1}
 .ld-avgl{font:var(--t-cap);color:var(--tx-3)}
 .ld-avgl .tb span{display:block;white-space:nowrap;transform:translateX(calc(-100% + 4px));width:max-content}
 
@@ -56,7 +56,7 @@
 /* 支払いの棒(割り勘・立替の自分の区間) = 補足の中に小さく */
 .ld-pbar{display:inline-flex;width:32px;height:6px;border-radius:3px;overflow:hidden;flex:none;vertical-align:middle}
 .ld-pbar i{display:block;height:100%;min-width:0}
-.ld-pbar i.me{background:var(--me)}
+.ld-pbar i.me{background:var(--light),var(--me)} /* v4.9: ベタ→グラデ */
 .ld-pbar i.rest{background:var(--axis)}
 .ld-pbar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 2px,color-mix(in srgb,var(--owe) 40%,transparent) 2px 4px)}
 

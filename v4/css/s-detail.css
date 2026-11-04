@@ -8,7 +8,7 @@
 /* ---------- 出来事の詳細の最上部(ui.js pinView の .pin) ---------- */
 .pin{--px:36px;--ax:17px;position:relative;margin:4px var(--gutter) 0;padding:0 0 22px var(--px)}
 /* 軸の切れ端: 上下で薄れる。予定の詳細(.pin-cur.fut)では点線 */
-.pin::before{content:"";position:absolute;left:calc(var(--ax) - 1px);top:0;bottom:0;width:2px;background:var(--axis-past);
+.pin::before{content:"";position:absolute;left:calc(var(--ax) - .75px);top:0;bottom:0;width:1.5px;background:var(--axis-past); /* v4.9 */
   -webkit-mask:linear-gradient(#0000,#000 22px,#000 calc(100% - 22px),#0000);mask:linear-gradient(#0000,#000 22px,#000 calc(100% - 22px),#0000)}
 .pin:has(>.pin-cur.fut)::before{background:repeating-linear-gradient(to bottom,var(--plan-ln) 0 4px,#0000 4px 9px)}
 
@@ -60,7 +60,7 @@
 
 /* 支払いの下の └ = 親→子(自分の支出の半券チケットを、カプセルからぶら下げる) */
 .hang{position:relative;margin:12px 0 0 28px}
-.hang::before{content:"";position:absolute;left:-18px;top:-12px;height:calc(50% + 12px);width:18px;border-left:2px solid var(--line-strong);border-bottom:2px solid var(--line-strong);border-bottom-left-radius:8px}
+.hang::before{content:"";position:absolute;left:-18px;top:-12px;height:calc(50% + 12px);width:18px;border-left:1.5px solid var(--line);border-bottom:1.5px solid var(--line); /* v4.9 */border-bottom-left-radius:8px}
 
 /* 精算・完了の帯(支払いの詳細): 未精算=琥珀の帯。ボタンは見た目36px、当たり判定は44px以上 */
 .suggest.owe{background:var(--owe-soft)}
@@ -85,7 +85,7 @@
 
 /* 品目の内訳(同じ品目を開いた子): 面ではなく、親の下の行。左の案内線だけ */
 .grp-kids{position:relative;margin:0 0 6px 34px}
-.grp-kids::before{content:"";position:absolute;left:-18px;top:-4px;bottom:50%;width:2px;background:var(--line-strong);border-radius:1px}
+.grp-kids::before{content:"";position:absolute;left:-18px;top:-4px;bottom:50%;width:1.5px;background:var(--line); /* v4.9 */border-radius:1px}
 .grp-kids .row.kid{min-height:44px;padding:6px 12px}
 .grp-kids .row.kid .t{font:var(--t-label);color:var(--tx-2)}
 .grp-kids .row.kid+.row.kid::before{left:12px}
@@ -151,7 +151,7 @@
 .ins-c{display:flex;flex-direction:column;gap:6px;padding:18px 20px 16px;border-radius:18px;background:var(--tl-card);box-shadow:var(--tl-sh)}
 .ins-tm{font:700 32px/1 var(--font);color:var(--tx);letter-spacing:-.01em;font-variant-numeric:tabular-nums}
 .ins-t{font:600 15px/1.3 var(--font);color:var(--tx-2)}
-.pin-cur:has(>.ins-c)>.node{left:calc(var(--ax) - var(--px) - 7px);top:27px;width:14px;height:14px;border-radius:4px;background:var(--surface);box-shadow:inset 0 0 0 2.5px var(--ev),0 0 0 4px var(--bg)}
+.pin-cur:has(>.ins-c)>.node{left:calc(var(--ax) - var(--px) - 7px);top:27px;width:14px;height:14px;border-radius:4px;background:var(--surface);box-shadow:inset 0 0 0 1.5px var(--ev),0 0 0 4px var(--bg)} /* v4.9 */
 .pin-cur:has(>.ins-c)>.node::after{width:12px}
 /* 時刻の編集(シート) */
 .ins-f{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:56px;padding:0 16px}
