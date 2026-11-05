@@ -212,11 +212,18 @@ function actMenu(id){
     row({lead:ico('edit'),t:ins?'時刻を編集':'編集',onclick:ins?`closeSheet();insTimeEd('${id}')`:`closeSheet();toast('編集はモックでは未対応です')`}),
     row({lead:ico('trash'),t:'削除',onclick:`deleteActivity('${id}')`})])});
 }
+/* v4.14 子孫(活動の中の活動・支払い)も一緒に消す。取り消しで全部と親の並び位置を戻す */
 function deleteActivity(id){
-  const a=A[id],p=a.parent&&A[a.parent];const snap=JSON.stringify({a,x:a.x?X[a.x]:null});
-  if(p)p.kids=p.kids.filter(k=>k!==id);const xid=a.x;delete A[id];if(xid)delete X[xid];
+  const a=A[id],p=a.parent&&A[a.parent];
+  const desc=descOf(id),all=[id,...desc];
+  const snap=JSON.stringify(all.map(k=>({k,a:A[k],x:A[k].x?X[A[k].x]:null})));
+  const at=p?p.kids.indexOf(id):-1;
+  if(p)p.kids=p.kids.filter(k=>k!==id);
+  all.forEach(k=>{const xid=A[k].x;delete A[k];if(xid)delete X[xid]});
   closeSheet();save();goBack();
-  toast('記録を削除しました',()=>{const s=JSON.parse(snap);A[id]=s.a;if(xid)X[xid]=s.x;if(p)p.kids.push(id)});
+  toast(desc.length?`記録と中の ${desc.length} 件を削除しました`:'記録を削除しました',()=>{
+    JSON.parse(snap).forEach(({k,a,x})=>{A[k]=a;if(x&&a.x)X[a.x]=x});
+    if(p){if(at<0)p.kids.push(id);else p.kids.splice(Math.min(at,p.kids.length),0,id)}});
 }
 
 /** 品目を「同じ名前+同じ合計+同じ金額行」でまとめる(表示だけ。データは1行=1個) */
@@ -334,11 +341,11 @@ function origPlan(id){const ev=Object.entries(EV).find(([k,e])=>e.rec===id);if(!
 /** 子を時刻順に(時刻なしは後ろ) */
 const kidSorted=id=>kidActs(id).slice().sort((x,y)=>(A[x].time||'99:99').localeCompare(A[y].time||'99:99'));
 /** 支払い以外の子の行: 種類の印・時刻・題名・子の件数・›(瞬間は時刻と題名だけ) */
-function ckRow(c){const k=A[c],[ncls,icon]=AX_NODE[k.type]||['','activity'];const inst=INSTANT_TYPES.includes(k.type),n=kidActs(c).length;
+function ckRow(c,showN){const k=A[c],[ncls,icon]=AX_NODE[k.type]||['','activity'];const inst=INSTANT_TYPES.includes(k.type),n=showN?kidActs(c).length:0; /* 件数は、孫を並べない深さの時だけ(並べている時は重複) */
   return `<a class="ck${inst?' inst':''}" href="#/a/${c}"><span class="ck-n ${ncls}">${IC[icon]||''}</span><span class="ck-tm num">${esc(timeText(k))}</span><span class="ck-t">${esc(k.title)}</span>${n?`<span class="ck-c">${n}件</span>`:''}${inst?'':`<span class="ck-chev">${IC.chev}</span>`}</a>`}
 /** 子1つと、その子(孫)を案内線つきで字下げして並べる。最大3段 */
 function ckKid(c,depth=1){const k=A[c];if(!k)return '';
-  const body=k.type==='支払い'?payShell(c,{mode:'kid'}):ckRow(c);
+  const body=k.type==='支払い'?payShell(c,{mode:'kid'}):ckRow(c,depth>=3);
   const sub=depth<3?kidSorted(c).map(g=>ckKid(g,depth+1)).join(''):'';
   return body+(sub?`<div class="ck-sub">${sub}</div>`:'')}
 /** 主役の中の子の並び(見出しなし)。最後に点線の「アクティビティを追加」。支払いが2件以上で自分の支出があれば合計を下端に */

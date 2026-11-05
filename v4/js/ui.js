@@ -156,7 +156,7 @@ function payShell(pid,{mode='row',xid}={}){
   }
   if(mode==='kid'){
     const go_=`event.preventDefault();event.stopPropagation();go('#/a/${pid}')`,go_x=`event.preventDefault();event.stopPropagation();go('#/x/${xk}')`;
-    return `<div class="ps ps-kid"><span class="ps-h" role="link" tabindex="0" onclick="${go_}"><span class="ps-ic">${IC.pay}</span><span class="ps-l">${esc(payLabel(p))}${p.time?` <small>${esc(p.time)}</small>`:''}</span>${tot}</span>`
+    return `<div class="ps ps-kid"><span class="ps-h" role="link" tabindex="0" onclick="${go_}"><span class="ps-ic">${IC.pay}</span><span class="ps-l" aria-label="${esc(payLabel(p))}">${esc(payeeOf(p)||'支払い')}</span>${p.time?`<small class="ps-tm num">${esc(p.time)}</small>`:''}${tot}</span>`
       +(x?`<span class="ps-tk" role="link" tabindex="0" onclick="${go_x}">${psTk(p,x,{cls:'sm'})}</span>`:'')+`</div>`;
   }
   /* row(既定) */
