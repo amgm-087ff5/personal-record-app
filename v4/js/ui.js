@@ -439,17 +439,30 @@ const navCentres=ss=>ss.map(s=>{const b=s.parentNode.getBoundingClientRect();ret
 /* v4.13: 指に近い窓ほど先に動く。窓ごとに指からの距離 d(0=指の真下・1=遠い)で追従の速さを変える:
    近い窓 τ≈17ms、遠い窓 τ≈60ms。動きの途中で近い窓の位置(上への移動量)が大きくなり、遠い窓が遅れて付いてくる */
 let NAV_DR=null;
+/* v4.14: ＋(中央の枠)の箱。＋の左右の端と中心 x と幅 */
+function navPlusBox(){
+  const p=document.querySelector('#nav .fab-slot');if(!p)return null;
+  const r=p.getBoundingClientRect();return {c:r.left+r.width/2,w:r.width};
+}
+/* v4.14: 指からの距離 d(0..1)。窓の中心と指の x の差に、＋を挟んで反対側なら＋の幅を足す(＋が隙間として効く)。ナビの幅で割る */
+function navDist(c,fx,W,plus){
+  let px=Math.abs(c-fx);
+  if(plus&&((c<plus.c)!==(fx<plus.c)))px+=plus.w;
+  return Math.min(1,px/W);
+}
 function navDragStart(base){
   const nav=document.getElementById('nav'),ss=navStrips();
-  NAV_DR={ss,c:navCentres(ss),p:ss.map(()=>base),tgt:base,fx:0,W:nav.clientWidth||1,t:performance.now(),raf:0};
+  NAV_DR={ss,c:navCentres(ss),plus:navPlusBox(),p:ss.map(()=>base),tgt:base,fx:0,W:nav.clientWidth||1,t:performance.now(),raf:0};
   NAV_DR.raf=requestAnimationFrame(navDragStep);
 }
 function navDragStep(now){
   const D=NAV_DR;if(!D)return;
   const dt=Math.min(50,Math.max(0,now-D.t));D.t=now;
   D.ss.forEach((s,k)=>{
-    const d=Math.min(1,Math.abs(D.c[k]-D.fx)/(D.W*.9));
-    const r=Math.max(.008,.09-.085*d); /* v4.13 本体調整: 遠い窓ほどはっきり遅れる(近い=ほぼ即時・遠い=約0.1秒遅れ) */
+    const d=navDist(D.c[k],D.fx,D.W,D.plus);
+    /* v4.14: 追従率 r = lerp(0.09, 0.012, d^0.8)。r は1msあたり(既存の exp(-r*dt) と同じ単位)。
+       指の真下の窓は τ≈11ms でほぼ即時、遠い窓は τ≈80ms。＋を挟んだ窓は d に＋の幅が乗るので、隣の窓より遅れる */
+    const r=.09+(.012-.09)*Math.pow(d,.8);
     D.p[k]+=(D.tgt-D.p[k])*(1-Math.exp(-r*dt));
     s.style.transform=`translate3d(0,${D.p[k].toFixed(1)}px,0)`;
   });
@@ -467,7 +480,8 @@ function navFollow(raw,fx){
   return off;
 }
 /* v4.11: 枚目へ落ち着かせる。stagger=窓ごとに 0/25/50/75ms ずらす(つまみを押した時だけ)。landed=切り替わった時はラベルの拡大も付ける
-   v4.13: fx(指を離した x)を渡すと、窓を指に近い順に 0/25/50/75ms ずらす(離した位置が基準)。fx が無ければ左から右 */
+   v4.13: fx(指を離した x)を渡すと、窓を指に近い順に 0/25/50/75ms ずらす(離した位置が基準)。fx が無ければ左から右
+   v4.14: fx がある時は、ドラッグ中と同じ距離(＋を挟んだ分を含む)で遅れを決める。遅れ = round(d*110)ms。タップ(fx無し)は 0/25/50/75ms のまま */
 function navSettle(to,stagger,landed=true,fx=null){
   const nav=document.getElementById('nav'),H=nav.clientHeight,reduced=navReduced();
   navDragStop();
@@ -475,10 +489,10 @@ function navSettle(to,stagger,landed=true,fx=null){
   NAV_PG=to;
   navPaint(NAV_CUR);
   const ss=navStrips(),tgt=to?-H:0;
-  let rank=ss.map((_,k)=>k);
-  if(fx!==null){const cs=navCentres(ss);rank=cs.map((c,k)=>cs.filter((o,j)=>Math.abs(o-fx)<Math.abs(c-fx)||(Math.abs(o-fx)===Math.abs(c-fx)&&j<k)).length)}
+  let delay=ss.map((_,k)=>k*25);
+  if(fx!==null){const cs=navCentres(ss),pl=navPlusBox(),W=nav.clientWidth||1;delay=cs.map(c=>Math.round(navDist(c,fx,W,pl)*110))}
   nav.style.setProperty('--np',tgt+'px');
-  ss.forEach((s,k)=>{s.style.transitionDelay=(stagger&&!reduced?rank[k]*25:0)+'ms';s.style.transform=`translate3d(0,${tgt}px,0)`});
+  ss.forEach((s,k)=>{s.style.transitionDelay=(stagger&&!reduced?delay[k]:0)+'ms';s.style.transform=`translate3d(0,${tgt}px,0)`});
   navTweenDots(to,reduced?0:340);
   if(landed&&!reduced){
     const ss=document.querySelectorAll('#nav .nav-strip');
