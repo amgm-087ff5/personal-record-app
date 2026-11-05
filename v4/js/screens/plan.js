@@ -135,11 +135,15 @@ function plDayView(){
   timed.forEach(b=>{let i=lanesEnd.findIndex(en=>en<=b.s);if(i<0){i=lanesEnd.length;lanesEnd.push(0)}lanesEnd[i]=b.e;b.i=i});
   const N=Math.max(1,lanesEnd.length);
   const blocks=timed.map(({x,s,e,i})=>{
-    const top=(s-H0*60)/60*PH, h=Math.max((e-s)/60*PH,44);
+    /* v4.13 本体調整: 瞬間(終わりの無い記録・支払い)は時間の帯にせず、その時刻に細いカプセル(高さ28・時刻に中心)。支払いは「支払い · 支払先 ¥金額」 */
+    const inst=!x.end&&x.kind==='rec';
+    const top=inst?(s-H0*60)/60*PH-14:(s-H0*60)/60*PH, h=inst?28:Math.max((e-s)/60*PH,44);
     const isRec=x.kind==='rec';
     const href=isRec?'#/a/'+x.k:'#/ev/'+x.k;
     const tm=x.end?`${x.time}–${x.end}`:x.time;
-    return `<a class="pl-blk ${isRec?'rec':'plan'}" href="${href}" style="top:${top}px;height:${h}px;left:calc(52px + (100% - 52px) * ${i/N});width:calc((100% - 52px) / ${N} - 4px)"><b>${esc(x.t)}</b>${h>=48?`<span>${tm}</span>`:''}</a>`;
+    const ra=isRec&&A[x.k];
+    const ttl=ra&&ra.type==='支払い'?`${payLabel(ra)} ${yen(ra.amt)}`:x.t;
+    return `<a class="pl-blk ${isRec?'rec':'plan'}${inst?' inst':''}" href="${href}" style="top:${top}px;height:${h}px;left:calc(52px + (100% - 52px) * ${i/N});width:calc((100% - 52px) / ${N} - 4px)"><b>${inst?`<small class="num">${esc(x.time)}</small> `:''}${esc(ttl)}</b>${h>=48?`<span>${tm}</span>`:''}</a>`;
   }).join('');
   let grid='';
   for(let h=H0;h<=H1;h++){const y=(h-H0)*PH;grid+=`<span class="pl-hl num" style="top:${y}px">${h}:00</span><i class="pl-hr" style="top:${y}px"></i>`}

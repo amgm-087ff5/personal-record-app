@@ -114,3 +114,9 @@
 .pl-blk.rec{background:var(--light),var(--ev);color:var(--on-cap);box-shadow:var(--hl-fill)}
 .pl-now{position:absolute;left:52px;right:0;height:2px;border-radius:1px;background:var(--late);z-index:2}
 .pl-now span{position:absolute;left:-52px;width:48px;top:-8px;text-align:right;padding-right:8px;font:700 12px/16px var(--font);color:var(--late);background:var(--tl-card)}
+
+/* v4.13 本体調整: 日表示の瞬間(支払い・起床など)= その時刻の細いカプセル。押せる範囲は ::before で44px */
+.pl-blk.inst{border-radius:14px;padding:0 10px;display:flex;align-items:center;min-height:0}
+.pl-blk.inst b{font:600 12px/1 var(--font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-blk.inst small{font:500 12px/1 var(--font);opacity:.85;margin-right:4px}
+.pl-blk.inst::before{content:"";position:absolute;inset:-8px 0}
