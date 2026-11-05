@@ -319,10 +319,11 @@ addEventListener('scroll',()=>{const b=document.querySelector('.appbar');if(b)b.
 
 /* ---------- 下部ナビ ----------
    v4.4(11/04 ユーザー指示): 2枚のナビ。
-   1枚目(毎日): ホーム・記録・＋・予定・メモ / 2枚目(整理): ToDo・エンティティ・＋・家計簿・設定
+   v4.13(11/05 ユーザー指示): 1枚目(毎日): ホーム・アクティビティ・＋・ToDo・メモ / 2枚目(整理): エンティティ・家計簿・＋・設定・(空き)
+   予定タブは廃止(予定の表示はアクティビティの「リスト/日/月」)。2枚目の5つ目は空きの枠(見た目なし・触れない)。
    枠 = [タブ][タブ][＋][タブ][タブ][切替]。＋は2枚とも同じ位置。切替は2つの点(いまの枚目=塗り)。
    ナビの上で横に30px以上スワイプしても切り替わる。今いる画面のタブがある枚目を、画面が変わった時に出す。
-   幅900px以上は左のレールに8つ全部(枚目なし)。 */
+   幅900px以上は左のレールに7つ全部(枚目なし・空きは出さない)。 */
 const navSvg=d=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">${d}</svg>`;
 /* 面系(塗り)。抜き(穴)は evenodd で表す。キーは下のタブのキーと同じ */
 const NAV_IC={
@@ -330,8 +331,6 @@ const NAV_IC={
   home:navSvg('<path fill-rule="evenodd" d="M12 2.8 2.9 10.1a1 1 0 0 0-.4.8v8.9a1.7 1.7 0 0 0 1.7 1.7h15.6a1.7 1.7 0 0 0 1.7-1.7v-8.9a1 1 0 0 0-.4-.8Z M9.8 21.5v-5a1.2 1.2 0 0 1 1.2-1.2h2a1.2 1.2 0 0 1 1.2 1.2v5Z"/>'),
   /* 時間の軸=記録: 軸の上に塗りの区間と点(既存の記録の形を面に) */
   activities:navSvg('<rect x="3" y="2" width="2.6" height="20" rx="1.3"/><rect x="8" y="3.5" width="13" height="6" rx="3"/><rect x="8" y="13" width="8.5" height="6" rx="3"/><circle cx="4.3" cy="19" r="2.4"/>'),
-  /* カプセル=予定: 中抜きの形を塗りに */
-  plan:navSvg('<rect x="2" y="6" width="20" height="12" rx="6"/>'),
   /* 角を折った紙=メモ: 折り返しと文字の行は抜く */
   memo:navSvg('<path fill-rule="evenodd" d="M6 2.5h8.3l5.2 5.2V20a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 20V4A1.5 1.5 0 0 1 6 2.5Z M14.3 2.5v5.2h5.2Z M8.2 11.2h7.6v1.8H8.2Z M8.2 15h4.6v1.8H8.2Z"/>'),
   /* 箱の中のチェック=ToDo: チェックは抜く */
@@ -345,19 +344,27 @@ const NAV_IC={
   /* 2つの点=切替(いまの枚目は濃く、もう一方は淡い。出し分けはCSS) */
   switch:'<svg class="i" viewBox="0 0 52 30" aria-hidden="true" fill="currentColor"><circle class="d d1" cx="19.5" cy="15" r="3.5"/><circle class="d d2" cx="32.5" cy="15" r="3.5"/><rect class="r r1" x="12.5" y="12" width="14" height="6" rx="3"/><rect class="r r2" x="29.5" y="12" width="6" height="6" rx="3"/></svg>',
 };
+/* v4.13: 2枚目の5つ目は空き(NAV_BLANK)。同じ大きさで何も見せず、触れない */
+const NAV_BLANK=['blank',''];
+const isBlank=t=>!!t&&t[0]==='blank';
 const NAV_PAGES=[
-  [['home','ホーム'],['activities','アクティビティ'],null,['plan','予定'],['memo','メモ']],
-  [['todo','ToDo'],['entities','エンティティ'],null,['ledger','家計簿'],['settings','設定']],
+  [['home','ホーム'],['activities','アクティビティ'],null,['todo','ToDo'],['memo','メモ']],
+  [['entities','エンティティ'],['ledger','家計簿'],null,['settings','設定'],NAV_BLANK],
 ];
-const NAV_ALL=NAV_PAGES.flat().filter(Boolean);
+const NAV_ALL=NAV_PAGES.flat().filter(t=>t&&!isBlank(t));
 /* 期限切れのToDoの件数は ToDo のタブに付ける */
 const navBadge=k=>k==='todo'?(typeof overdueCount==='function'?overdueCount():0):0;
 const WIDE_NAV=matchMedia('(min-width:900px)');
 let NAV_PG=0,NAV_KEY=null,NAV_CUR='home';
 const navPageOf=k=>NAV_PAGES.findIndex(p=>p.some(t=>t&&t[0]===k));
 /* 切替のつまみ: 1枚目を表示中に2枚目のタブへお知らせ(期限切れのToDo)がある時は、右上に赤い点と読み上げ */
-const navSwInfo=pg=>{const dot=pg===0&&NAV_PAGES[1].some(t=>t&&navBadge(t[0])>0);return {dot,label:`ナビを切り替え(${pg+1}/2)${dot?'(2枚目にお知らせ)':''}`}};
-const navItem=(t,cur,hid)=>t?`<a href="#/${t[0]}"${t[0]===cur?' aria-current="page"':''}${hid?' tabindex="-1" aria-hidden="true" inert':''}><span class="pill">${NAV_IC[t[0]]}</span>${t[1]}${navBadge(t[0])?`<span class="badge">${navBadge(t[0])}</span>`:''}</a>`:`<div class="fab-slot"><button class="fab" type="button" aria-label="作成" onclick="openCreate()">${IC.plus}</button></div>`;
+/* v4.13: 今見えていない側の枚目に期限切れのToDoなどがあれば、つまみに赤い点(どちらの枚目を表示中でも、もう一方を見る) */
+const navSwInfo=pg=>{const other=NAV_PAGES[pg?0:1];const dot=other.some(t=>t&&!isBlank(t)&&navBadge(t[0])>0);return {dot,label:`ナビを切り替え(${pg+1}/2)${dot?'(もう一方の枚目にお知らせ)':''}`}};
+const navItem=(t,cur,hid)=>{
+  if(!t)return `<div class="fab-slot"><button class="fab" type="button" aria-label="作成" onclick="openCreate()">${IC.plus}</button></div>`;
+  if(isBlank(t))return '<span class="nav-blank" aria-hidden="true"></span>';
+  return `<a href="#/${t[0]}"${t[0]===cur?' aria-current="page"':''}${hid?' tabindex="-1" aria-hidden="true" inert':''}><span class="pill">${NAV_IC[t[0]]}</span>${t[1]}${navBadge(t[0])?`<span class="badge">${navBadge(t[0])}</span>`:''}</a>`;
+};
 /* 狭い幅: 窓(.nav-cell)は [左2][＋][右2] の4つ。各窓の中に1枚目と2枚目のタブを縦に積んだ帯(.nav-strip。高さ=タブ2つ分)を置く。
    1枚目を表示=帯 translateY(0)、2枚目=translateY(-50%)(タブ1つ分上)。窓は overflow:hidden。見えていない側のタブは inert・tabindex=-1・aria-hidden。
    ＋と切替のつまみは動かさない。窓ごとに 0/25/50/75ms ずらして帯をすべらせる(CSS の transition。inline の transition-delay) */
@@ -403,28 +410,59 @@ function navTweenDots(to,dur){
 /* v4.11: 帯を動かさずに今の枚目の位置へ置く(画面が変わった時・作り直した時。自動の枚目表示に動きは付けない) */
 function navPosInstant(){
   if(!NAV_SPRING)return;
-  const nav=document.getElementById('nav'),H=nav.clientHeight;
-  cancelAnimationFrame(navRaf);
-  nav.classList.add('dr');nav.style.setProperty('--np',(NAV_PG?-H:0)+'px');void nav.offsetWidth;nav.classList.remove('dr');
+  const nav=document.getElementById('nav'),H=nav.clientHeight,tgt=NAV_PG?-H:0;
+  cancelAnimationFrame(navRaf);navDragStop();
+  nav.classList.add('dr');nav.style.setProperty('--np',tgt+'px');
+  navStrips().forEach(s=>{s.style.transform=`translate3d(0,${tgt}px,0)`;s.style.transitionDelay='0ms'});
+  void nav.offsetWidth;nav.classList.remove('dr');
   navDots(NAV_PG);
 }
-/* v4.11: 指に追従させる(ドラッグ中)。上に限らず端では少しだけ引っ張れる(ゴム) */
-function navFollow(raw){
+/* v4.13: 窓の中心の x(ナビの左端からの位置は気にせず、指の x と比べる用)。窓=帯の親 */
+const navStrips=()=>[...document.querySelectorAll('#nav .nav-strip')];
+const navCentres=ss=>ss.map(s=>{const b=s.parentNode.getBoundingClientRect();return b.left+b.width/2});
+/* v4.13: 指に近い窓ほど先に動く。窓ごとに指からの距離 d(0=指の真下・1=遠い)で追従の速さを変える:
+   近い窓 τ≈17ms、遠い窓 τ≈60ms。動きの途中で近い窓の位置(上への移動量)が大きくなり、遠い窓が遅れて付いてくる */
+let NAV_DR=null;
+function navDragStart(base){
+  const nav=document.getElementById('nav'),ss=navStrips();
+  NAV_DR={ss,c:navCentres(ss),p:ss.map(()=>base),tgt:base,fx:0,W:nav.clientWidth||1,t:performance.now(),raf:0};
+  NAV_DR.raf=requestAnimationFrame(navDragStep);
+}
+function navDragStep(now){
+  const D=NAV_DR;if(!D)return;
+  const dt=Math.min(50,Math.max(0,now-D.t));D.t=now;
+  D.ss.forEach((s,k)=>{
+    const d=Math.min(1,Math.abs(D.c[k]-D.fx)/(D.W*.9));
+    const r=Math.max(.01,.06-.05*d);
+    D.p[k]+=(D.tgt-D.p[k])*(1-Math.exp(-r*dt));
+    s.style.transform=`translate3d(0,${D.p[k].toFixed(1)}px,0)`;
+  });
+  D.raf=requestAnimationFrame(navDragStep);
+}
+function navDragStop(){if(NAV_DR){cancelAnimationFrame(NAV_DR.raf);NAV_DR=null}}
+/* v4.11: 指に追従させる(ドラッグ中)。上に限らず端では少しだけ引っ張れる(ゴム)。v4.13: 窓ごとの位置は navDragStep が描く */
+function navFollow(raw,fx){
   const nav=document.getElementById('nav'),H=nav.clientHeight;
   const off=raw>0?raw*.3:raw<-H?-H+(raw+H)*.3:raw;
   cancelAnimationFrame(navRaf);
   nav.style.setProperty('--np',off.toFixed(1)+'px');
+  if(NAV_DR){NAV_DR.tgt=off;NAV_DR.fx=fx}
   navDots(Math.min(1,Math.max(0,-off/H)));
   return off;
 }
-/* v4.11: 枚目へ落ち着かせる。stagger=窓ごとに 0/25/50/75ms ずらす(つまみを押した時だけ)。landed=切り替わった時はラベルの拡大も付ける */
-function navSettle(to,stagger,landed=true){
+/* v4.11: 枚目へ落ち着かせる。stagger=窓ごとに 0/25/50/75ms ずらす(つまみを押した時だけ)。landed=切り替わった時はラベルの拡大も付ける
+   v4.13: fx(指を離した x)を渡すと、窓を指に近い順に 0/25/50/75ms ずらす(離した位置が基準)。fx が無ければ左から右 */
+function navSettle(to,stagger,landed=true,fx=null){
   const nav=document.getElementById('nav'),H=nav.clientHeight,reduced=navReduced();
+  navDragStop();
   nav.classList.remove('dr');
   NAV_PG=to;
   navPaint(NAV_CUR);
-  document.querySelectorAll('#nav .nav-strip').forEach((s,k)=>{s.style.transitionDelay=(stagger&&!reduced?k*25:0)+'ms'});
-  nav.style.setProperty('--np',(to?-H:0)+'px');
+  const ss=navStrips(),tgt=to?-H:0;
+  let rank=ss.map((_,k)=>k);
+  if(fx!==null){const cs=navCentres(ss);rank=cs.map((c,k)=>cs.filter((o,j)=>Math.abs(o-fx)<Math.abs(c-fx)||(Math.abs(o-fx)===Math.abs(c-fx)&&j<k)).length)}
+  nav.style.setProperty('--np',tgt+'px');
+  ss.forEach((s,k)=>{s.style.transitionDelay=(stagger&&!reduced?rank[k]*25:0)+'ms';s.style.transform=`translate3d(0,${tgt}px,0)`});
   navTweenDots(to,reduced?0:340);
   if(landed&&!reduced){
     const ss=document.querySelectorAll('#nav .nav-strip');
@@ -497,9 +535,10 @@ addEventListener('pointermove',e=>{
     g.drag=true;NAV_MOVED=true;g.sgn=Math.sign(dy);g.base=NAV_PG?-navEl.clientHeight:0;
     try{navEl.setPointerCapture(e.pointerId)}catch(err){}
     navEl.classList.add('dr');
+    navDragStart(g.base);
   }
-  /* v4.11: 8px の不感帯を引く。開始の位置から指に追従するので、ドラッグ開始で飛ばない */
-  g.off=navFollow(g.base+dy-g.sgn*8);
+  /* v4.11: 8px の不感帯を引く。開始の位置から指に追従するので、ドラッグ開始で飛ばない。v4.13: 窓ごとの位置は指の x を使う */
+  g.off=navFollow(g.base+dy-g.sgn*8,e.clientX);
   g.hist.push([e.clientY,e.timeStamp]);
   while(g.hist.length>2&&e.timeStamp-g.hist[0][1]>100)g.hist.shift();
 });
@@ -522,7 +561,8 @@ function navFinish(e,cancel){
   }
   const changed=to!==NAV_PG;
   if(changed)navBuzz();
-  navSettle(to,false,changed);
+  /* v4.13: 離した位置に近い窓から先に落ち着く(0/25/50/75ms) */
+  navSettle(to,true,changed,e.clientX);
 }
 addEventListener('pointerup',e=>navFinish(e,false));
 addEventListener('pointercancel',e=>navFinish(e,true));
@@ -571,10 +611,13 @@ function openCreate(){
 }
 
 /* ---------- 保存(このブラウザ) ---------- */
-const SKEY='prmock-v4.3'; /* v4.3でデータモデルを変えたので、古い保存データは読まない */
-function save(){try{localStorage.setItem(SKEY,JSON.stringify({A,X,E,EV,TD,TYPES,CATS,NOTES,MEMOS,LISTS,TYPE_PROPS,EXTRA:typeof EXTRA!=='undefined'?EXTRA:{}}))}catch(e){}}
+const SKEY='prmock-v4.13'; /* v4.13で予定とToDoを1つのデータ(PLN)にしたので、古い保存データは読まない */
+/* 予定・ToDoは PLN だけを保存する(EV・TD は PLN の見え方なので保存しない) */
+function save(){try{plSettle();localStorage.setItem(SKEY,JSON.stringify({A,X,E,PLN,TYPES,CATS,NOTES,MEMOS,LISTS,TYPE_PROPS,EXTRA:typeof EXTRA!=='undefined'?EXTRA:{}}))}catch(e){}}
 function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(!s)return;
-  for(const [k,o] of Object.entries({A,X,E,EV,TD,TYPES,CATS,NOTES,MEMOS,LISTS,TYPE_PROPS})){if(s[k]){for(const kk of Object.keys(o))delete o[kk];Object.assign(o,s[k])}}
+  /* PLN は中身を入れ替える(EV・TD の Proxy がそのまま見えるように、オブジェクト自体は作り直さない) */
+  for(const [k,o] of Object.entries({A,X,E,PLN,TYPES,CATS,NOTES,MEMOS,LISTS,TYPE_PROPS})){if(s[k]){for(const kk of Object.keys(o))delete o[kk];Object.assign(o,s[k])}}
+  plSettle();
   if(s.EXTRA&&typeof EXTRA!=='undefined')Object.assign(EXTRA,s.EXTRA);
   Object.values(A).forEach(a=>(a.items||[]).forEach(itemMigrate));
   /* v4.4: 茶色の系統の旧カテゴリ色(テラコッタ・マスタード)と近すぎた色を、保存データでも置き換える */

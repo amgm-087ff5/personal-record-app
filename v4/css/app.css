@@ -697,3 +697,7 @@ a.row:active,button.row:active,.btn:active,.chip:active,a.ax-row:active,a.dh2:ac
 .nav.sp .nav-sw .d{display:none}
 @media (prefers-reduced-motion:reduce){.nav.sp .nav-strip.land>a .pill{animation:none}}
 .nav.sp,.nav.sp a{-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+
+/* ---------- v4.13: ナビ(2枚目の空き枠・ジェスチャーの窓ごとの位置) ---------- */
+/* 2枚目の5つ目は空き。タブと同じ大きさ(帯の半分)で、見た目もなく触れない */
+.nav .nav-strip>.nav-blank{flex:0 0 50%;height:auto;display:block;pointer-events:none}

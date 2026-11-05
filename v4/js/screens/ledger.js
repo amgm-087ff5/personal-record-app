@@ -112,16 +112,16 @@ route('ledger',()=>{
     const ups=Object.entries(EV).filter(([k,e])=>e.pay&&e.rep).map(([k,e])=>[k,e,nextOn(e)]).sort((a,b)=>a[2].localeCompare(b[2]));
     if(ups.length)upcoming=sh('これからの固定費',`${ups.length}件`)+`<div class="ax">`+axGroup('',ups.map(([k,e,d])=>axRow({href:`#/ev/${k}`,time:md(d),node:{cls:'plan',icon:'pay'},future:true,t:esc(e.t),m:esc(catPath(e.pay.cat)),amt:`<b>${yen(e.pay.amt)}</b>`})).join(''),{future:true})+`</div>`;
 
-    /* 支出: 日付の区切りは置かず、日付は本体の補足に出す。新しい順 */
+    /* 支出: 日付の区切りは置かず、日付は本体の補足に出す。古い順(上=過去・下=未来)で、下の「これからの固定費」へつながる */
     const fl=Object.entries(X).filter(([k,x])=>ldMatch(x))
-      .sort((a,b)=>xDate(b[1]).localeCompare(xDate(a[1]))||(A[b[1].pay].time||'').localeCompare(A[a[1].pay].time||''));
+      .sort((a,b)=>xDate(a[1]).localeCompare(xDate(b[1]))||(A[a[1].pay].time||'').localeCompare(A[b[1].pay].time||''));
     const clear=ldFilter?`<div class="ld-clear">${chips([['x',`${AX_NAME[ldFilter.ax]}: ${ldFilterName()} ×`]],'x','ldClear()')}</div>`:'';
     spend=sh('支出',`${fl.length}件`)+clear+(fl.length?`<div class="ld-tix">${fl.map(([k,x])=>ldTicket(k,x)).join('')}</div>`:empty('expense','該当の支出 なし'));
   }
 
   return largeTitle('家計簿',{actions:[
       {text:'カテゴリ',icon:'cats',onclick:"go('#/cats')"}]})
-    +nav+note+summary+sh('推移','6か月')+chart+breakdown+upcoming+spend;
+    +nav+note+summary+sh('推移','6か月')+chart+breakdown+spend+upcoming; /* v4.13 支出一覧(過去)→これからの固定費(未来)。上=過去・下=未来で一本に */
 },{tab:'ledger'});
 
 /* ---------- 支出の詳細(自分の分だけ切り取った点) ---------- */
