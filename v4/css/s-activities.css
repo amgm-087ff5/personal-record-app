@@ -1,62 +1,71 @@
 /* =====================================================================
-   v4.13: アクティビティの上部(固定・縮む)。js/screens/activities.js の actOnScroll / actApply が --p を決める(0=広い / 1=縮んだ)。
+   v4.14: アクティビティの上部(固定・縮む)。js/screens/activities.js の actOnScroll / actApply が
+   --p(0=広い / 1=縮んだ、直線)・--e(--p をイージングした位置用)・--fo(消える途中=p 0→0.4 で 1→0)・--fi(出る途中=p 0.6→1 で 0→1) を決める。
    方針: 縮む時に 高さ・文字・余白・幅 を変えない(毎フレームのレイアウトをなくす)。動くのは transform と opacity だけ。
-   - 上部の高さは全部 CSS で固定: 302px(タイトル行 56 + まとめ 4+130 + 月の切替 52 + 絞り込み 60)。
-   - 縮み量 86px(ACT_R。JS と同じ値): まとめの中の数字の段・ボタンの段・まとめの白い札、下の段(月・絞り込み・表示切替)が上へ動く。
-   - 縮んだ形: 数字と短いラベルが 1 行(まとめの札の上の段)。広い形の長いラベルと、作る 2 つの丸ボタン(タイトル行)は opacity で入れ替える(先に消す→後から出す。二重に見えない)。
-   - 背景は不透明寄り(backdrop-filter なし)。上部全体の影は ::before の box-shadow で、背景と一緒に動く。
+   - 上部の高さは全部 CSS で固定(346px = タイトル 56 + 表示の切替 44 + まとめ 4+130 + 月の切替 52 + 絞り込み 60)。
+   - 縮み量 146px(--act-r。JS の ACT_R と同じ値 = まとめの縮み 86 + 絞り込みの行 60)。
+     背景の札と上部の下端は --p(直線)で動く。下端は一覧のスクロールと一致させるため、ここだけはイージングしない。
+   - 縮んだ後の形(高さ 200): タイトル行(丸ボタン2つ)・表示の切替(少し上へ)・1行のまとめ・月の切替。
+     絞り込み(すべて/予定…)は月の切替の下へ潜り込んで消える(p 0.4 まで)。
+   - 背景は不透明。影は下端の ::after で、縮むほど濃くなる(p に比例)。
    ===================================================================== */
 
 /* 上部の帯: 固定・画面の上端。pointer-events は子だけが受ける(下の余白は下の一覧が受ける) */
-.act-top{position:fixed;top:0;left:0;width:100%;z-index:30;box-sizing:border-box;overflow:hidden;contain:layout paint;pointer-events:none;--act-r:86px}
-/* v4.13: 帯の中の段だけが押せる(帯の空いた所と、縮んで下に空いた所は下の一覧が受ける) */
+.act-top{position:fixed;top:0;left:0;width:100%;z-index:30;box-sizing:border-box;overflow:hidden;contain:layout paint;pointer-events:none;
+  --act-r:146px;--act-sc:86px;--act-v:8px}
+/* v4.14: 帯の中の段だけが押せる(帯の空いた所と、縮んで下に空いた所は下の一覧が受ける) */
 .act-top>*{pointer-events:auto}
-/* 背景の札: 上部の全部の高さで置き、縮んだ分だけ上へ動かす(上の余った部分は帯の外で切れる)。影も一緒に動く */
+/* 背景の札: 上部の全部の高さで置き、縮んだ分(直線の p)だけ上へ。一覧のスクロールと同じ速さで、下端を一覧の上端に合わせる */
 .act-top::before{content:"";position:absolute;left:0;top:0;width:100%;height:100%;z-index:-1;pointer-events:none;
   background:var(--bg);
-  box-shadow:0 6px 10px -6px color-mix(in srgb,var(--tx) 22%,transparent);
-  transform:translate3d(0,calc(-86px*var(--p,0)),0);will-change:transform}
-/* まとめより下の段(月の切替・絞り込み など): 縮んだ分だけ上へ。位置は動かさず transform だけ。
-   まとめより上の段(表示の切替)は動かさない=縮んだ後も見える。 */
-.act-top .act-sc~*{transform:translate3d(0,calc(-86px*var(--p,0)),0);will-change:transform}
+  transform:translate3d(0,calc(-1*var(--act-r)*var(--p,0)),0);will-change:transform}
+/* v4.14: 影: 札の下端に付く帯。縮むほど濃くなる(opacity = p)。札と一緒に動く */
+.act-top::after{content:"";position:absolute;left:0;top:100%;width:100%;height:14px;z-index:-1;pointer-events:none;
+  background:linear-gradient(color-mix(in srgb,var(--tx) 18%,transparent),transparent 100%);
+  opacity:var(--p,0);transform:translate3d(0,calc(-1*var(--act-r)*var(--p,0)),0);will-change:transform,opacity}
 
-/* 1) 大見出しの行: 高さ 56 のまま。見出しは transform で 28px→20px 相当(scale 1→0.714、左の辺を基準)。縮んだ時に右の丸ボタン2つが出る */
+/* 1) 大見出しの行: 高さ 56 のまま。見出しは scale 1→0.68 と少し上へ(イージング) */
 .act-top .act-lt{position:relative;box-sizing:border-box;height:56px;padding:0 var(--gutter);display:flex;align-items:center;gap:8px}
 .act-top .act-lt h1{font:700 28px/1.2 var(--font);letter-spacing:.01em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;
-  transform-origin:0 50%;transform:scale(calc(1 - 0.2857*var(--p,0)));will-change:transform}
+  transform-origin:0 50%;transform:translate3d(0,calc(-3px*var(--e,0)),0) scale(calc(1 - 0.32*var(--e,0)));will-change:transform}
 .act-top .act-lt .iconbtn{margin-right:-10px}
-/* 丸ボタン2つ: 行の上に重ねて置く(並びは検索の左 8px)。p=0.5 から見え、それまでは触れない */
-.act-top .act-tb{position:absolute;top:6px;right:calc(var(--gutter) + 42px);display:flex;align-items:center;
-  opacity:clamp(0,calc(2*var(--p,0) - 1),1);transform:scale(calc(0.8 + 0.2*var(--p,0)));transform-origin:100% 50%;will-change:transform,opacity}
+/* 丸ボタン2つ(作る): 行の上に重ねて置く。p 0.6 から出る(--fi)。出るまでは触れない */
+.act-top .act-tb{position:absolute;top:2px;right:calc(var(--gutter) + 42px);display:flex;align-items:center;
+  opacity:var(--fi,0);transform:translate3d(0,calc(6px*(1 - var(--fi,0))),0) scale(calc(0.8 + 0.2*var(--fi,0)));transform-origin:100% 50%;will-change:transform,opacity}
 .act-top:not(.is-line) .act-tb{visibility:hidden}
 .act-top .act-ib{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--me-soft);color:var(--me)}
 .act-top .act-ib svg.i{width:20px;height:20px}
 
-/* 2) まとめ: 高さ 130 のまま(札は縮んだ分だけ見えなくなる)。札の白は ::before で縦に縮める(origin は上) */
+/* 1b) 表示の切替(リスト/日/月): 縮む時は少し上へ(イージング)。位置は動かさず transform だけ */
+.act-top .act-views{transform:translate3d(0,calc(-1*var(--act-v)*var(--e,0)),0);will-change:transform}
+
+/* 2) まとめ: 高さ 130 のまま。札は縮んだ分だけ縦に縮める(origin は上)。札の下端は月の切替の上端と同じ位置に来る */
 .act-top .act-sc{position:relative;box-sizing:border-box;margin:4px var(--gutter) 0;padding:0;height:130px;background:none;box-shadow:none;border-radius:0;pointer-events:none}
 .act-top .act-sc::before{content:"";position:absolute;left:0;right:0;top:0;height:100%;z-index:-1;border-radius:18px;background:var(--tl-card);box-shadow:var(--tl-sh);
-  transform-origin:50% 0;transform:scaleY(calc(1 - 0.6615*var(--p,0)));will-change:transform}
+  transform-origin:50% 0;transform:scaleY(calc(1 - 0.6615*var(--e,0)));will-change:transform}
 .act-top .act-sci{position:relative;box-sizing:border-box;height:100%;display:grid;grid-template-columns:minmax(0,1fr);align-content:start;
   padding:12px 14px 14px;pointer-events:auto}
 .act-top .act-full{display:flex;flex-direction:column;grid-area:1/1;min-width:0}
-/* 数字の段: 12px 上へ(縮んだ時の 1 行の位置) */
-.act-top .act-ms{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));height:44px;transform:translate3d(0,calc(-12px*var(--p,0)),0);will-change:transform}
+/* 数字の段: 12px 上へ(縮んだ時は 1 行に収まる位置)。数字の行は少し下へ沈めて 1 行に揃える */
+.act-top .act-ms{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));height:44px;transform:translate3d(0,calc(-12px*var(--e,0)),0);will-change:transform}
 .act-top .act-m{display:flex;flex-direction:column;justify-content:center;min-width:0;min-height:44px;padding:0 10px;color:var(--tx)}
 .act-top .act-m:first-child{padding-left:4px}
 .act-top .act-m+.act-m{border-left:1px solid var(--line)}
-.act-top .act-m .n{display:flex;align-items:baseline;gap:3px;min-width:0;white-space:nowrap;transform:translate3d(0,calc(8px*var(--p,0)),0)}
+.act-top .act-m .n{display:flex;align-items:baseline;gap:3px;min-width:0;white-space:nowrap;transform:translate3d(0,calc(8px*var(--e,0)),0)}
 .act-top .act-m b{font:700 20px/1.2 var(--font);font-variant-numeric:tabular-nums}
-/* 短いラベル(縮んだ時だけ数字の右に出る)と、長いラベル(広い時だけ数字の下に出る)は opacity で入れ替える。先に消してから出す */
-.act-top .act-m .s{display:inline-flex;align-items:center;font:500 12px/1.2 var(--font);color:var(--tx-2);white-space:nowrap;opacity:clamp(0,calc(2*var(--p,0) - 1),1)}
-.act-top .act-m .l{display:flex;align-items:center;font:500 12px/1.3 var(--font);color:var(--tx-2);white-space:nowrap;overflow:hidden;opacity:clamp(0,calc(1 - 2*var(--p,0)),1)}
+/* 短いラベル(縮んだ時だけ数字の右に出る。p 0.6 から)と、長いラベル(広い時だけ数字の下。p 0.4 まで)は opacity で入れ替える。先に消してから出す */
+.act-top .act-m .s{display:inline-flex;align-items:center;font:500 12px/1.2 var(--font);color:var(--tx-2);white-space:nowrap;opacity:var(--fi,0)}
+.act-top .act-m .l{display:flex;align-items:center;font:500 12px/1.3 var(--font);color:var(--tx-2);white-space:nowrap;overflow:hidden;opacity:var(--fo,1)}
 .act-top .act-m svg.i{width:12px;height:12px;flex:none}
-/* ボタンの段: 縮んだ分だけ上へ動かし、先に消す(p=0.4 で 0)。消えたあとは触れない */
-.act-top .act-acts{margin-top:12px;height:48px;transform:translate3d(0,calc(-86px*var(--p,0)),0);opacity:clamp(0,calc(1 - var(--p,0)/.4),1);will-change:transform,opacity}
-.act-top.is-line .act-acts{visibility:hidden}
+/* ボタンの段: 縮んだ分だけ上へ(イージング)。p 0.4 で消す。消えたあとは触れない(is-fold) */
+.act-top .act-acts{margin-top:12px;height:48px;transform:translate3d(0,calc(-1*var(--act-sc)*var(--e,0)),0);opacity:var(--fo,1);will-change:transform,opacity}
+.act-top.is-fold .act-acts{visibility:hidden}
 .act-top .act-acts .sc-acts{margin:0}
 
-/* 3) 月の切替: 高さ 52 のまま(下の段として上へ動く) */
-.act-top .act-mn{box-sizing:border-box;margin:0;height:52px;padding:4px var(--gutter);gap:18px}
+/* 3) 月の切替: 高さ 52 のまま。まとめの札の下端へ上がる(まとめと同じ量)。札の白と同じ色の背景で、下に潜る絞り込みを隠す */
+.act-top .act-mn{box-sizing:border-box;margin:0;height:52px;padding:4px var(--gutter);gap:18px;
+  position:relative;z-index:2;background:var(--bg);
+  transform:translate3d(0,calc(-1*var(--act-sc)*var(--e,0)),0);will-change:transform}
 .act-top .act-mn button{position:relative;width:44px;height:44px;padding:0;border:0;background:none;display:flex;align-items:center;justify-content:center;color:var(--tx-2)}
 .act-top .act-mn button::before{content:"";position:absolute;left:4px;right:4px;top:4px;bottom:4px;border-radius:50%;border:1px solid var(--line-strong);background:var(--surface)}
 .act-top .act-mn button svg{position:relative}
@@ -64,8 +73,11 @@
 .act-top .act-mn button:disabled{opacity:.3}
 .act-top .act-mn b{font:700 16px/1 var(--font);min-width:110px;text-align:center}
 
-/* 4) 絞り込み: 高さ 60 のまま(チップは 44px) */
-.act-top .act-chips{box-sizing:border-box;height:60px;padding:8px 0}
+/* 4) 絞り込み: 高さ 60 のまま。縮むと月の切替の下へ滑り込み(p と同じ速さ=札の下端と一緒に)、p 0.4 までに消す */
+.act-top .act-chips{box-sizing:border-box;height:60px;padding:8px 0;
+  position:relative;z-index:1;
+  transform:translate3d(0,calc(-1*var(--act-r)*var(--p,0)),0);opacity:var(--fo,1);will-change:transform,opacity}
+.act-top.is-fold .act-chips{visibility:hidden}
 .act-top .act-chips .chips{padding:0 var(--gutter);height:44px;align-items:center}
 .act-top .act-chips .chip{height:44px}
 

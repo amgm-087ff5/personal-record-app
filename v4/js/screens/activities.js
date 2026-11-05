@@ -30,12 +30,12 @@ function landTo(el,{top=12,end=false}={}){
 }
 /* ---------- v4.11: 上部(固定)とページ全体のスクロール ----------
    上部 #act-top は position:fixed(幅が広い時は左の一覧 .pane-l の上に合わせる)。
-   縮み具合 actP(0=広い / 1=縮んだ)は、動いた量 ÷ 縮められる幅(v4.13: ACT_R=86px)で決まる。どこでスクロールしても、動いた分だけ縮み・戻る。
+   縮み具合 actP(0=広い / 1=縮んだ)は、動いた量 ÷ 縮められる幅(v4.14: ACT_R=146px)で決まる。どこでスクロールしても、動いた分だけ縮み・戻る。
    タイムラインは自分の枠を持たず、ページ(または一覧)がそのまま動く。
    開いた時・月の切替は、今日の札が上部のすぐ下(8px)に来る位置へ。いまの時刻は使わない。 */
-/* v4.13: 縮められる量(px)。css/s-activities.css の 86px と同じ値。上部の高さは CSS で固定し、縮みは transform/opacity だけで見せる */
-const ACT_R=86;
-let actP=0,actLastY=null,actRaf=0,actWasOn=false,actFullH=0;
+/* v4.14: 縮められる量(px)。css/s-activities.css の --act-r(146px)と同じ値。まとめの縮み 86 + 絞り込みの行 60。上部の高さは CSS で固定し、縮みは transform/opacity だけで見せる */
+const ACT_R=146;
+let actP=0,actLastY=null,actRaf=0,actWasOn=false,actFullH=0,actSettleT=0,actSnapRaf=0;
 const actHdr=()=>document.getElementById('act-top');
 /** 動くのが一覧の枠(幅が広い時の .pane-l)なら枠、窓なら null */
 const actScroller=()=>innerWidth>=1100?document.querySelector('#app .pane-l'):null;
@@ -45,9 +45,18 @@ const actDocTop=(el,s)=>s?el.getBoundingClientRect().top-s.getBoundingClientRect
 const actVH=s=>s?s.clientHeight:innerHeight;
 const actH=s=>s?s.scrollHeight:document.documentElement.scrollHeight;
 const actSet=(s,y)=>{if(s)s.scrollTop=y;else scrollTo({top:y,behavior:'instant'})};
-/** v4.11: 縮み具合を上部に反映(CSS の --p と、縮んだ時の表示の切り替え) */
-/* v4.13: 1フレームに1回だけ --p を書く。クラスは境目を越えた時だけ付け外しする(毎フレームの属性変更をなくす) */
-function actApply(h){h=h||actHdr();if(!h)return;h.style.setProperty('--p',actP.toFixed(4));const l=actP>.375;if(h.classList.contains('is-line')!==l)h.classList.toggle('is-line',l)}
+/** v4.11: 縮み具合を上部に反映(CSS の --p と、縮んだ時の表示の切り替え)
+    v4.14: 位置用のイージング --e(easeInOutCubic)と、消える・出る途中の --fo / --fi を一緒に書く。どれも transform/opacity だけに効く(レイアウトは変わらない)
+    クラスは境目を越えた時だけ付け外しする: is-fold(p>0.4 で絞り込み・ボタンの段を隠す) / is-line(p>0.6 で作る丸ボタンを出す) */
+function actApply(h){h=h||actHdr();if(!h)return;const p=actP;
+  const e=p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;
+  h.style.setProperty('--p',p.toFixed(4));
+  h.style.setProperty('--e',e.toFixed(4));
+  h.style.setProperty('--fo',Math.max(0,1-p/.4).toFixed(4));
+  h.style.setProperty('--fi',Math.min(1,Math.max(0,(p-.6)/.4)).toFixed(4));
+  const l=p>.6,f=p>.4;
+  if(h.classList.contains('is-line')!==l)h.classList.toggle('is-line',l);
+  if(h.classList.contains('is-fold')!==f)h.classList.toggle('is-fold',f)}
 /** v4.11: 上部の幅・位置と高さを合わせる。p=0(広い)と p=1(縮んだ)の高さを測り、上部の下に広い時の高さの余白を置く。
     今日の札を上部のすぐ下(8px)に置けるよう、下の余白(.ax-room)を足りない分だけにする */
 function actLayout(){
@@ -90,7 +99,25 @@ function actOnScroll(){
   /* v4.13: 読むのは scrollTop/scrollY だけ(枠や位置の測定はしない) */
   if(y<=0)actP=0;else if(dy)actP=Math.min(1,Math.max(0,actP+dy/ACT_R));
   actApply(h);
+  /* v4.14: 止まったら、中途半端な形(0<p<1)を 0 か 1 へ送る。スクロール中は何もしない */
+  clearTimeout(actSettleT);actSettleT=setTimeout(actSettle,100);
 }
+/* v4.14: スナップ。上部の形は一覧のスクロールで決まるので、形だけ 180ms で動かすと一覧と隙間(または重なり)が出る。
+   そこで止まった所から、残りの分だけスクロールを 180ms で動かす(ease-out)。動くのは縮み具合 p が追う。
+   50% 未満なら 0(広い)へ戻し、以上なら 1(縮む)へ送る。ユーザーが触ったら止める(actCancelSnap)。 */
+function actSettle(){
+  actSettleT=0;
+  if(CUR.name!=='activities'||actP<=.001||actP>=.999)return;
+  const s=actScroller(),y=actY(s),max=Math.max(0,actH(s)-actVH(s));
+  const to=Math.min(max,Math.max(0,actP<.5?y-ACT_R*actP:y+ACT_R*(1-actP)));
+  const dur=matchMedia('(prefers-reduced-motion: reduce)').matches?0:180,t0=performance.now();
+  actCancelSnap();
+  const step=now=>{const k=dur?Math.min(1,(now-t0)/dur):1,ea=1-Math.pow(1-k,3);
+    actSet(s,y+(to-y)*ea);actSnapRaf=k<1?requestAnimationFrame(step):0};
+  actSnapRaf=requestAnimationFrame(step);
+}
+function actCancelSnap(){if(actSnapRaf){cancelAnimationFrame(actSnapRaf);actSnapRaf=0}}
+['wheel','touchstart','pointerdown','keydown'].forEach(t=>addEventListener(t,actCancelSnap,{capture:true,passive:true}));
 /* 窓か左の一覧の、スクロールを1か所で受ける(scroll は泡立たないので capture で受ける) */
 document.addEventListener('scroll',e=>{const t=e.target;
   if((t===document||(t.classList&&t.classList.contains('pane-l')))&&!actRaf)actRaf=requestAnimationFrame(actOnScroll)},{capture:true,passive:true});
