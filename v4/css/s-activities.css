@@ -9,13 +9,16 @@
 
 /* 上部の帯: 固定・画面の上端。pointer-events は子だけが受ける(下の余白は下の一覧が受ける) */
 .act-top{position:fixed;top:0;left:0;width:100%;z-index:30;box-sizing:border-box;overflow:hidden;contain:layout paint;pointer-events:none;--act-r:86px}
+/* v4.13: 帯の中の段だけが押せる(帯の空いた所と、縮んで下に空いた所は下の一覧が受ける) */
+.act-top>*{pointer-events:auto}
 /* 背景の札: 上部の全部の高さで置き、縮んだ分だけ上へ動かす(上の余った部分は帯の外で切れる)。影も一緒に動く */
 .act-top::before{content:"";position:absolute;left:0;top:0;width:100%;height:100%;z-index:-1;pointer-events:none;
-  background:color-mix(in srgb,var(--bg) 97%,transparent);
+  background:var(--bg);
   box-shadow:0 6px 10px -6px color-mix(in srgb,var(--tx) 22%,transparent);
   transform:translate3d(0,calc(-86px*var(--p,0)),0);will-change:transform}
-/* 下の段(月の切替・絞り込み・あれば表示切替): 縮んだ分だけ上へ。位置は動かさず transform だけ(v4.13: 子の増減に強いよう :not で決める) */
-.act-top>:not(.act-lt):not(.act-sc){transform:translate3d(0,calc(-86px*var(--p,0)),0);will-change:transform}
+/* まとめより下の段(月の切替・絞り込み など): 縮んだ分だけ上へ。位置は動かさず transform だけ。
+   まとめより上の段(表示の切替)は動かさない=縮んだ後も見える。 */
+.act-top .act-sc~*{transform:translate3d(0,calc(-86px*var(--p,0)),0);will-change:transform}
 
 /* 1) 大見出しの行: 高さ 56 のまま。見出しは transform で 28px→20px 相当(scale 1→0.714、左の辺を基準)。縮んだ時に右の丸ボタン2つが出る */
 .act-top .act-lt{position:relative;box-sizing:border-box;height:56px;padding:0 var(--gutter);display:flex;align-items:center;gap:8px}

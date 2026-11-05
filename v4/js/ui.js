@@ -287,7 +287,7 @@ function render(keepScroll){
   CUR=parseHash();const r=ROUTES[CUR.name]||ROUTES.activities;
   const y=scrollY;
   const safe=(fn,id,q)=>{try{return fn(id,q)}catch(e){console.error(e);return appbar('表示できません')+banner('warn',`この画面を表示できませんでした。<br><small>${esc(e.message)}</small>`)}};
-  const ROOT={home:'home',activities:'activities',plan:'plan',memo:'memo',todo:'todo',entities:'entities',ledger:'ledger',settings:'settings'};
+  const ROOT={home:'home',activities:'activities',memo:'memo',todo:'todo',entities:'entities',ledger:'ledger',settings:'settings'};
   const wide=innerWidth>=1100;const rootName=ROOT[r.tab||lastTab]||'home';
   const app=document.getElementById('app');
   /* v4.10: 中でスクロールする枠(data-keep)の位置。同じ画面の描き直しでは保つ */

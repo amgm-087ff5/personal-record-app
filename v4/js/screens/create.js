@@ -83,7 +83,7 @@ function crActSync(id,st,d,t,set){const el=document.getElementById(id);if(el)el.
    ホーム・家計簿・設定=レシートで支払い / 記録=出来事 / 予定=予定 / メモ=メモ / ToDo=ToDo(plan.js) / エンティティ=エンティティ */
 CREATE.push({id:'receipt',label:'レシートで支払い',icon:'pay',color:'var(--ev)',primaryOn:['home','ledger','settings'],onclick:'openReceipt()'});
 CREATE.push({id:'happening',label:'出来事',icon:'moment',color:'var(--ev)',primaryOn:['activities'],onclick:'openNewHappening()'});
-CREATE.push({id:'event',label:'予定',icon:'future',color:'var(--plan)',primaryOn:['plan'],onclick:'openNewEvent()'});
+CREATE.push({id:'event',label:'予定',icon:'future',color:'var(--plan)',primaryOn:['activities'],onclick:'openNewEvent()'});
 CREATE.push({id:'entity',label:'エンティティ',icon:'kin',color:'var(--kin)',primaryOn:['entities'],onclick:'openNewEntity()'});
 CREATE.push({id:'diary',label:'今日の日記',icon:'diary',color:'var(--ev)',primaryOn:[],onclick:'openDiary(TODAY)'});
 CREATE.push({id:'memo',label:'メモ',icon:'memo',color:'var(--ev)',primaryOn:['memo'],onclick:'openNewMemo()'});
