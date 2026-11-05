@@ -76,6 +76,7 @@
   --row:56px;
   --tap:44px;
   --nav-h:64px;
+  --page-end:calc(var(--nav-h) + 96px + env(safe-area-inset-bottom)); /* v4.10 画面の一番下の余白: ナビ64+下10+飛び出す＋とつまみ約40+ゆとり46 */
   --ease:cubic-bezier(.2,.8,.2,1);
   --fill-act:#1F7F91;
   --fill-pay:#33437A;
