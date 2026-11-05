@@ -4,6 +4,15 @@
    ===================================================================== */
 
 let actFilter='all';let actMonth=TODAY.slice(0,7);
+/* v4.13: 表示(リスト/日/月)。#/activities?view=… で持つ。wide の左の一覧(別の画面の時)は最後に選んだ表示 */
+let actViewNow='list';
+/** 表示の切替。日と月は位置を引き継ぐ(リストの月 ⇔ 日・月の月)。描き直しは hashchange が行う */
+function actSetView(v){
+  const cur=actViewNow;if(v===cur)return;
+  if(v==='list')actMonth=plSel.slice(0,7);
+  else if(cur==='list')plFromMonth(actMonth);
+  location.replace('#/activities?view='+v);
+}
 const monthShift=n=>{const [y,m]=actMonth.split('-').map(Number);const d=new Date(y,m-1+n,1);actMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');landWant=actMonth===TODAY.slice(0,7)?'today':'bottom';rerender()};
 const ACT_FILTERS=[['all','すべて'],['予定','予定'],['支払い','支払い'],['会話','会話'],['移動','移動']];
 /* ---------- 開いた時・月の切替の位置合わせ(上=過去・下=未来。開いた時は「いま」の線を上に) ----------
@@ -21,10 +30,12 @@ function landTo(el,{top=12,end=false}={}){
 }
 /* ---------- v4.11: 上部(固定)とページ全体のスクロール ----------
    上部 #act-top は position:fixed(幅が広い時は左の一覧 .pane-l の上に合わせる)。
-   縮み具合 actP(0=広い / 1=縮んだ)は、動いた量 ÷ 縮められる幅(actRange)で決まる。どこでスクロールしても、動いた分だけ縮み・戻る。
+   縮み具合 actP(0=広い / 1=縮んだ)は、動いた量 ÷ 縮められる幅(v4.13: ACT_R=86px)で決まる。どこでスクロールしても、動いた分だけ縮み・戻る。
    タイムラインは自分の枠を持たず、ページ(または一覧)がそのまま動く。
    開いた時・月の切替は、今日の札が上部のすぐ下(8px)に来る位置へ。いまの時刻は使わない。 */
-let actP=0,actLastY=null,actRaf=0,actWasOn=false,actRange=0,actFullH=0;
+/* v4.13: 縮められる量(px)。css/s-activities.css の 86px と同じ値。上部の高さは CSS で固定し、縮みは transform/opacity だけで見せる */
+const ACT_R=86;
+let actP=0,actLastY=null,actRaf=0,actWasOn=false,actFullH=0;
 const actHdr=()=>document.getElementById('act-top');
 /** 動くのが一覧の枠(幅が広い時の .pane-l)なら枠、窓なら null */
 const actScroller=()=>innerWidth>=1100?document.querySelector('#app .pane-l'):null;
@@ -35,16 +46,17 @@ const actVH=s=>s?s.clientHeight:innerHeight;
 const actH=s=>s?s.scrollHeight:document.documentElement.scrollHeight;
 const actSet=(s,y)=>{if(s)s.scrollTop=y;else scrollTo({top:y,behavior:'instant'})};
 /** v4.11: 縮み具合を上部に反映(CSS の --p と、縮んだ時の表示の切り替え) */
-function actApply(h){h=h||actHdr();if(!h)return;h.style.setProperty('--p',actP.toFixed(4));h.classList.toggle('is-min',actP>.625);h.classList.toggle('is-line',actP>.375)}  /* v4.11: 2つの形の見える/隠れる切り替え(重なる幅の外で切る=ちらつかない) */
+/* v4.13: 1フレームに1回だけ --p を書く。クラスは境目を越えた時だけ付け外しする(毎フレームの属性変更をなくす) */
+function actApply(h){h=h||actHdr();if(!h)return;h.style.setProperty('--p',actP.toFixed(4));const l=actP>.375;if(h.classList.contains('is-line')!==l)h.classList.toggle('is-line',l)}
 /** v4.11: 上部の幅・位置と高さを合わせる。p=0(広い)と p=1(縮んだ)の高さを測り、上部の下に広い時の高さの余白を置く。
     今日の札を上部のすぐ下(8px)に置けるよう、下の余白(.ax-room)を足りない分だけにする */
 function actLayout(){
   const h=actHdr();if(!h||CUR.name!=='activities')return;
   const s=actScroller(),box=(s||document.getElementById('app')).getBoundingClientRect();
   h.style.left=box.left+'px';h.style.width=box.width+'px';h.style.top=(s?box.top:0)+'px';
-  h.style.setProperty('--p',0);const full=h.getBoundingClientRect().height;
-  h.style.setProperty('--p',1);const min=h.getBoundingClientRect().height;
-  actFullH=full;actRange=Math.max(0,full-min);
+  /* v4.13: 高さは CSS で固定なので、測るのはここの一度だけ(縮む時の毎フレームでは測らない) */
+  const full=h.offsetHeight;
+  actFullH=full;
   document.getElementById('act-sp').style.height=full+'px';
   const room=document.querySelector('#app .ax-room'),t=document.querySelector('#app .dh2.today .dcard');
   if(room){room.style.height='0px';if(t){const below=actH(s)-actDocTop(t,s);room.style.height=Math.max(0,Math.round(actVH(s)-full-8-below))+'px'}}
@@ -75,7 +87,8 @@ function actOnScroll(){
   const s=actScroller(),y=actY(s);
   if(actLastY===null){actLastY=y;return}
   const dy=y-actLastY;actLastY=y;
-  if(y<=0)actP=0;else if(dy&&actRange>0)actP=Math.min(1,Math.max(0,actP+dy/actRange));
+  /* v4.13: 読むのは scrollTop/scrollY だけ(枠や位置の測定はしない) */
+  if(y<=0)actP=0;else if(dy)actP=Math.min(1,Math.max(0,actP+dy/ACT_R));
   actApply(h);
 }
 /* 窓か左の一覧の、スクロールを1か所で受ける(scroll は泡立たないので capture で受ける) */
@@ -86,7 +99,9 @@ addEventListener('resize',()=>{if(CUR.name==='activities')actLayout()});
 if(document.fonts)document.fonts.ready.then(()=>{if(CUR.name==='activities')actLayout()});
 /** 画面を開いた時の位置: アクティビティは今月なら今日の札を上部のすぐ下・前の月なら一番下 / 今日の日のページは「いま」を上に(sticky の見出しの分 68px) */
 function landOnOpen(){
-  if(CUR.name==='activities')setTimeout(()=>actLandSoon(actMonth===TODAY.slice(0,7)?'today':'bottom'),0);
+  /* v4.13: 日・月の表示は一番上から(リストは今まで通り今日/前の月の位置)。wide の左の一覧は枠の中を0へ */
+  if(CUR.name==='activities'&&CUR.q.view&&CUR.q.view!=='list')setTimeout(()=>{const s=actScroller();if(s)s.scrollTop=0;else scrollTo({top:0,behavior:'instant'})},0);
+  else if(CUR.name==='activities')setTimeout(()=>actLandSoon(actMonth===TODAY.slice(0,7)?'today':'bottom'),0);
   else if(CUR.name==='day'&&CUR.id===TODAY)setTimeout(()=>{const n=document.querySelector('#app .ax .now');if(n)landTo(n,{top:68})},0);
 }
 addEventListener('hashchange',landOnOpen);
@@ -115,7 +130,19 @@ function recordDates(){const ds=new Set(Object.values(A).filter(a=>a.type==='日
 const axDay=(d,o={})=>{const items=dayItems(d);if(d!==TODAY)return items.map(it=>itemHtml(it)).join('');
   return items.filter(it=>!isFuturePlan(it)).map(it=>itemHtml(it)).join('')+nowLine()+items.filter(it=>isFuturePlan(it)).map(it=>itemHtml(it,{future:true})).join('')};
 
-route('activities',()=>{
+route('activities',(id,q)=>{
+  /* v4.13: 表示(リスト/日/月)。今の画面(#/activities)なら URL の view(既定はリスト)。別の画面の時(wide の左の一覧)は最後に選んだ表示 */
+  if(CUR.name==='activities')actViewNow=['day','month'].includes(q.view)?q.view:'list';
+  const view=actViewNow;
+  /* 上部の大見出しの行(縮んだ時に出る丸ボタン2つ=作る)と、表示の切替の行 */
+  const tb=`<div class="act-tb"><button class="act-ib" type="button" aria-label="レシートで支払い" onclick="openReceipt()">${IC.camera}</button><button class="act-ib" type="button" aria-label="出来事を追加" onclick="openNewHappening()">${IC.plus}</button></div>`;
+  const titleRow=`<div class="lt act-lt"><h1>アクティビティ</h1>${tb}<button class="iconbtn" type="button" aria-label="検索" onclick="toast('検索はモックでは未対応です')">${IC.search}</button></div>`;
+  const viewRow=`<div class="act-views">${seg([['list','リスト'],['day','日'],['month','月']],view,"actSetView('$v')")}</div>`;
+  /* 日・月: まとめ・月の送り・絞り込みは出さず、期間の送りと「予定を追加」だけ。中身は plan.js の描き方 */
+  if(view!=='list'){
+    return `<header class="act-top" id="act-top">${titleRow}${viewRow}<div class="act-per">${view==='day'?plDayNav():plMonthNav()}<button class="act-ib" type="button" aria-label="予定を追加" onclick="openNewEvent('${plSel}')">${IC.plus}</button></div></header><div class="act-sp" id="act-sp" aria-hidden="true"></div>`
+      +`<div class="pl-root">${view==='day'?plDayView():plMonthView()}</div><div class="act-end" aria-hidden="true"></div>`;
+  }
   const upcoming=Object.entries(EV).filter(([k,e])=>!e.hol&&!e.rec&&e.d>TODAY).sort((a,b)=>a[1].d.localeCompare(b[1].d));
   const isNow=actMonth===TODAY.slice(0,7),dates=recordDates().filter(d=>d.startsWith(actMonth));
   const allD=[...recordDates(),TODAY],minM=allD.sort()[0].slice(0,7),maxM=TODAY.slice(0,7);
@@ -127,16 +154,14 @@ route('activities',()=>{
   const want=landWant;landWant=null;
   if(want)setTimeout(()=>actLandSoon(want),0);
   /* v4.11 上部(固定の帯): 「広い形」と「1行の形」を両方描き、縮み具合 --p で見せる方を入れ替える(css/s-activities.css) */
-  const mets=[{v:`${monthRec}件`,l:`${+actMonth.slice(5)}月の記録`,s:`${+actMonth.slice(5)}月`},{v:`${todayEv}件`,l:'今日の予定',s:'予定',href:'#/plan'},{v:`${todoTodayCount()}件`,l:'今日のToDo',s:'ToDo',href:'#/todo'}];
+  const mets=[{v:`${monthRec}件`,l:`${+actMonth.slice(5)}月の記録`,s:`${+actMonth.slice(5)}月`},{v:`${todayEv}件`,l:'今日の予定',s:'予定',href:'#/activities?view=day'},{v:`${todoTodayCount()}件`,l:'今日のToDo',s:'ToDo',href:'#/todo'}];
   const acts=[{text:'レシートで支払い',icon:'camera',primary:true,onclick:'openReceipt()'},{text:'出来事',icon:'plus',onclick:'openNewHappening()'}];
   /* v4.11 本体調整: 数字は1組だけ(2つの形を重ねない=二重に見えない・空にならない)。縮むと 数字が小さくなり、下の長いラベルが畳まれ、数字の右に短いラベルが出る */
   const metU=m=>{const inner=`<span class="n"><b class="num">${esc(m.v)}</b><span class="s">${esc(m.s)}${m.href?IC.chev:''}</span></span><span class="l">${esc(m.l)}${m.href?IC.chev:''}</span>`;return m.href?`<a class="act-m" href="${m.href}">${inner}</a>`:`<div class="act-m">${inner}</div>`};
   const full=`<div class="act-full"><div class="act-ms">${mets.map(metU).join('')}</div><div class="act-acts">${sumActs(acts)}</div></div>`;
   const line='';
   /* 縮んだ時は、作る2つの丸ボタンを大見出しの行へ移す(行の幅を --p で広げる。全部の幅は 0→88px。ぶつからない) */
-  const tb=`<div class="act-tb"><button class="act-ib" type="button" aria-label="レシートで支払い" onclick="openReceipt()">${IC.camera}</button><button class="act-ib" type="button" aria-label="出来事を追加" onclick="openNewHappening()">${IC.plus}</button></div>`;
-  const head=`<header class="act-top" id="act-top">`
-    +`<div class="lt act-lt"><h1>アクティビティ</h1>${tb}<button class="iconbtn" type="button" aria-label="検索" onclick="toast('検索はモックでは未対応です')">${IC.search}</button></div>`
+  const head=`<header class="act-top" id="act-top">`+titleRow+viewRow
     +`<section class="sc act-sc"><div class="act-sci">${full}${line}</div></section>`
     +`<div class="mnav act-mn"><button type="button" aria-label="前の月" ${actMonth<=minM?'disabled':''} onclick="monthShift(-1)">${IC.back}</button><b>${actMonth.slice(0,4)}年${+actMonth.slice(5)}月</b><button type="button" class="nx" aria-label="次の月" ${actMonth>=maxM?'disabled':''} onclick="monthShift(1)">${IC.back}</button></div>`
     +`<div class="act-chips">${chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")}</div>`
@@ -151,7 +176,7 @@ route('activities',()=>{
         const hol=evs.find(([k,e])=>e.hol);const rows=evs.filter(([k,e])=>!e.hol).map(([k])=>planRowAx(k,{future:true})).join('');
         out.push(dayHead(d,{href:`#/day/${d}`,future:true,empty:hol?hol[1].t:''})+rows)}
       const later=upcoming.filter(([k,e])=>e.d>addDays(TODAY,14)).length;
-      return out.join('')+`<a href="#/plan">`+axEdge(later?`これより先の予定 ${later}件${IC.chev}`:`予定 › 月で見る${IC.chev}`)+`</a>`})():'')
+      return out.join('')+`<a href="#/activities?view=month">`+axEdge(later?`これより先の予定 ${later}件${IC.chev}`:`予定 › 月で見る${IC.chev}`)+`</a>`})():'')
     +(isNow?'<div class="ax-room" aria-hidden="true"></div>':'')
     +`</div><div class="act-end" aria-hidden="true"></div>`;
 },{tab:'activities'});

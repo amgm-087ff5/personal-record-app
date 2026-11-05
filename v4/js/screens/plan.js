@@ -1,12 +1,11 @@
 /* =====================================================================
-   予定 — 月 / 日 / 3週間(時間軸) / 予定の詳細 ・ ToDo(独立タブ) / ToDoの詳細
-   ルート: #/plan(?view=month|day|list), #/todo, #/ev/{id}, #/task/{id}
-   (ToDoは予定から独立。#/plan?view=todo は #/todo へ移す)
+   予定の描き方 — v4.13: 予定タブは廃止。日・月の表示は アクティビティ(#/activities?view=day|month)の中に入る。
+   ここは中身だけ: 月(日のマス・件数の印)・日(時間グリッド)・その日のToDo・予定の詳細・ToDo(一覧・詳細)
+   ルート: #/plan(古い入口。#/activities?view=day|month へ置き換え), #/todo, #/ev/{id}, #/task/{id}
    見た目は css/s-plan.css。軸の一覧は axGroup(日の面)で作る(DESIGN.md v4)
    ===================================================================== */
 
 /* ---------- 状態(画面をまたいで残す) ---------- */
-let planView='month';
 let plSel=TODAY, plYM=[+TODAY.slice(0,4),+TODAY.slice(5,7)];
 let plTodoView='today', plShowDone=false;
 
@@ -21,45 +20,23 @@ function plDayFor(date){
   if(!k){k=uid('d');A[k]={type:'日記',date,dd:String(+date.slice(8)),dw:wdOf(date),body:'',kids:[]}}
   return k;
 }
-function plSetView(v){
-  planView=v;
-  location.replace('#/plan?view='+v);
-  rerender();
-}
+/** v4.13: リストの月 → 日・月の期間(表示を切り替えた時に位置を引き継ぐ。今月なら今日) */
+function plFromMonth(ym){plYM=[+ym.slice(0,4),+ym.slice(5,7)];plSel=ym===TODAY.slice(0,7)?TODAY:ym+'-01'}
 /** その日の記録(実線)と予定(点線)を時間順に。繰り返しは evOn が日付ごとに含める */
 function plItemsOn(d){
   const recs=actsOn(d).map(([k,a])=>({k,kind:'rec',t:a.title||'',time:a.time||'00:00',end:'',all:false,cat:a.x&&X[a.x]?X[a.x].cat:''}));
   const plans=evOn(d).filter(([k,e])=>!e.hol&&!plRecordedOn(e,d)).map(([k,e])=>({k,kind:'plan',t:e.t,time:e.all?'00:00':e.s,end:e.all?'':e.e,all:!!e.all,cat:e.pay?e.pay.cat:''}));
   return [...recs,...plans].sort((a,b)=>a.time.localeCompare(b.time));
 }
+/** その日が期限のToDoのキー(js/plans.js の todosDueOn があれば使う。無ければ空)。戻りがキーでも [キー,中身] でもよい */
+function plTodosOn(d){
+  if(typeof todosDueOn!=='function')return [];
+  return todosDueOn(d).map(x=>Array.isArray(x)?x[0]:x).filter(k=>TD[k]);
+}
 /** 見出しの下の小さい見出し。期限切れは赤(cls='late') */
 function plSec(title,n,cls='',act){
   return `<div class="sh pl-sec ${cls}"><h2>${esc(title)}</h2>${n!=null&&n!==''?`<span class="n">${n}</span>`:''}${act?`<a class="act" href="javascript:void 0" onclick="${act.onclick}">${esc(act.label)}</a>`:''}</div>`;
 }
-
-/* ---------- 予定タブ ---------- */
-/** 今日から7日間の予定の件数(同じ予定の同じ日は1件。繰り返しは日付ごと) */
-function plCountWeek(pred){const s=new Set();for(let i=0;i<7;i++){const d=addDays(TODAY,i);evOn(d).forEach(([k,e])=>{if(!e.hol&&pred(e))s.add(k+'@'+d)})}return s.size}
-
-route('plan',(id,q)=>{
-  /* ToDoは独立したタブ。古い #/plan?view=todo は #/todo へ移す(移すと hashchange で描き直す) */
-  if(q.view==='todo'){location.replace('#/todo');return '<div class="pl-root"></div>'}
-  if(q.view)planView=['month','day','list'].includes(q.view)?q.view:(q.view==='cal'?'month':planView);
-  const body=planView==='day'?plDayPane()
-    :planView==='list'?plListAx()
-    :plCalPane();
-  /* まとめカード(予定だけ): 数字=今日の予定 / 1週間の予定 / 支払い予定(1週間)。ボタン=予定を追加(主のみ) */
-  const todayEv=evOn(TODAY).filter(([k,e])=>!e.hol).length;
-  const week=plCountWeek(e=>true), pay=plCountWeek(e=>!!e.pay);
-  return `<div class="pl-root">`+largeTitle('予定')
-    +summaryCard({metrics:[
-        {v:`${todayEv}件`,l:'今日の予定',href:'#/plan?view=day'},
-        {v:`${week}件`,l:'1週間の予定',href:'#/plan?view=list'},
-        {v:`${pay}件`,l:'支払い予定',href:'#/plan?view=list'}],
-      actions:[{text:'予定を追加',icon:'plus',primary:true,onclick:`openNewEvent('${plSel}')`}]})
-    +seg([['month','月'],['day','日'],['list','3週間']],planView,"plSetView('$v')")
-    +body+`</div>`;
-},{tab:'plan'});
 
 /* ---------- ToDo(独立したタブ #/todo) ---------- */
 route('todo',()=>{
@@ -81,25 +58,26 @@ function plFocusQuick(){
   el.scrollIntoView({block:'center'});el.focus();
 }
 
-/* ---------- 月 ---------- */
-function plCalPane(){
+/* ---------- 月(アクティビティの「月」表示の中身。期間の送りは plMonthNav をヘッダーへ) ---------- */
+function plMonthNav(){const [y,m]=plYM;return periodNav({label:`${m}月`,sub:String(y),prev:{on:'plMove(-1)'},next:{on:'plMove(1)'}})}
+function plMonthView(){
   const [y,m]=plYM;
   const first=new Date(y,m-1,1).getDay(), dim=new Date(y,m,0).getDate();
   let cells='<span></span>'.repeat(first);
   for(let n=1;n<=dim;n++){
     const d=`${y}-${String(m).padStart(2,'0')}-${String(n).padStart(2,'0')}`;
-    const its=plItemsOn(d);
+    const its=plItemsOn(d), tds=plTodosOn(d).length;
     const hol=evOn(d).some(([k,e])=>e.hol);
     const sun=hol||(first+n-1)%7===0;
-    /* 月のマスは件数だけ: 小さいカプセル(塗り=記録、点線=予定、角が四角=支払い)を最大4つ。文字は下の日の面で読む */
+    /* 月のマスは件数だけ: 小さいカプセル(塗り=記録、点線=予定、角が四角=支払い)を最大4つ。ToDoは下に小さい✓の件数。文字は下の日の面で読む */
     const dots=its.slice(0,4).map(it=>`<i class="pl-dot ${it.kind==='rec'?'rec':'plan'}${it.cat?' pay':''}"></i>`).join('');
-    cells+=`<button class="pl-cell${sun?' sun':''}${d===plSel?' sel':''}${d===TODAY?' today':''}" type="button" aria-label="${fmtMDW(d)}${its.length?' '+its.length+'件':''}" aria-pressed="${d===plSel}" onclick="plSelect('${d}')"><span class="pl-dn num">${n}</span><span class="pl-bars">${dots}</span></button>`;
+    const td=tds?`<span class="pl-td">${IC.check}${tds}</span>`:'';
+    cells+=`<button class="pl-cell${sun?' sun':''}${d===plSel?' sel':''}${d===TODAY?' today':''}" type="button" aria-label="${fmtMDW(d)}${its.length?' '+its.length+'件':''}${tds?' ToDo '+tds+'件':''}" aria-pressed="${d===plSel}" onclick="plSelect('${d}')"><span class="pl-dn num">${n}</span><span class="pl-bars">${dots}</span><span class="pl-tdr">${td}</span></button>`;
   }
-  const head=`<div class="pl-mh">${periodNav({label:`${m}月`,sub:String(y),prev:{on:'plMove(-1)'},next:{on:'plMove(1)'}})}</div>`;
   const wd=`<div class="pl-wd">${WD.split('').map((w,i)=>`<span class="${i===0?'sun':''}">${w}</span>`).join('')}</div>`;
-  const legend=`<div class="pl-legend"><span><i class="pl-dot plan"></i>予定</span><span><i class="pl-dot rec"></i>記録</span><span><i class="pl-dot plan pay"></i>支払い予定</span></div>`;
-  return `<div class="list pl-cal">${head}${wd}<div class="pl-grid">${cells}</div>${legend}</div>`
-    +plDayAx(plSel);
+  const legend=`<div class="pl-legend"><span><i class="pl-dot plan"></i>予定</span><span><i class="pl-dot rec"></i>記録</span><span><i class="pl-dot plan pay"></i>支払い予定</span><span>${IC.check}ToDo</span></div>`;
+  return `<div class="list pl-cal">${wd}<div class="pl-grid">${cells}</div>${legend}</div>`
+    +plDayAx(plSel)+plTodoBlock(plSel);
 }
 function plSelect(d){plSel=d;rerender()}
 function plMove(n){
@@ -109,7 +87,7 @@ function plMove(n){
   rerender();
 }
 
-/** 1日の面: 日の札+その日の記録と予定の行(時間の古い順 = 上が過去・下が未来)。今日は「いま」の線で過去と未来を分ける。月の下と日表示で同じ */
+/** 1日の面: 日の札+その日の記録と予定の行(時間の古い順 = 上が過去・下が未来)。今日は「いま」の線で過去と未来を分ける。月の下で使う */
 function plDayAx(d){
   const future=d>TODAY;
   const hol=evOn(d).find(([k,e])=>e.hol);
@@ -128,16 +106,20 @@ function plDayAx(d){
   return `<div class="ax">${axGroup(head,body||`<div class="pl-none">予定・記録 なし</div>`,{future,cls:d===TODAY?'today':''})}</div>`;
 }
 
-/* ---------- 日 ---------- */
+/* ---------- 日(アクティビティの「日」表示の中身。期間の送りは plDayNav をヘッダーへ) ---------- */
 function plStepDay(n){
   plSel=addDays(plSel,n);
   plYM=[+plSel.slice(0,4),+plSel.slice(5,7)];
   rerender();
 }
+function plDayNav(){
+  const d=plSel,hol=evOn(d).find(([k,e])=>e.hol);
+  return periodNav({label:fmtMDW(d),sub:d===TODAY?'今日':(hol?esc(hol[1].t):''),prev:{on:'plStepDay(-1)',text:'前の日'},next:{on:'plStepDay(1)',text:'次の日'}});
+}
 /** 日表示: 時間グリッド(6:00–24:00)。重なりは列に分けて横に並べる(v2の日表示。v3から継続)。
     v4: グリッドは1日=1枚の面の中。記録=塗りのカプセルの帯、予定=点線の中抜き */
 const plCatMark=c=>c?`<i class="pl-cat" style="--cc:${catColor(c)}"></i>`:'';
-function plDayPane(){
+function plDayView(){
   const d=plSel, isToday=d===TODAY;
   const H0=6,H1=24,PH=48;
   const minOf=t=>{const [h,m]=String(t).split(':').map(Number);return h*60+m};
@@ -153,44 +135,32 @@ function plDayPane(){
   timed.forEach(b=>{let i=lanesEnd.findIndex(en=>en<=b.s);if(i<0){i=lanesEnd.length;lanesEnd.push(0)}lanesEnd[i]=b.e;b.i=i});
   const N=Math.max(1,lanesEnd.length);
   const blocks=timed.map(({x,s,e,i})=>{
-    const top=(s-H0*60)/60*PH, h=Math.max((e-s)/60*PH,44);
+    /* v4.13 本体調整: 瞬間(終わりの無い記録・支払い)は時間の帯にせず、その時刻に細いカプセル(高さ28・時刻に中心)。支払いは「支払い · 支払先 ¥金額」 */
+    const inst=!x.end&&x.kind==='rec';
+    const top=inst?(s-H0*60)/60*PH-14:(s-H0*60)/60*PH, h=inst?28:Math.max((e-s)/60*PH,44);
     const isRec=x.kind==='rec';
     const href=isRec?'#/a/'+x.k:'#/ev/'+x.k;
     const tm=x.end?`${x.time}–${x.end}`:x.time;
-    return `<a class="pl-blk ${isRec?'rec':'plan'}" href="${href}" style="top:${top}px;height:${h}px;left:calc(52px + (100% - 52px) * ${i/N});width:calc((100% - 52px) / ${N} - 4px)"><b>${esc(x.t)}</b>${h>=48?`<span>${tm}</span>`:''}</a>`;
+    const ra=isRec&&A[x.k];
+    const ttl=ra&&ra.type==='支払い'?`${payLabel(ra)} ${yen(ra.amt)}`:x.t;
+    return `<a class="pl-blk ${isRec?'rec':'plan'}${inst?' inst':''}" href="${href}" style="top:${top}px;height:${h}px;left:calc(52px + (100% - 52px) * ${i/N});width:calc((100% - 52px) / ${N} - 4px)"><b>${inst?`<small class="num">${esc(x.time)}</small> `:''}${esc(ttl)}</b>${h>=48?`<span>${tm}</span>`:''}</a>`;
   }).join('');
   let grid='';
   for(let h=H0;h<=H1;h++){const y=(h-H0)*PH;grid+=`<span class="pl-hl num" style="top:${y}px">${h}:00</span><i class="pl-hr" style="top:${y}px"></i>`}
   const nowHtml=isToday?`<div class="pl-now" style="top:${(minOf(NOW)-H0*60)/60*PH}px"><span>${NOW}</span></div>`:'';
   const alld=allday.map(x=>`<a class="pl-bar ${x.kind==='rec'?'rec':'plan'}" href="${x.kind==='rec'?'#/a/'+x.k:'#/ev/'+x.k}">${plCatMark(x.cat)}${esc(x.t)}</a>`).join('');
   const s=daySpent(d);
-  return `<div class="toolbar pl-dtb">${periodNav({label:fmtMDW(d),sub:isToday?'今日':(hol?esc(hol[1].t):''),prev:{on:'plStepDay(-1)',text:'前の日'},next:{on:'plStepDay(1)',text:'次の日'}})}</div>`
-    +`<section class="pl-dpanel ${isToday?'today':''}">${dayHead(d,{href:'#/day/'+d,diary:dayDiary(d),sum:s?`自分 ${yen(s)}`:'',empty:hol?hol[1].t:''})}`
+  return `<section class="pl-dpanel ${isToday?'today':''}">${dayHead(d,{href:'#/day/'+d,diary:dayDiary(d),sum:s?`自分 ${yen(s)}`:'',empty:hol?hol[1].t:''})}`
     +(alld?`<div class="pl-allday">${alld}</div>`:'')
-    +`<div class="pl-tg" style="height:${(H1-H0)*PH+12}px">${grid}${blocks}${nowHtml}</div></section>`;
+    +`<div class="pl-tg" style="height:${(H1-H0)*PH+12}px">${grid}${blocks}${nowHtml}</div></section>`
+    +plTodoBlock(d);
 }
 
-/* ---------- 3週間(今日から21日の時間軸) ---------- */
-function plListAx(){
-  /* 今日から21日を上から下へ(上=過去・下=未来)。今日の面は 過ぎた項目 → いまの線 → これからの項目。日ごとに1枚の面 */
-  let html='', n=0;
-  for(let i=0;i<=20;i++){
-    const d=addDays(TODAY,i);
-    const its=plItemsOn(d);
-    if(!its.length&&d!==TODAY)continue;
-    n+=its.length;
-    const hol=evOn(d).find(([k,e])=>e.hol);
-    const rows=its.map(x=>{
-      if(x.kind==='rec')return {fut:false,html:momentRow(x.k)};
-      const e=EV[x.k],fut=d>TODAY||(!e.all&&e.s>NOW);
-      return {fut,html:planRowAx(x.k,{future:fut,late:!fut&&!(d===TODAY&&e.all)})};
-    });
-    const body=rows.filter(r=>!r.fut).map(r=>r.html).join('')+(d===TODAY?nowLine():'')+rows.filter(r=>r.fut).map(r=>r.html).join('');
-    html+=axGroup(dayHead(d,{href:'#/day/'+d,future:d>TODAY,empty:hol?hol[1].t:''}),body,{future:d>TODAY,cls:d===TODAY?'today':''});
-  }
-  return n
-    ?sh('いまから3週間',n)+`<div class="ax">${html}${axEdge('3週間より先 › 月')}</div>`
-    :sh('いまから3週間')+empty('schedule','予定 なし');
+/** v4.13: その日が期限のToDo(日・月の表示の下)。チェック欄=完了、行=ToDoの詳細。0件なら何も出さない */
+function plTodoBlock(d){
+  const ks=plTodosOn(d);if(!ks.length)return '';
+  const open=ks.filter(k=>!TD[k].done), done=ks.filter(k=>TD[k].done);
+  return `<div class="pl-dtodo">${plSec('ToDo',`${ks.length}件`)}${objs([...open.map(plTodoRow),...done.map(plDoneRow)])}</div>`;
 }
 
 /* ---------- ToDo ---------- */
@@ -291,6 +261,12 @@ function plSaveTask(){
   closeSheet();save();rerender();toast('ToDoを追加しました');
 }
 
+/* ---------- 古い入口: #/plan は廃止。アクティビティの 月 / 日 へ置き換える(ToDoは #/todo) ---------- */
+route('plan',(id,q)=>{
+  location.replace(q.view==='todo'?'#/todo':'#/activities?view='+(q.view==='day'?'day':'month'));
+  return '<div class="pl-root"></div>';
+},{tab:'activities'});
+
 /* ---------- 予定の詳細: 時間軸の上の1点(主役) ---------- */
 route('ev',id=>{
   const e=EV[id];
@@ -331,7 +307,7 @@ route('ev',id=>{
     +(rec
       ?`<div class="ax">${momentRow(e.rec)}</div>`
       :`<div class="btnrow"><button class="btn block" type="button" onclick="recordEvent('${id}')">${IC.check}${e.pay?'支払いとして記録する':'記録にする'}</button></div>`)+'</div>';
-},{tab:'plan'});
+},{tab:'activities'});
 function plEvTaskRow(k){
   const t=TD[k];
   return row({cls:'pl-todo',wrap:true,lead:checkbox(!!t.done,`toggleTask('${k}')`),href:'#/task/'+k,t:`<span class="${t.done?'pl-done-t':''}">${esc(t.t)}</span>`,s:t.due?relDay(t.due):'',chev:1});

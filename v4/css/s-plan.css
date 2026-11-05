@@ -1,6 +1,7 @@
 /* =====================================================================
-   画面: 予定・ToDo(route plan / ev / task) — UI v4
-   月=件数の小さいカプセル / 日・3週間=日の面(axis.css の axGroup) / ToDo=チェック欄の行 / 詳細=点線のカプセル
+   画面: 予定の中身・ToDo(route todo / ev / task)とアクティビティの「日・月」の表示 — UI v4(v4.13)
+   月=件数の小さいカプセル+ToDoの✓件数 / 日=時間グリッド / ToDo=チェック欄の行 / 詳細=点線のカプセル
+   表示の切替(リスト/日/月)の行と期間の行は .act-top の中(css/s-activities.css の上部の規則には触れない)
    色は tokens.css の変数だけ。形と色の意味は DESIGN.md §2・§5・§6・§7。
    押し面は44px以上(見た目が小さい所は ::before で当たり判定を広げる)。
    ===================================================================== */
@@ -17,16 +18,23 @@
 /* 面の中の「0件」の一言(面の中の空の行) */
 .pl-none{padding:12px var(--gutter) 14px;font:400 13px/1.4 var(--font);color:var(--tx-3)}
 
-/* ---- 月(カレンダー): 文字を置かず、件数の小さいカプセルで示す ---- */
+/* ---- 表示の切替(リスト/日/月)と期間の行: 上部(.act-top)の中。行は44px、押す所は44px ---- */
+.act-top .act-views{box-sizing:border-box;height:44px;padding:0 var(--gutter);display:flex;align-items:center}
+.act-top .act-views .seg{flex:1;min-width:0;margin:0;padding:3px;gap:2px;overflow:visible;background:var(--sunk);border-radius:var(--r-sm)}
+.act-top .act-views .seg button{flex:1;position:relative;height:36px;padding:0;border:0;border-radius:8px;background:none;box-shadow:none;color:var(--tx-2);font:var(--t-label)}
+.act-top .act-views .seg button::before{content:"";position:absolute;inset:-4px 0}
+.act-top .act-views .seg button[aria-pressed="true"]{background:var(--surface);color:var(--tx);box-shadow:var(--e1);font-weight:600}
+.act-top .act-per{box-sizing:border-box;height:52px;padding:8px var(--gutter);display:flex;align-items:center;gap:8px}
+.act-top .act-per .pnav{flex:1;min-width:0;justify-content:center}
+.act-top .act-per .pnav button{padding:0 8px;white-space:nowrap}
+.act-top .act-per .pnav b{white-space:nowrap}
+
+/* ---- 月(カレンダー): 文字を置かず、件数の小さいカプセルで示す。ToDoは✓と件数 ---- */
 .pl-cal{padding:4px 8px 8px;overflow:visible}
-.pl-mh{display:flex;align-items:center;gap:4px;height:44px}
-.pl-mh b{flex:1;text-align:center;font:var(--t-head);font-variant-numeric:tabular-nums}
-.pl-nav{height:44px;padding:0 12px;border-radius:var(--r-pill);font:var(--t-label);color:var(--me);white-space:nowrap}
-.pl-nav:active{background:var(--sunk)}
 .pl-wd,.pl-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .pl-wd span{font:500 12px/24px var(--font);text-align:center;color:var(--tx-3)}
 .pl-wd .sun{color:var(--tx-2)}
-.pl-cell{min-width:0;min-height:52px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:4px 0 6px;border-radius:var(--r-sm)}
+.pl-cell{min-width:0;min-height:64px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0 6px;border-radius:var(--r-sm)}
 .pl-cell:active{background:var(--sunk)}
 /* 休日(日曜・祝日)= 薄い灰の面。赤にしない(赤は遅れ) */
 .pl-cell.sun{background:color-mix(in srgb,var(--sunk) 55%,transparent)}
@@ -36,18 +44,23 @@
 .pl-cell.sun .pl-dn{font-weight:600}
 .pl-cell.today .pl-dn{color:var(--me);font-weight:700}
 /* 選んだ日 = 数字だけ青の塗り(自分の操作) */
-.pl-cell.sel .pl-dn{background:var(--light),var(--me);color:var(--on-me)} /* v4.9: ベタ→グラデ */
+.pl-cell.sel .pl-dn{background:var(--light),var(--me);color:var(--on-me)}
 .pl-bars{display:flex;justify-content:center;align-items:center;gap:2px;height:6px}
 /* 件数の印: 記録=塗りのカプセル / 予定=点線のカプセル / 支払い=角を四角く(帯=お金の形) */
 .pl-dot{display:block;flex:none;width:10px;height:6px;border-radius:999px;box-sizing:border-box}
 .pl-dot.rec{background:var(--ev)}
 .pl-dot.plan{outline:1.5px dashed var(--plan);outline-offset:-1.5px}
 .pl-dot.pay{border-radius:2px}
-.pl-legend{display:flex;justify-content:center;gap:14px;padding:6px 0 0;font:var(--t-cap);color:var(--tx-3)}
+/* ToDoの件数: 小さい✓と数字(12px以上)。0件の時も行の高さは同じ(並びが揃う) */
+.pl-tdr{display:flex;align-items:center;justify-content:center;height:14px}
+.pl-td{display:inline-flex;align-items:center;gap:2px;font:600 12px/1 var(--font);color:var(--tx-2);font-variant-numeric:tabular-nums}
+.pl-td svg.i{width:12px;height:12px;flex:none}
+.pl-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;padding:6px 0 0;font:var(--t-cap);color:var(--tx-3)}
 .pl-legend span{display:flex;align-items:center;gap:6px}
+.pl-legend svg.i{width:12px;height:12px}
 
-/* ---- 日: 前後の日の送り(面は plDayAx が作る) ---- */
-.pl-dnav{display:flex;align-items:center;justify-content:space-between;height:44px;margin:0 var(--gutter)}
+/* ---- 日の下のToDo(その日が期限のもの) ---- */
+.pl-dtodo{margin-top:4px}
 
 /* ---- ToDo: 行56px・チェック欄・押し面44px ---- */
 /* 絞り込みのチップは app.css の .chips(1段の横スクロール)に合わせる */
@@ -82,7 +95,6 @@
 .pl-root .cap .meta .cd{font:600 15px/1.2 var(--font);color:var(--tx-2)}
 
 /* ---- 日表示: 日付の札+その下に時間グリッド。外側の面は作らない(札の中に面を重ねない) ---- */
-.pl-dtb{justify-content:center;padding-right:var(--gutter)}
 .pl-dpanel{margin:0 var(--gutter)}
 /* 日の札は面の中の札ではなく、グリッドの上の1枚。固定しない(sticky を外す) */
 .pl-dpanel .dh2{position:relative;top:auto;padding:0;background:none;backdrop-filter:none}
@@ -102,3 +114,9 @@
 .pl-blk.rec{background:var(--light),var(--ev);color:var(--on-cap);box-shadow:var(--hl-fill)}
 .pl-now{position:absolute;left:52px;right:0;height:2px;border-radius:1px;background:var(--late);z-index:2}
 .pl-now span{position:absolute;left:-52px;width:48px;top:-8px;text-align:right;padding-right:8px;font:700 12px/16px var(--font);color:var(--late);background:var(--tl-card)}
+
+/* v4.13 本体調整: 日表示の瞬間(支払い・起床など)= その時刻の細いカプセル。押せる範囲は ::before で44px */
+.pl-blk.inst{border-radius:14px;padding:0 10px;display:flex;align-items:center;min-height:0}
+.pl-blk.inst b{font:600 12px/1 var(--font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-blk.inst small{font:500 12px/1 var(--font);opacity:.85;margin-right:4px}
+.pl-blk.inst::before{content:"";position:absolute;inset:-8px 0}

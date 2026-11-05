@@ -117,35 +117,54 @@ const MEMOS={
 };
 /* 予定(=これからのアクティビティ)。終わると記録(rec)に結び付く */
 const TODAY='2026-10-31';
-const EV={
-  e9:{t:'在宅作業',d:'2026-10-31',s:'10:00',e:'12:00',place:['home']},
-  e1:{t:'花子さんと映画',d:'2026-10-31',s:'15:00',e:'17:10',place:[null,'シネマ青葉'],who:['hanako'],todo:['t2'],memo:'チケットはネットで予約',alarm:'30分前'},
-  e2:{t:'夕食の買い物',d:'2026-10-31',s:'18:30',e:'19:00',place:['super'],todo:['t4','t5','t6'],alarm:'なし'},
-  e3:{t:'歯医者',d:'2026-11-02',s:'10:00',e:'11:00',place:[null,'さくら歯科'],todo:['t3'],alarm:'1時間前'},
-  e4:{t:'家賃の支払い',d:'2026-10-27',all:1,rep:'毎月27日',pay:{amt:85000,cat:'rent'},rec:'p13'},
-  e5:{t:'花子さんとランチ',d:'2026-10-30',s:'12:00',e:'13:00',place:['aoba'],who:['hanako'],rec:'l1'},
-  e6:{t:'温泉旅行',d:'2026-11-08',d2:'2026-11-09',all:1,place:[null,'宿 山の湯'],who:['hanako']},
-  e7:{t:'スマホ料金',d:'2026-10-10',all:1,rep:'毎月10日',pay:{amt:3280,cat:'phone'},rec:'p14'},
-  e8:{t:'文化の日',d:'2026-11-03',all:1,hol:1},
-  e10:{t:'動画サブスク',d:'2026-10-15',all:1,rep:'毎月15日',pay:{amt:990,cat:'sub'},rec:'p15'},
-  e11:{t:'不動産屋と打ち合わせ',d:'2026-11-07',s:'14:00',e:'15:00',place:[null,'不動産ファースト'],ent:['proj1']},
+/* 予定とToDo(v4.13): 1つのデータ PLN に入れ、kind で種類を分ける。
+   kind: '予定' = 通常の予定(終日・祝日を含む) / '支払い予定' = pay を持つ予定(固定費など) / 'ToDo' = やること・買う物。
+   既存の項目名はそのまま(予定: t,d,s,e,all,hol,place,who,todo,memo,alarm,rep,rec,ent,pay / ToDo: t,due,done,list,pri,ev,ent,rep…)。
+   EV と TD は PLN を種類で絞った見え方(Proxy)。EV[k]・TD[k]・Object.keys(TD)・delete TD[k] などは従来どおり動く。補助関数は js/plans.js */
+const PLN={
+  e9:{kind:'予定',t:'在宅作業',d:'2026-10-31',s:'10:00',e:'12:00',place:['home']},
+  e1:{kind:'予定',t:'花子さんと映画',d:'2026-10-31',s:'15:00',e:'17:10',place:[null,'シネマ青葉'],who:['hanako'],todo:['t2'],memo:'チケットはネットで予約',alarm:'30分前'},
+  e2:{kind:'予定',t:'夕食の買い物',d:'2026-10-31',s:'18:30',e:'19:00',place:['super'],todo:['t4','t5','t6'],alarm:'なし'},
+  e3:{kind:'予定',t:'歯医者',d:'2026-11-02',s:'10:00',e:'11:00',place:[null,'さくら歯科'],todo:['t3'],alarm:'1時間前'},
+  e4:{kind:'支払い予定',t:'家賃の支払い',d:'2026-10-27',all:1,rep:'毎月27日',pay:{amt:85000,cat:'rent'},rec:'p13'},
+  e5:{kind:'予定',t:'花子さんとランチ',d:'2026-10-30',s:'12:00',e:'13:00',place:['aoba'],who:['hanako'],rec:'l1'},
+  e6:{kind:'予定',t:'温泉旅行',d:'2026-11-08',d2:'2026-11-09',all:1,place:[null,'宿 山の湯'],who:['hanako']},
+  e7:{kind:'支払い予定',t:'スマホ料金',d:'2026-10-10',all:1,rep:'毎月10日',pay:{amt:3280,cat:'phone'},rec:'p14'},
+  e8:{kind:'予定',t:'文化の日',d:'2026-11-03',all:1,hol:1},
+  e10:{kind:'支払い予定',t:'動画サブスク',d:'2026-10-15',all:1,rep:'毎月15日',pay:{amt:990,cat:'sub'},rec:'p15'},
+  e11:{kind:'予定',t:'不動産屋と打ち合わせ',d:'2026-11-07',s:'14:00',e:'15:00',place:[null,'不動産ファースト'],ent:['proj1']},
+  t2:{kind:'ToDo',t:'映画のチケットを予約',due:'2026-10-31',list:'inbox',ev:'e1',pri:1},
+  t9:{kind:'ToDo',t:'資源ごみを出す',due:'2026-10-31',list:'life',rep:'毎週土曜',done:'2026-10-31'},
+  t7:{kind:'ToDo',t:'ドラッグ桜のポイントを交換',due:'2026-10-29',list:'inbox',ent:['drug']},
+  t3:{kind:'ToDo',t:'歯医者の問診票を書く',due:'2026-11-01',list:'life',ev:'e3'},
+  t1:{kind:'ToDo',t:'花子さんの誕生日プレゼントを選ぶ',due:'2026-11-05',list:'life',pri:1,ent:['hanako'],sub:[['候補を3つ挙げる',1],['予算を決める',0],['注文する',0]],memo:'ノートの「誕生日プレゼント候補」を見る'},
+  t8:{kind:'ToDo',t:'年末調整の書類を出す',due:'2026-11-14',list:'life'},
+  t4:{kind:'ToDo',t:'牛乳',list:'shop',ev:'e2'},
+  t6:{kind:'ToDo',t:'食器用洗剤',list:'shop',ev:'e2'},
+  t5:{kind:'ToDo',t:'卵',list:'shop',ev:'e2',done:'2026-10-29',pay:'p2'},
+  t10:{kind:'ToDo',t:'スマホの料金プランを見直す',list:'inbox',memo:'通信費(固定費)を下げたい'},
+  t11:{kind:'ToDo',t:'不動産屋に連絡',due:'2026-11-02',list:'life',ent:['proj1']},
+  t12:{kind:'ToDo',t:'転居の届け出を出す',due:'2026-11-30',list:'life',ent:['proj1']},
 };
-/* ToDo: 完了状態を持つ。対象エンティティ・予定・支払い(購入)に結び付く */
+
 const LISTS={inbox:{n:'受信箱'},life:{n:'生活'},shop:{n:'買い物',shop:'super'}};
-const TD={
-  t2:{t:'映画のチケットを予約',due:'2026-10-31',list:'inbox',ev:'e1',pri:1},
-  t9:{t:'資源ごみを出す',due:'2026-10-31',list:'life',rep:'毎週土曜',done:'2026-10-31'},
-  t7:{t:'ドラッグ桜のポイントを交換',due:'2026-10-29',list:'inbox',ent:['drug']},
-  t3:{t:'歯医者の問診票を書く',due:'2026-11-01',list:'life',ev:'e3'},
-  t1:{t:'花子さんの誕生日プレゼントを選ぶ',due:'2026-11-05',list:'life',pri:1,ent:['hanako'],sub:[['候補を3つ挙げる',1],['予算を決める',0],['注文する',0]],memo:'ノートの「誕生日プレゼント候補」を見る'},
-  t8:{t:'年末調整の書類を出す',due:'2026-11-14',list:'life'},
-  t4:{t:'牛乳',list:'shop',ev:'e2'},
-  t6:{t:'食器用洗剤',list:'shop',ev:'e2'},
-  t5:{t:'卵',list:'shop',ev:'e2',done:'2026-10-29',pay:'p2'},
-  t10:{t:'スマホの料金プランを見直す',list:'inbox',memo:'通信費(固定費)を下げたい'},
-  t11:{t:'不動産屋に連絡',due:'2026-11-02',list:'life',ent:['proj1']},
-  t12:{t:'転居の届け出を出す',due:'2026-11-30',list:'life',ent:['proj1']},
+/* EV(予定)と TD(ToDo)= PLN を種類で絞った見え方。kind は代入で自動で決まる(EV は pay があれば '支払い予定'、TD は 'ToDo') */
+const plView=isTodo=>{
+  const has=k=>typeof k==='string'&&Object.prototype.hasOwnProperty.call(PLN,k)&&(PLN[k].kind==='ToDo')===isTodo;
+  const put=(k,v)=>{if(typeof k!=='string'||!v||typeof v!=='object')throw new TypeError('予定・ToDoは「キー: オブジェクト」で入れてください');
+    v.kind=isTodo?'ToDo':(v.pay?'支払い予定':'予定');PLN[k]=v;return true};
+  return new Proxy({},{
+    get:(_,k)=>has(k)?PLN[k]:Reflect.get(Object.prototype,k),
+    set:(_,k,v)=>put(k,v),
+    defineProperty:(_,k,d)=>'value' in d?put(k,d.value):false,
+    has:(_,k)=>has(k),
+    deleteProperty:(_,k)=>{if(has(k))delete PLN[k];return true},
+    ownKeys:()=>Object.keys(PLN).filter(k=>(PLN[k].kind==='ToDo')===isTodo),
+    getOwnPropertyDescriptor:(_,k)=>has(k)?{value:PLN[k],writable:true,enumerable:true,configurable:true}:undefined,
+  });
 };
+const EV=plView(false);
+const TD=plView(true);
 const TYPE_PROPS={person:['電話','誕生日','住所'],colleague:['部署'],split:['略称'],place:['住所'],shop:['営業時間','定休日'],company:['所在地'],thing:['購入日'],doc:['発行元','期限'],project:['期間','状況']};
 
 /* 純粋なヘルパー */
