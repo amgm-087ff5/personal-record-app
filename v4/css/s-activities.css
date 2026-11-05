@@ -1,0 +1,60 @@
+/* =====================================================================
+   v4.11: アクティビティの上部(固定・縮む)。js/screens/activities.js の actLayout / actOnScroll が --p を決める。
+   --p は 0(広い)〜1(縮んだ)。値は calc(… * var(--p)) だけで決める(スクロールに合わせて動くので CSS の transition は使わない)。
+   上部の高さ: 広い時 約302px → 縮んだ時 約192px。押す所はどの段階でも 44px 以上、文字は 12px 以上。
+   ===================================================================== */
+
+/* 上部の帯: 固定・画面の上端。背景は半透明+ぼかし。縮んだ時だけ下に薄い影(--p で濃さを変える) */
+.act-top{position:fixed;top:0;left:0;width:100%;z-index:30;box-sizing:border-box;
+  background:color-mix(in srgb,var(--bg) 94%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.act-top::after{content:"";position:absolute;left:0;right:0;top:100%;height:10px;pointer-events:none;opacity:var(--p,0);
+  background:linear-gradient(color-mix(in srgb,var(--tx) 10%,transparent),transparent)}
+
+/* 1) 大見出し: 行の高さ 56→48、文字 28px→20px */
+.act-top .act-lt{box-sizing:border-box;height:calc(56px - 8px*var(--p,0));padding:0 var(--gutter);display:flex;align-items:center;gap:8px}
+.act-top .act-lt h1{font:700 calc(28px - 8px*var(--p,0))/1.2 var(--font);letter-spacing:.01em;flex:1;min-width:0;white-space:nowrap;overflow:hidden}
+.act-top .act-lt .iconbtn{margin-right:-10px}
+
+/* 2) まとめ: 広い形(数字3つ+ボタン2つ)→ 1行(数字+ラベル。右にカメラと＋)。高さ 130→52(外側の余白 4px は変えない) */
+.act-top .act-sc{margin:4px var(--gutter) 0;padding:0;box-sizing:border-box;height:calc(130px - 78px*var(--p,0));overflow:hidden}
+.act-top .act-sci{box-sizing:border-box;height:100%;display:grid;grid-template-columns:minmax(0,1fr);align-content:start;
+  padding:calc(12px - 8px*var(--p,0)) 14px calc(14px - 10px*var(--p,0))}
+.act-top .act-full,.act-top .act-line{grid-area:1/1;min-width:0}
+/* 広い形: 数字 20px→15px、ボタンの段は高さも余白も 0 へ(はみ出しは隠す)。縮んだ時は隠す(visibility) */
+.act-top .act-full{display:flex;flex-direction:column;opacity:calc(1 - 2*var(--p,0))}
+.act-top .sc-ms{height:44px}
+.act-top .sc-m b{font:600 calc(20px - 5px*var(--p,0))/1.2 var(--font)}
+.act-top .act-acts{height:calc(48px - 48px*var(--p,0));margin-top:calc(12px - 12px*var(--p,0));overflow:hidden}
+.act-top .act-acts .sc-acts{margin:0}
+.act-top.is-min .act-full{visibility:hidden}
+/* 1行の形: 縮み切った時だけ見える(p=0.5 から重なって現れる) */
+.act-top .act-line{display:flex;align-items:center;gap:6px;height:44px;opacity:calc(2*var(--p,0) - 1)}
+.act-top:not(.is-min) .act-line{visibility:hidden}
+.act-top .act-lm{flex:1;min-width:0;display:flex;align-items:center;overflow:hidden;white-space:nowrap}
+.act-top .act-x{display:inline-flex;align-items:center;gap:2px;flex:none;min-height:44px;font:500 12px/1.2 var(--font);color:var(--tx-2);white-space:nowrap}
+.act-top .act-x b{font:600 15px/1.2 var(--font);color:var(--tx);font-variant-numeric:tabular-nums;margin-right:3px}
+.act-top .act-x+.act-x::before{content:"·";margin:0 6px;color:var(--tx-3)}
+.act-top .act-x svg.i{width:12px;height:12px;flex:none}
+.act-top .act-ib{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--me-soft);color:var(--me)}
+.act-top .act-ib svg.i{width:20px;height:20px}
+
+/* 3) 月の切替: 高さ 52→44(押す所は 44px のまま。丸い枠は見た目だけ) */
+.act-top .act-mn{box-sizing:border-box;margin:0;height:calc(52px - 8px*var(--p,0));padding:calc(4px - 4px*var(--p,0)) var(--gutter);gap:18px}
+.act-top .act-mn button{position:relative;width:44px;height:44px;padding:0;border:0;background:none;display:flex;align-items:center;justify-content:center;color:var(--tx-2)}
+.act-top .act-mn button::before{content:"";position:absolute;left:4px;right:4px;top:4px;bottom:4px;border-radius:50%;border:1px solid var(--line-strong);background:var(--surface)}
+.act-top .act-mn button svg{position:relative}
+.act-top .act-mn button.nx svg{transform:rotate(180deg)}
+.act-top .act-mn button:disabled{opacity:.3}
+.act-top .act-mn b{font:700 16px/1 var(--font);min-width:110px;text-align:center}
+
+/* 4) 絞り込み: 上下の余白だけ減らす。チップは 44px のまま */
+.act-top .act-chips{box-sizing:border-box;height:calc(60px - 16px*var(--p,0));padding:calc(8px - 8px*var(--p,0)) 0}
+.act-top .act-chips .chips{padding:0 var(--gutter);height:44px;align-items:center}
+.act-top .act-chips .chip{height:44px}
+
+/* 上部の下の空き(中身は js が上部の全部の高さに合わせる) */
+.act-sp{height:0}
+
+/* 一番下の余白: 窓(スマホ)は #app の padding-bottom(--page-end)。左の一覧(幅が広い時)は一覧の中の一番下に同じ余白 */
+.act-end{height:0}
+@media (min-width:1100px){#app .pane-l .act-end{height:var(--page-end)}}

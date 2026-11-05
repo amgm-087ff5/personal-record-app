@@ -19,31 +19,46 @@ function landTo(el,{top=12,end=false}={}){
   const off=s?s.getBoundingClientRect().top-s.scrollTop:-scrollY;
   box.scrollTo({top:el.getBoundingClientRect().top-off-top,behavior:'instant'});
 }
-/* v4.10(11/05 ユーザー指示「タイムライン部分はそこだけでスクロール」「スクロール位置は現在時刻ではなく今日に(今日のカードが上部に)」):
-   タイムラインは自分だけでスクロールする枠(.act-scroll)。ページは上端のまま、枠の中だけ今日の日付カードを上端に合わせる。いまの時刻は位置に使わない */
-/** 枠の高さ = 枠の上端から画面(幅が広い時は左の一覧)の下端まで。描画のたび・画面の大きさが変わった時に合わせる */
-function actFit(){
-  const s=document.querySelector('#app .act-scroll');if(!s)return;
-  const pane=s.closest('.pane-l');
-  const h=pane?pane.clientHeight-(s.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop):innerHeight-(s.getBoundingClientRect().top+scrollY);
-  s.style.height=Math.max(360,Math.round(h))+'px';
+/* ---------- v4.11: 上部(固定)とページ全体のスクロール ----------
+   上部 #act-top は position:fixed(幅が広い時は左の一覧 .pane-l の上に合わせる)。
+   縮み具合 actP(0=広い / 1=縮んだ)は、動いた量 ÷ 縮められる幅(actRange)で決まる。どこでスクロールしても、動いた分だけ縮み・戻る。
+   タイムラインは自分の枠を持たず、ページ(または一覧)がそのまま動く。
+   開いた時・月の切替は、今日の札が上部のすぐ下(8px)に来る位置へ。いまの時刻は使わない。 */
+let actP=0,actLastY=null,actRaf=0,actWasOn=false,actRange=0,actFullH=0;
+const actHdr=()=>document.getElementById('act-top');
+/** 動くのが一覧の枠(幅が広い時の .pane-l)なら枠、窓なら null */
+const actScroller=()=>innerWidth>=1100?document.querySelector('#app .pane-l'):null;
+const actY=s=>s?s.scrollTop:scrollY;
+/** 要素の上端の位置(文書の座標。枠があれば枠の中の座標) */
+const actDocTop=(el,s)=>s?el.getBoundingClientRect().top-s.getBoundingClientRect().top+s.scrollTop:el.getBoundingClientRect().top+scrollY;
+const actVH=s=>s?s.clientHeight:innerHeight;
+const actH=s=>s?s.scrollHeight:document.documentElement.scrollHeight;
+const actSet=(s,y)=>{if(s)s.scrollTop=y;else scrollTo({top:y,behavior:'instant'})};
+/** v4.11: 縮み具合を上部に反映(CSS の --p と、縮んだ時の表示の切り替え) */
+function actApply(h){h=h||actHdr();if(!h)return;h.style.setProperty('--p',actP.toFixed(4));h.classList.toggle('is-min',actP>.5)}
+/** v4.11: 上部の幅・位置と高さを合わせる。p=0(広い)と p=1(縮んだ)の高さを測り、上部の下に広い時の高さの余白を置く。
+    今日の札を上部のすぐ下(8px)に置けるよう、下の余白(.ax-room)を足りない分だけにする */
+function actLayout(){
+  const h=actHdr();if(!h||CUR.name!=='activities')return;
+  const s=actScroller(),box=(s||document.getElementById('app')).getBoundingClientRect();
+  h.style.left=box.left+'px';h.style.width=box.width+'px';h.style.top=(s?box.top:0)+'px';
+  h.style.setProperty('--p',0);const full=h.getBoundingClientRect().height;
+  h.style.setProperty('--p',1);const min=h.getBoundingClientRect().height;
+  actFullH=full;actRange=Math.max(0,full-min);
+  document.getElementById('act-sp').style.height=full+'px';
+  const room=document.querySelector('#app .ax-room'),t=document.querySelector('#app .dh2.today .dcard');
+  if(room){room.style.height='0px';if(t){const below=actH(s)-actDocTop(t,s);room.style.height=Math.max(0,Math.round(actVH(s)-full-8-below))+'px'}}
+  actApply(h);
 }
-document.addEventListener('rendered',actFit);addEventListener('resize',actFit);
-/** 今日の札を上端に置けるよう、下の余白(.ax-room)を足りない分だけにする(予定の絞り込みで下が短い時も今日が上に来る) */
-function actRoom(s,el){
-  const room=s.querySelector('.ax-room');if(!room)return;room.style.height='0px';
-  const below=s.scrollHeight-(el.getBoundingClientRect().top-s.getBoundingClientRect().top+s.scrollTop);
-  room.style.height=Math.max(0,s.clientHeight-below)+'px';
-}
-/** アクティビティの位置合わせ: today=今日の日付カードを枠の上端に / bottom=月の一番下 */
+/** v4.11: 位置合わせ。today=今日の札の上端を上部のすぐ下(8px)へ / bottom=一番下。位置合わせは上部を広げて(p=0)行い、その動きで縮まないよう最後の位置を覚える */
 function actLand(want){
-  const s=document.querySelector('#app .act-scroll');if(!s)return;
-  if(want==='bottom'){s.scrollTop=s.scrollHeight;return}
-  const t=s.querySelector('.dh2.today .dcard')||s.querySelector('.dh2.today');if(!t)return;
-  actRoom(s,t);
-  s.scrollTop=t.getBoundingClientRect().top-s.getBoundingClientRect().top+s.scrollTop-8; /* カード自体を枠の上端から8pxに */
+  const h=actHdr();if(!h)return;const s=actScroller();
+  actP=0;actLayout();
+  if(want==='bottom')actSet(s,actH(s)-actVH(s));
+  else{const t=document.querySelector('#app .dh2.today .dcard')||document.querySelector('#app .dh2.today');if(!t)return;actSet(s,Math.max(0,actDocTop(t,s)-actFullH-8))}
+  actLastY=actY(s);actApply(h);
 }
-/** 画面を開いた時の位置: アクティビティは今月なら今日のカードを枠の上端に・前の月なら一番下(ページ自体は上端) / 今日の日のページは「いま」を上に(sticky の見出しの分 68px) */
+/** 画面を開いた時の位置: アクティビティは今月なら今日の札を上部のすぐ下・前の月なら一番下 / 今日の日のページは「いま」を上に(sticky の見出しの分 68px) */
 function landOnOpen(){
   if(CUR.name==='activities')setTimeout(()=>actLand(actMonth===TODAY.slice(0,7)?'today':'bottom'),0);
   else if(CUR.name==='day'&&CUR.id===TODAY)setTimeout(()=>{const n=document.querySelector('#app .ax .now');if(n)landTo(n,{top:68})},0);
@@ -78,23 +93,27 @@ route('activities',()=>{
   const upcoming=Object.entries(EV).filter(([k,e])=>!e.hol&&!e.rec&&e.d>TODAY).sort((a,b)=>a[1].d.localeCompare(b[1].d));
   const isNow=actMonth===TODAY.slice(0,7),dates=recordDates().filter(d=>d.startsWith(actMonth));
   const allD=[...recordDates(),TODAY],minM=allD.sort()[0].slice(0,7),maxM=TODAY.slice(0,7);
-  const pm=+TODAY.slice(5,7)===1?12:+TODAY.slice(5,7)-1;
   const s=daySpent(TODAY);
-  /* まとめカード(v2のB+v3の見出し): 数字は表示中の月の記録と今日。押せる数字は予定・ToDoへ */
+  /* まとめの数字: 表示中の月の記録と今日。押せる数字は予定・ToDoへ */
   const monthRec=Object.values(A).filter(a=>a.type!=='日記'&&dateOf(a).startsWith(actMonth)).length;
   const todayEv=evOn(TODAY).filter(([k,e])=>!e.hol).length;
-  /* 月の切替の後の位置(前の月=一番下・今月=今日のカードを上)。開いた時の位置は landOnOpen */
+  /* 月の切替の後の位置(前の月=一番下・今月=今日の札を上部のすぐ下)。開いた時の位置は landOnOpen */
   const want=landWant;landWant=null;
   if(want)setTimeout(()=>actLand(want),0);
-  return largeTitle('アクティビティ',{actions:[{icon:'search',label:'検索',onclick:"toast('検索はモックでは未対応です')"}]})
-    +summaryCard({metrics:[
-        {v:`${monthRec}件`,l:`${+actMonth.slice(5)}月の記録`},
-        {v:`${todayEv}件`,l:'今日の予定',href:'#/plan'},
-        {v:`${todoTodayCount()}件`,l:'今日のToDo',href:'#/todo'}],
-      actions:[{text:'レシートで支払い',icon:'camera',primary:true,onclick:'openReceipt()'},{text:'出来事',icon:'plus',onclick:'openNewHappening()'}]})
-    +`<div class="mnav"><button type="button" aria-label="前の月" ${actMonth<=minM?'disabled':''} onclick="monthShift(-1)">${IC.back}</button><b>${actMonth.slice(0,4)}年${+actMonth.slice(5)}月</b><button type="button" class="nx" aria-label="次の月" ${actMonth>=maxM?'disabled':''} onclick="monthShift(1)">${IC.back}</button></div>`
-    +chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")
-    +`<div class="act-scroll" data-keep="act"><div class="ax">`
+  /* v4.11 上部(固定の帯): 「広い形」と「1行の形」を両方描き、縮み具合 --p で見せる方を入れ替える(css/s-activities.css) */
+  const mets=[{v:`${monthRec}件`,l:`${+actMonth.slice(5)}月の記録`},{v:`${todayEv}件`,l:'今日の予定',href:'#/plan'},{v:`${todoTodayCount()}件`,l:'今日のToDo',href:'#/todo'}];
+  const acts=[{text:'レシートで支払い',icon:'camera',primary:true,onclick:'openReceipt()'},{text:'出来事',icon:'plus',onclick:'openNewHappening()'}];
+  const metF=m=>{const inner=`<b class="num">${esc(m.v)}</b><span>${esc(m.l)}${m.href?IC.chev:''}</span>`;return m.href?`<a class="sc-m" href="${m.href}">${inner}</a>`:`<div class="sc-m">${inner}</div>`};
+  const metL=m=>{const inner=`<b class="num">${esc(m.v)}</b>${esc(m.l)}${m.href?IC.chev:''}`;return m.href?`<a class="act-x" href="${m.href}">${inner}</a>`:`<span class="act-x">${inner}</span>`};
+  const full=`<div class="act-full"><div class="sc-ms">${mets.map(metF).join('')}</div><div class="act-acts">${sumActs(acts)}</div></div>`;
+  const line=`<div class="act-line"><div class="act-lm">${mets.map(metL).join('')}</div><button class="act-ib" type="button" aria-label="レシートで支払い" onclick="openReceipt()">${IC.camera}</button><button class="act-ib" type="button" aria-label="出来事を追加" onclick="openNewHappening()">${IC.plus}</button></div>`;
+  const head=`<header class="act-top" id="act-top">`
+    +`<div class="lt act-lt"><h1>アクティビティ</h1><button class="iconbtn" type="button" aria-label="検索" onclick="toast('検索はモックでは未対応です')">${IC.search}</button></div>`
+    +`<section class="sc act-sc"><div class="act-sci">${full}${line}</div></section>`
+    +`<div class="mnav act-mn"><button type="button" aria-label="前の月" ${actMonth<=minM?'disabled':''} onclick="monthShift(-1)">${IC.back}</button><b>${actMonth.slice(0,4)}年${+actMonth.slice(5)}月</b><button type="button" class="nx" aria-label="次の月" ${actMonth>=maxM?'disabled':''} onclick="monthShift(1)">${IC.back}</button></div>`
+    +`<div class="act-chips">${chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")}</div>`
+    +`</header><div class="act-sp" id="act-sp" aria-hidden="true"></div>`;
+  return head+`<div class="ax">`
     +(actMonth<=minM?axEdge('これより前の記録 なし',true):'')
     +dates.map(d=>{const sp=daySpent(d);return dayHead(d,{href:`#/day/${d}`,diary:dayDiary(d),sum:sp?`自分 ${yen(sp)}`:''})+axDay(d)}).join('')
     +(isNow?dayHead(TODAY,{href:`#/day/${TODAY}`,diary:dayDiary(TODAY),empty:'今日の日記を書く',sum:s?`自分 ${yen(s)}`:''})+axDay(TODAY):'')
@@ -106,7 +125,7 @@ route('activities',()=>{
       const later=upcoming.filter(([k,e])=>e.d>addDays(TODAY,14)).length;
       return out.join('')+`<a href="#/plan">`+axEdge(later?`これより先の予定 ${later}件${IC.chev}`:`予定 › 月で見る${IC.chev}`)+`</a>`})():'')
     +(isNow?'<div class="ax-room" aria-hidden="true"></div>':'')
-    +`</div></div>`;
+    +`</div><div class="act-end" aria-hidden="true"></div>`;
 },{tab:'activities'});
 
 /* ---------- 日のページ: 1日=1ページの日記と、その日の軸 ---------- */

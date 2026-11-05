@@ -258,11 +258,3 @@ a.ax-row:active .ax-c{background:var(--sunk);transform:scale(.99)}
 .ax-c .kid-x .tkt-b .s .pbar{width:56px;height:5px;margin:0}
 .ax-c .kid-x .tkt-b .amt{font:700 15px/1.2 var(--font)}
 .ax-c .kid-x .tkt-b .chev{display:none}
-
-/* v4.10(11/05): アクティビティのタイムラインは自分だけでスクロールする枠。高さは js(actFit)で画面の下端まで。
-   枠の中の一番下は、飛び出したナビ(＋・切替のつまみ)に隠れない余白。ページ側の下の余白は要らない(ページは動かない) */
-.act-scroll{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
-.act-scroll>.ax{padding-bottom:var(--page-end)}
-#app:has(.act-scroll){padding-bottom:0}
-@media (min-width:1100px){#app:has(.act-scroll) .pane-l{padding-bottom:0}}
-.act-scroll .ax-room{height:0} /* 足りない時だけ js(actRoom)が今日を上端に置ける分を足す */

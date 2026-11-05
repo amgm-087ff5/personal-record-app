@@ -316,7 +316,7 @@ const NAV_IC={
   /* 歯車=設定: 中心の穴は抜く */
   settings:navSvg('<path fill-rule="evenodd" d="M19.60 12.00 L22.10 13.44 L21.65 15.30 L18.77 15.45 L18.15 16.47 L17.37 17.37 L18.12 20.16 L16.49 21.16 L14.35 19.23 L13.19 19.51 L12.00 19.60 L10.56 22.10 L8.70 21.65 L8.55 18.77 L7.53 18.15 L6.63 17.37 L3.84 18.12 L2.84 16.49 L4.77 14.35 L4.49 13.19 L4.40 12.00 L1.90 10.56 L2.35 8.70 L5.23 8.55 L5.85 7.53 L6.63 6.63 L5.88 3.84 L7.51 2.84 L9.65 4.77 L10.81 4.49 L12.00 4.40 L13.44 1.90 L15.30 2.35 L15.45 5.23 L16.47 5.85 L17.37 6.63 L20.16 5.88 L21.16 7.51 L19.23 9.65 L19.51 10.81ZM8.7 12a3.3 3.3 0 1 0 6.6 0a3.3 3.3 0 1 0 -6.6 0Z"/>'),
   /* 2つの点=切替(いまの枚目は濃く、もう一方は淡い。出し分けはCSS) */
-  switch:'<svg class="i" viewBox="0 0 52 30" aria-hidden="true" fill="currentColor"><circle class="d d1" cx="19.5" cy="15" r="3.5"/><circle class="d d2" cx="32.5" cy="15" r="3.5"/></svg>',
+  switch:'<svg class="i" viewBox="0 0 52 30" aria-hidden="true" fill="currentColor"><circle class="d d1" cx="19.5" cy="15" r="3.5"/><circle class="d d2" cx="32.5" cy="15" r="3.5"/><rect class="r r1" x="12.5" y="12" width="14" height="6" rx="3"/><rect class="r r2" x="29.5" y="12" width="6" height="6" rx="3"/></svg>',
 };
 const NAV_PAGES=[
   [['home','ホーム'],['activities','アクティビティ'],null,['plan','予定'],['memo','メモ']],
@@ -346,29 +346,93 @@ function navPaint(cur){
   const sw=document.querySelector('#nav .nav-sw');
   if(sw){const i=navSwInfo(NAV_PG);sw.dataset.pg=NAV_PG;sw.setAttribute('aria-label',i.label);sw.classList.toggle('dot',i.dot)}
 }
+/* v4.11: 下部ナビの動き。NAV_ANIM='spring' = 指に追従するドラッグ・バネ風の着地・つまみの点の変形・着地したラベルの小さな拡大。
+   'classic' = v4.10 までと同じ(つまみ・横スワイプで帯が .26s ease-out ですべるだけ。ドラッグなし)。戻す時はここだけ直す */
+const NAV_ANIM='spring';
+const NAV_SPRING=NAV_ANIM==='spring';
+let NAV_P=0,NAV_G=null,NAV_MOVED=false,navRaf=0,navLandT=0;
+const navReduced=()=>{try{return matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return false}};
+/* v4.11: 振動(対応する端末だけ。失敗しても無視) */
+const navBuzz=()=>{try{navigator.vibrate?.(6)}catch(e){}};
+const navEase=t=>{const c=1.1,u=t-1;return 1+(c+1)*u*u*u+c*u*u}; /* v4.11: 少しだけ行き過ぎて戻るバネ風 */
+/* v4.11: 切替つまみの点: 今の枚目の点は 14px の pill、もう一方は 6px。中心は動かさず、幅と濃さを p(0=1枚目,1=2枚目)で変える */
+function navDots(p){
+  NAV_P=p;
+  const a=document.querySelector('#nav .nav-sw .r1'),b=document.querySelector('#nav .nav-sw .r2');
+  if(!a||!b)return;
+  const w1=6+8*(1-p),w2=6+8*p;
+  a.setAttribute('x',(19.5-w1/2).toFixed(2));a.setAttribute('width',w1.toFixed(2));
+  b.setAttribute('x',(32.5-w2/2).toFixed(2));b.setAttribute('width',w2.toFixed(2));
+  a.style.opacity=(.35+.65*(1-p)).toFixed(3);b.style.opacity=(.35+.65*p).toFixed(3);
+}
+function navTweenDots(to,dur){
+  cancelAnimationFrame(navRaf);
+  const from=NAV_P;
+  if(dur<=0||from===to){navDots(to);return}
+  const t0=performance.now();
+  const step=now=>{const t=Math.min(1,(now-t0)/dur);navDots(from+(to-from)*navEase(t));if(t<1)navRaf=requestAnimationFrame(step)};
+  navRaf=requestAnimationFrame(step);
+}
+/* v4.11: 帯を動かさずに今の枚目の位置へ置く(画面が変わった時・作り直した時。自動の枚目表示に動きは付けない) */
+function navPosInstant(){
+  if(!NAV_SPRING)return;
+  const nav=document.getElementById('nav'),H=nav.clientHeight;
+  cancelAnimationFrame(navRaf);
+  nav.classList.add('dr');nav.style.setProperty('--np',(NAV_PG?-H:0)+'px');void nav.offsetWidth;nav.classList.remove('dr');
+  navDots(NAV_PG);
+}
+/* v4.11: 指に追従させる(ドラッグ中)。上に限らず端では少しだけ引っ張れる(ゴム) */
+function navFollow(raw){
+  const nav=document.getElementById('nav'),H=nav.clientHeight;
+  const off=raw>0?raw*.3:raw<-H?-H+(raw+H)*.3:raw;
+  cancelAnimationFrame(navRaf);
+  nav.style.setProperty('--np',off.toFixed(1)+'px');
+  navDots(Math.min(1,Math.max(0,-off/H)));
+  return off;
+}
+/* v4.11: 枚目へ落ち着かせる。stagger=窓ごとに 0/25/50/75ms ずらす(つまみを押した時だけ)。landed=切り替わった時はラベルの拡大も付ける */
+function navSettle(to,stagger,landed=true){
+  const nav=document.getElementById('nav'),H=nav.clientHeight,reduced=navReduced();
+  nav.classList.remove('dr');
+  NAV_PG=to;
+  navPaint(NAV_CUR);
+  document.querySelectorAll('#nav .nav-strip').forEach((s,k)=>{s.style.transitionDelay=(stagger&&!reduced?k*25:0)+'ms'});
+  nav.style.setProperty('--np',(to?-H:0)+'px');
+  navTweenDots(to,reduced?0:340);
+  if(landed&&!reduced){
+    const ss=document.querySelectorAll('#nav .nav-strip');
+    ss.forEach(s=>s.classList.add('land'));
+    clearTimeout(navLandT);navLandT=setTimeout(()=>ss.forEach(s=>s.classList.remove('land')),600);
+  }
+}
 function renderNav(cur){
   NAV_CUR=cur;
   /* 画面(ハッシュ)が変わった時だけ、今の画面のタブがある枚目に合わせる。同じ画面の描き直しでは手動の枚目を保つ */
   const key=CUR.name+'/'+(CUR.id||'');
-  if(key!==NAV_KEY){NAV_KEY=key;const p=navPageOf(cur);if(p>=0)NAV_PG=p}
+  const jump=key!==NAV_KEY;
+  if(jump){NAV_KEY=key;const p=navPageOf(cur);if(p>=0)NAV_PG=p}
   const nav=document.getElementById('nav');
+  nav.classList.toggle('sp',NAV_SPRING&&!WIDE_NAV.matches);
   if(WIDE_NAV.matches){
     nav.innerHTML=`<div class="nav-in">${navItem(null)}${NAV_ALL.map(t=>navItem(t,cur)).join('')}</div>`;
     return;
   }
-  /* 帯が無い時(初回・幅が広い表示から戻った時)は作るだけで動かさない。あとは帯の向きを変えて、動きにする(自動の枚目表示も同じ) */
-  if(!nav.querySelector('.nav-strip')){
+  /* 帯が無い時(初回・幅が広い表示から戻った時)は作るだけで動かさない。あとは帯の向きを変えて、動きにする */
+  const fresh=!nav.querySelector('.nav-strip');
+  if(fresh){
     nav.innerHTML=`<div class="nav-in">${navWin(0)}${navWin(1)}${navItem(null)}${navWin(2)}${navWin(3)}</div><button class="nav-sw" type="button" onclick="navSwitch()">${NAV_IC.switch}</button>`;
   }
   navPaint(cur);
+  if(fresh||jump)navPosInstant();
 }
-/* 2枚を切り替える。ナビ全体も枠も＋も動かさず、各窓の帯だけが上下にすべる(.26s ease-out・フェードしない)。
-   動きを減らす設定では CSS の transition が止まり、その場で切り替わる */
-function navSwitch(){
-  NAV_PG=NAV_PG?0:1;
-  navPaint(NAV_CUR);
+/* v4.11: 2枚を切り替える(つまみ・横スワイプ)。classic は帯の向きを変えるだけ。spring は落ち着かせる(遅れは窓ごと) */
+function navSwitch(stagger=true){
+  if(!NAV_SPRING){NAV_PG=NAV_PG?0:1;navPaint(NAV_CUR);return}
+  const to=NAV_PG?0:1;
+  navBuzz();
+  navSettle(to,stagger);
 }
-/* 横スワイプ(pointer と touch。横に30px以上・縦より大きい)で切り替え。同じジェスチャの2つ目のイベントは起点を消して無視する */
+/* 横スワイプ(classic の pointer と touch。横に30px以上・縦より大きい)で切り替え。同じジェスチャの2つ目のイベントは起点を消して無視する */
 let navSX=null,navSY=0;
 const navEl=document.getElementById('nav');
 const navDown=(x,y)=>{navSX=x;navSY=y};
@@ -377,11 +441,64 @@ const navUp=(x,y)=>{
   const dx=x-navSX,dy=y-navSY;navSX=null;
   if(!WIDE_NAV.matches&&Math.abs(dx)>=30&&Math.abs(dx)>Math.abs(dy))navSwitch();
 };
-navEl.addEventListener('pointerdown',e=>navDown(e.clientX,e.clientY));
-navEl.addEventListener('pointerup',e=>navUp(e.clientX,e.clientY));
+/* v4.11(spring): ナビの上の縦ドラッグで4つの帯が指に追従する。縦に8px動いてからドラッグになり、それまではタップ(タブへの移動)。
+   離すと、35%以上動いたか 0.4px/ms 以上のフリックで切り替え、そうでなければ元へ戻す。横の30px以上のスワイプは切替(遅れなし) */
+navEl.addEventListener('pointerdown',e=>{
+  NAV_MOVED=false;
+  if(!NAV_SPRING){navDown(e.clientX,e.clientY);return}
+  if(WIDE_NAV.matches||e.button>0||e.target.closest('.nav-sw'))return;
+  NAV_G={id:e.pointerId,x0:e.clientX,y0:e.clientY,sgn:0,drag:false,h:false,base:0,off:0,hist:[[e.clientY,e.timeStamp]]};
+});
+navEl.addEventListener('pointerup',e=>{if(!NAV_SPRING)navUp(e.clientX,e.clientY)});
 navEl.addEventListener('pointercancel',()=>{navSX=null});
-navEl.addEventListener('touchstart',e=>navDown(e.touches[0].clientX,e.touches[0].clientY),{passive:true});
-navEl.addEventListener('touchend',e=>navUp(e.changedTouches[0].clientX,e.changedTouches[0].clientY),{passive:true});
+if(!NAV_SPRING){
+  navEl.addEventListener('touchstart',e=>navDown(e.touches[0].clientX,e.touches[0].clientY),{passive:true});
+  navEl.addEventListener('touchend',e=>navUp(e.changedTouches[0].clientX,e.changedTouches[0].clientY),{passive:true});
+}
+/* v4.11: 動かした後の click は押さない(タブに移動しない) */
+navEl.addEventListener('click',e=>{if(NAV_MOVED){NAV_MOVED=false;if(NAV_SPRING){e.preventDefault();e.stopPropagation()}}},true);
+/* v4.11: ドラッグ中にブラウザの「リンクをドラッグ」「文字選択」が始まると指の動きを取られるので止める */
+navEl.addEventListener('dragstart',e=>{if(NAV_SPRING)e.preventDefault()});
+addEventListener('pointermove',e=>{
+  const g=NAV_G;if(!NAV_SPRING||!g||e.pointerId!==g.id)return;
+  const dx=e.clientX-g.x0,dy=e.clientY-g.y0;
+  if(!g.drag){
+    if(g.h)return;
+    if(Math.abs(dx)>=8&&Math.abs(dx)>Math.abs(dy)){g.h=true;NAV_MOVED=true;return}
+    if(Math.abs(dy)<8||Math.abs(dy)<=Math.abs(dx))return;
+    /* v4.11: 縦に8px以上でドラッグ開始。今の位置から指に追従させる(飛ばない) */
+    g.drag=true;NAV_MOVED=true;g.sgn=Math.sign(dy);g.base=NAV_PG?-navEl.clientHeight:0;
+    try{navEl.setPointerCapture(e.pointerId)}catch(err){}
+    navEl.classList.add('dr');
+  }
+  /* v4.11: 8px の不感帯を引く。開始の位置から指に追従するので、ドラッグ開始で飛ばない */
+  g.off=navFollow(g.base+dy-g.sgn*8);
+  g.hist.push([e.clientY,e.timeStamp]);
+  while(g.hist.length>2&&e.timeStamp-g.hist[0][1]>100)g.hist.shift();
+});
+function navFinish(e,cancel){
+  const g=NAV_G;if(!NAV_SPRING||!g||e.pointerId!==g.id)return;NAV_G=null;
+  const dx=e.clientX-g.x0,dy=e.clientY-g.y0;
+  if(!g.drag){
+    if(!cancel&&g.h&&Math.abs(dx)>=30&&Math.abs(dx)>Math.abs(dy))navSwitch(false);
+    return;
+  }
+  const H=navEl.clientHeight,dist=g.off-g.base;
+  const hist=g.hist;hist.push([e.clientY,e.timeStamp]);
+  while(hist.length>2&&e.timeStamp-hist[0][1]>100)hist.shift();
+  const dt=hist[hist.length-1][1]-hist[0][1];
+  const v=dt>0?(hist[hist.length-1][0]-hist[0][0])/dt:0; /* px/ms。上に動かすと負 */
+  let to=NAV_PG;
+  if(!cancel){
+    if(NAV_PG===0&&dist<0&&(-dist>=.35*H||v<=-.4))to=1;
+    else if(NAV_PG===1&&dist>0&&(dist>=.35*H||v>=.4))to=0;
+  }
+  const changed=to!==NAV_PG;
+  if(changed)navBuzz();
+  navSettle(to,false,changed);
+}
+addEventListener('pointerup',e=>navFinish(e,false));
+addEventListener('pointercancel',e=>navFinish(e,true));
 WIDE_NAV.addEventListener('change',()=>renderNav(NAV_CUR));
 
 /* ---------- シート ----------
