@@ -46,3 +46,57 @@ a.tkt-w:active .tkt,button.tkt-w:active .tkt{filter:brightness(.97)}
 .tkt-w.lg .tkt-b .main{gap:6px}
 .tkt-w.lg .tkt-b .t{font:700 36px/1.1 var(--font);font-variant-numeric:tabular-nums;overflow:visible}
 .tkt-w.lg .tkt-b .s{font-size:14px;white-space:normal}
+
+/* =====================================================================
+   v4.12 支払いの殻: 支払い(外の面)の中に自分の支出の半券を埋め込む1枚。
+   row=タイムライン・日の行(外の白い面は .ax-c.ps-host = 既存の記録カード) /
+   kid=活動の中の子(薄い色の面) / pay=支払い詳細の主役の下端 / x=支出詳細の最上部(小さい見出し+大きい半券)
+   ===================================================================== */
+.ps{position:relative;min-width:0;color:var(--tx);text-align:left}
+.ps-h{position:relative;display:flex;align-items:center;gap:8px;min-height:36px;color:inherit;text-decoration:none}
+.ps-h::before{content:"";position:absolute;inset:-4px -6px} /* 当たり判定を44px以上に(見た目は36px) */
+.ps-ic{width:24px;height:24px;border-radius:8px;display:grid;place-items:center;flex:none;background:var(--light),linear-gradient(135deg,var(--ev-hi),var(--ev-lo));color:var(--on-cap)}
+.ps-ic svg.i{width:12px;height:12px}
+.ps-l{flex:1;min-width:0;font:600 15px/1.35 var(--font);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ps-l small{margin-left:6px;font:400 12px/1 var(--font);color:var(--tx-3)}
+.ps-tot{flex:none;font:500 13px/1.2 var(--font);color:var(--tx-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ps-tot b{font:600 13px/1.2 var(--font);color:var(--tx-2)}
+.ps-h>svg.i{flex:none;width:16px;height:16px;color:var(--tx-3)}
+.ps-cat{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tkt-b .s .pbar{flex:none}
+
+/* 半券の小型版(行・活動の中)。ticket.css の基本の形を縮めたもの */
+.tkt-w.sm{--stub:50px;--nt:6px;filter:drop-shadow(0 1px 1px rgba(40,70,130,.08)) drop-shadow(0 3px 6px rgba(60,100,180,.10))}
+.tkt-w.sm .tkt{min-height:52px;border-radius:12px}
+.tkt-w.sm .tkt-s{gap:2px;padding:6px 2px;font:600 12px/1.2 var(--font)}
+.tkt-w.sm .tkt-s .sp{font:700 12px/1.2 var(--font)}
+.tkt-w.sm .tkt-s .sp-star svg.i{width:13px;height:13px}
+.tkt-w.sm .tkt-s .none{font:500 12px/1.2 var(--font)}
+.tkt-w.sm .tkt-b{padding:6px 10px;gap:8px}
+.tkt-w.sm .tkt-b .main{gap:2px}
+.tkt-w.sm .tkt-b .t{font:600 14px/1.3 var(--font)}
+.tkt-w.sm .tkt-b .s{font-size:12px}
+.tkt-w.sm .tkt-b .s .pbar{width:56px;height:5px;margin:0}
+.tkt-w.sm .tkt-b .amt{font:700 15px/1.2 var(--font)}
+
+/* 行(タイムライン・日): 見出しの下に半券。外の面の余白は既存の記録カードと同じ */
+.ax-c.ps-host{display:block}
+.ps-row .tkt-w{margin-top:8px}
+
+/* 活動の中(kid): 薄い色の面。見出し13px+合計、その下に小さい半券。面全体は押せない(見出しと半券がそれぞれ押せる) */
+.ps-kid{margin-top:8px;padding:8px 10px;border-radius:14px;background:color-mix(in srgb,var(--me) 5%,var(--surface))}
+.ps-kid .ps-h{min-height:28px}
+.ps-kid .ps-h::before{inset:-8px -6px}
+.ps-kid .ps-l{font:600 13px/1.35 var(--font)}
+.ps-kid .ps-l small{font-size:12px}
+.ps-kid .ps-tk{display:block;margin-top:6px;cursor:pointer}
+
+/* 支払い詳細: 主役(暗い塗り)の下端に普通の大きさの半券(白い面) */
+.cap .ps-pay{margin-top:16px}
+
+/* 支出詳細の最上部: 白い1枚(角丸20)。見出しは小さく(13px)、大きい半券が主役。見出し全体が押せる */
+.ps-x{padding:12px 12px 14px;border-radius:20px;background:var(--tl-card);box-shadow:var(--tl-sh)}
+.ps-x .ps-h{min-height:32px}
+.ps-x .ps-l{font:600 13px/1.35 var(--font);white-space:normal;overflow:visible}
+.ps-x .tkt-w{margin-top:10px}
+.ps-detail{padding:0 var(--gutter)}.ps-detail+.ps-detail{margin-top:8px}.ps-detail .ps-kid{margin-top:0;background:var(--surface);box-shadow:var(--e1,0 1px 3px rgba(40,70,130,.08))} /* v4.12 活動の詳細の「自分の支出」の節: 画面の左右の余白に揃え、白い面に */

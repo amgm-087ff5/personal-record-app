@@ -311,7 +311,7 @@ function actPayRow(c){const p=A[c],px=p.x&&X[p.x];
 /** 活動の中の支払い1件の表示(v4.6)。自分の支出がある子=白い半券チケット(押すと自分の支出)+「支払いの詳細」の小さい行。無い子=支払いの1行 */
 function actKidHtml(c){const p=A[c],x=p.x&&X[p.x];
   if(!x)return list([actPayRow(c)],'flat');
-  return `<div class="xk">${ticket({href:`#/x/${p.x}`,stub:spStub(xSp(x)),t:'自分の支出',s:esc(`支払い ${yen(p.amt)} · ${payeeOf(p)}`),amt:esc(yen(x.amt)),chev:true})}<a class="xk-link" href="#/a/${c}">支払いの詳細 ›</a></div>`}
+  return `<div class="ps-detail">${payShell(c,{mode:'kid'})}</div>`; /* v4.12 詳細の節では左右の余白(--gutter)に合わせる。 支払いの殻(kid)。旧: 半券+「支払いの詳細 ›」の行 */}
 /** 活動の中に支払いを追加: 金額だけで支払いを、日付・時刻・親=この活動にして開く */
 function actPayAdd(id){const a=A[id];openQuickExpense();Object.assign(CQ,{date:dateOf(a),time:a.time,act:id});crQeRender()}
 
@@ -345,11 +345,9 @@ function actView(id,a,d){
 
 /** 支払いの詳細: 上に日の札(親が活動なら、その1行を日の札の下に)。主役は瞬間の時刻。自分の支出は半券 */
 function payView(id,a,d){
-  const pa=parentAct(a),x=a.x&&X[a.x];
+  const pa=parentAct(a);
   /* 主役(v4.6): 種類の札「支払い」+時刻 / 題名=支払先 / 合計は普通の大きさの1行(割合の棒の上に1回だけ) / 補足=支払い方法 */
-  const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC.pay}支払い</span><span class="tm">${esc(a.time||'')}</span></div><h1>${esc(payeeOf(a)||a.title)}</h1>${a.amt!=null?`<div class="pay-sum"><span>合計</span><b class="num">${yen(a.amt)}</b></div>`:''}${a.pay?`<div class="meta"><span>${IC.pay}${esc(a.pay)}</span></div>`:''}${paySplit(a)}</section>`;
-  /* 子: 支払い → 自分の支出 を └ でぶら下げる。自分の支出は半券チケット(DESIGN v4 = 自分の支出の形) */
-  const child=x?`<div class="hang">${ticket({href:`#/x/${a.x}`,stub:spStub(xSp(x)),t:'自分の支出',s:esc(catPath(x.cat)),amt:esc(yen(x.amt)),cls:'fill',chev:true})}</div>`:'';
+  const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC.pay}支払い</span><span class="tm">${esc(a.time||'')}</span></div><h1>${esc(payeeOf(a)||a.title)}</h1>${a.amt!=null?`<div class="pay-sum"><span>合計</span><b class="num">${yen(a.amt)}</b></div>`:''}${a.pay?`<div class="meta"><span>${IC.pay}${esc(a.pay)}</span></div>`:''}${paySplit(a)}${payShell(id,{mode:'pay'})}</section>`; /* v4.12: 半券は主役の中の下端(旧 .hang の └ は廃止) */
   const later=[{day:d},...(pa?[{href:`#/a/${a.parent}`,time:timeText(pa),title:pa.title}]:[])];
   /* 交わった人・場所 = 支払いの役割(支払先・支払者) + 親の活動の同席者(whoOf と同じ考え方) */
   const roles=[...(a.roles||[])];
@@ -357,7 +355,7 @@ function payView(id,a,d){
   const shop=roles.find(r=>r[0]==='支払先');
   const att=(EXTRA.attach||{})[id];
   return appbar('',{actions:[menuAct(id)]})
-    +pinView({later,earlier:[],cap:cap+child})
+    +pinView({later,earlier:[],cap})
     +(a.adv&&a.adv[2]==='未精算'?`<div class="suggest owe"><span class="pbar lg" aria-hidden="true"><i class="owed" style="flex:1"></i></span><span class="t"><span class="nm">${esc(E[a.adv[0]].n.split(' ').pop())}さんの分 <b class="num">${yen(a.adv[1])}</b></span><span class="st">未精算</span></span><button class="btn sm" type="button" onclick="settle('${id}')">精算済みにする</button></div>`:'')
     +shopTodoSug(id,a)
     +(roles.length?sh('関わったエンティティ',roles.length,shop&&!shop[1]?{label:'支払先を店として登録',onclick:`registerShop('${id}')`}:null)+list(roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
