@@ -97,12 +97,14 @@ const AX_NODE={'支払い':['pay','pay'],'会話':['','talk'],'移動':['','move
 /** 瞬間の種類(時刻1つ。カードにしない小さい行)。支払いも瞬間だが、お金の行として扱う */
 const INSTANT_TYPES=['起床','就寝','出発','到着','出来事(瞬間)'];
 /** 軸の1行。o:{href,time,node:{cls,icon},t,m,amt,cls,future} */
-const axRow=o=>{const tagN=o.href?'a':'div';return `<${tagN} class="ax-row ${o.cls||''} ${o.future?'future':''}" ${o.href?`href="${o.href}"`:''}><span class="ax-time">${o.time&&typeof o.time==='object'?`<b>${o.time.d}日</b><small>${esc(o.time.t||'')}</small>${o.end?`<small class="to">${esc(o.end)}</small>`:''}`:`${esc(o.time??'')}${o.end?`<small class="to">${esc(o.end)}</small>`:''}`}</span><span class="ax-node ${o.node&&o.node.cls||''}">${o.node&&IC[o.node.icon]||''}</span><span class="ax-c"><span class="main"><div class="t">${o.t}</div>${o.m?`<div class="m">${o.m}</div>`:''}${o.kids||''}</span>${o.amt?`<span class="amt">${o.amt}</span>`:''}${o.right||''}</span></${tagN}>`};
+const axRow=o=>{const tagN=o.href?'a':'div';return `<${tagN} class="ax-row ${o.cls||''} ${o.future?'future':''}" ${o.href?`href="${o.href}"`:''}><span class="ax-time">${o.time&&typeof o.time==='object'?`<b>${o.time.d}日</b><small>${esc(o.time.t||'')}</small>${o.end?`<small class="to">${esc(o.end)}</small>`:''}`:`${esc(o.time??'')}${o.end?`<small class="to">${esc(o.end)}</small>`:''}`}</span><span class="ax-node ${o.node&&o.node.cls||''}">${o.node&&IC[o.node.icon]||''}</span>${o.body?`<span class="ax-c ps-host">${o.body}</span>`:`<span class="ax-c"><span class="main"><div class="t">${o.t}</div>${o.m?`<div class="m">${o.m}</div>`:''}${o.kids||''}</span>${o.amt?`<span class="amt">${o.amt}</span>`:''}${o.right||''}</span>`}</${tagN}>`};
 const placeName=r=>r?(r[1]&&E[r[1]]?E[r[1]].n:r[2]):'';
 /** 記録(アクティビティ)の1行 */
 function momentRow(k,o={}){
   const a=A[k];
   if(INSTANT_TYPES.includes(a.type))return axRow({href:`#/a/${k}`,time:a.time,node:{cls:'at'},cls:'at',t:esc(a.title)});
+  /* v4.12 支払いの殻: 支払いは白い面の中に自分の支出の半券を埋め込んだ1枚(外は支払いの見た目) */
+  if(a.type==='支払い')return axRow({time:o.showDate&&dateOf(a)?{d:+dateOf(a).slice(8),t:a.time}:a.time,node:{cls:'pay',icon:'pay'},cls:(o.cls||'')+' pay',future:o.future,body:payShell(k,{mode:'row'})});
   const [ncls,icon]=AX_NODE[a.type]||['','activity'];
   /* 支払い(日の直下の1件)は題名が「支払い · 支払先」なので、支払先を m に重ねない */
   const isPay=a.type==='支払い';
@@ -113,7 +115,7 @@ function momentRow(k,o={}){
   /* 活動の中の支払い(子)。v4.6: 自分の支出がある子は小さい半券チケット(押すと自分の支出の詳細)。
      自分の支出が無い子(全部ほかの人の分など)は、支払いの1行のまま(押すと支払いの詳細) */
   const kids=(a.kids||[]).filter(c=>A[c]&&A[c].type==='支払い'&&!o.flat).map(c=>{const p=A[c],x=p.x&&X[p.x];
-    if(x)return `<span class="kid kid-x" role="link" tabindex="0" onclick="event.preventDefault();event.stopPropagation();go('#/x/${p.x}')">${ticket({stub:spStub(xSp(x)),t:'自分の支出',s:x.amt!==p.amt?payBar(p,x):'',amt:yen(x.amt),cls:'sm'})}</span>`;
+    if(x)return payShell(c,{mode:'kid'}); /* v4.12 活動の中の支払いの殻(旧 .kid-x) */
     return `<span class="kid" role="link" tabindex="0" onclick="event.preventDefault();event.stopPropagation();go('#/a/${c}')"><span class="kid-i">${IC.pay}</span><span class="kid-t">${esc(payLabel(p))}<small>${esc(p.time)}</small></span><span class="kid-a"><b>${yen(p.amt)}</b></span></span>`}).join('');
   return axRow({href:`#/a/${k}`,time:o.showDate&&dd?{d:+dd.slice(8),t:a.time}:a.time,end:a.end,kids:kids?`<span class="kids">${kids}</span>`:'',node:{cls:ncls,icon},cls:(o.cls||'')+(a.type==='支払い'?' pay':'')+(a.end?' span':''),future:o.future,
     t:isPay?esc(payLabel(a)):esc(a.title),m:`${o.role?`<span class="role">${esc(o.role)}</span>`:''}${pl&&pl[1]!==o.exclude?`<span class="ell">${esc(placeName(pl))}</span>`:''}${knots(ppl)}`,
@@ -122,6 +124,31 @@ function momentRow(k,o={}){
 /** 1つの支払いの棒: 自分(青) / ほかの人(灰) / 立替・未精算(琥珀の斜線) */
 function payBar(a,x){const rest=a.amt-x.amt;const owed=a.adv&&a.adv[2]==='未精算';
   return `<span class="pbar" aria-label="支払い ${yen(a.amt)} のうち自分 ${yen(x.amt)}"><i class="me" style="flex:${x.amt}"></i>${rest>0?`<i class="${owed?'owed':'other'}" style="flex:${rest}"></i>`:''}</span>`}
+/* ---- v4.12 支払いの殻 ----
+   支払い(外の面)の中に、自分の支出の半券(ticket)を埋め込む1つの部品。タイムライン・活動の中・支払い詳細・支出詳細で同じ部品を使う。
+   mode: row=タイムライン・日の行(白い面。見出し=支払い詳細 / 半券=支出) /
+         kid=活動の中の子(薄い面。外が <a> なので span で書く) /
+         pay=支払い詳細の暗い主役の下端(半券だけ。普通の大きさ) /
+         x=支出詳細の最上部(支払いの見出し1行が小さく + 支出の半券が大きい) */
+const psTk=(p,x,o)=>ticket(Object.assign({stub:spStub(xSp(x)),t:'自分の支出',s:`<span class="ps-cat">${esc(catPath(x.cat))}</span>${x.amt!==p.amt?payBar(p,x):''}`,amt:yen(x.amt)},o));
+function payShell(pid,{mode='row',xid}={}){
+  const p=A[pid];if(!p)return '';
+  const x=xid?X[xid]:(p.x&&X[p.x]),xk=xid||p.x;
+  const tot=`<span class="ps-tot">合計 <b>${yen(p.amt)}</b></span>`;
+  if(mode==='pay')return x?`<div class="ps ps-pay">${psTk(p,x,{href:`#/x/${xk}`,chev:true})}</div>`:'';
+  if(mode==='x'){
+    const d=xDate(x),pct=Math.round(x.amt/p.amt*100),owed=p.adv&&p.adv[2]==='未精算';
+    return `<div class="ps ps-x"><a class="ps-h" href="#/a/${pid}"><span class="ps-ic">${IC.pay}</span><span class="ps-l">${esc(payLabel(p))} · ${fmtMDW(d)}${p.time?` ${esc(p.time)}`:''}</span>${tot}${IC.chev}</a>`
+      +ticket({cls:'lg fill',label:`自分の支出 ${yen(x.amt)}`,stub:spStub(xSp(x)),t:yen(x.amt),s:`支払い ${yen(p.amt)} の ${pct}%${owed?' '+tag('未精算',{cls:'warn'}):''}`})+`</div>`;
+  }
+  if(mode==='kid'){
+    const go_=`event.preventDefault();event.stopPropagation();go('#/a/${pid}')`,go_x=`event.preventDefault();event.stopPropagation();go('#/x/${xk}')`;
+    return `<div class="ps ps-kid"><span class="ps-h" role="link" tabindex="0" onclick="${go_}"><span class="ps-ic">${IC.pay}</span><span class="ps-l">${esc(payLabel(p))}${p.time?` <small>${esc(p.time)}</small>`:''}</span>${tot}</span>`
+      +(x?`<span class="ps-tk" role="link" tabindex="0" onclick="${go_x}">${psTk(p,x,{cls:'sm'})}</span>`:'')+`</div>`;
+  }
+  /* row(既定) */
+  return `<div class="ps ps-row"><a class="ps-h" href="#/a/${pid}"><span class="ps-ic">${IC.pay}</span><span class="ps-l">${esc(payLabel(p))}</span>${tot}</a>${x?psTk(p,x,{href:`#/x/${xk}`,cls:'sm'}):''}</div>`;
+}
 /** 予定の1行(中抜き・点線)。late: いまより前で未記録 */
 function planRowAx(k,o={}){
   const e=EV[k];const late=o.late;

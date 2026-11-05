@@ -145,12 +145,8 @@ function ldMenu(id){
 route('x',id=>{
   const x=X[id];
   if(!x)return appbar('')+empty('expense','支出 なし');
-  const p=A[x.pay],date=xDate(x),pct=Math.round(x.amt/p.amt*100);
-  const owed=p.adv&&p.adv[2]==='未精算';
-  /* 最上部: 親の支払いへの参照(1行)+ 自分の分の半券チケット(主役・塗り) */
-  const parent=`<a class="ld-parent" href="#/a/${x.pay}">${ico('pay','var(--tx-2)')}<span class="grow">${esc(payLabel(p))}</span><span class="v num">${yen(p.amt)}</span>${IC.chev}</a>`;
-  const top=`<div class="ld-top">${parent}${ticket({cls:'lg fill',label:`自分の支出 ${yen(x.amt)}`,stub:spStub(xSp(x)),
-    t:yen(x.amt),s:`${fmtMDW(date)} · 支払い ${yen(p.amt)} の ${pct}%${owed?' '+tag('未精算',{cls:'warn'}):''}`})}</div>`;
+  /* 最上部(v4.12 支払いの殻 x): 支払いの見出し1行(小さく・押すと支払い)+ 自分の分の大きい半券(主役・塗り)を、同じ1枚の中に */
+  const top=`<div class="ld-top">${payShell(x.pay,{mode:'x',xid:id})}</div>`;
   const over=tag('この支出だけ',{cls:'brand'});
   return appbar('',{actions:[{icon:'more',label:'その他の操作',onclick:`ldMenu('${id}')`}]})
     +top
