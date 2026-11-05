@@ -157,35 +157,55 @@ function crQeSave(){
   else{go('#/a/'+aid);toast('支払いを保存しました(自分の支出=全額)')}
 }
 
-/* ---------- 予定 ---------- */
-let CE=null;
-function openNewEvent(date){CE={t:'',all:false,d:date||TODAY,s:'10:00',e:'11:00',place:'',who:[],rep:'なし',alarm:'なし'};crEvRender()}
-function crEvWho(k){CE.who=CE.who.includes(k)?CE.who.filter(x=>x!==k):[...CE.who,k];crEvRender()}
-function crEvAll(){CE.all=!CE.all;crEvRender()}
-function crEvRender(){
-  const body=`<div class="list">
-    <div class="field"><label>タイトル</label><input value="${esc(CE.t)}" placeholder="例: 花子さんとカフェ" oninput="CE.t=this.value"></div>
-    <div class="field"><label>終日</label>${toggle(CE.all,'crEvAll()')}</div>
-    <div class="field"><label>日付</label><input type="date" value="${CE.d}" oninput="CE.d=this.value"></div>
-    ${CE.all?'':`<div class="field"><label>開始</label><input type="time" value="${CE.s}" oninput="CE.s=this.value"></div>
-    <div class="field"><label>終了</label><input type="time" value="${CE.e}" oninput="CE.e=this.value"></div>`}
-    <div class="field"><label>場所</label><input value="${esc(CE.place)}" placeholder="場所を入力" oninput="CE.place=this.value;crSugUpdate('cr-sug-ev',this.value,'crEvPick')"></div>
-    <div class="cr-sug" id="cr-sug-ev">${crPlaceSug(CE.place,'crEvPick')}</div>
-    <div class="field"><label>繰り返し</label><select onchange="CE.rep=this.value">${['なし','毎日','毎週','毎月'].map(r=>`<option ${CE.rep===r?'selected':''}>${r}</option>`).join('')}</select></div>
-    <div class="field"><label>通知</label><select onchange="CE.alarm=this.value">${['なし','10分前','30分前','1時間前','前日'].map(r=>`<option ${CE.alarm===r?'selected':''}>${r}</option>`).join('')}</select></div>
+/* ---------- 予定・ToDo(1枚のシート「予定」。上の切替で種類を選ぶ)(v4.13) ----------
+   予定 = 日付・時刻・場所・参加者・繰り返し・通知。ToDo = 期限・リスト・優先・関係する人(entの値)。
+   保存は EV / TD(PLN の見え方)へ。CREATE の「予定」は予定、「ToDo」(plan.js)は ToDo を選んだ状態で開く */
+let CP=null;
+function crPlNew(kind,o={}){return {kind,t:'',all:false,d:o.d||TODAY,s:'10:00',e:'11:00',place:'',who:[],rep:'なし',alarm:'なし',due:'',list:'inbox',pri:false}}
+function openNewEvent(date){CP=crPlNew('予定',{d:date||TODAY});crPlRender()}
+/* plan.js の openNewTask より後に読むので、こちらが使われる(plan.js 側の同名の関数は使われない) */
+function openNewTask(){CP=crPlNew('ToDo');crPlRender()}
+function crPlKind(v){CP.kind=v;crPlRender()}
+function crPlAll(){CP.all=!CP.all;crPlRender()}
+function crPlPri(){CP.pri=!CP.pri;crPlRender()}
+function crPlWho(k){CP.who=CP.who.includes(k)?CP.who.filter(x=>x!==k):[...CP.who,k];crPlRender()}
+function crPlPick(k){CP.place=E[k].n;crPlRender()}
+function crPlRender(){
+  const ev=CP.kind==='予定';
+  const kind=seg([['予定','予定'],['ToDo','ToDo']],CP.kind,"crPlKind('$v')");
+  const evRows=`<div class="field"><label>終日</label>${toggle(CP.all,'crPlAll()')}</div>
+    <div class="field"><label>日付</label><input type="date" value="${CP.d}" oninput="CP.d=this.value"></div>
+    ${CP.all?'':`<div class="field"><label>開始</label><input type="time" value="${CP.s}" oninput="CP.s=this.value"></div>
+    <div class="field"><label>終了</label><input type="time" value="${CP.e}" oninput="CP.e=this.value"></div>`}
+    <div class="field"><label>場所</label><input value="${esc(CP.place)}" placeholder="場所を入力" oninput="CP.place=this.value;crSugUpdate('cr-sug-ev',this.value,'crPlPick')"></div>
+    <div class="cr-sug" id="cr-sug-ev">${crPlaceSug(CP.place,'crPlPick')}</div>
+    <div class="field"><label>繰り返し</label><select onchange="CP.rep=this.value">${['なし','毎日','毎週','毎月'].map(r=>`<option ${CP.rep===r?'selected':''}>${r}</option>`).join('')}</select></div>
+    <div class="field"><label>通知</label><select onchange="CP.alarm=this.value">${['なし','10分前','30分前','1時間前','前日'].map(r=>`<option ${CP.alarm===r?'selected':''}>${r}</option>`).join('')}</select></div>`;
+  const tdRows=`<div class="field"><label>期限</label><input type="date" value="${CP.due}" oninput="CP.due=this.value"></div>
+    <div class="field"><label>リスト</label><select onchange="CP.list=this.value">${Object.entries(LISTS).map(([k,L])=>`<option value="${k}" ${CP.list===k?'selected':''}>${esc(L.n)}</option>`).join('')}</select></div>
+    <div class="field"><label>優先</label>${toggle(CP.pri,'crPlPri()')}</div>`;
+  const body=`${kind}
+  <div class="list">
+    <div class="field"><label>タイトル</label><input value="${esc(CP.t)}" placeholder="${ev?'例: 花子さんとカフェ':'例: 牛乳を買う'}" oninput="CP.t=this.value"></div>
+    ${ev?evRows:tdRows}
   </div>
-  ${sh('参加者')}
-  <div class="chips" role="group">${crPeople().map(([k,e])=>`<button class="chip" type="button" aria-pressed="${CE.who.includes(k)}" onclick="crEvWho('${k}')">${knot(k,'sm')}${esc(e.n)}</button>`).join('')}</div>`;
-  crPanel('予定を作成',body,{right:{label:'予定を追加',onclick:'crEvSave()'}});
+  ${sh(ev?'参加者':'関係する人')}
+  <div class="chips" role="group">${crPeople().map(([k,e])=>`<button class="chip" type="button" aria-pressed="${CP.who.includes(k)}" onclick="crPlWho('${k}')">${knot(k,'sm')}${esc(e.n)}</button>`).join('')}</div>`;
+  crPanel('予定',body,{right:{label:ev?'予定を追加':'ToDoを追加',onclick:'crPlSave()'}});
 }
-function crEvPick(k){CE.place=E[k].n;crEvRender()}
-function crEvSave(){
-  if(!CE.t.trim()){toast('タイトルを入れてください');return}
-  const place=CE.place.trim();const pid=crFindEnt(place);const id=uid('ev');
-  const rep=CE.rep==='毎月'?`毎月${+CE.d.slice(8)}日`:CE.rep==='毎週'?`毎週${wdOf(CE.d)}曜`:CE.rep==='毎日'?'毎日':undefined;
-  EV[id]={t:CE.t.trim(),d:CE.d,all:CE.all?1:undefined,s:CE.all?undefined:CE.s,e:CE.all?undefined:CE.e,
-    place:place?[pid,place]:undefined,who:CE.who.length?[...CE.who]:undefined,rep,alarm:CE.alarm};
-  CE=null;closeSheet();save();go('#/ev/'+id);toast('予定を追加しました');
+function crPlSave(){
+  if(!CP.t.trim()){toast('タイトルを入れてください');return}
+  if(CP.kind==='ToDo')return crPlSaveTodo();
+  const place=CP.place.trim();const pid=crFindEnt(place);const id=uid('ev');
+  const rep=CP.rep==='毎月'?`毎月${+CP.d.slice(8)}日`:CP.rep==='毎週'?`毎週${wdOf(CP.d)}曜`:CP.rep==='毎日'?'毎日':undefined;
+  EV[id]={t:CP.t.trim(),d:CP.d,all:CP.all?1:undefined,s:CP.all?undefined:CP.s,e:CP.all?undefined:CP.e,
+    place:place?[pid,place]:undefined,who:CP.who.length?[...CP.who]:undefined,rep,alarm:CP.alarm};
+  CP=null;closeSheet();save();go('#/ev/'+id);toast('予定を追加しました');
+}
+function crPlSaveTodo(){
+  const id=uid('t');
+  TD[id]={t:CP.t.trim(),list:CP.list||'inbox',...(CP.due?{due:CP.due}:{}),...(CP.pri?{pri:1}:{}),...(CP.who.length?{ent:[...CP.who]}:{})};
+  CP=null;closeSheet();save();rerender();toast('ToDoを追加しました');
 }
 
 /* ---------- 出来事(期間 / 瞬間) ----------

@@ -154,7 +154,7 @@ const plView=isTodo=>{
   const put=(k,v)=>{if(typeof k!=='string'||!v||typeof v!=='object')throw new TypeError('予定・ToDoは「キー: オブジェクト」で入れてください');
     v.kind=isTodo?'ToDo':(v.pay?'支払い予定':'予定');PLN[k]=v;return true};
   return new Proxy({},{
-    get:(_,k)=>has(k)?PLN[k]:undefined,
+    get:(_,k)=>has(k)?PLN[k]:Reflect.get(Object.prototype,k),
     set:(_,k,v)=>put(k,v),
     defineProperty:(_,k,d)=>'value' in d?put(k,d.value):false,
     has:(_,k)=>has(k),
