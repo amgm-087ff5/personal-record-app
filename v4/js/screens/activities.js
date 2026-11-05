@@ -140,7 +140,7 @@ route('activities',(id,q)=>{
   const viewRow=`<div class="act-views">${seg([['list','リスト'],['day','日'],['month','月']],view,"actSetView('$v')")}</div>`;
   /* 日・月: まとめ・月の送り・絞り込みは出さず、期間の送りと「予定を追加」だけ。中身は plan.js の描き方 */
   if(view!=='list'){
-    return `<header class="act-top" id="act-top">${titleRow}${viewRow}<div class="act-per">${view==='day'?plDayNav():plMonthNav()}<button class="btn sm tonal" type="button" onclick="openNewEvent('${plSel}')">${IC.plus}予定を追加</button></div></header><div class="act-sp" id="act-sp" aria-hidden="true"></div>`
+    return `<header class="act-top" id="act-top">${titleRow}${viewRow}<div class="act-per">${view==='day'?plDayNav():plMonthNav()}<button class="act-ib" type="button" aria-label="予定を追加" onclick="openNewEvent('${plSel}')">${IC.plus}</button></div></header><div class="act-sp" id="act-sp" aria-hidden="true"></div>`
       +`<div class="pl-root">${view==='day'?plDayView():plMonthView()}</div><div class="act-end" aria-hidden="true"></div>`;
   }
   const upcoming=Object.entries(EV).filter(([k,e])=>!e.hol&&!e.rec&&e.d>TODAY).sort((a,b)=>a[1].d.localeCompare(b[1].d));

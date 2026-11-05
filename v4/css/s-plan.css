@@ -26,7 +26,8 @@
 .act-top .act-views .seg button[aria-pressed="true"]{background:var(--surface);color:var(--tx);box-shadow:var(--e1);font-weight:600}
 .act-top .act-per{box-sizing:border-box;height:52px;padding:8px var(--gutter);display:flex;align-items:center;gap:8px}
 .act-top .act-per .pnav{flex:1;min-width:0;justify-content:center}
-.act-top .act-per .btn{flex:none}
+.act-top .act-per .pnav button{padding:0 8px;white-space:nowrap}
+.act-top .act-per .pnav b{white-space:nowrap}
 
 /* ---- 月(カレンダー): 文字を置かず、件数の小さいカプセルで示す。ToDoは✓と件数 ---- */
 .pl-cal{padding:4px 8px 8px;overflow:visible}
