@@ -433,7 +433,7 @@ function navDragStep(now){
   const dt=Math.min(50,Math.max(0,now-D.t));D.t=now;
   D.ss.forEach((s,k)=>{
     const d=Math.min(1,Math.abs(D.c[k]-D.fx)/(D.W*.9));
-    const r=Math.max(.012,.085-.075*d);
+    const r=Math.max(.008,.09-.085*d); /* v4.13 本体調整: 遠い窓ほどはっきり遅れる(近い=ほぼ即時・遠い=約0.1秒遅れ) */
     D.p[k]+=(D.tgt-D.p[k])*(1-Math.exp(-r*dt));
     s.style.transform=`translate3d(0,${D.p[k].toFixed(1)}px,0)`;
   });
