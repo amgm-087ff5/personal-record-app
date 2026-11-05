@@ -159,3 +159,5 @@ a.hm-tile:active{transform:scale(.985)}
 .hm-root .hm-last{display:flex;flex-direction:column;gap:4px;width:100%;min-height:44px;padding:8px 0 0;text-align:left;border-top:1px solid var(--line)}
 .hm-root .hm-last-b{font:500 15px/1.5 var(--font);color:var(--tx);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 .hm-root .hm-last-t{font:500 13px/1.3 var(--font);color:var(--tx-3)}
+/* v4.11(11/05「固定費は除くのがいい。明記して」): 見出しの横に、この欄の全部の数字の範囲を明記(淡い面の札) */
+.hm-root .hm-excl{min-width:0;padding:4px 10px;border-radius:999px;background:var(--me-soft);color:var(--me);font:600 12px/1.3 var(--font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

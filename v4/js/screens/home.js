@@ -123,8 +123,8 @@ function hmMoney(){
   const thisW=hmSpendRange(hmAdd(TODAY,-6),TODAY), prevW=hmSpendRange(hmAdd(TODAY,-13),hmAdd(TODAY,-7));
   const rate=prevW?Math.round((thisW-prevW)/prevW*100):null;
   return `<section class="hm-tile hm-wide hm-money">`
-    +`<div class="hm-th"><h2>支出</h2><a class="hm-more" href="#/ledger">家計簿 ›</a></div>`
-    +`<div class="hm-sp-top"><div><span class="hm-k">今日 <span class="hm-note">固定費を除く</span></span><b class="hm-big num">${yen(today)}</b></div>`
+    +`<div class="hm-th"><h2>支出</h2><span class="hm-excl">固定費(家賃・通信・サブスク)を除く</span><a class="hm-more" href="#/ledger">家計簿 ›</a></div>`
+    +`<div class="hm-sp-top"><div><span class="hm-k">今日</span><b class="hm-big num">${yen(today)}</b></div>`
     +`<div class="hm-sp-cmp"><span class="hm-sub num">先週の土曜 ${yen(sat)}</span>${tag(diffTxt)}</div></div>`
     +`<div class="hm-chart" role="group" aria-label="直近8日間の支出">${cols}</div>`
     +`<div class="hm-wk"><div><span class="hm-k">この7日間 ${md(hmAdd(TODAY,-6))}〜${md(TODAY)}</span><b class="hm-amt2 num">${yen(thisW)}</b></div>`
