@@ -54,11 +54,11 @@
 .ld-tix .tkt-b .s{flex-wrap:wrap;white-space:normal;overflow:visible;row-gap:4px}
 .ld-tix .amt small{display:block;margin-top:3px;font:400 12px/1.2 var(--font);color:var(--tx-3);text-align:right}
 /* 支払いの棒(割り勘・立替の自分の区間) = 補足の中に小さく */
-.ld-pbar{display:inline-flex;width:32px;height:6px;border-radius:3px;overflow:hidden;flex:none;vertical-align:middle}
+.ld-pbar{display:inline-flex;width:32px;height:6px;border-radius:3px;overflow:hidden;flex:none;vertical-align:middle;background:var(--sunk)}
 .ld-pbar i{display:block;height:100%;min-width:0}
 .ld-pbar i.me{background:var(--light),var(--me)} /* v4.9: ベタ→グラデ */
 .ld-pbar i.rest{background:var(--axis)}
-.ld-pbar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 2px,color-mix(in srgb,var(--owe) 40%,transparent) 2px 4px)}
+/* 未精算の斜線は app.css の .ld-pbar i.owed と共通 */
 
 /* ---- 支出の詳細: 親の支払いへの1行 + 半券チケット(主役) ---- */
 .ld-top{padding:6px var(--gutter) 0;display:flex;flex-direction:column;gap:8px}

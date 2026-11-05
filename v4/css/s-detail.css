@@ -50,11 +50,10 @@
 .cap .split .bar i{display:block;height:100%}
 .cap .split .bar i.me{background:var(--on-cap)}
 .cap .split .bar i.other{background:color-mix(in srgb,var(--on-cap) 45%,transparent)}
-.cap .split .bar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 4px,color-mix(in srgb,var(--owe) 40%,transparent) 4px 8px)}
+.cap .split .bar{--hw:4px} /* 未精算の斜線は app.css 共通。塗りのカプセル上の溝は白の半透明(上の .bar の background) */
 .cap .split .lg{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font:var(--t-cap);opacity:.92}
 .cap .split .lg span{display:inline-flex;align-items:center;gap:6px}
 .cap .split .lg span::before{content:"";width:10px;height:10px;border-radius:3px;background:var(--on-cap)}
-.cap .split .lg span[style*="--owe"]::before{background:var(--owe)}
 .cap .split .lg span[style*="--axis"]::before{background:color-mix(in srgb,var(--on-cap) 45%,transparent)}
 .cap .split .lg b{font:600 13px/1 var(--font);color:inherit;font-variant-numeric:tabular-nums}
 

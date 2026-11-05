@@ -611,7 +611,7 @@ function openCreate(){
 }
 
 /* ---------- 保存(このブラウザ) ---------- */
-const SKEY='prmock-v4.13'; /* v4.13で予定とToDoを1つのデータ(PLN)にしたので、古い保存データは読まない */
+const SKEY='prmock-v4.14'; /* v4.14で活動の中に活動(w2 › c1)を入れたので、古い保存データは読まない */
 /* 予定・ToDoは PLN だけを保存する(EV・TD は PLN の見え方なので保存しない) */
 function save(){try{plSettle();localStorage.setItem(SKEY,JSON.stringify({A,X,E,PLN,TYPES,CATS,NOTES,MEMOS,LISTS,TYPE_PROPS,EXTRA:typeof EXTRA!=='undefined'?EXTRA:{}}))}catch(e){}}
 function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(!s)return;
