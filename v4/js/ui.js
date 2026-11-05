@@ -263,6 +263,8 @@ function render(keepScroll){
   const ROOT={home:'home',activities:'activities',plan:'plan',memo:'memo',todo:'todo',entities:'entities',ledger:'ledger',settings:'settings'};
   const wide=innerWidth>=1100;const rootName=ROOT[r.tab||lastTab]||'home';
   const app=document.getElementById('app');
+  /* v4.10: 中でスクロールする枠(data-keep)の位置。同じ画面の描き直しでは保つ */
+  const keeps=[...app.querySelectorAll('[data-keep]')].map(e=>[e.dataset.keep,e.scrollTop]);
   if(wide){
     const isRoot=CUR.name===rootName;const ly=app.querySelector('.pane-l')?.scrollTop||0;const sameRoot=app.dataset.root===rootName;
     const left=safe(ROUTES[rootName].fn,null,isRoot?CUR.q:{});
@@ -279,6 +281,8 @@ function render(keepScroll){
   if(r.tab)lastTab=r.tab;
   renderNav(r.tab||lastTab);
   if(keepScroll)scrollTo(0,y);else scrollTo(0,0);
+  document.dispatchEvent(new Event('rendered')); /* 中の枠の高さ合わせ(アクティビティ) */
+  if(keepScroll)keeps.forEach(([k,t])=>{const e=app.querySelector(`[data-keep="${k}"]`);if(e)e.scrollTop=t});
   document.title=(document.querySelector('.lt h1,.appbar .title')?.textContent||'個人記録')+' — 個人記録';
 }
 /** 状態変更後に同じ画面を描き直す(スクロール位置を保つ) */
