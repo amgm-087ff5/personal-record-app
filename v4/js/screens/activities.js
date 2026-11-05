@@ -35,7 +35,7 @@ const actVH=s=>s?s.clientHeight:innerHeight;
 const actH=s=>s?s.scrollHeight:document.documentElement.scrollHeight;
 const actSet=(s,y)=>{if(s)s.scrollTop=y;else scrollTo({top:y,behavior:'instant'})};
 /** v4.11: 縮み具合を上部に反映(CSS の --p と、縮んだ時の表示の切り替え) */
-function actApply(h){h=h||actHdr();if(!h)return;h.style.setProperty('--p',actP.toFixed(4));h.classList.toggle('is-min',actP>.5)}
+function actApply(h){h=h||actHdr();if(!h)return;h.style.setProperty('--p',actP.toFixed(4));h.classList.toggle('is-min',actP>.625);h.classList.toggle('is-line',actP>.375)}  /* v4.11: 2つの形の見える/隠れる切り替え(重なる幅の外で切る=ちらつかない) */
 /** v4.11: 上部の幅・位置と高さを合わせる。p=0(広い)と p=1(縮んだ)の高さを測り、上部の下に広い時の高さの余白を置く。
     今日の札を上部のすぐ下(8px)に置けるよう、下の余白(.ax-room)を足りない分だけにする */
 function actLayout(){
@@ -58,9 +58,35 @@ function actLand(want){
   else{const t=document.querySelector('#app .dh2.today .dcard')||document.querySelector('#app .dh2.today');if(!t)return;actSet(s,Math.max(0,actDocTop(t,s)-actFullH-8))}
   actLastY=actY(s);actApply(h);
 }
+/** v4.11: 位置合わせは、描き直しの入る動き(.screen の変形 4px)が終わってから行う。終わらないと今日の札の位置が 4px ずれる */
+function actLandSoon(want){
+  const an=document.getAnimations?document.getAnimations():[];
+  Promise.all(an.map(a=>a.finished.catch(()=>{}))).then(()=>{if(CUR.name==='activities')actLand(want)});
+}
+/** 描き直しの後(ui.js の rendered)。別の画面から来た時は上部を広げる(位置合わせは landOnOpen)。同じ画面の描き直し(絞り込み・チェック)は縮み具合を保つ */
+function actSync(){
+  if(CUR.name!=='activities'){actWasOn=false;return}
+  if(!actWasOn){actP=0;actWasOn=true}
+  actLayout();actLastY=actY(actScroller());
+}
+/** 動いた量で上部の縮み具合を決める(1フレームに1回)。上端では必ず広げる。動いたのが位置合わせ(プログラムの移動)の分は、その後に actLastY を合わせてあるので縮まない */
+function actOnScroll(){
+  actRaf=0;const h=actHdr();if(!h||CUR.name!=='activities')return;
+  const s=actScroller(),y=actY(s);
+  if(actLastY===null){actLastY=y;return}
+  const dy=y-actLastY;actLastY=y;
+  if(y<=0)actP=0;else if(dy&&actRange>0)actP=Math.min(1,Math.max(0,actP+dy/actRange));
+  actApply(h);
+}
+/* 窓か左の一覧の、スクロールを1か所で受ける(scroll は泡立たないので capture で受ける) */
+document.addEventListener('scroll',e=>{const t=e.target;
+  if((t===document||(t.classList&&t.classList.contains('pane-l')))&&!actRaf)actRaf=requestAnimationFrame(actOnScroll)},{capture:true,passive:true});
+document.addEventListener('rendered',actSync);
+addEventListener('resize',()=>{if(CUR.name==='activities')actLayout()});
+if(document.fonts)document.fonts.ready.then(()=>{if(CUR.name==='activities')actLayout()});
 /** 画面を開いた時の位置: アクティビティは今月なら今日の札を上部のすぐ下・前の月なら一番下 / 今日の日のページは「いま」を上に(sticky の見出しの分 68px) */
 function landOnOpen(){
-  if(CUR.name==='activities')setTimeout(()=>actLand(actMonth===TODAY.slice(0,7)?'today':'bottom'),0);
+  if(CUR.name==='activities')setTimeout(()=>actLandSoon(actMonth===TODAY.slice(0,7)?'today':'bottom'),0);
   else if(CUR.name==='day'&&CUR.id===TODAY)setTimeout(()=>{const n=document.querySelector('#app .ax .now');if(n)landTo(n,{top:68})},0);
 }
 addEventListener('hashchange',landOnOpen);
@@ -99,16 +125,18 @@ route('activities',()=>{
   const todayEv=evOn(TODAY).filter(([k,e])=>!e.hol).length;
   /* 月の切替の後の位置(前の月=一番下・今月=今日の札を上部のすぐ下)。開いた時の位置は landOnOpen */
   const want=landWant;landWant=null;
-  if(want)setTimeout(()=>actLand(want),0);
+  if(want)setTimeout(()=>actLandSoon(want),0);
   /* v4.11 上部(固定の帯): 「広い形」と「1行の形」を両方描き、縮み具合 --p で見せる方を入れ替える(css/s-activities.css) */
-  const mets=[{v:`${monthRec}件`,l:`${+actMonth.slice(5)}月の記録`},{v:`${todayEv}件`,l:'今日の予定',href:'#/plan'},{v:`${todoTodayCount()}件`,l:'今日のToDo',href:'#/todo'}];
+  const mets=[{v:`${monthRec}件`,l:`${+actMonth.slice(5)}月の記録`,s:`${+actMonth.slice(5)}月`},{v:`${todayEv}件`,l:'今日の予定',s:'予定',href:'#/plan'},{v:`${todoTodayCount()}件`,l:'今日のToDo',s:'ToDo',href:'#/todo'}];
   const acts=[{text:'レシートで支払い',icon:'camera',primary:true,onclick:'openReceipt()'},{text:'出来事',icon:'plus',onclick:'openNewHappening()'}];
-  const metF=m=>{const inner=`<b class="num">${esc(m.v)}</b><span>${esc(m.l)}${m.href?IC.chev:''}</span>`;return m.href?`<a class="sc-m" href="${m.href}">${inner}</a>`:`<div class="sc-m">${inner}</div>`};
-  const metL=m=>{const inner=`<b class="num">${esc(m.v)}</b>${esc(m.l)}${m.href?IC.chev:''}`;return m.href?`<a class="act-x" href="${m.href}">${inner}</a>`:`<span class="act-x">${inner}</span>`};
-  const full=`<div class="act-full"><div class="sc-ms">${mets.map(metF).join('')}</div><div class="act-acts">${sumActs(acts)}</div></div>`;
-  const line=`<div class="act-line"><div class="act-lm">${mets.map(metL).join('')}</div><button class="act-ib" type="button" aria-label="レシートで支払い" onclick="openReceipt()">${IC.camera}</button><button class="act-ib" type="button" aria-label="出来事を追加" onclick="openNewHappening()">${IC.plus}</button></div>`;
+  /* v4.11 本体調整: 数字は1組だけ(2つの形を重ねない=二重に見えない・空にならない)。縮むと 数字が小さくなり、下の長いラベルが畳まれ、数字の右に短いラベルが出る */
+  const metU=m=>{const inner=`<span class="n"><b class="num">${esc(m.v)}</b><span class="s">${esc(m.s)}${m.href?IC.chev:''}</span></span><span class="l">${esc(m.l)}${m.href?IC.chev:''}</span>`;return m.href?`<a class="act-m" href="${m.href}">${inner}</a>`:`<div class="act-m">${inner}</div>`};
+  const full=`<div class="act-full"><div class="act-ms">${mets.map(metU).join('')}</div><div class="act-acts">${sumActs(acts)}</div></div>`;
+  const line='';
+  /* 縮んだ時は、作る2つの丸ボタンを大見出しの行へ移す(行の幅を --p で広げる。全部の幅は 0→88px。ぶつからない) */
+  const tb=`<div class="act-tb"><button class="act-ib" type="button" aria-label="レシートで支払い" onclick="openReceipt()">${IC.camera}</button><button class="act-ib" type="button" aria-label="出来事を追加" onclick="openNewHappening()">${IC.plus}</button></div>`;
   const head=`<header class="act-top" id="act-top">`
-    +`<div class="lt act-lt"><h1>アクティビティ</h1><button class="iconbtn" type="button" aria-label="検索" onclick="toast('検索はモックでは未対応です')">${IC.search}</button></div>`
+    +`<div class="lt act-lt"><h1>アクティビティ</h1>${tb}<button class="iconbtn" type="button" aria-label="検索" onclick="toast('検索はモックでは未対応です')">${IC.search}</button></div>`
     +`<section class="sc act-sc"><div class="act-sci">${full}${line}</div></section>`
     +`<div class="mnav act-mn"><button type="button" aria-label="前の月" ${actMonth<=minM?'disabled':''} onclick="monthShift(-1)">${IC.back}</button><b>${actMonth.slice(0,4)}年${+actMonth.slice(5)}月</b><button type="button" class="nx" aria-label="次の月" ${actMonth>=maxM?'disabled':''} onclick="monthShift(1)">${IC.back}</button></div>`
     +`<div class="act-chips">${chips(ACT_FILTERS,actFilter,"actFilter='$v';rerender()")}</div>`
