@@ -50,11 +50,10 @@
 .cap .split .bar i{display:block;height:100%}
 .cap .split .bar i.me{background:var(--on-cap)}
 .cap .split .bar i.other{background:color-mix(in srgb,var(--on-cap) 45%,transparent)}
-.cap .split .bar i.owed{background:repeating-linear-gradient(135deg,var(--owe) 0 4px,color-mix(in srgb,var(--owe) 40%,transparent) 4px 8px)}
+.cap .split .bar{--hw:4px} /* 未精算の斜線は app.css 共通。塗りのカプセル上の溝は白の半透明(上の .bar の background) */
 .cap .split .lg{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font:var(--t-cap);opacity:.92}
 .cap .split .lg span{display:inline-flex;align-items:center;gap:6px}
 .cap .split .lg span::before{content:"";width:10px;height:10px;border-radius:3px;background:var(--on-cap)}
-.cap .split .lg span[style*="--owe"]::before{background:var(--owe)}
 .cap .split .lg span[style*="--axis"]::before{background:color-mix(in srgb,var(--on-cap) 45%,transparent)}
 .cap .split .lg b{font:600 13px/1 var(--font);color:inherit;font-variant-numeric:tabular-nums}
 
@@ -160,3 +159,38 @@
 .ac-body{margin:0;padding:14px 16px;line-height:1.85}
 .ac-att{padding:12px}
 .ac-att img{display:block;max-width:120px;border-radius:8px}
+
+/* ---------- v4.14: 活動の子を主役の中に入れ子で(見出しなし)・子の詳細で親が子を包む(祖先の枠) ---------- */
+/* 主役の中の子の並び: 明るい行(面)を6pxの間で。文字は本文色(塗りの上でも行の中は明るい) */
+.cap-kids{display:flex;flex-direction:column;gap:6px;margin-top:16px;color:var(--tx)}
+.ck{position:relative;display:flex;align-items:center;gap:10px;min-height:48px;padding:6px 12px 6px 10px;border-radius:var(--r-md);background:var(--surface);box-shadow:0 1px 3px rgba(40,70,130,.08);color:var(--tx);font:500 15px/1.3 var(--font);text-decoration:none}
+.ck:active{background:var(--surface-2)}
+.ck-n,.anc-i{display:grid;place-items:center;flex:none;width:26px;height:26px;border-radius:8px;background:var(--sunk);color:var(--tx-2)}
+.ck-n svg.i,.anc-i svg.i{width:15px;height:15px}
+.ck-tm,.anc-h .tm{flex:none;font:600 13px/1 var(--font);color:var(--tx-2);font-variant-numeric:tabular-nums}
+.ck-t,.anc-h .t{flex:1;min-width:0;overflow-wrap:anywhere} /* 切らずに折り返す */
+.ck-c{flex:none;padding:4px 8px;border-radius:999px;background:var(--sunk);font:600 12px/1 var(--font);color:var(--tx-2)}
+.ck-chev{display:grid;flex:none;color:var(--tx-3)}
+.ck-chev svg{width:16px;height:16px}
+/* 孫: 案内線(白の半透明)で1段深く */
+.ck-sub{position:relative;display:flex;flex-direction:column;gap:6px;margin:6px 0 0 22px;padding-left:14px}
+.ck-sub::before{content:"";position:absolute;left:4px;top:-6px;bottom:24px;width:1.5px;border-radius:1px;background:color-mix(in srgb,var(--on-cap) 50%,transparent)}
+/* 並びの最後の点線の行「アクティビティを追加」(塗りの上なので白の半透明の枠と白い文字) */
+.ck-add{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;margin-top:2px;padding:0 16px;border:1px dashed color-mix(in srgb,var(--on-cap) 60%,transparent);border-radius:var(--r-md);background:none;color:var(--on-cap);font:600 14px/1 var(--font)}
+.ck-add svg.i{width:16px;height:16px}
+.ck-add:active{background:color-mix(in srgb,var(--on-cap) 12%,transparent)}
+/* 並びの下端の合計(支払いが2件以上で自分の支出がある時だけ) */
+.cap-kids .xk-sum{margin:6px 2px 0;color:var(--on-cap)}
+.cap-kids .xk-sum b{color:inherit}
+
+/* 祖先の枠(子の詳細): 白い面。上端が親の見出し(時刻 · 題名 ›)、中に子の主役を字下げして入れる */
+.pin-anc{padding:10px;border-radius:20px;background:var(--tl-card);box-shadow:var(--tl-sh)}
+.pin-anc.in{background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line)}
+.anc-h{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 2px;color:var(--tx);font:500 14px/1.3 var(--font);text-decoration:none}
+.anc-h>svg.i{flex:none;width:16px;height:16px;color:var(--tx-3)}
+.anc-h .t{font:600 14px/1.3 var(--font)}
+.anc-h:active{background:var(--sunk);border-radius:12px}
+.anc-in{margin-top:6px;padding-left:0}
+/* v4.14 祖先の枠の中は幅が狭いので、内側の枠と主役の余白を詰める(半券の文字を切らない) */
+.pin-anc.in{padding:6px 6px 8px}
+.anc-in .cap{padding-left:16px;padding-right:16px}

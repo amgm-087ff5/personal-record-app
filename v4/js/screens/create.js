@@ -67,13 +67,16 @@ function crPanel(title,body,opt={}){
    候補 = その日の活動(期間。支払い・瞬間は除く)。既定 = 支払いの時刻を含む活動、無ければ「なし(日の直下)」。
    st.act: undefined = 既定(時刻で決める) / '' = なし / 活動のid。日付が変わって合わなければ「なし」 */
 const crActCands=d=>actsOn(d).filter(([k,a])=>a.type!=='支払い'&&isSpan(a)).sort((x,y)=>x[1].time.localeCompare(y[1].time));
-function crActDefault(d,t){const h=crActCands(d).find(([k,a])=>a.time<=t&&t<=a.end);return h?h[0]:''}
+/* v4.14 既定は時刻を含む活動のうち一番内側(開始が一番遅いもの。活動の中の活動に入る) */
+function crActDefault(d,t){const h=crActCands(d).filter(([k,a])=>a.time<=t&&t<=a.end).pop();return h?h[0]:''}
 function crActResolve(st,d,t){if(st.act===undefined)return crActDefault(d,t);return st.act&&A[st.act]&&dateOf(A[st.act])===d?st.act:''}
 /** set: 選んだ時に実行する式(状態へ書き戻す。描き直さない) */
 function crActInner(st,d,t,set){const cur=crActResolve(st,d,t);
+  /* 候補に無い活動(瞬間の親など。act で渡された)も、選ばれた状態で1つ出す */
+  const cands=crActCands(d),extra=cur&&A[cur]&&!cands.some(([k])=>k===cur)?[[cur,A[cur]]]:[];
   return `<label>活動の中</label><select aria-label="どの活動の中か" onchange="${set}">`
     +`<option value="" ${cur===''?'selected':''}>なし(日の直下)</option>`
-    +crActCands(d).map(([k,a])=>`<option value="${k}" ${cur===k?'selected':''}>${esc(timeText(a))} ${esc(a.title||'')}</option>`).join('')+'</select>'}
+    +[...extra,...cands].map(([k,a])=>`<option value="${k}" ${cur===k?'selected':''}>${esc(timeText(a))} ${esc(a.title||'')}</option>`).join('')+'</select>'}
 function crActField(st,d,t,set,id){return `<div class="field" id="${id}">${crActInner(st,d,t,set)}</div>`}
 /** 日付・時刻の入力のたびに、選択肢の中身だけ差し替える(入力欄の框は保つ) */
 function crActSync(id,st,d,t,set){const el=document.getElementById(id);if(el)el.innerHTML=crActInner(st,d,t,set)}
@@ -215,7 +218,9 @@ const CH_SPAN=['食事','会話','作業','移動','買い物','その他'];
 const CH_INST=['起床','就寝','出発','到着','その他'];
 /** 時刻 hm に分を足す(23:59 まで) */
 function crPlusMin(hm,min){const [h,m]=hm.split(':').map(Number);const t=Math.min(h*60+m+min,23*60+59);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0')}
-function openNewHappening(date){const t=crNowHM();CH={d:date||TODAY,span:true,type:'食事',t:'',time:t,end:crPlusMin(t,60),from:'',place:'',who:[],body:''};crHpRender()}
+/** opt: {act:親の活動id, span:期間か(既定 true), time:開始, end:終了}。act を省くと親は時刻で決まる */
+function openNewHappening(date,opt={}){const span=opt.span!==false;const t=opt.time||crNowHM();
+  CH={d:date||TODAY,span,type:span?'食事':'起床',t:'',time:t,end:opt.end||crPlusMin(t,60),from:'',place:'',who:[],body:'',act:opt.act};crHpRender()}
 function crHpMode(v){CH.span=v==='span';CH.type=CH.span?'食事':'起床';crHpRender()}
 function crHpType(v){CH.type=v;crHpRender()}
 function crHpWho(k){CH.who=CH.who.includes(k)?CH.who.filter(x=>x!==k):[...CH.who,k];crHpRender()}
@@ -224,9 +229,11 @@ function crHpRender(){
   const mode=seg([['span','期間'],['inst','瞬間']],CH.span?'span':'inst',"crHpMode('$v')");
   const types=chips((CH.span?CH_SPAN:CH_INST).map(t=>[t,t]),CH.type,"crHpType('$v')");
   const times=CH.span
-    ?`<div class="field"><label>開始</label><input type="time" value="${CH.time}" oninput="CH.time=this.value"></div>
+    ?`<div class="field"><label>開始</label><input type="time" value="${CH.time}" oninput="CH.time=this.value;crActSync('cr-act-hp',CH,CH.d,CH.time,'CH.act=this.value')"></div>
       <div class="field"><label>終了</label><input type="time" value="${CH.end}" oninput="CH.end=this.value"></div>`
-    :`<div class="field"><label>時刻</label><input type="time" value="${CH.time}" oninput="CH.time=this.value"></div>`;
+    :`<div class="field"><label>時刻</label><input type="time" value="${CH.time}" oninput="CH.time=this.value;crActSync('cr-act-hp',CH,CH.d,CH.time,'CH.act=this.value')"></div>`;
+  /* 親の活動の欄(支払いの作成と同じ仕組み)。時刻が変わったら候補の既定も変わる */
+  const actRow=crActField(CH,CH.d,CH.time,'CH.act=this.value','cr-act-hp');
   const placeRows=!CH.span?'':mv
     ?`<div class="field"><label>出発地</label><input value="${esc(CH.from)}" placeholder="出発地を入力" oninput="CH.from=this.value;crSugUpdate('cr-sug-hpf',this.value,'crHpPickFrom')"></div>
       <div class="cr-sug" id="cr-sug-hpf">${crPlaceSug(CH.from,'crHpPickFrom')}</div>
@@ -238,6 +245,7 @@ function crHpRender(){
   <div class="list">
     <div class="field"><label>タイトル</label><input value="${esc(CH.t)}" placeholder="例: 進路の相談" oninput="CH.t=this.value"></div>
     ${times}
+    ${actRow}
     ${placeRows}
   </div>
   ${CH.span?`${mv?'':`${sh('参加者')}<div class="chips" role="group">${crPeople().map(([k,e])=>`<button class="chip" type="button" aria-pressed="${CH.who.includes(k)}" onclick="crHpWho('${k}')">${knot(k,'sm')}${esc(e.n)}</button>`).join('')}</div>`}
@@ -249,9 +257,11 @@ function crHpPick(k){CH.place=E[k].n;crHpRender()}
 function crHpPickFrom(k){CH.from=E[k].n;crHpRender()}
 function crHpSave(){
   const day=crDay(CH.d);const aid=uid('c');
+  /* 親: 選んだ活動(期間・瞬間どちらでもよい)。無ければ日の直下 */
+  const par=crActResolve(CH,CH.d,CH.time)||day;
   if(!CH.span){
     if(!CH.time){toast('時刻を入れてください');return}
-    A[aid]={type:CH.type==='その他'?'出来事(瞬間)':CH.type,parent:day,time:CH.time,title:CH.type==='その他'?'出来事':CH.type,roles:[],kids:[]};
+    A[aid]={type:CH.type==='その他'?'出来事(瞬間)':CH.type,parent:par,time:CH.time,title:CH.type==='その他'?'出来事':CH.type,roles:[],kids:[]};
   }else{
     if(!CH.time||!CH.end){toast('開始と終了を入れてください');return}
     if(CH.end<=CH.time){toast('終了は開始より後にしてください');return}
@@ -262,9 +272,18 @@ function crHpSave(){
       if(t)roles.push(['到着',crFindEnt(t),t]);
     }else{const p=CH.place.trim();if(p)roles.push(['場所',crFindEnt(p),p])}
     const tn=CH.type==='その他'?'出来事':CH.type;
-    A[aid]={type:tn,parent:day,time:CH.time,end:CH.end,title:CH.t.trim()||tn,roles,body:CH.body,kids:[]};
+    A[aid]={type:tn,parent:par,time:CH.time,end:CH.end,title:CH.t.trim()||tn,roles,body:CH.body,kids:[]};
   }
-  A[day].kids.push(aid);CH=null;closeSheet();save();go('#/a/'+aid);toast('出来事を保存しました');
+  A[par].kids.push(aid);CH=null;closeSheet();save();go('#/a/'+aid);toast('出来事を保存しました');
+}
+
+/* ---------- 活動の中に子を作る(活動の詳細の「＋ アクティビティを追加」) ----------
+   作成の一覧 = 操作の並び(区切り線だけ)。親=この活動、日付・時刻は親から引き継ぐ */
+function actAdd(id){const a=A[id];if(!a)return;const d=dateOf(a),end=isSpan(a)?a.end:crPlusMin(a.time,60);
+  openSheet({title:'アクティビティを追加',body:list([
+    row({lead:ico('pay'),t:'支払い',onclick:`closeSheet();actPayAdd('${id}')`}),
+    row({lead:ico('moment'),t:'期間のアクティビティ',onclick:`closeSheet();openNewHappening('${d}',{act:'${id}',span:true,time:'${a.time}',end:'${end}'})`}),
+    row({lead:ico('spark'),t:'瞬間',onclick:`closeSheet();openNewHappening('${d}',{act:'${id}',span:false,time:'${a.time}'})`})])});
 }
 
 /* ---------- 日記 ---------- */

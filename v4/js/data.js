@@ -33,7 +33,7 @@ const NOTES={
    - 瞬間: time だけ。起床・出発・到着・支払い(決済した時)
    親子: 日記(日) › 活動 › 子(支払い)。活動を記録していない支払い(振込・ネット購入)は日の直下に置く */
 const A={
-  d1030:{type:'日記',date:'2026-10-30',dd:'30',dw:'金',body:'花子さんとラーメン。午後はミナトで作業、夜は早めに帰宅。',photos:3,kids:['w1','l1','c1','m1']},
+  d1030:{type:'日記',date:'2026-10-30',dd:'30',dw:'金',body:'花子さんとラーメン。午後はミナトで作業、夜は早めに帰宅。',photos:3,kids:['w1','l1','w2','m1']},
   d1029:{type:'日記',date:'2026-10-29',dd:'29',dw:'木',body:'雨。在宅で仕事。',kids:['h1','s2']},
   d1028:{type:'日記',date:'2026-10-28',dd:'28',dw:'水',body:'朝パンを買って出社。',kids:['p3']},
   d1027:{type:'日記',date:'2026-10-27',dd:'27',dw:'火',body:'',kids:['p4']},
@@ -42,7 +42,9 @@ const A={
   p1:{type:'支払い',parent:'l1',time:'13:05',title:'支払い',pay:'現金',amt:4580,roles:[['支払先','aoba'],['支払者','me']],
       items:[{n:'醤油らーめん',price:1100,lines:[{n:'',k:'amt',v:1000},{n:'大盛り',k:'amt',v:100}],b:'自分',tax:10},{n:'塩らーめん',price:1200,b:'花子',tax:10},{n:'餃子',price:680,b:'半分',tax:10},
              {n:'生ビール',price:800,b:'自分',tax:10,memo:'1杯目'},{n:'生ビール',price:800,b:'花子',tax:10,memo:'花子さんの分'}],x:'x1',adv:['hanako',2340,'未精算']},
-  c1:{type:'会話',parent:'d1030',time:'15:00',end:'17:00',title:'転職の相談',roles:[['参加','hanako'],['場所','minato']],body:'A社を辞めるか迷っているとのこと。年内に決めたいらしい。',kids:['p16']},
+  /* v4.14: 活動の中に活動(サブアクティビティ)。作業 › 会話 › 支払い の3段 */
+  w2:{type:'作業',parent:'d1030',time:'13:40',end:'19:20',title:'カフェ ミナトで作業',roles:[['場所','minato']],kids:['c1']},
+  c1:{type:'会話',parent:'w2',time:'15:00',end:'17:00',title:'転職の相談',roles:[['参加','hanako'],['場所','minato']],body:'A社を辞めるか迷っているとのこと。年内に決めたいらしい。',kids:['p16']},
   p16:{type:'支払い',parent:'c1',time:'15:05',title:'支払い',pay:'現金',amt:1100,roles:[['支払先','minato'],['支払者','me']],
       items:[{n:'カフェラテ',price:550,b:'自分',tax:10},{n:'カフェラテ',price:550,b:'自分',tax:10,memo:'花子さんの分(おごり)'}],x:'x16'},
   m1:{type:'移動',parent:'d1030',time:'19:30',end:'20:05',title:'帰宅',roles:[['出発','minato'],['到着','home']]},
@@ -184,6 +186,12 @@ const isSpan=a=>!!(a&&a.end);
 const timeText=a=>a?(a.end?`${a.time}–${a.end}`:(a.time||'')):'';
 const parentAct=a=>{const p=a&&A[a.parent];return p&&p.type!=='日記'?p:null};
 /** 子孫(活動の中の支払いまで) */
+/** 子のアクティビティ(支払いを含む全種類)。v4.14: 活動の子は支払いに限らない */
+const kidActs=id=>(A[id]&&A[id].kids||[]).filter(c=>A[c]);
+/** 祖先の活動(日記を除く)。外側(一番上の親)が先 */
+const ancOf=a=>{const r=[];let p=a&&A[a.parent];while(p&&p.type!=='日記'){r.unshift(p);p=A[p.parent]}return r};
+/** 祖先の活動のid。外側が先 */
+const ancIds=id=>{const r=[];let k=A[id]&&A[id].parent;while(k&&A[k]&&A[k].type!=='日記'){r.unshift(k);k=A[k].parent}return r};
 const descOf=id=>{const out=[];const walk=k=>(A[k]&&A[k].kids||[]).forEach(c=>{if(A[c]){out.push(c);walk(c)}});walk(id);return out};
 const md=d=>{const[y,m,dd]=d.split('-');return `${+m}/${+dd}`};
 const catAnc=k=>{const r=[];while(k){r.unshift(k);k=CATS[k].p}return r};

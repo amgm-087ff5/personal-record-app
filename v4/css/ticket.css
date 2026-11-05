@@ -62,7 +62,9 @@ a.tkt-w:active .tkt,button.tkt-w:active .tkt{filter:brightness(.97)}
 .ps-tot{flex:none;font:500 13px/1.2 var(--font);color:var(--tx-2);white-space:nowrap;font-variant-numeric:tabular-nums}
 .ps-tot b{font:600 13px/1.2 var(--font);color:var(--tx-2)}
 .ps-h>svg.i{flex:none;width:16px;height:16px;color:var(--tx-3)}
-.ps-cat{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ps-cat{flex:0 1 auto;min-width:0;word-break:keep-all}
+/* v4.14 カテゴリは切らずに折り返す(狭い入れ子の中で「カフ…」にしない) */
+.tkt-b .s:has(.ps-cat){flex-wrap:wrap;row-gap:2px;white-space:normal}
 .tkt-b .s .pbar{flex:none}
 
 /* 半券の小型版(行・活動の中)。ticket.css の基本の形を縮めたもの */
@@ -89,10 +91,17 @@ a.tkt-w:active .tkt,button.tkt-w:active .tkt{filter:brightness(.97)}
 .ps-kid .ps-h::before{inset:-8px -6px}
 .ps-kid .ps-l{font:600 13px/1.35 var(--font)}
 .ps-kid .ps-l small{font-size:12px}
+/* v4.14 時刻は支払先と分けて縮めない(切れて「1…」にしない) */
+.ps-tm{flex:none;margin-left:-2px;font:400 12px/1 var(--font);color:var(--tx-3)}
 .ps-kid .ps-tk{display:block;margin-top:6px;cursor:pointer}
 
 /* 支払い詳細: 主役(暗い塗り)の下端に普通の大きさの半券(白い面) */
 .cap .ps-pay{margin-top:16px}
+/* 塗りの上の半券(v4.14): 明るい殻(面の色・縁6px)で包み、濃い青の半券と青灰の地を直接触れさせない。
+   切れ込み(ノッチ)は .tkt の mask で抜けるので、透けて見えるのが殻の面の色になる */
+.cap .ps-pay{padding:6px;border-radius:20px;background:var(--surface);box-shadow:var(--e1)}
+.cap .ps-kid{padding:6px;border-radius:18px;background:var(--surface);box-shadow:var(--e1)}
+.cap .ps-kid .ps-h{padding:0 2px}
 
 /* 支出詳細の最上部: 白い1枚(角丸20)。見出しは小さく(13px)、大きい半券が主役。見出し全体が押せる */
 .ps-x{padding:12px 12px 14px;border-radius:20px;background:var(--tl-card);box-shadow:var(--tl-sh)}

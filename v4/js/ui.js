@@ -112,14 +112,27 @@ function momentRow(k,o={}){
   const ppl=(a.roles||[]).filter(r=>r[1]&&E[r[1]]&&r[1]!=='me'&&r[1]!==o.exclude&&!['支払先','場所','到着','出発'].includes(r[0])).map(r=>r[1]);
   const x=a.x&&X[a.x];
   const dd=dateOf(a);
-  /* 活動の中の支払い(子)。v4.6: 自分の支出がある子は小さい半券チケット(押すと自分の支出の詳細)。
-     自分の支出が無い子(全部ほかの人の分など)は、支払いの1行のまま(押すと支払いの詳細) */
-  const kids=(a.kids||[]).filter(c=>A[c]&&A[c].type==='支払い'&&!o.flat).map(c=>{const p=A[c],x=p.x&&X[p.x];
-    if(x)return payShell(c,{mode:'kid'}); /* v4.12 活動の中の支払いの殻(旧 .kid-x) */
-    return `<span class="kid" role="link" tabindex="0" onclick="event.preventDefault();event.stopPropagation();go('#/a/${c}')"><span class="kid-i">${IC.pay}</span><span class="kid-t">${esc(payLabel(p))}<small>${esc(p.time)}</small></span><span class="kid-a"><b>${yen(p.amt)}</b></span></span>`}).join('');
+  /* v4.14 活動の子は全種類(支払い・会話・移動・瞬間…)を時刻順に入れ子で出す。o.flat の時は出さない */
+  const kids=o.flat?'':kidList(k);
   return axRow({href:`#/a/${k}`,time:o.showDate&&dd?{d:+dd.slice(8),t:a.time}:a.time,end:a.end,kids:kids?`<span class="kids">${kids}</span>`:'',node:{cls:ncls,icon},cls:(o.cls||'')+(a.type==='支払い'?' pay':'')+(a.end?' span':''),future:o.future,
     t:isPay?esc(payLabel(a)):esc(a.title),m:`${o.role?`<span class="role">${esc(o.role)}</span>`:''}${pl&&pl[1]!==o.exclude?`<span class="ell">${esc(placeName(pl))}</span>`:''}${knots(ppl)}`,
     amt:a.amt!=null?`<b>${yen(a.amt)}</b>${x&&x.amt!==a.amt?payBar(a,x):''}`:''});
+}
+/** v4.14 活動の子(全種類)を時刻順に並べた入れ子。子の子は案内線の下に字下げで続く */
+function kidList(id){
+  return kidActs(id).slice().sort((x,y)=>(A[x].time||'').localeCompare(A[y].time||'')).map(c=>kidItem(c)).join('');
+}
+function kidItem(c){
+  const p=A[c];
+  /* 支払い: 自分の支出がある子は支払いの殻(payShell kid)。無い子は1行のまま(押すと支払いの詳細) */
+  if(p.type==='支払い'){const x=p.x&&X[p.x];
+    if(x)return payShell(c,{mode:'kid'});
+    return `<span class="kid" role="link" tabindex="0" onclick="event.preventDefault();event.stopPropagation();go('#/a/${c}')"><span class="kid-i">${IC.pay}</span><span class="kid-t">${esc(payLabel(p))}<small>${esc(p.time)}</small></span><span class="kid-a"><b>${yen(p.amt)}</b></span></span>`;
+  }
+  /* 支払い以外: 淡い面の小さい行(種類の印・題名・時刻)。押すとその活動 */
+  const [,icon]=AX_NODE[p.type]||['','activity'];
+  const sub=kidActs(c).length?`<span class="ka-sub">${kidList(c)}</span>`:'';
+  return `<span class="ka-w"><span class="ka" role="link" tabindex="0" onclick="event.preventDefault();event.stopPropagation();go('#/a/${c}')"><span class="ka-i">${IC[icon]||''}</span><span class="ka-t">${esc(p.title||p.type||'')}<small>${esc(timeText(p))}</small></span></span>${sub}</span>`;
 }
 /** 1つの支払いの棒: 自分(青) / ほかの人(灰) / 立替・未精算(琥珀の斜線) */
 function payBar(a,x){const rest=a.amt-x.amt;const owed=a.adv&&a.adv[2]==='未精算';
@@ -143,7 +156,7 @@ function payShell(pid,{mode='row',xid}={}){
   }
   if(mode==='kid'){
     const go_=`event.preventDefault();event.stopPropagation();go('#/a/${pid}')`,go_x=`event.preventDefault();event.stopPropagation();go('#/x/${xk}')`;
-    return `<div class="ps ps-kid"><span class="ps-h" role="link" tabindex="0" onclick="${go_}"><span class="ps-ic">${IC.pay}</span><span class="ps-l">${esc(payLabel(p))}${p.time?` <small>${esc(p.time)}</small>`:''}</span>${tot}</span>`
+    return `<div class="ps ps-kid"><span class="ps-h" role="link" tabindex="0" onclick="${go_}"><span class="ps-ic">${IC.pay}</span><span class="ps-l" aria-label="${esc(payLabel(p))}">${esc(payeeOf(p)||'支払い')}</span>${p.time?`<small class="ps-tm num">${esc(p.time)}</small>`:''}${tot}</span>`
       +(x?`<span class="ps-tk" role="link" tabindex="0" onclick="${go_x}">${psTk(p,x,{cls:'sm'})}</span>`:'')+`</div>`;
   }
   /* row(既定) */
@@ -191,12 +204,15 @@ function splitBar(segs,total){
 /** 独立したオブジェクトの並び(1件=1つの面) */
 const objs=rows=>`<div class="objs">${rows.join('')}</div>`;
 /** 詳細の最上部: 細い軸に掛かったカプセル。
-    later/earlier の要素: {day} 日の区切り | {now} いまの線 | {time,title,href,icon,plan,late,fut} 前後の点。fut=いまより未来 */
-function pinView({later=[],earlier=[],cap,future,plan,late}){
+    later/earlier の要素: {day} 日の区切り | {now} いまの線 | {time,title,href,icon,plan,late,fut} 前後の点。fut=いまより未来
+    anc(v4.14): 祖先の活動の並び(外側が先)。{href,time,title,icon}。主役を白い枠で包み、枠の上端に親の見出し。軸の節は一番外の見出しに1つ */
+function pinView({later=[],earlier=[],cap,future,plan,late,anc=[]}){
   const n=x=>x.now?`<div class="pin-now fut-b" aria-label="いま ${NOW}"><span>いま ${NOW}</span></div>`
     :x.day?dayHead(x.day,{href:'#/day/'+x.day,future:x.fut})
     :`<a class="pin-n ${x.plan?'plan':''} ${x.late?'late':''} ${x.fut?'fut':''}" href="${x.href}"><span class="pn">${x.icon&&!x.plan?IC[x.icon]:''}</span><span class="tm">${esc(x.time||'')}</span><span class="t">${esc(x.title)}</span></a>`;
-  return `<div class="pin">${later.map(n).join('')}<div class="pin-cur ${future?'fut':''} ${plan?'plan':''} ${late?'late':''}"><span class="node"></span>${cap}</div>${earlier.map(n).join('')}</div>`;
+  /* 祖先の枠: 内側から外へ包む(reduceRight)。外側の枠だけ見出しの軸の節に対応する(.pin-cur.anc>.node) */
+  const body=anc.length?anc.reduceRight((inner,p,i)=>`<div class="pin-anc${i?' in':''}"><a class="anc-h" href="${p.href}"><span class="anc-i">${IC[p.icon]||''}</span><span class="tm">${esc(p.time||'')}</span><span class="t">${esc(p.title)}</span>${IC.chev}</a><div class="anc-in">${inner}</div></div>`,cap):cap;
+  return `<div class="pin">${later.map(n).join('')}<div class="pin-cur ${anc.length?'anc ':''}${future?'fut':''} ${plan?'plan':''} ${late?'late':''}"><span class="node"></span>${body}</div>${earlier.map(n).join('')}</div>`;
 }
 /* ---- 汎用 ---- */
 const tag=(label,o={})=>{const inner=`${o.color?`<span class="dot" style="--cc:${o.color}"></span>`:''}${esc(label)}`;return o.href?`<a class="tag ${o.cls||''}" href="${o.href}">${inner}</a>`:`<span class="tag ${o.cls||''}">${inner}</span>`};
@@ -625,7 +641,7 @@ function openCreate(){
 }
 
 /* ---------- 保存(このブラウザ) ---------- */
-const SKEY='prmock-v4.13'; /* v4.13で予定とToDoを1つのデータ(PLN)にしたので、古い保存データは読まない */
+const SKEY='prmock-v4.14'; /* v4.14で活動の中に活動(w2 › c1)を入れたので、古い保存データは読まない */
 /* 予定・ToDoは PLN だけを保存する(EV・TD は PLN の見え方なので保存しない) */
 function save(){try{plSettle();localStorage.setItem(SKEY,JSON.stringify({A,X,E,PLN,TYPES,CATS,NOTES,MEMOS,LISTS,TYPE_PROPS,EXTRA:typeof EXTRA!=='undefined'?EXTRA:{}}))}catch(e){}}
 function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(!s)return;
