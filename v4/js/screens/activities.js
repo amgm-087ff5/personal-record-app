@@ -330,13 +330,25 @@ const durText=a=>{if(!isSpan(a))return '';const t=s=>{const[h,m]=s.split(':').ma
 /** もとの予定(この記録になった予定)。予定→記録の導線 */
 function origPlan(id){const ev=Object.entries(EV).find(([k,e])=>e.rec===id);if(!ev)return '';
   return sh('元の予定')+objs([row({href:`#/ev/${ev[0]}`,lead:`<span class="ax-node plan" style="margin:0"></span>`,t:esc(ev[1].t),s:`${fmtMDW(ev[1].d)} ${ev[1].s||''}`,chev:1})])}
-/** 活動の中の支払い(子)の1行: 時刻・支払先・金額・割合の棒。押すとその支払い */
-function actPayRow(c){const p=A[c],px=p.x&&X[p.x];
-  return row({href:`#/a/${c}`,time:p.time,t:esc(payLabel(p)),v:`<span class="pv"><b class="num">${yen(p.amt)}</b>${px?payBar(p,px):''}</span>`,chev:1})}
-/** 活動の中の支払い1件の表示(v4.6)。自分の支出がある子=白い半券チケット(押すと自分の支出)+「支払いの詳細」の小さい行。無い子=支払いの1行 */
-function actKidHtml(c){const p=A[c],x=p.x&&X[p.x];
-  if(!x)return list([actPayRow(c)],'flat');
-  return `<div class="ps-detail">${payShell(c,{mode:'kid'})}</div>`; /* v4.12 詳細の節では左右の余白(--gutter)に合わせる。 支払いの殻(kid)。旧: 半券+「支払いの詳細 ›」の行 */}
+/* ---------- v4.14: 活動の子を主役の中に入れ子で並べる(見出しなし) ---------- */
+/** 子を時刻順に(時刻なしは後ろ) */
+const kidSorted=id=>kidActs(id).slice().sort((x,y)=>(A[x].time||'99:99').localeCompare(A[y].time||'99:99'));
+/** 支払い以外の子の行: 種類の印・時刻・題名・子の件数・›(瞬間は時刻と題名だけ) */
+function ckRow(c){const k=A[c],[ncls,icon]=AX_NODE[k.type]||['','activity'];const inst=INSTANT_TYPES.includes(k.type),n=kidActs(c).length;
+  return `<a class="ck${inst?' inst':''}" href="#/a/${c}"><span class="ck-n ${ncls}">${IC[icon]||''}</span><span class="ck-tm num">${esc(timeText(k))}</span><span class="ck-t">${esc(k.title)}</span>${n?`<span class="ck-c">${n}件</span>`:''}${inst?'':`<span class="ck-chev">${IC.chev}</span>`}</a>`}
+/** 子1つと、その子(孫)を案内線つきで字下げして並べる。最大3段 */
+function ckKid(c,depth=1){const k=A[c];if(!k)return '';
+  const body=k.type==='支払い'?payShell(c,{mode:'kid'}):ckRow(c);
+  const sub=depth<3?kidSorted(c).map(g=>ckKid(g,depth+1)).join(''):'';
+  return body+(sub?`<div class="ck-sub">${sub}</div>`:'')}
+/** 主役の中の子の並び(見出しなし)。最後に点線の「アクティビティを追加」。支払いが2件以上で自分の支出があれば合計を下端に */
+function capKids(id){const ks=kidSorted(id),payK=ks.filter(c=>A[c].type==='支払い');
+  const mine=payK.reduce((s,c)=>s+(A[c].x&&X[A[c].x]?X[A[c].x].amt:0),0);
+  return `<div class="cap-kids">${ks.map(c=>ckKid(c)).join('')}`
+    +`<button class="ck-add" type="button" onclick="typeof actAdd==='function'?actAdd('${id}'):actPayAdd('${id}')">${IC.plus}アクティビティを追加</button>`
+    +(payK.length>1&&mine?`<div class="xk-sum"><span>自分の支出 合計</span><b class="num">${yen(mine)}</b></div>`:'')+`</div>`}
+/** 祖先の活動を、軸の見出し用の {href,time,title,icon} の並びにする(外側が先)。子の詳細で親が子を包む */
+const ancPins=id=>ancIds(id).map(k=>({href:'#/a/'+k,time:timeText(A[k]),title:A[k].title,icon:(AX_NODE[A[k].type]||['','activity'])[1]}));
 /** 活動の中に支払いを追加: 金額だけで支払いを、日付・時刻・親=この活動にして開く */
 function actPayAdd(id){const a=A[id];openQuickExpense();Object.assign(CQ,{date:dateOf(a),time:a.time,act:id});crQeRender()}
 
@@ -349,20 +361,12 @@ function actView(id,a,d){
   const stop=(r,t)=>`<span class="rs"><small>${esc(r[0])}</small>${r[1]&&E[r[1]]?`<a href="#/e/${r[1]}">${esc(E[r[1]].n)}</a>`:esc(placeName(r))} <b>${esc(t)}</b></span>`;
   const rt=mv?`<div class="route">${dep?stop(dep,a.time):''}<i aria-hidden="true">→</i>${arr?stop(arr,a.end):''}</div>`:'';
   const tm=mv?esc(dur):`${esc(timeText(a))}${dur?` <small>${esc(dur)}</small>`:''}`;
-  const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC[icon]}${esc(a.type)}</span><span class="tm">${tm}</span></div><h1>${esc(a.title)}</h1>${rt}</section>`;
-  /* この中の支払い: 子の支払いを白い1行ずつ。2件以上なら合計。子が無い時は見出しも空の面も出さず、点線の1行「支払いを追加」だけ */
-  const kids=(a.kids||[]).filter(c=>A[c]&&A[c].type==='支払い');
-  /* 自分の支出の合計(子のうち自分の支出があるもの)。2件以上の時だけ下に出す */
-  const mine=kids.reduce((s,c)=>s+(A[c].x&&X[A[c].x]?X[A[c].x].amt:0),0);
-  const pays=kids.length
-    ?`<div class="dsec">`+sh('自分の支出',kids.length,{label:'支払いを追加',icon:'plus',onclick:`actPayAdd('${id}')`})
-      +kids.map(actKidHtml).join('')+(kids.length>1&&mine?`<div class="xk-sum"><span>自分の支出 合計</span><b class="num">${yen(mine)}</b></div>`:'')+`</div>`
-    :`<button class="pay-add" type="button" onclick="actPayAdd('${id}')">${IC.plus}支払いを追加</button>`;
+  /* v4.14: 子(どの種類のアクティビティでも)は主役の中に入れ子で並ぶ(見出しなし)。子の一覧と追加ボタンは capKids */
+  const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC[icon]}${esc(a.type)}</span><span class="tm">${tm}</span></div><h1>${esc(a.title)}</h1>${rt}${capKids(id)}</section>`;
   /* 交わった人・場所(リンク付き)。移動の出発・到着は主役の行に出しているので重ねない */
   const rr=(a.roles||[]).filter(r=>!mv||!['出発','到着'].includes(r[0]));
   return appbar('',{actions:[menuAct(id)]})
-    +pinView({later:[{day:d}],earlier:[],cap})
-    +pays
+    +pinView({later:[{day:d}],earlier:[],cap,anc:ancPins(id)})
     +(rr.length?sh('関わったエンティティ',rr.length)+list(rr.map(r=>prop(r[0],eref(r[1],r[2])))):'')
     +(a.body?sh('内容')+`<div class="list"><p class="ac-body">${esc(a.body)}</p></div>`:'')
     +origPlan(id);
@@ -373,14 +377,15 @@ function payView(id,a,d){
   const pa=parentAct(a);
   /* 主役(v4.6): 種類の札「支払い」+時刻 / 題名=支払先 / 合計は普通の大きさの1行(割合の棒の上に1回だけ) / 補足=支払い方法 */
   const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC.pay}支払い</span><span class="tm">${esc(a.time||'')}</span></div><h1>${esc(payeeOf(a)||a.title)}</h1>${a.amt!=null?`<div class="pay-sum"><span>合計</span><b class="num">${yen(a.amt)}</b></div>`:''}${a.pay?`<div class="meta"><span>${IC.pay}${esc(a.pay)}</span></div>`:''}${paySplit(a)}${payShell(id,{mode:'pay'})}</section>`; /* v4.12: 半券は主役の中の下端(旧 .hang の └ は廃止) */
-  const later=[{day:d},...(pa?[{href:`#/a/${a.parent}`,time:timeText(pa),title:pa.title}]:[])];
+  /* v4.14: 親の活動は軸の並びに出さず、主役を包む枠(anc)として出す(親が子を包む) */
+  const later=[{day:d}];
   /* 交わった人・場所 = 支払いの役割(支払先・支払者) + 親の活動の同席者(whoOf と同じ考え方) */
   const roles=[...(a.roles||[])];
   if(pa)(pa.roles||[]).forEach(r=>{if(r[1]&&r[1]!=='me'&&!['場所','出発','到着','支払先','支払者'].includes(r[0])&&!roles.some(q=>q[1]===r[1]))roles.push(r)});
   const shop=roles.find(r=>r[0]==='支払先');
   const att=(EXTRA.attach||{})[id];
   return appbar('',{actions:[menuAct(id)]})
-    +pinView({later,earlier:[],cap})
+    +pinView({later,earlier:[],cap,anc:ancPins(id)})
     +(a.adv&&a.adv[2]==='未精算'?`<div class="suggest owe"><span class="pbar lg" aria-hidden="true"><i class="owed" style="flex:1"></i></span><span class="t"><span class="nm">${esc(E[a.adv[0]].n.split(' ').pop())}さんの分 <b class="num">${yen(a.adv[1])}</b></span><span class="st">未精算</span></span><button class="btn sm" type="button" onclick="settle('${id}')">精算済みにする</button></div>`:'')
     +shopTodoSug(id,a)
     +(roles.length?sh('関わったエンティティ',roles.length,shop&&!shop[1]?{label:'支払先を店として登録',onclick:`registerShop('${id}')`}:null)+list(roles.map(r=>prop(r[0],eref(r[1],r[2])))):'')
@@ -393,7 +398,7 @@ function payView(id,a,d){
 /** 瞬間の詳細(起床など): 小さな主役(時刻+名前)だけ。上に日の札。時刻の編集・削除は「その他の操作」 */
 function insView(id,a,d){
   const cap=`<div class="ins-c"><span class="ins-tm num">${esc(a.time||'')}</span><span class="ins-t">${esc(a.title)}</span></div>`;
-  return appbar('',{actions:[menuAct(id)]})+pinView({later:[{day:d}],earlier:[],cap})+origPlan(id);
+  return appbar('',{actions:[menuAct(id)]})+pinView({later:[{day:d}],earlier:[],cap,anc:ancPins(id)})+origPlan(id);
 }
 /** 時刻の編集(瞬間の記録) */
 function insTimeEd(id){const a=A[id];
