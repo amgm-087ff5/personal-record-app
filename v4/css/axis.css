@@ -258,3 +258,12 @@ a.ax-row:active .ax-c{background:var(--sunk);transform:scale(.99)}
 .ax-c .kid-x .tkt-b .s .pbar{width:56px;height:5px;margin:0}
 .ax-c .kid-x .tkt-b .amt{font:700 15px/1.2 var(--font)}
 .ax-c .kid-x .tkt-b .chev{display:none}
+/* v4.14 活動の子(支払い以外)の入れ子の行。淡い面・44px以上・字12px以上。子の子は案内線の下に字下げ */
+.ax-c .kids .ka-w{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.ax-c .ka{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px 10px;border-radius:14px;background:color-mix(in srgb,var(--me) 5%,var(--surface));cursor:pointer}
+.ax-c .ka:active{background:var(--sunk)}
+.ax-c .ka-i{width:24px;height:24px;flex:none;display:grid;place-items:center;border-radius:50%;background:var(--sunk);color:var(--tx-2)}
+.ax-c .ka-i svg.i{width:12px;height:12px}
+.ax-c .ka-t{flex:1;min-width:0;font:600 13px/1.35 var(--font);color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ax-c .ka-t small{margin-left:6px;font:400 12px/1 var(--font);color:var(--tx-3)}
+.ax-c .ka-sub{display:flex;flex-direction:column;gap:6px;margin:6px 0 0 14px;padding-left:10px;border-left:1.5px solid var(--line)}
