@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -144,7 +145,7 @@ fun BottomNav(modifier: Modifier = Modifier) {
 @Composable
 private fun NavCell(slot: Int, anim: Float, badge: (String) -> Int, modifier: Modifier) {
     val app = LocalApp.current
-    BoxWithConstraints(modifier.fillMaxHeight().clip(RoundedCornerShape(0.dp))) {
+    BoxWithConstraints(modifier.fillMaxHeight().clip(VerticalClip)) {
         val h = maxHeight
         Column(Modifier.fillMaxWidth().height(h * 2).offset(y = -h * anim)) {
             for (p in 0..1) {
@@ -166,18 +167,24 @@ private fun NavTab(key: String, label: String, current: Boolean, badge: Int, ena
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Box(Modifier.size(56.dp, 30.dp).clip(RoundedCornerShape(50)).background(if (current) c.brandSoft else Color.Transparent), contentAlignment = Alignment.Center) {
-            Icon(V4NavIcons.byKey(key), null, tint = if (current) c.brand else c.tx3, modifier = Modifier.size(24.dp))
+        Box(Modifier.size(56.dp, 30.dp)) {
+            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(50)).background(if (current) c.brandSoft else Color.Transparent), contentAlignment = Alignment.Center) {
+                Icon(V4NavIcons.byKey(key), null, tint = if (current) c.brand else c.tx3, modifier = Modifier.size(24.dp))
+            }
+            // 期限切れの件数(赤い丸)。ピルの外にはみ出してよい
             if (badge > 0) Box(
-                Modifier.align(Alignment.TopStart).offset(x = 36.dp, y = (-4).dp).heightIn(min = 16.dp).widthIn(min = 16.dp)
+                Modifier.offset(x = 36.dp, y = (-2).dp).heightIn(min = 16.dp).widthIn(min = 16.dp)
                     .clip(RoundedCornerShape(8.dp)).background(c.lateFill).padding(horizontal = 4.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text("$badge", style = plex(12, 600), color = Color.White) }
+            ) { Text("$badge", style = plex(12, 600, 1.0), color = Color.White) }
         }
         Spacer(Modifier.height(4.dp))
-        Text(label, style = plex(12, 500), color = if (current) c.brand else c.tx3, maxLines = 1, overflow = TextOverflow.Clip)
+        Text(label, style = plex(12, 500, 1.0), color = if (current) c.brand else c.tx3, maxLines = 1, softWrap = false, modifier = Modifier.wrapContentWidth(unbounded = true))
     }
 }
+
+/** 縦だけを切る(窓の上下で帯を隠す。横はラベルがはみ出してよい) */
+private val VerticalClip = androidx.compose.foundation.shape.GenericShape { size, _ -> addRect(androidx.compose.ui.geometry.Rect(-40f, 0f, size.width + 40f, size.height)) }
 
 /** 下から出るシート(.sheet)。つまみ・見出し(左=✕か文字の操作/題名/右は空き)・本文・下の主ボタン */
 @Composable

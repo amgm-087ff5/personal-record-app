@@ -790,6 +790,8 @@ fun SummaryCard(metrics: List<Metric>, actions: List<CardAction>) {
                 ) { a.icon?.let { Icon(it, null, tint = Color.White, modifier = Modifier.size(18.dp)) }; Text(a.text, style = plex(14, 600), color = Color.White, maxLines = 1, softWrap = false) }
                 else TonalButton(a.text, a.icon, modifier = Modifier.weight(1f), onClick = a.onClick)
             }
+            // 2列の格子(.sc-acts): 1つだけなら左半分
+            if (actions.size == 1) Spacer(Modifier.weight(1f))
         }
     }
 }

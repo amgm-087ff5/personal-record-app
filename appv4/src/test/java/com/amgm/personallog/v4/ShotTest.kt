@@ -55,10 +55,14 @@ class ShotTest {
                     else -> app.goHash(s)
                 }
             }
-            repeat(12) { rule.mainClock.advanceTimeBy(100) }
+            repeat(12) { rule.mainClock.advanceTimeBy(100); org.robolectric.shadows.ShadowLooper.idleMainLooper() }
             val v = rule.activity.window.decorView
             val bmp = Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888)
-            rule.runOnUiThread { v.draw(Canvas(bmp)) }
+            rule.runOnUiThread {
+                v.measure(android.view.View.MeasureSpec.makeMeasureSpec(v.width, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(v.height, android.view.View.MeasureSpec.EXACTLY))
+                v.layout(0, 0, v.width, v.height)
+                v.draw(Canvas(bmp))
+            }
             val f = File(out, s.replace("/", "_").replace("@", "sheet-").replace("?", "_").replace("=", "-") + "_" + theme + ".png")
             f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
             println("SHOT " + f.absolutePath)
