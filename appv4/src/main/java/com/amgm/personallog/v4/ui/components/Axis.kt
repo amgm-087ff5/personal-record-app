@@ -451,7 +451,8 @@ fun PsTicket(pid: String, size: TicketSize = TicketSize.SM, chev: Boolean = fals
     Ticket(
         t = "自分の支出", stub = { SpStub(d.xSp(x), size) }, amt = yen(x.amt), size = size, chev = chev,
         s = {
-            Text(d.catPath(x.cat), modifier = Modifier.weight(1f, fill = false))
+            Text(d.catPath(x.cat))
+            // 割り勘の棒はカテゴリの後ろ。入らなければ次の行へ(.s の flex-wrap)
             if (x.amt != (p.amt ?: x.amt)) PayBar(p, x, width = if (size == TicketSize.SM) 56.dp else 64.dp, height = if (size == TicketSize.SM) 5.dp else 6.dp)
         },
         onClick = { app.go("x", xid) },

@@ -621,6 +621,7 @@ fun SpStub(sp: String?, size: TicketSize = TicketSize.NORMAL) {
  * 半券チケット(.tkt-w): 左に半券(--me-fill の塗り・幅56)、上下に切れ込み、点線の切り取り線、本体に題名・補足・金額。
  * fill=true で全体が青の塗り(詳細の最上部)。size: SM(行・活動の中)/ LG(詳細の最上部)。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun Ticket(
     t: String,
@@ -679,7 +680,7 @@ fun Ticket(
                         androidx.compose.runtime.CompositionLocalProvider(
                             androidx.compose.material3.LocalContentColor provides sc,
                             androidx.compose.material3.LocalTextStyle provides plex(when (size) { TicketSize.SM -> 12; TicketSize.LG -> 14; else -> 13 }, 400, 1.35).copy(color = sc),
-                        ) { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) { s() } }
+                        ) { FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) { s() } }
                     }
                 }
                 if (amt != null) Text(amt, style = plex(if (size == TicketSize.SM) 15 else 17, 700).copy(fontFeatureSettings = "tnum"), color = onC, textAlign = TextAlign.End)
