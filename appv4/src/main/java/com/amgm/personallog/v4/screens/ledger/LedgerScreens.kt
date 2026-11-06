@@ -259,8 +259,8 @@ fun LedgerScreen(r: Route) {
                 Divider(0.dp)
                 // 下段の操作(.sc-foot)
                 Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LActButton("レシートで支払い", V4Icons.camera, primary = true, modifier = Modifier.weight(1f)) { app.toast("レシート(未実装)") }
-                    LActButton("金額だけ", V4Icons.plus, primary = false, modifier = Modifier.weight(1f)) { app.toast("金額だけ(未実装)") }
+                    LActButton("レシートで支払い", V4Icons.camera, primary = true, modifier = Modifier.weight(1f)) { com.amgm.personallog.v4.screens.create.openReceiptSheet(app) }
+                    LActButton("金額だけ", V4Icons.plus, primary = false, modifier = Modifier.weight(1f)) { com.amgm.personallog.v4.screens.create.openPaymentSheet(app) }
                 }
             }
         }
@@ -501,7 +501,7 @@ fun ExpenseDetailScreen(r: Route) {
 
         // 品目(担当外の品目の行は、ここでは素の行で出す)
         val groups = x.items.groupBy { it.n to it.price }.map { (k, v) -> LItemGroup(k.first, k.second, v.first().b, v.size) }
-        SectionHead("品目", "${groups.size}", actLabel = "編集", actIcon = V4Icons.edit, onAct = { app.toast("品目の編集(未実装)") })
+        SectionHead("品目", "${groups.size}", actLabel = "編集", actIcon = V4Icons.edit, onAct = { app.go("a", x.pay) }  /* 品目は支払いが持つ → 支払いの詳細(品目の編集はそこ) */)
         ListCard {
             groups.forEachIndexed { i, g ->
                 LRow(

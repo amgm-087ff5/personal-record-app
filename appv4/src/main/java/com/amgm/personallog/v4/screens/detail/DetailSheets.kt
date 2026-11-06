@@ -410,7 +410,7 @@ internal fun ItemDraft.toItem(base: PayItem?): PayItem {
     return PayItem(n = name.trim(), price = price, lines = ls, b = base?.b ?: "自分", tax = tax, memo = memo.trim().ifEmpty { null })
 }
 
-internal fun openItemSheet(app: AppState, id: String, ix: Int?) {
+fun openItemSheet(app: AppState, id: String, ix: Int?) {
     val a = app.data.acts[id] ?: return
     val base = ix?.let { a.items.getOrNull(it) }
     val draft = ItemDraft(base)
