@@ -12,6 +12,15 @@ import com.amgm.personallog.v4.data.Seed
 import com.amgm.personallog.v4.data.Store
 import com.amgm.personallog.v4.data.settled
 import com.amgm.personallog.v4.screens.create.openCreate
+import com.amgm.personallog.v4.screens.create.openPaymentSheet
+import com.amgm.personallog.v4.screens.create.openActivitySheet
+import com.amgm.personallog.v4.screens.create.openAddKidSheet
+import com.amgm.personallog.v4.screens.create.openPlanSheet
+import com.amgm.personallog.v4.screens.create.openMemoSheet
+import com.amgm.personallog.v4.screens.create.openEntitySheet
+import com.amgm.personallog.v4.screens.create.openDiarySheet
+import com.amgm.personallog.v4.screens.create.openReceiptSheet
+import com.amgm.personallog.v4.screens.create.setResetConfirm
 import com.amgm.personallog.v4.ui.AppRoot
 import com.amgm.personallog.v4.ui.AppState
 import org.junit.Assume.assumeTrue
@@ -75,6 +84,16 @@ object ShotHooks {
     /** 「@名前:引数」→ (app, 引数) */
     val hooks = linkedMapOf<String, (AppState, String?) -> Unit>(
         "create" to { app, _ -> openCreate(app) },
+        "pay" to { app, _ -> openPaymentSheet(app) },
+        "act" to { app, _ -> openActivitySheet(app) },
+        "plan" to { app, _ -> openPlanSheet(app) },
+        "todo" to { app, _ -> openPlanSheet(app, todo = true) },
+        "memo" to { app, _ -> openMemoSheet(app) },
+        "ent" to { app, _ -> openEntitySheet(app) },
+        "diary" to { app, _ -> openDiarySheet(app, app.today) },
+        "kid" to { app, _ -> openAddKidSheet(app, "l1") },
+        "receipt" to { app, _ -> openReceiptSheet(app) },
+        "reset" to { app, _ -> setResetConfirm(app) },
     )
     fun run(app: AppState, name: String) {
         val (n, arg) = name.split(":", limit = 2).let { it[0] to it.getOrNull(1) }

@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,21 +88,22 @@ fun BottomNav(modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .height(V4Dim.navH),
     ) {
-        // 切替のつまみ(カードの上に浮く 52×30。押せる範囲 48×48)
-        Box(
-            Modifier.align(Alignment.TopEnd).offset(x = (-14).dp, y = (-39).dp)
-                .size(52.dp, 30.dp)
-                .shadow(10.dp, RoundedCornerShape(50), ambientColor = Color(0x47284896), spotColor = Color(0x47284896))
-                .clip(RoundedCornerShape(50)).background(c.surface)
-                .semantics { contentDescription = "ナビを切り替え(${pg + 1}/2)" + if (otherDot) "(もう一方の枚目にお知らせ)" else "" }
-                .clickable { app.navPage = 1 - pg },
-            contentAlignment = Alignment.Center,
-        ) {
-            // 2つの点: いまの枚目 14×6 の pill、もう一方 6×6 で淡い
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                val w0 = 6f + 8f * (1 - anim); val w1 = 6f + 8f * anim
-                Box(Modifier.size(w0.dp, 6.dp).clip(RoundedCornerShape(50)).background(c.tx2.copy(alpha = 0.35f + 0.65f * (1 - anim))))
-                Box(Modifier.size(w1.dp, 6.dp).clip(RoundedCornerShape(50)).background(c.tx2.copy(alpha = 0.35f + 0.65f * anim)))
+        // 切替のつまみ(カードの上に浮く 52×30。押せる範囲 48×48)。赤い点=見えていない枚目にお知らせ
+        Box(Modifier.align(Alignment.TopEnd).offset(x = (-14).dp, y = (-39).dp).size(52.dp, 30.dp)) {
+            Box(
+                Modifier.fillMaxSize()
+                    .shadow(10.dp, RoundedCornerShape(50), ambientColor = Color(0x47284896), spotColor = Color(0x47284896))
+                    .clip(RoundedCornerShape(50)).background(c.surface)
+                    .semantics { contentDescription = "ナビを切り替え(${pg + 1}/2)" + if (otherDot) "(もう一方の枚目にお知らせ)" else "" }
+                    .clickable { app.navPage = 1 - pg },
+                contentAlignment = Alignment.Center,
+            ) {
+                // 2つの点: いまの枚目 14×6 の pill、もう一方 6×6 で淡い
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val w0 = 6f + 8f * (1 - anim); val w1 = 6f + 8f * anim
+                    Box(Modifier.size(w0.dp, 6.dp).clip(RoundedCornerShape(50)).background(c.tx2.copy(alpha = 0.35f + 0.65f * (1 - anim))))
+                    Box(Modifier.size(w1.dp, 6.dp).clip(RoundedCornerShape(50)).background(c.tx2.copy(alpha = 0.35f + 0.65f * anim)))
+                }
             }
             if (otherDot) Box(Modifier.align(Alignment.TopEnd).offset(2.dp, (-2).dp).size(12.dp).clip(CircleShape).background(c.surface).padding(2.dp).clip(CircleShape).background(c.lateFill))
         }
@@ -147,7 +150,8 @@ private fun NavCell(slot: Int, anim: Float, badge: (String) -> Int, modifier: Mo
     val app = LocalApp.current
     BoxWithConstraints(modifier.fillMaxHeight().clip(VerticalClip)) {
         val h = maxHeight
-        Column(Modifier.fillMaxWidth().height(h * 2).offset(y = -h * anim)) {
+        // 帯の高さ=タブ2つ分(窓より高い)。上端に揃えて置き、上下にすべらせる
+        Column(Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).requiredHeight(h * 2).offset(y = -h * anim)) {
             for (p in 0..1) {
                 val t = Tabs.PAGES[p][slot]
                 Box(Modifier.fillMaxWidth().height(h)) {
