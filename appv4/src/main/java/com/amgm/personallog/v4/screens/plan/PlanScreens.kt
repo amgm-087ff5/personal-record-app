@@ -32,7 +32,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -71,7 +73,9 @@ import com.amgm.personallog.v4.ui.components.LargeTitle
 import com.amgm.personallog.v4.ui.components.MainButton
 import com.amgm.personallog.v4.ui.components.Metric
 import com.amgm.personallog.v4.ui.components.MomentRow
+import com.amgm.personallog.v4.ui.components.ObjCard
 import com.amgm.personallog.v4.ui.components.Objs
+import com.amgm.personallog.v4.ui.lightBrush
 import com.amgm.personallog.v4.ui.components.Prop
 import com.amgm.personallog.v4.ui.components.Screen
 import com.amgm.personallog.v4.ui.components.SummaryCard
@@ -205,12 +209,15 @@ fun EventDetailScreen(r: Route) {
         Column(Modifier.fillMaxWidth().padding(horizontal = V4Dim.gutter)) {
             DayHead(od, future = od > today)
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                Box(Modifier.width(26.dp).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
-                    Box(Modifier.width(1.5.dp).fillMaxHeight().background(c.planLn))
-                    Box(Modifier.padding(top = 22.dp).offset(x = (-4).dp).size(10.dp, 18.dp).clip(RoundedCornerShape(9.dp))
-                        .background(c.bg).dashedBorder(if (late) c.late else c.plan, radius = 9.dp))
-                }
+                // 軸(中心 17dp)・予定の節(幅30・高さ18の破線の印)・つなぎ線。カードは左 36dp から(モックの .pin の余白)。
+                // 節は軸の上(後に描く)で、カードには掛からない
                 val cardColor = if (late) c.late else c.plan
+                Box(Modifier.width(36.dp).fillMaxHeight()) {
+                    Box(Modifier.offset(x = 16.25.dp).width(1.5.dp).fillMaxHeight().background(c.planLn))
+                    Box(Modifier.offset(x = 2.dp, y = 30.dp).size(30.dp, 18.dp).clip(RoundedCornerShape(9.dp))
+                        .background(c.bg).dashedBorder(cardColor, width = 2.dp, radius = 9.dp, dash = 3.dp, gap = 3.dp))
+                    Box(Modifier.offset(x = 32.dp, y = 38.dp).size(4.dp, 2.dp).background(cardColor))
+                }
                 Column(
                     Modifier.weight(1f).padding(top = 8.dp, bottom = 12.dp).clip(RoundedCornerShape(24.dp))
                         .background(c.surface).dashedBorder(cardColor, radius = 24.dp).padding(16.dp),
@@ -229,10 +236,14 @@ fun EventDetailScreen(r: Route) {
                             Text(d.placeOf(e), style = V4.t.label, color = c.tx2)
                         }
                         if (e.who.isNotEmpty()) Knots(e.who, color = c.tx2, style = V4.t.label)
-                        remainText(od, e, today, now)?.let { Text(it, style = plex(15, 600), color = c.tx) }
-                        if (e.rep != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Icon(V4Icons.repeat, null, tint = c.tx3, modifier = Modifier.size(14.dp))
-                            Text("次回 ${Dates.fmtMDW(od)}", style = V4.t.label, color = c.tx2)
+                        // 「27日後」と「次回 ○日」は1行(モックの .meta: 間隔 14)
+                        val remain = remainText(od, e, today, now)
+                        if (remain != null || e.rep != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            remain?.let { Text(it, style = plex(15, 600), color = c.tx2) }
+                            if (e.rep != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(V4Icons.repeat, null, tint = c.tx3, modifier = Modifier.size(15.dp))
+                                Text("次回 ${Dates.fmtMDW(od)}", style = V4.t.label, color = c.tx2)
+                            }
                         }
                     }
                 }
@@ -265,18 +276,57 @@ fun EventDetailScreen(r: Route) {
 
         if (kids.isNotEmpty()) {
             PlSec("この予定のToDo", kids.size.toString())
-            Objs { kids.forEach { k -> d.plans[k]?.let { TodoRow(k, it, it.done != null) } } }
+            Objs { kids.forEach { k -> d.plans[k]?.let { EvTaskRow(k, it) } } }
         }
 
         if (recKey != null) {
             PlSec(if (e.rep != null) "前回の記録" else "記録", null)
             AxColumn { MomentRow(recKey) }
         } else {
-            MainButton(
-                if (pay != null) "支払いとして記録する" else "記録にする",
-                Modifier.fillMaxWidth().padding(horizontal = V4Dim.gutter, vertical = 12.dp),
-            ) { recordEvent(app, id) }
+            PlSec("記録", null)
+            RecordButton(if (pay != null) "支払いとして記録する" else "記録にする") { recordEvent(app, id) }
         }
+    }
+}
+
+/** 予定の詳細の「この予定のToDo」の行(モックの plEvTaskRow): 題名と期限だけ。「!」・リスト・予定名は出さない */
+@Composable
+private fun EvTaskRow(k: String, p: Plan) {
+    val app = LocalApp.current
+    val c = V4.c
+    val done = p.done != null
+    ObjCard(onClick = { app.go("task", k) }) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 4.dp, end = 14.dp, top = 6.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CheckBox(on = done, onClick = { toggleTask(app, k) })
+            Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                Text(
+                    p.t, style = plex(15, 500, 1.4), color = if (done) c.tx3 else c.tx, maxLines = 2,
+                    textDecoration = if (done) TextDecoration.LineThrough else null,
+                )
+                p.due?.let { Text(relDayPl(it, app.today), style = V4.t.cap, color = c.tx3, modifier = Modifier.padding(top = 2.dp)) }
+            }
+            Icon(V4Icons.chev, null, tint = c.tx3, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+/** 「記録にする」(モックの .btn.block + ✓): 幅いっぱい・高さ48。塗りは主ボタンと同じ、前に ✓ の印 */
+@Composable
+private fun RecordButton(label: String, onClick: () -> Unit) {
+    val c = V4.c
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = V4Dim.gutter, vertical = 12.dp).height(48.dp)
+            .shadow(6.dp, RoundedCornerShape(10.dp), ambientColor = c.meFill, spotColor = c.meFill)
+            .clip(RoundedCornerShape(10.dp)).background(c.meFill).background(lightBrush())
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
+    ) {
+        Icon(V4Icons.check, null, tint = Color.White, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = plex(15, 600), color = Color.White, maxLines = 1)
     }
 }
 

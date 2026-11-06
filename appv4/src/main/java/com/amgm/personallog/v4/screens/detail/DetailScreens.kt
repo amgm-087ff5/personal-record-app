@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -339,13 +341,20 @@ private fun KindRow(icon: ImageVector, label: String, right: String, small: Stri
     }
 }
 
-/** 移動の出発・到着 */
+/** 移動の出発・到着: 「出発 カフェ ミナト 19:30 → 到着 自宅 20:05」を1行(折り返し可)。矢印は間に1つ(モックの .route) */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MoveRoute(a: Activity) {
     val d = LocalData.current
-    Column(Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        RouteStop(d, "出発", a.roles.firstOrNull { it.role == "出発" }, a.time)
-        RouteStop(d, "到着", a.roles.firstOrNull { it.role == "到着" }, a.end)
+    val c = V4.c
+    val dep = a.roles.firstOrNull { it.role == "出発" }
+    val arr = a.roles.firstOrNull { it.role == "到着" }
+    FlowRow(
+        Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        RouteStop(d, "出発", dep, a.time)
+        if (dep != null && arr != null) Text("→", style = plex(16, 600), color = c.onCap.copy(alpha = 0.85f))
+        RouteStop(d, "到着", arr, a.end)
     }
 }
 
@@ -355,13 +364,13 @@ private fun RouteStop(d: AppData, label: String, r: Role?, time: String?) {
     val c = V4.c
     if (r == null) return
     val ent = r.ent
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, style = plex(12, 500), color = c.onCap.copy(alpha = 0.85f))
         Text(
             d.roleName(r), style = plex(16, 600, 1.4).copy(textDecoration = TextDecoration.Underline), color = c.onCap,
             modifier = if (ent != null) Modifier.clickable { app.go("e", ent) } else Modifier,
         )
-        Text(time ?: "", style = plex(16, 700).num(), color = c.onCap)
+        Text(time ?: "", style = plex(16, 600).num(), color = c.onCap)
     }
 }
 
@@ -502,7 +511,8 @@ private fun OrigPlan(id: String) {
     Objs {
         ObjCard(onClick = { app.go("ev", key) }) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.size(22.dp, 16.dp).dashedBorder(c.plan, radius = 6.dp))
+                // 元の予定の印(モックの .ax-node.plan を行の中で使う): 30×20 の角丸の破線
+                Box(Modifier.size(30.dp, 20.dp).dashedBorder(c.plan, width = 2.dp, radius = 6.dp, dash = 3.dp, gap = 3.dp))
                 Column(Modifier.weight(1f)) {
                     Text(p.t, style = plex(15, 500, 1.4), color = c.tx, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text("${p.d?.let { Dates.fmtMDW(it) } ?: ""} ${p.s ?: ""}".trim(), style = V4.t.cap, color = c.tx3)

@@ -1,5 +1,6 @@
 package com.amgm.personallog.v4.screens.activities
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,7 +43,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -477,11 +480,7 @@ fun DayScreen(r: Route) {
         val photos = diary?.photos ?: 0
         if (photos > 0) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = V4Dim.gutter, top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                repeat(photos) {
-                    Box(Modifier.size(72.dp).clip(RoundedCornerShape(12.dp)).background(c.sunk), contentAlignment = Alignment.Center) {
-                        Icon(V4Icons.photo, null, tint = c.tx3, modifier = Modifier.size(24.dp))
-                    }
-                }
+                repeat(photos) { DayPhoto(d, it) }
             }
         }
 
@@ -508,6 +507,59 @@ fun DayScreen(r: Route) {
             if (d == today) Spacer(Modifier.height(LocalConfiguration.current.screenHeightDp.dp))
         } else {
             Empty(V4Icons.activity, "この日の出来事はまだありません", "出来事を追加") { openActivitySheet(app, date = d) }
+        }
+    }
+}
+
+/**
+ * 日の写真の1枚(モックの photoThumb): 72 角丸12。空・太陽・草原の絵。色と丘の形は日と番号で決まる(同じ日なら同じ絵)
+ * 絵は 88 の座標で描いて 72dp に縮める
+ */
+/** CSS の hsl(色相, 彩度, 明度) を Color にする(色相は度、彩度と明度は 0〜1) */
+private fun hslColor(hue: Float, sat: Float, light: Float): Color {
+    val c = (1f - kotlin.math.abs(2f * light - 1f)) * sat
+    val hp = (hue % 360f) / 60f
+    val x = c * (1f - kotlin.math.abs(hp % 2f - 1f))
+    val (r, g, b) = when (hp.toInt()) {
+        0 -> Triple(c, x, 0f)
+        1 -> Triple(x, c, 0f)
+        2 -> Triple(0f, c, x)
+        3 -> Triple(0f, x, c)
+        4 -> Triple(x, 0f, c)
+        else -> Triple(c, 0f, x)
+    }
+    val m = light - c / 2f
+    return Color(r + m, g + m, b + m)
+}
+
+@Composable
+private fun DayPhoto(d: String, i: Int) {
+    val day = d.takeLast(2).toInt()
+    val h = (day * 37 + i * 71) % 40
+    val sky = hslColor(195f + h / 2f, 0.5f, 0.74f)
+    val land = hslColor(85f + h, 0.28f, 0.42f)
+    val sun = hslColor(45f + h / 4f, 0.85f, 0.86f)
+    Box(Modifier.size(72.dp).clip(RoundedCornerShape(12.dp))) {
+        Canvas(Modifier.fillMaxSize()) {
+            val s = size.width / 88f
+            drawRect(sky)
+            drawCircle(sun, radius = 9f * s, center = Offset((20f + i * 18f) * s, 26f * s))
+            // 手前の丘: M0 64 Q22 (46+6i) 44 60 T88 56 V88 H0Z (T は前の制御点を鏡映し)
+            val hill = Path().apply {
+                moveTo(0f * s, 64f * s)
+                quadraticBezierTo(22f * s, (46f + i * 6f) * s, 44f * s, 60f * s)
+                quadraticBezierTo(66f * s, (74f - i * 6f) * s, 88f * s, 56f * s)
+                lineTo(88f * s, 88f * s); lineTo(0f, 88f * s); close()
+            }
+            drawPath(hill, land)
+            // 奥の草原(70%): M0 74 Q30 66 60 76 T88 72 V88 H0Z
+            val far = Path().apply {
+                moveTo(0f, 74f * s)
+                quadraticBezierTo(30f * s, 66f * s, 60f * s, 76f * s)
+                quadraticBezierTo(90f * s, 86f * s, 88f * s, 72f * s)
+                lineTo(88f * s, 88f * s); lineTo(0f, 88f * s); close()
+            }
+            drawPath(far, land, alpha = 0.7f)
         }
     }
 }

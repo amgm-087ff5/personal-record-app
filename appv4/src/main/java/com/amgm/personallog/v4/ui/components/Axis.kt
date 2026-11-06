@@ -129,7 +129,7 @@ fun AxNodeMark(node: AxNode, icon: ImageVector? = null) {
             Box(Modifier.size(12.dp).rotate(45f).clip(RoundedCornerShape(3.dp)).background(c.kinSoft).border(1.5.dp, c.kin, RoundedCornerShape(3.dp)))
         }
         // 予定: 30×20 の --bg に 2px の破線の枠(遅れは赤)
-        AxNode.PLAN, AxNode.LATE -> Box(Modifier.size(36.dp, 26.dp).clip(RoundedCornerShape(13.dp)).background(c.bg).padding(3.dp).dashedBorder(if (node == AxNode.LATE) c.late else c.plan, 2.dp, 10.dp, 3.dp, 2.dp))
+        AxNode.PLAN, AxNode.LATE -> Box(Modifier.size(36.dp, 26.dp).clip(RoundedCornerShape(13.dp)).background(c.bg).padding(3.dp).dashedBorder(if (node == AxNode.LATE) c.late else c.plan, 1.25.dp, 10.dp, 3.dp, 4.dp))
         AxNode.NONE -> Spacer(Modifier.size(20.dp))
     }
 }
@@ -171,7 +171,8 @@ fun AxRow(
             Modifier.weight(1f).padding(start = 4.dp, end = 20.dp, top = 6.dp, bottom = 6.dp).let {
                 when {
                     instant -> it.padding(start = 14.dp, end = 14.dp, top = 5.dp, bottom = 2.dp)
-                    plan -> it.clip(shape).dashedBorder(c.lineStrong, 1.5.dp, 16.dp, 4.dp, 3.dp).let { m -> if (onClick != null) m.press(onClick = onClick) else m }.padding(horizontal = 14.dp, vertical = 12.dp)
+                    // 予定のカード: 角丸に沿う細い丸い端の破線(plan-dash.css: 3 6・約1.25px)。遅れは赤
+                    plan -> it.clip(shape).dashedBorder(if (node == AxNode.LATE) c.late else c.plan, 1.25.dp, 16.dp, 3.dp, 6.dp).let { m -> if (onClick != null) m.press(onClick = onClick) else m }.padding(horizontal = 14.dp, vertical = 12.dp)
                     else -> it.tlShadow(shape).clip(shape).background(c.tlCard).let { m -> if (onClick != null) m.press(onClick = onClick) else m }.padding(horizontal = 14.dp, vertical = 12.dp)
                 }
             },

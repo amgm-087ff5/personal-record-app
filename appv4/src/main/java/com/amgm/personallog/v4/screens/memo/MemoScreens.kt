@@ -141,8 +141,8 @@ private class PaperShape(private val tl: Dp, private val br: Dp, private val bl:
 
 private val PAPER_SHADOW = Color(40, 55, 90, 20)
 
-/** 紙: 白い面+右上の折り返し+左の綴じ目の線(常に --kin) */
-private fun Modifier.paper(tl: Dp = 4.dp, br: Dp = 14.dp, bl: Dp = 14.dp): Modifier = composed {
+/** 紙(.en-paper): 白い面+右上の折り返し+左の綴じ目の線(常に --kin)。エンティティの詳細のメモの紙も同じものを使う */
+fun Modifier.paper(tl: Dp = 4.dp, br: Dp = 14.dp, bl: Dp = 14.dp): Modifier = composed {
     val c = V4.c
     val shape = PaperShape(tl, br, bl)
     this.shadow(3.dp, shape, ambientColor = PAPER_SHADOW, spotColor = PAPER_SHADOW)
@@ -365,7 +365,8 @@ private fun NoteCard(id: String, compact: Boolean) {
     Column(
         Modifier.fillMaxWidth().paper()
             .press { app.go("n", id) }
-            .padding(start = 20.dp, end = if (compact) 34.dp else 40.dp, top = 14.dp, bottom = 14.dp),
+            // 右の余白はモックの見た目に合わせて 34(仕様は一覧だけ 40。本文が「足りる。」を次の行に落とすため)
+            .padding(start = 20.dp, end = 34.dp, top = 14.dp, bottom = 14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         head()

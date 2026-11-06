@@ -26,7 +26,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -39,6 +45,7 @@ import com.amgm.personallog.v4.data.evOn
 import com.amgm.personallog.v4.data.actsOn
 import com.amgm.personallog.v4.data.todosDueOn
 import com.amgm.personallog.v4.data.yen
+import com.amgm.personallog.v4.screens.plan.TodoRow
 import com.amgm.personallog.v4.screens.plan.toggleTask
 import com.amgm.personallog.v4.ui.LocalApp
 import com.amgm.personallog.v4.ui.LocalData
@@ -54,7 +61,8 @@ import com.amgm.personallog.v4.ui.components.DayHead
 import com.amgm.personallog.v4.ui.components.Divider
 import com.amgm.personallog.v4.ui.components.ListCard
 import com.amgm.personallog.v4.ui.components.MomentRow
-import com.amgm.personallog.v4.ui.components.NowLine
+import com.amgm.personallog.v4.ui.components.Objs
+import com.amgm.personallog.v4.ui.components.rail
 import com.amgm.personallog.v4.ui.components.PlanRowAx
 import com.amgm.personallog.v4.ui.components.SectionHead
 import com.amgm.personallog.v4.ui.components.dashedBorder
@@ -104,7 +112,7 @@ fun ColumnScope.ActAxRows(d: String, filter: String, today: String, now: String,
         return
     }
     items.filter { !isFut(it) }.forEach { ActItemRow(it = it, future = false, late = late(it)) }
-    Box(nowMod.fillMaxWidth()) { NowLine(now) }
+    Box(nowMod.fillMaxWidth()) { DayNowLine(now) }
     items.filter { isFut(it) }.forEach { ActItemRow(it = it, future = true, late = false) }
 }
 
@@ -372,7 +380,7 @@ private fun ActLegend() {
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Box(Modifier.size(10.dp, 6.dp).clip(RoundedCornerShape(999.dp)).dashedBorder(c.plan, radius = 3.dp))
+            Box(Modifier.size(10.dp, 6.dp).legendDash(c.plan, 3.dp))
             Text("予定", style = V4.t.cap, color = c.tx3)
         }
         Spacer(Modifier.width(14.dp))
@@ -382,7 +390,7 @@ private fun ActLegend() {
         }
         Spacer(Modifier.width(14.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Box(Modifier.size(10.dp, 6.dp).clip(RoundedCornerShape(2.dp)).dashedBorder(c.plan, radius = 2.dp))
+            Box(Modifier.size(10.dp, 6.dp).legendDash(c.plan, 2.dp))
             Text("支払い予定", style = V4.t.cap, color = c.tx3)
         }
         Spacer(Modifier.width(14.dp))
@@ -417,7 +425,7 @@ private fun ActDayAxBody(d: String) {
             Text("予定・記録 なし", style = plex(13, 400, 1.4), color = c.tx3, modifier = Modifier.padding(top = 12.dp, bottom = 14.dp))
         } else if (d == today) {
             sorted.filter { !it.fut }.forEach { AxEntryRow(it) }
-            Box(Modifier.fillMaxWidth()) { NowLine(now) }
+            Box(Modifier.fillMaxWidth()) { DayNowLine(now) }
             sorted.filter { it.fut }.forEach { AxEntryRow(it) }
         } else {
             sorted.forEach { AxEntryRow(it) }
@@ -432,29 +440,47 @@ private fun AxEntryRow(e: AxEntry) {
     if (e.rec) MomentRow(e.k) else PlanRowAx(e.k, future = e.fut, late = e.late)
 }
 
+/** 凡例の点線の印(.pl-dot.plan): 1.5 の破線の輪郭。10×6 の小さい印に合わせて破線を細かく */
+private fun Modifier.legendDash(color: Color, radius: Dp): Modifier = drawBehind {
+    val w = 1.5.dp.toPx()
+    drawRoundRect(
+        color = color, topLeft = Offset(w / 2, w / 2), size = Size(size.width - w, size.height - w),
+        cornerRadius = CornerRadius(radius.toPx()),
+        style = Stroke(w, pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.5.dp.toPx(), 2.dp.toPx()))),
+    )
+}
+
+/** いまの線の列の幅(Axis.kt の時間の列・軸の列と同じ値) */
+private val NOW_TCOL = 52.dp
+private val NOW_RAIL = 26.dp
+
+/** いまの線(日の時間グリッド): 時刻を白い地の箱に載せる(モックの .pl-now span)。軸と線の描き方は NowLine と同じ */
+@Composable
+private fun DayNowLine(now: String) {
+    val c = V4.c
+    Row(
+        Modifier.fillMaxWidth().height(28.dp).rail(false, c.axisPast, c.planLn, 0f, 0.5f).rail(true, c.axisPast, c.planLn, 0.5f, 1f),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.width(NOW_TCOL).fillMaxHeight().background(c.tlCard), contentAlignment = Alignment.CenterEnd) {
+            Text(now, style = plex(12, 700, 1.0).num(), color = c.late, modifier = Modifier.padding(end = 6.dp))
+        }
+        Box(Modifier.width(NOW_RAIL), contentAlignment = Alignment.Center) { Box(Modifier.size(12.dp, 2.dp).clip(RoundedCornerShape(2.dp)).background(c.late)) }
+        Box(Modifier.weight(1f).padding(end = 20.dp).height(2.dp).clip(RoundedCornerShape(2.dp)).background(c.late))
+    }
+}
+
 /* ---------- その日の ToDo(plTodoBlock) ---------- */
 
 /** その日が期限の未完了の ToDo。0件なら何も出さない。チェック=完了、行=ToDo の詳細 */
 @Composable
 fun ActTodoBlock(d: String) {
-    val app = LocalApp.current
     val data = LocalData.current
-    val c = V4.c
     val ks = data.todosDueOn(d)
     if (ks.isEmpty()) return
     Column(Modifier.fillMaxWidth()) {
         SectionHead("ToDo", "${ks.size}件")
-        ListCard {
-            ks.forEachIndexed { i, (k, t) ->
-                if (i > 0) Divider(left = 54.dp)
-                Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CheckBox(on = t.done != null) { toggleTask(app, k) }
-                    Text(
-                        t.t, style = plex(15, 500), color = c.tx, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f).clickable { app.go("task", k) },
-                    )
-                }
-            }
-        }
+        // 行は ToDo の一覧と同じ部品(題名・「!」・期限・リスト・予定名)
+        Objs { ks.forEach { (k, t) -> TodoRow(k, t, false) } }
     }
 }

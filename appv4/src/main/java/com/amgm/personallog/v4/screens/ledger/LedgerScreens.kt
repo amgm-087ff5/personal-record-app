@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -34,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -56,6 +58,7 @@ import com.amgm.personallog.v4.data.AppData
 import com.amgm.personallog.v4.data.Category
 import com.amgm.personallog.v4.data.Dates
 import com.amgm.personallog.v4.data.Expense
+import com.amgm.personallog.v4.data.XItem
 import com.amgm.personallog.v4.data.catAnc
 import com.amgm.personallog.v4.data.catColor
 import com.amgm.personallog.v4.data.catFx
@@ -93,6 +96,7 @@ import com.amgm.personallog.v4.ui.components.Ico
 import com.amgm.personallog.v4.ui.components.LargeTitle
 import com.amgm.personallog.v4.ui.components.ListCard
 import com.amgm.personallog.v4.ui.components.Pill
+import com.amgm.personallog.v4.ui.components.press
 import com.amgm.personallog.v4.ui.components.Screen
 import com.amgm.personallog.v4.ui.components.Seg
 import com.amgm.personallog.v4.ui.components.SectionHead
@@ -452,7 +456,27 @@ private fun ExpenseTicket(app: AppState, d: AppData, key: String, x: Expense) {
 
 /* ---------------- 自分の支出の詳細 #/x/{id} ---------------- */
 
-private class LItemGroup(val name: String, val price: Int, val b: String, val count: Int)
+/** 品目を「同じ名前・同じ金額」でまとめた組(表示だけ。データは1行=1個)。モックの itemGroups(金額行は支出の品目に無い) */
+private class LItemGroup(val first: XItem, val idx: MutableList<Int>)
+
+private fun lGroupItems(items: List<XItem>): List<LItemGroup> {
+    val out = ArrayList<LItemGroup>()
+    val at = HashMap<String, Int>()
+    items.forEachIndexed { i, p ->
+        val key = "${p.n}|${p.price}"
+        val g = at[key]
+        if (g == null) {
+            at[key] = out.size
+            out.add(LItemGroup(p, mutableListOf(i)))
+        } else {
+            out[g].idx.add(i)
+        }
+    }
+    return out
+}
+
+/** 同じ品目を開いているか(画面のメモリ上。モックの openGroups と同じ) */
+private val lOpenGroups = mutableStateMapOf<String, Boolean>()
 
 @Composable
 fun ExpenseDetailScreen(r: Route) {
@@ -499,24 +523,83 @@ fun ExpenseDetailScreen(r: Route) {
             }
         }
 
-        // 品目(担当外の品目の行は、ここでは素の行で出す)
-        val groups = x.items.groupBy { it.n to it.price }.map { (k, v) -> LItemGroup(k.first, k.second, v.first().b, v.size) }
+        // 品目(同じものは「×N」にまとめ、開くと1個目・2個目が字下げ+案内線で並ぶ)
+        val groups = lGroupItems(x.items)
         SectionHead("品目", "${groups.size}", actLabel = "編集", actIcon = V4Icons.edit, onAct = { app.go("a", x.pay) }  /* 品目は支払いが持つ → 支払いの詳細(品目の編集はそこ) */)
         ListCard {
-            groups.forEachIndexed { i, g ->
-                LRow(
-                    t = g.name, minH = 56.dp, padV = 10.dp,
-                    sub = { Text(if (g.count > 1) "${g.count}個 ${yen(g.price)}" else g.b, style = V4.t.cap, color = c.tx3) },
-                    v = { Text(yen(g.price * g.count), style = plex(15, 600, 1.4).num(), color = c.tx) },
-                    chev = true, divider = i > 0,
-                )
-            }
+            groups.forEachIndexed { gi, g -> LItemGroupRow(key, x.pay, x.items, g, gi, divider = gi > 0) }
             val total = x.items.sumOf { it.price }
             LRow(
                 t = "品目の合計 = 自分の支出", tBold = true, divider = groups.isNotEmpty(),
                 v = { Text(yen(total), style = plex(15, 600, 1.4).num(), color = c.me) },
             )
         }
+    }
+}
+
+/** 品目の1組(.row.grp)。2個以上は「名前 ×N ⌄」と「1個 ¥N」、押すと開く。1個だけは補足に全額などを出し、押すと品目の詳細 */
+@Composable
+private fun LItemGroupRow(key: String, pay: String, items: List<XItem>, g: LItemGroup, gi: Int, divider: Boolean) {
+    val app = LocalApp.current
+    val c = V4.c
+    val gk = "$key:$gi"
+    val n = g.idx.size
+    val open = lOpenGroups[gk] == true
+    val unit = g.first.price
+    Column {
+        if (divider) Divider(14.dp)
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 56.dp).press {
+                if (n > 1) lOpenGroups[gk] = !open else app.go("i", pay, g.idx[0].toString())
+            }.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(g.first.n, style = plex(15, 500, 1.4), color = c.tx, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (n > 1) {
+                        Text(" ×$n", style = plex(15, 400, 1.4), color = c.tx3)
+                        Icon(V4Icons.chev, null, tint = c.tx3, modifier = Modifier.padding(start = 4.dp).size(16.dp).rotate(if (open) -90f else 90f))
+                    }
+                }
+                Text(if (n > 1) "1個 ${yen(unit)}" else g.first.b, style = V4.t.cap, color = c.tx3, modifier = Modifier.padding(top = 2.dp))
+            }
+            Text(yen(unit * n), style = plex(15, 600, 1.4).num(), color = c.tx)
+            if (n == 1) Icon(V4Icons.chev, null, tint = c.tx3, modifier = Modifier.size(16.dp))
+        }
+        // 開いた子(.grp-kids): 一覧の左から34dp字下げ。案内線は一覧の左から16dp、親の下から中ほどまで
+        if (n > 1 && open) Column(
+            Modifier.fillMaxWidth().padding(start = 34.dp, bottom = 6.dp).drawBehind {
+                val x = -18.dp.toPx()
+                drawLine(c.line, Offset(x, -4.dp.toPx()), Offset(x, size.height / 2), strokeWidth = 1.5.dp.toPx())
+            },
+        ) {
+            g.idx.forEachIndexed { k, idx ->
+                if (k > 0) Divider(12.dp)
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 44.dp).press { app.go("i", pay, idx.toString()) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    LKidNo(k + 1)
+                    Text(
+                        items[idx].memo ?: "メモなし", style = V4.t.label, color = c.tx2,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                    )
+                    Tag(items[idx].b)
+                    Icon(V4Icons.chev, null, tint = c.tx3, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
+}
+
+/** 子の番号(.kid-n): 22dp の丸、背景 --sunk */
+@Composable
+private fun LKidNo(n: Int) {
+    val c = V4.c
+    Box(Modifier.size(22.dp).clip(CircleShape).background(c.sunk), contentAlignment = Alignment.Center) {
+        Text("$n", style = plex(12, 600), color = c.tx2)
     }
 }
 

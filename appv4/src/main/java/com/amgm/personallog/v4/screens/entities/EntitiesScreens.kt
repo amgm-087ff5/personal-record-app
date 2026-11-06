@@ -66,6 +66,7 @@ import com.amgm.personallog.v4.data.typeAnc
 import com.amgm.personallog.v4.data.uid
 import com.amgm.personallog.v4.data.yen
 import com.amgm.personallog.v4.screens.create.openEntitySheet
+import com.amgm.personallog.v4.screens.memo.paper
 import com.amgm.personallog.v4.screens.plan.toggleTask
 import com.amgm.personallog.v4.ui.AppState
 import com.amgm.personallog.v4.ui.LocalApp
@@ -116,12 +117,16 @@ import com.amgm.personallog.v4.ui.components.dashedBorder
 /* ---------------- 補助(data.js / ui.js の計算) ---------------- */
 
 private val YMRE = Regex("\\d{4}-\\d{2}")
-private val YM_HEAD = Regex("^(\\d{4})-(\\d{2})")
+private val YM_SINCE = Regex("(\\d{4})-(\\d{2})〜")
 private val MARK_RE = Regex("\\{[ea]:[^}]*\\}")
 private val collator: java.text.Collator = java.text.Collator.getInstance(java.util.Locale.JAPAN)
 
-/** 「メモ」「YYYY-MM〜」→「2020年4月から」。形が合わなければ null */
-private fun sinceOf(s: String?): String? = s?.let { YM_HEAD.find(it) }?.let { "${it.groupValues[1]}年${it.groupValues[2].toInt()}月から" }
+/** 「版2 · 2020-04〜」「2020-04〜」→「2020年4月から」(モックと同じく途中の YYYY-MM〜 を拾う)。無ければ null */
+private fun sinceOf(s: String?): String? = s?.let { YM_SINCE.find(it) }?.let { "${it.groupValues[1]}年${it.groupValues[2].toInt()}月から" }
+
+/** 関係の期間(period)の表示。YYYY-MM〜 は「…から」に、それ以外はそのまま(モックの replace と同じ) */
+private fun periodLabel(period: String): String? =
+    if (period.isEmpty()) null else sinceOf(period) ?: period
 
 /** 「最後に交わった」の文言(agoLabel) */
 private fun agoLabel(date: String?, today: String): String {
@@ -416,7 +421,7 @@ private fun EntityBody(id: String, e: Entity) {
                 idx++
             }
             rels.forEach { rel ->
-                FactLine(rel.kind, divider = idx > 0) {
+                FactLine(rel.kind, divider = idx > 0, since = periodLabel(rel.period)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(if (rel.mutual) "⟷" else "→", style = plex(14, 500), color = c.tx3)
                         ERef(rel.to)
@@ -519,11 +524,11 @@ private fun MemoPaper(id: String) {
     val d = LocalData.current
     val c = V4.c
     val note = d.notes[id]
-    val shape = RoundedCornerShape(topStart = 4.dp, topEnd = 0.dp, bottomEnd = 14.dp, bottomStart = 14.dp)
+    // 紙の形は memo パッケージの paper()(.en-paper: 右上を切る・綴じ目・折り返し)と同じ
     Box(
         Modifier.padding(start = V4Dim.gutter, end = V4Dim.gutter, top = 12.dp).fillMaxWidth()
-            .clip(shape).background(c.surface)
-            .clickable {
+            .paper()
+            .press {
                 if (note != null) app.go("n", id)
                 else {
                     val upd = "${Dates.md(app.today)} ${app.now}"
@@ -531,23 +536,8 @@ private fun MemoPaper(id: String) {
                     app.go("n", id)
                 }
             }
-            .padding(start = 20.dp, end = 34.dp, top = 14.dp, bottom = 14.dp)
-            // 左の綴じ目(縁の色)。文字の後ろに描く
-            .drawBehind {
-                drawRoundRect(
-                    c.kin,
-                    topLeft = Offset(0f, 14.dp.toPx()),
-                    size = Size(3.dp.toPx(), size.height - 28.dp.toPx()),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()),
-                )
-            },
+            .padding(start = 20.dp, end = 34.dp, top = 14.dp, bottom = 14.dp),
     ) {
-        // 折り返し(右上の三角)
-        Box(
-            Modifier.align(Alignment.TopEnd).size(18.dp).drawBehind {
-                drawPath(Path().apply { moveTo(0f, 0f); lineTo(size.width, size.height); lineTo(0f, size.height); close() }, c.line)
-            },
-        )
         Column {
             if (note == null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -683,7 +673,14 @@ fun TypesScreen(r: Route) {
         Objs {
             flat.forEach { row ->
                 val k = row.k
-                Box(Modifier.fillMaxWidth().padding(start = (row.depth * 20).dp)) {
+                // 木の線(.objs.en-tree > .row.ind::after): 子の行の左 12dp に、行の上下 8dp まで伸びる縦線
+                Box(
+                    Modifier.fillMaxWidth().padding(start = (row.depth * 20).dp).let {
+                        if (row.depth == 0) it else it.drawBehind {
+                            drawLine(c.line, Offset(-12.dp.toPx(), -8.dp.toPx()), Offset(-12.dp.toPx(), size.height + 8.dp.toPx()), strokeWidth = 1.5.dp.toPx())
+                        }
+                    },
+                ) {
                     ObjCard(onClick = { openTypeEdit(app, k) }) {
                         Row(
                             Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(end = 14.dp, top = 6.dp, bottom = 6.dp),
