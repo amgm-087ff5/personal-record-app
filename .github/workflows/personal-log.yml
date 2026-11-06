@@ -62,7 +62,7 @@ jobs:
       - name: Commit generated Room schema
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          git add app/schemas
+          git add app/schemas appv4/schemas
           if ! git diff --cached --quiet; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -91,11 +91,44 @@ jobs:
           name: personal-log-release-apk
           path: personal-log-release.apk
 
+      # 個人記録 v4(:appv4。UI v4 モックを別アプリにしたもの。applicationId com.amgm.personallog.v4)
+      - name: Verify v4 APK
+        id: sig4
+        run: |
+          APK=appv4/build/outputs/apk/release/appv4-release.apk
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "$APK" | tee sig4.txt
+          echo "sha=$(grep 'certificate SHA-256 digest' sig4.txt | head -1 | awk '{print $NF}')" >> "$GITHUB_OUTPUT"
+          echo "vn=$("$BT/aapt2" dump badging "$APK" | grep -o "versionName='[^']*'" | head -1 | cut -d"'" -f2)" >> "$GITHUB_OUTPUT"
+          cp "$APK" personal-log-v4.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: personal-log-v4-apk
+          path: personal-log-v4.apk
+
+      # v4 の配布: main と feat/app-v4 のとき(既存アプリの配布とは別のタグ)
+      - name: Publish v4 pre-release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/app-v4'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA256: ${{ steps.sig4.outputs.sha }}
+          VN: ${{ steps.sig4.outputs.vn }}
+        run: |
+          TAG=personal-log-v4-latest
+          gh release delete "$TAG" --cleanup-tag --yes || true
+          NOTES=$(printf '個人記録 v4(UI v4 を既存アプリとは別のアプリにしたもの。既存アプリと並べてインストールできます)\n\n- versionName: %s\n- ブランチ: %s\n- コミット: %s\n- 署名証明書 SHA-256: `%s`' "$VN" "$GITHUB_REF_NAME" "$GITHUB_SHA" "$SHA256")
+          gh release create "$TAG" personal-log-v4.apk \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "personal-log v4 (latest)" --notes "$NOTES"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: reports
-          path: app/build/reports/tests/
+          path: |
+            app/build/reports/tests/
+            appv4/build/reports/tests/
 
       # 配布(最新APKの置き換え)は本線 main のときだけ。feat/** はビルド確認のみ
       - name: Publish pre-release

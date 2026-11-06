@@ -6,6 +6,17 @@
 - applicationId: `com.amgm.personallog`(debug/release 共通)
 - タブ: 日記 / レシート / 家計簿 / 設定(Wave1 時点で実装済みは設定画面のみ。他は空の画面)
 
+## 個人記録 v4(別アプリ `:appv4`)
+
+UI v4 モック(`feat/ui-v4` の `v4/`、https://amgm-087ff5.github.io/personal-record-app/v4/ )を、既存アプリとは別の Android アプリにしたもの。
+
+- applicationId: `com.amgm.personallog.v4`(既存アプリ `com.amgm.personallog` と並べてインストールできる。データも別)
+- 技術: Kotlin / Jetpack Compose / Room(1件=1行の JSON、差分保存・取り消し)/ kotlinx-serialization。DI なし
+- データは端末内だけ。初回起動時に v4 モックの見本データを「今日」に合わせてずらして入れる(設定 › データ › 初期状態に戻す で入れ直せる)
+- 最新 APK: https://github.com/amgm-087ff5/personal-record-app/releases/download/personal-log-v4-latest/personal-log-v4.apk(`main` と `feat/app-v4` の push で更新)
+- 画面の撮影(モックとの照合): `./gradlew :appv4:testDebugUnitTest --tests '*ShotTest*' -Pshots=home,a/l1,@create -PshotTheme=dark` → `appv4/build/shots/`
+- 構成: `data/`(モデル・見本・保存・data.js の補助関数)/ `ui/`(トークン・ナビ・シート・トースト・共通部品・時間軸)/ `screens/<画面>/`
+
 ## ビルドとインストール
 
 ローカルにAndroid SDKがなくても、GitHub Actions(`personal-log` ワークフロー)でビルドされます。`main` ブランチへ push すると、テストと `assembleDebug` を実行し、最新のAPKをプレリリースに公開します。
