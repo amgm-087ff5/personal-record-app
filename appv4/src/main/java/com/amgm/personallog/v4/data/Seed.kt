@@ -217,7 +217,10 @@ object Seed {
         }
         val memos = data.memos.mapValuesTo(LinkedHashMap()) { (_, m) -> m.copy(at = sd(m.at)!!, rec = mk(m.rec)) }
         val plans = data.plans.mapValuesTo(LinkedHashMap()) { (_, p) ->
-            p.copy(d = sd(p.d), d2 = sd(p.d2), due = sd(p.due), done = sd(p.done), rec = mk(p.rec))
+            // 「毎月N日」の繰り返しは、ずらした月の N日に置く(日をずらすと繰り返しの日と合わなくなる)
+            val n = p.rep?.let { Regex("毎月(\\d+)日").find(it)?.groupValues?.get(1)?.toInt() }
+            val d = if (n != null && p.d != null) LocalDate.parse(sd(p.d)).let { it.withDayOfMonth(minOf(n, it.lengthOfMonth())) }.toString() else sd(p.d)
+            p.copy(d = d, d2 = sd(p.d2), due = sd(p.due), done = sd(p.done), rec = mk(p.rec))
         }
         return data.copy(acts = acts, memos = memos, plans = plans, settings = data.settings.copy(seededShiftDays = days))
     }

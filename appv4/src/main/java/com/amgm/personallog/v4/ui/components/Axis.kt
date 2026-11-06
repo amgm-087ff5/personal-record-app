@@ -157,7 +157,7 @@ fun AxRow(
     val instant = node == AxNode.INSTANT || node == AxNode.FACT
     val plan = node == AxNode.PLAN || node == AxNode.LATE
     Row(
-        Modifier.fillMaxWidth().height(IntrinsicSize.Min).heightIn(min = if (instant) 44.dp else 0.dp).rail(future, c.axisPast, c.planLn)
+        Modifier.fillMaxWidth().heightIn(min = if (instant) 44.dp else 0.dp).rail(future, c.axisPast, c.planLn)
             .let { if (onClick != null && instant) it.press(onClick = onClick) else it },
     ) {
         AxTime(time, timeEnd, if (instant) 13.dp else 19.dp, day)
@@ -296,10 +296,8 @@ fun MomentRow(id: String, exclude: String? = null, showDate: Boolean = false, ro
     val day = if (showDate) d.dateOf(id).takeIf { it.isNotEmpty() }?.let { Dates.parse(it).dayOfMonth } else null
     when {
         a.type in INSTANT -> AxRow(a.time, (role?.let { "$it · " } ?: "") + a.title, node = AxNode.INSTANT, day = day, future = future, onClick = { app.go("a", id) })
-        a.type == "支払い" -> AxRow(a.time, node = AxNode.DOT, icon = V4Icons.pay, day = day, future = future) {
-            if (role != null) Text(role, style = plex(12, 600, 1.4), color = c.tx2, modifier = Modifier.padding(bottom = 4.dp))
-            PayShell(id, PsMode.ROW)
-        }
+        // 支払いは殻だけ(ui.js momentRow: 支払いの行に役割は出さない)
+        a.type == "支払い" -> AxRow(a.time, node = AxNode.DOT, icon = V4Icons.pay, day = day, future = future) { PayShell(id, PsMode.ROW) }
         else -> {
             val pl = a.roles.firstOrNull { it.role in setOf("支払先", "場所", "到着") }?.takeIf { it.ent == null || it.ent != exclude }?.let { d.roleName(it) }
             val ppl = a.roles.filter { it.ent != null && d.entities[it.ent] != null && it.ent != "me" && it.ent != exclude && it.role !in setOf("支払先", "場所", "到着", "出発") }.map { it.ent!! }
@@ -451,8 +449,8 @@ fun PsTicket(pid: String, size: TicketSize = TicketSize.SM, chev: Boolean = fals
     Ticket(
         t = "自分の支出", stub = { SpStub(d.xSp(x), size) }, amt = yen(x.amt), size = size, chev = chev,
         s = {
+            // カテゴリは切らずに折り返す(.ps-cat)。割り勘の棒はその右
             Text(d.catPath(x.cat))
-            // 割り勘の棒はカテゴリの後ろ。入らなければ次の行へ(.s の flex-wrap)
             if (x.amt != (p.amt ?: x.amt)) PayBar(p, x, width = if (size == TicketSize.SM) 56.dp else 64.dp, height = if (size == TicketSize.SM) 5.dp else 6.dp)
         },
         onClick = { app.go("x", xid) },

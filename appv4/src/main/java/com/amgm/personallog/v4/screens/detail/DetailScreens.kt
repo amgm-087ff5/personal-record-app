@@ -187,20 +187,23 @@ private fun PinFrame(day: String, instant: Boolean, ancs: List<String>, cap: @Co
     val c = V4.c
     Column(Modifier.fillMaxWidth()) {
         Box(Modifier.padding(horizontal = V4Dim.gutter)) { DayHead(day) }
-        Row(Modifier.fillMaxWidth().padding(start = V4Dim.gutter, end = V4Dim.gutter, bottom = 22.dp).height(IntrinsicSize.Min)) {
-            Box(Modifier.width(36.dp).fillMaxHeight()) {
-                VLine(c.axisPast, modifier = Modifier.offset(x = 16.25.dp))
-                // 節(中心は軸の上 x=17dp)。瞬間は小さい四角、期間は角丸の薬の形
-                if (instant) {
-                    Box(Modifier.offset(x = 6.dp, y = 23.dp).size(22.dp).clip(RoundedCornerShape(6.dp)).background(c.bg))
-                    Box(Modifier.offset(x = 10.dp, y = 27.dp).size(14.dp).clip(RoundedCornerShape(4.dp)).background(c.surface).border(1.5.dp, c.ev, RoundedCornerShape(4.dp)))
-                } else {
-                    Box(Modifier.offset(x = -2.dp, y = 14.dp).size(38.dp, 26.dp).clip(RoundedCornerShape(13.dp)).background(c.bg))
-                    Box(Modifier.offset(x = 2.dp, y = 18.dp).size(30.dp, 18.dp).clip(RoundedCornerShape(9.dp)).background(c.ev).background(lightBrush()))
-                    Box(Modifier.offset(x = 32.dp, y = 26.dp).size(6.dp, 2.dp).background(c.ev))
+        // 軸の線は中身の高さに合わせる(IntrinsicSize は折り返す文字の高さを正しく測れないので使わない)
+        Box(Modifier.fillMaxWidth().padding(start = V4Dim.gutter, end = V4Dim.gutter, bottom = 22.dp)) {
+            Column(Modifier.fillMaxWidth().padding(start = 36.dp)) { AncFrames(ancs, 0, cap) }
+            Box(Modifier.matchParentSize()) {
+                Box(Modifier.width(36.dp).fillMaxHeight()) {
+                    VLine(c.axisPast, modifier = Modifier.offset(x = 16.25.dp))
+                    // 節(中心は軸の上 x=17dp)。瞬間は小さい四角、期間は角丸の薬の形
+                    if (instant) {
+                        Box(Modifier.offset(x = 6.dp, y = 23.dp).size(22.dp).clip(RoundedCornerShape(6.dp)).background(c.bg))
+                        Box(Modifier.offset(x = 10.dp, y = 27.dp).size(14.dp).clip(RoundedCornerShape(4.dp)).background(c.surface).border(1.5.dp, c.ev, RoundedCornerShape(4.dp)))
+                    } else {
+                        Box(Modifier.offset(x = -2.dp, y = 14.dp).size(38.dp, 26.dp).clip(RoundedCornerShape(13.dp)).background(c.bg))
+                        Box(Modifier.offset(x = 2.dp, y = 18.dp).size(30.dp, 18.dp).clip(RoundedCornerShape(9.dp)).background(c.ev).background(lightBrush()))
+                        Box(Modifier.offset(x = 32.dp, y = 26.dp).size(6.dp, 2.dp).background(c.ev))
+                    }
                 }
             }
-            Column(Modifier.weight(1f)) { AncFrames(ancs, 0, cap) }
         }
     }
 }

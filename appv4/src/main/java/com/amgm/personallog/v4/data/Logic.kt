@@ -23,10 +23,10 @@ object Dates {
     fun fmtMDW(d: String): String = "${fmtMD(d)}(${wd(d)})"
     fun ym(d: String): String = d.substring(0, 7)
     fun daysBetween(a: String, b: String): Long = java.time.temporal.ChronoUnit.DAYS.between(parse(a), parse(b))
-    /** 今日/昨日/明日/n日前 */
-    fun relDay(d: String, today: String): String = when (val n = daysBetween(today, d)) {
-        0L -> "今日"; -1L -> "昨日"; 1L -> "明日"; -2L -> "おととい"
-        else -> if (n < 0) "${-n}日前" else "${n}日後"
+    /** ui.js relDay: 今日・明日・昨日・明後日、それ以外は 10月29日(木) */
+    fun relDay(d: String, today: String): String = when (daysBetween(today, d)) {
+        0L -> "今日"; 1L -> "明日"; -1L -> "昨日"; 2L -> "明後日"
+        else -> fmtMDW(d)
     }
     fun minutes(t: String): Int { val (h, m) = t.split(":"); return h.toInt() * 60 + m.toInt() }
     fun hhmm(min: Int): String = "%02d:%02d".format(min / 60, min % 60)
@@ -146,18 +146,40 @@ fun AppData.placeOf(p: Plan): String = p.place?.let { it.ent?.let { e -> entName
 /* ---- 予定・ToDo(plans.js) ---- */
 val AppData.events: Map<String, Plan> get() = plans.filterValues { !it.isTodo }
 val AppData.todos: Map<String, Plan> get() = plans.filterValues { it.isTodo }
-fun repOn(e: Plan, d: String): Boolean = e.rep != null && e.d != null && d > e.d && d.substring(8).toInt() == e.d.substring(8).toInt() && e.rep.startsWith("毎月")
+/**
+ * 繰り返しの日か(元の日 e.d より後の日だけ)。毎日 / 毎週(X曜) / 毎月(N日) / 毎年。
+ * 毎月N日 で月に N日が無い時(2月30日・11月31日)は、その月の末日に出す。
+ */
+fun repOn(e: Plan, d: String): Boolean {
+    val rep = e.rep ?: return false
+    val start = e.d ?: return false
+    if (d <= start) return false
+    val x = Dates.parse(d); val s0 = Dates.parse(start)
+    return when {
+        rep.startsWith("毎日") -> true
+        rep.startsWith("毎週") -> {
+            val w = Regex("毎週(.)曜").find(rep)?.groupValues?.get(1)
+            if (w != null) Dates.wd(d) == w else x.dayOfWeek == s0.dayOfWeek
+        }
+        rep.startsWith("毎月") -> {
+            val n = Regex("毎月(\\d+)日").find(rep)?.groupValues?.get(1)?.toInt() ?: s0.dayOfMonth
+            x.dayOfMonth == minOf(n, x.lengthOfMonth())
+        }
+        rep.startsWith("毎年") -> x.monthValue == s0.monthValue && x.dayOfMonth == minOf(s0.dayOfMonth, x.lengthOfMonth())
+        else -> false
+    }
+}
 /** その日の予定(終日が先、時刻順) */
 fun AppData.evOn(d: String): List<Pair<String, Plan>> = events.entries
     .filter { (_, e) -> e.d == d || (e.d2 != null && e.d!! <= d && d <= e.d2) || repOn(e, d) }
     .sortedBy { if (it.value.all) "0" else (it.value.s ?: "0") }.map { it.key to it.value }
-/** 繰り返しの次回 */
+/** 繰り返しの次回(今日より後で最初の日)。繰り返しでなければ e.d */
 fun nextOn(e: Plan, today: String): String? {
     if (e.rep == null || e.d == null) return e.d
-    val dom = e.d.substring(8).toInt(); var y = today.substring(0, 4).toInt(); var m = today.substring(5, 7).toInt()
-    var d = "%04d-%02d-%02d".format(y, m, dom)
-    if (d <= today) { m++; if (m > 12) { m = 1; y++ }; d = "%04d-%02d-%02d".format(y, m, dom) }
-    return d
+    if (e.d > today) return e.d
+    var d = Dates.addDays(today, 1)
+    repeat(400) { if (repOn(e, d)) return d; d = Dates.addDays(d, 1) }
+    return null
 }
 fun AppData.todosOf(ev: String): List<String> = todos.filterValues { it.ev == ev }.keys.toList()
 fun AppData.todosDueOn(d: String): List<Pair<String, Plan>> = todos.filterValues { it.done == null && it.due == d }.map { it.key to it.value }

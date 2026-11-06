@@ -650,7 +650,8 @@ fun Ticket(
             .let { if (onClick != null) it.press(onClick = onClick) else it }
             .semantics { if (label != null) contentDescription = label },
     ) {
-        Row(Modifier.fillMaxWidth().heightIn(min = minH).height(IntrinsicSize.Min)) {
+        // 半券(左の塗り)と切り取り線は、本体の高さに合わせて伸びる(matchParentSize)
+        Box(Modifier.matchParentSize()) {
             Box(
                 Modifier.width(stubW).fillMaxHeight()
                     .let { if (fill) it.background(Color.White.copy(alpha = 0.12f)) else it.background(c.meFill).background(lightBrush()) }
@@ -658,34 +659,34 @@ fun Ticket(
                 contentAlignment = Alignment.Center,
             ) { stub() }
             // 切り取り線(縦の破線 1.5)
-            Box(Modifier.width(1.5.dp).fillMaxHeight().drawBehind {
+            Box(Modifier.padding(start = stubW).width(1.5.dp).fillMaxHeight().drawBehind {
                 drawLine(if (fill) Color.White.copy(alpha = 0.42f) else c.line, Offset(this.size.width / 2, 0f), Offset(this.size.width / 2, this.size.height), strokeWidth = this.size.width,
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())))
             })
-            Row(
-                Modifier.weight(1f).padding(
-                    horizontal = when (size) { TicketSize.SM -> 10.dp; TicketSize.LG -> 18.dp; else -> 14.dp },
-                    vertical = when (size) { TicketSize.SM -> 6.dp; TicketSize.LG -> 16.dp; else -> 10.dp },
-                ),
-                verticalAlignment = if (size == TicketSize.LG) Alignment.Top else Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(if (size == TicketSize.SM) 8.dp else 10.dp),
-            ) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(when (size) { TicketSize.SM -> 2.dp; TicketSize.LG -> 6.dp; else -> 3.dp })) {
-                    Text(
-                        t, color = onC, maxLines = 1, overflow = if (size == TicketSize.LG) TextOverflow.Visible else TextOverflow.Ellipsis,
-                        style = when (size) { TicketSize.SM -> plex(14, 600, 1.3); TicketSize.LG -> plex(36, 700, 1.1).copy(fontFeatureSettings = "tnum"); else -> plex(15, 600, 1.35) },
-                    )
-                    if (s != null) {
-                        val sc = if (fill) Color.White.copy(alpha = 0.82f) else c.tx3
-                        androidx.compose.runtime.CompositionLocalProvider(
-                            androidx.compose.material3.LocalContentColor provides sc,
-                            androidx.compose.material3.LocalTextStyle provides plex(when (size) { TicketSize.SM -> 12; TicketSize.LG -> 14; else -> 13 }, 400, 1.35).copy(color = sc),
-                        ) { FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) { s() } }
-                    }
+        }
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = minH).padding(start = stubW + 1.5.dp).padding(
+                horizontal = when (size) { TicketSize.SM -> 10.dp; TicketSize.LG -> 18.dp; else -> 14.dp },
+                vertical = when (size) { TicketSize.SM -> 6.dp; TicketSize.LG -> 16.dp; else -> 10.dp },
+            ),
+            verticalAlignment = if (size == TicketSize.LG) Alignment.Top else Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(if (size == TicketSize.SM) 8.dp else 10.dp),
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(when (size) { TicketSize.SM -> 2.dp; TicketSize.LG -> 6.dp; else -> 3.dp })) {
+                Text(
+                    t, color = onC, maxLines = 1, overflow = if (size == TicketSize.LG) TextOverflow.Visible else TextOverflow.Ellipsis,
+                    style = when (size) { TicketSize.SM -> plex(14, 600, 1.3); TicketSize.LG -> plex(36, 700, 1.1).copy(fontFeatureSettings = "tnum"); else -> plex(15, 600, 1.35) },
+                )
+                if (s != null) {
+                    val sc = if (fill) Color.White.copy(alpha = 0.82f) else c.tx3
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        androidx.compose.material3.LocalContentColor provides sc,
+                        androidx.compose.material3.LocalTextStyle provides plex(when (size) { TicketSize.SM -> 12; TicketSize.LG -> 14; else -> 13 }, 400, 1.35).copy(color = sc),
+                    ) { WrapRow(hGap = 6.dp, vGap = 2.dp) { with(WrapRowScope) { s() } } }
                 }
-                if (amt != null) Text(amt, style = plex(if (size == TicketSize.SM) 15 else 17, 700).copy(fontFeatureSettings = "tnum"), color = onC, textAlign = TextAlign.End)
-                if (chev) Icon(V4Icons.chev, null, tint = if (fill) Color.White.copy(alpha = 0.82f) else c.tx3, modifier = Modifier.size(16.dp))
             }
+            if (amt != null) Text(amt, style = plex(if (size == TicketSize.SM) 15 else 17, 700).copy(fontFeatureSettings = "tnum"), color = onC, textAlign = TextAlign.End, maxLines = 1, softWrap = false)
+            if (chev) Icon(V4Icons.chev, null, tint = if (fill) Color.White.copy(alpha = 0.82f) else c.tx3, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -740,11 +741,11 @@ fun SplitBar(segs: List<SplitSeg>, onFill: Boolean = true) {
                 })
             }
         }
-        FlowRow(Modifier.padding(top = 10.dp).graphicsLayer { alpha = 0.92f }, horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        WrapRow(Modifier.padding(top = 10.dp).graphicsLayer { alpha = 0.92f }, hGap = 16.dp, vGap = 6.dp) {
             segs.forEach { s ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.let { m -> s.onClick?.let { m.clickable(onClick = it) } ?: m }) {
                     Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).let {
-                        when (s.cls) { "me" -> it.background(fg); "owed" -> it.background(c.owe); else -> it.background(fg.copy(alpha = 0.45f)) }
+                        when (s.cls) { "me" -> it.background(fg); "owed" -> it.hatch(c.owe); else -> it.background(fg.copy(alpha = 0.45f)) }
                     })
                     Text(s.label, style = V4.t.cap, color = fg)
                     if (!s.noAmt) Text(yen(s.v), style = plex(13, 600), color = fg)
@@ -836,3 +837,43 @@ val data: AppData @Composable get() = LocalData.current
 @Suppress("unused") private val unusedSp = 1.sp
 @Suppress("unused") private fun Modifier.unusedWidthIn() = widthIn(0.dp)
 @Suppress("unused") private fun Modifier.unusedDraw() = drawWithContent { drawContent() }
+
+
+/** 折り返す横並び(CSS の flex-wrap)。子を左から置き、入らなければ次の行へ。各行の中は縦の中央揃え */
+@Composable
+fun WrapRow(modifier: Modifier = Modifier, hGap: Dp = 6.dp, vGap: Dp = 2.dp, content: @Composable () -> Unit) {
+    androidx.compose.ui.layout.Layout(content, modifier) { ms, cs ->
+        val maxW = cs.maxWidth
+        val ps = ms.map { it.measure(cs.copy(minWidth = 0, minHeight = 0)) }
+        val hg = hGap.roundToPx(); val vg = vGap.roundToPx()
+        val lines = ArrayList<MutableList<androidx.compose.ui.layout.Placeable>>()
+        var cur = ArrayList<androidx.compose.ui.layout.Placeable>(); var w = 0
+        for (p in ps) {
+            val add = if (cur.isEmpty()) p.width else w + hg + p.width
+            if (cur.isNotEmpty() && add > maxW) { lines.add(cur); cur = ArrayList(); w = p.width } else w = add
+            cur.add(p)
+        }
+        if (cur.isNotEmpty()) lines.add(cur)
+        val lh = lines.map { l -> l.maxOf { it.height } }
+        val width = if (cs.hasBoundedWidth && lines.size > 1) maxW else (lines.maxOfOrNull { l -> l.sumOf { it.width } + hg * (l.size - 1) } ?: 0).coerceAtMost(maxW)
+        val height = lh.sum() + vg * (lines.size - 1).coerceAtLeast(0)
+        layout(width, height) {
+            var y = 0
+            lines.forEachIndexed { i, l ->
+                var x = 0
+                l.forEach { p -> p.placeRelative(x, y + (lh[i] - p.height) / 2); x += p.width + hg }
+                y += lh[i] + vg
+            }
+        }
+    }
+}
+
+/** WrapRow の中で RowScope の内容(Ticket の s)をそのまま書くための入れ物(weight は使えない) */
+@androidx.compose.runtime.Stable
+private object WrapRowScope : RowScope {
+    override fun Modifier.weight(weight: Float, fill: Boolean): Modifier = this
+    override fun Modifier.align(alignment: Alignment.Vertical): Modifier = this
+    override fun Modifier.alignBy(alignmentLine: androidx.compose.ui.layout.HorizontalAlignmentLine): Modifier = this
+    override fun Modifier.alignByBaseline(): Modifier = this
+    override fun Modifier.alignBy(alignmentLineBlock: (androidx.compose.ui.layout.Measured) -> Int): Modifier = this
+}

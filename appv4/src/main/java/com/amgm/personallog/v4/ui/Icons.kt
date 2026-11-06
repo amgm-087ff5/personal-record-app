@@ -387,11 +387,14 @@ object V4Icons {
     }
 
     /* actIcon: 活動の小分類(ACT_IC)からアイコンを引く。無ければ activity */
+    /** 種類 → 印(ui.js AX_NODE と同じ。詳細の種類の札・タイムラインの節で共通) */
     fun actIcon(type: String): ImageVector = when (type) {
         "支払い" -> pay
         "会話" -> talk
         "移動" -> move
         "日記" -> diary
+        "出来事" -> spark
+        "食事", "買い物", "作業" -> moment
         else -> activity
     }
 
