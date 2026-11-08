@@ -1,3 +1,5 @@
+> **【アーカイブ・今後触らない】** ネイティブ版 v4(`appv4/`)はこのブランチから削除しました。タグ `retired/native-v4` の時点に残っています。HTMLモック(GitHub Pages の `gh-pages`)は残しており、参照対象はそちらです。
+
 # 個人記録 (Personal Log)
 
 写真 → 日記 → レシート読取 → 家計簿 をひとつにまとめた個人用アプリ。データは端末内(Room / 内部ストレージ / DataStore)にのみ保存します。Android 先行(minSdk 28)。

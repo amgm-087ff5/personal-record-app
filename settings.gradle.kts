@@ -16,4 +16,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "PersonalLog"
 include(":app")
-include(":appv4")
