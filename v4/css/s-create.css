@@ -70,3 +70,6 @@
 #sheet .field input,#sheet .field select{min-height:44px}
 #sheet .sh .act{position:relative;min-height:44px;display:inline-flex;align-items:center}
 #sheet .suggest .btn{height:44px}
+/* v4.16 使った人・払った人のチップ(js/money.js whoChips)。複数選べる。選んでいる人=薄い青(自分の操作) */
+.who-c{display:flex;flex-wrap:wrap;gap:8px}
+.who-c .cr-b{height:36px;min-width:56px;padding:0 14px;border-radius:999px}
