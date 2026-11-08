@@ -9,22 +9,22 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script>window.BUILD="UI v4.15 · 20261106-0300"</script>
-<link rel="stylesheet" href="css/tokens.css?v=20261106-0300">
-<link rel="stylesheet" href="css/app.css?v=20261106-0300">
-<link rel="stylesheet" href="css/axis.css?v=20261106-0300">
-<link rel="stylesheet" href="css/ticket.css?v=20261106-0300">
-<link rel="stylesheet" href="css/summary.css?v=20261106-0300">
-<link rel="stylesheet" href="css/s-detail.css?v=20261106-0300">
-<link rel="stylesheet" href="css/s-plan.css?v=20261106-0300">
-<link rel="stylesheet" href="css/s-entities.css?v=20261106-0300">
-<link rel="stylesheet" href="css/s-ledger.css?v=20261106-0300">
-<link rel="stylesheet" href="css/s-create.css?v=20261106-0300">
-<link rel="stylesheet" href="css/s-home.css?v=20261106-0300">
-<link rel="stylesheet" href="css/s-memo.css?v=20261106-0300">
-<link rel="stylesheet" href="css/s-settings.css?v=20261106-0300">
-<link rel="stylesheet" href="css/s-activities.css?v=20261106-0300">
-<link rel="stylesheet" href="css/plan-dash.css?v=20261106-0300">
+<script>window.BUILD="UI v4.16 · 20261108-1400"</script>
+<link rel="stylesheet" href="css/tokens.css?v=20261108-1400">
+<link rel="stylesheet" href="css/app.css?v=20261108-1400">
+<link rel="stylesheet" href="css/axis.css?v=20261108-1400">
+<link rel="stylesheet" href="css/ticket.css?v=20261108-1400">
+<link rel="stylesheet" href="css/summary.css?v=20261108-1400">
+<link rel="stylesheet" href="css/s-detail.css?v=20261108-1400">
+<link rel="stylesheet" href="css/s-plan.css?v=20261108-1400">
+<link rel="stylesheet" href="css/s-entities.css?v=20261108-1400">
+<link rel="stylesheet" href="css/s-ledger.css?v=20261108-1400">
+<link rel="stylesheet" href="css/s-create.css?v=20261108-1400">
+<link rel="stylesheet" href="css/s-home.css?v=20261108-1400">
+<link rel="stylesheet" href="css/s-memo.css?v=20261108-1400">
+<link rel="stylesheet" href="css/s-settings.css?v=20261108-1400">
+<link rel="stylesheet" href="css/s-activities.css?v=20261108-1400">
+<link rel="stylesheet" href="css/plan-dash.css?v=20261108-1400">
 </head>
 <body>
 <div id="app"></div>
@@ -32,17 +32,18 @@
 <div class="scrim" id="scrim" onclick="closeSheet()"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-<script src="js/data.js?v=20261106-0300"></script>
-<script src="js/plans.js?v=20261106-0300"></script>
-<script src="js/ui.js?v=20261106-0300"></script>
-<script src="js/screens/activities.js?v=20261106-0300"></script>
-<script src="js/screens/plan.js?v=20261106-0300"></script>
-<script src="js/screens/entities.js?v=20261106-0300"></script>
-<script src="js/screens/ledger.js?v=20261106-0300"></script>
-<script src="js/screens/create.js?v=20261106-0300"></script>
-<script src="js/screens/home.js?v=20261106-0300"></script>
-<script src="js/screens/memo.js?v=20261106-0300"></script>
-<script src="js/screens/settings.js?v=20261106-0300"></script>
-<script>load();render();</script>
+<script src="js/data.js?v=20261108-1400"></script>
+<script src="js/plans.js?v=20261108-1400"></script>
+<script src="js/ui.js?v=20261108-1400"></script>
+<script src="js/money.js?v=20261108-1400"></script>
+<script src="js/screens/activities.js?v=20261108-1400"></script>
+<script src="js/screens/plan.js?v=20261108-1400"></script>
+<script src="js/screens/entities.js?v=20261108-1400"></script>
+<script src="js/screens/ledger.js?v=20261108-1400"></script>
+<script src="js/screens/create.js?v=20261108-1400"></script>
+<script src="js/screens/home.js?v=20261108-1400"></script>
+<script src="js/screens/memo.js?v=20261108-1400"></script>
+<script src="js/screens/settings.js?v=20261108-1400"></script>
+<script>moneyMigrate();moneyInstall();load();render();</script>
 </body>
 </html>

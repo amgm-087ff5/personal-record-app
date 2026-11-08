@@ -327,23 +327,23 @@ function recordEvent(id){
   const e=EV[id];if(!e)return;
   if(e.rec&&A[e.rec])return;
   const day=plDayFor(e.d);
-  const aid=uid('c');
+  let aid;
   const placeId=e.place?e.place[0]:null;
   const placeName=e.place?(e.place[0]?E[e.place[0]].n:e.place[1]):'';
   if(e.pay){
-    const xid=uid('x');
-    const roles=[['支払先',placeId,placeName||e.t],['支払者','me'],...(e.who||[]).map(w=>['同席',w])];
-    A[aid]={type:'支払い',parent:day,time:e.s||'09:00',title:'支払い',pay:'カード ••1234',amt:e.pay.amt,roles,
-      items:[{n:e.t,price:e.pay.amt,b:'自分',tax:10}],x:xid};
-    X[xid]={pay:aid,amt:e.pay.amt,cat:e.pay.cat,memo:'',items:[{n:e.t,price:e.pay.amt,b:'全額'}]};
+    /* 支払いの予定は支払い + 自分の支出として作る(money.js の makePayment。親の kids にも入る) */
+    aid=makePayment({parent:day,time:e.s||'09:00',items:[{n:e.t,price:e.pay.amt,users:['me'],tax:10}],
+      payee:[placeId,placeName||e.t],roles:(e.who||[]).map(w=>['同席',w]),how:'カード ••1234',cat:e.pay.cat});
   }else{
+    aid=uid('c');
     /* 予定の時刻の範囲のまま活動(期間)にする。種類は内容から推定せず「出来事」。終日は時刻の範囲が無いので1つの時刻 */
     const roles=(e.who||[]).map(w=>['参加',w]);
     if(e.place)roles.push(['場所',placeId,placeName]);
     const span=!e.all&&e.s&&e.e?{time:e.s,end:e.e}:{time:e.s||'09:00'};
     A[aid]={type:'出来事',parent:day,...span,title:e.t,roles,body:'',kids:[]};
+    A[day].kids.push(aid);
   }
-  A[day].kids.push(aid);e.rec=aid;
+  e.rec=aid;
   save();go('#/a/'+aid);toast('記録にしました');
 }
 

@@ -155,12 +155,15 @@ function hmTodoTile(){
 }
 /** 未精算(全幅・1行): 立替の合計と相手。無ければ「なし」 */
 function hmOweTile(){
-  const owed=Object.values(A).filter(a=>a.adv&&a.adv[2]==='未精算');
-  const sum=owed.reduce((s,a)=>s+a.adv[1],0);
-  const people=[...new Set(owed.map(a=>a.adv[0]).filter(id=>E[id]))];
+  const ob=openBalances();
+  const lend=ob.filter(([,,b])=>b.amt>0), borrow=ob.filter(([,,b])=>b.amt<0);
+  /* 貸し・借りそれぞれの合計と相手。片方だけなら片方だけ出す */
+  const part=(xs,label)=>{const sum=xs.reduce((s,[,,b])=>s+Math.abs(b.amt),0),ppl=[...new Set(xs.flatMap(([,,b])=>b.with))];
+    return `<span class="hm-ow-l"><span class="hm-ow-k">${label}</span><b class="hm-amt num">${yen(sum)}</b>${ppl.length?`<span class="hm-sub">${knots(ppl)}</span>`:''}</span>`};
   return `<a class="hm-tile hm-wide hm-owe" href="#/ledger"><span class="hm-k">未精算</span>`
-    +`<b class="hm-amt num">${owed.length?yen(sum):'なし'}</b>`
-    +`<span class="hm-sub">${people.length?knots(people):''}</span></a>`;
+    +(ob.length?'':`<b class="hm-amt num">なし</b>`)
+    +(lend.length?part(lend,'貸し'):'')+(borrow.length?part(borrow,'借り'):'')
+    +`</a>`;
 }
 /** すぐメモ(全幅): 1行の入力+保存。最新のメモ1件(2行まで・時刻)。押すとメモのシート */
 function hmMemoSave(){

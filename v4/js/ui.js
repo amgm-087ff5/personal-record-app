@@ -135,24 +135,28 @@ function kidItem(c){
   return `<span class="ka-w"><span class="ka" role="link" tabindex="0" onclick="event.preventDefault();event.stopPropagation();go('#/a/${c}')"><span class="ka-i">${IC[icon]||''}</span><span class="ka-t">${esc(p.title||p.type||'')}<small>${esc(timeText(p))}</small></span></span>${sub}</span>`;
 }
 /** 1つの支払いの棒: 自分(青) / ほかの人(灰) / 立替・未精算(琥珀の斜線) */
-function payBar(a,x){const rest=a.amt-x.amt;const owed=a.adv&&a.adv[2]==='未精算';
-  return `<span class="pbar" aria-label="支払い ${yen(a.amt)} のうち自分 ${yen(x.amt)}"><i class="me" style="flex:${x.amt}"></i>${rest>0?`<i class="${owed?'owed':'other'}" style="flex:${rest}"></i>`:''}</span>`}
+/** 貸し(自分が多く払った)が未精算か。未精算の時は、ほかの人の区間を琥珀の斜線にする */
+const owedOpen=a=>{const b=balanceOf(a);return b.amt>0&&!b.settled};
+/** 借り(自分の分を払っていない)が未精算の時の印。金額の横に出す */
+const debtTag=a=>{const b=balanceOf(a);return b.amt<0&&!b.settled?tag('借り',{cls:'warn'}):''};
+function payBar(a,x){const mine=xAmt(x),rest=a.amt-mine;
+  return `<span class="pbar" aria-label="支払い ${yen(a.amt)} のうち自分 ${yen(mine)}"><i class="me" style="flex:${mine}"></i>${rest>0?`<i class="${owedOpen(a)?'owed':'other'}" style="flex:${rest}"></i>`:''}</span>`}
 /* ---- v4.12 支払いの殻 ----
    支払い(外の面)の中に、自分の支出の半券(ticket)を埋め込む1つの部品。タイムライン・活動の中・支払い詳細・支出詳細で同じ部品を使う。
    mode: row=タイムライン・日の行(白い面。見出し=支払い詳細 / 半券=支出) /
          kid=活動の中の子(薄い面。外が <a> なので span で書く) /
          pay=支払い詳細の暗い主役の下端(半券だけ。普通の大きさ) /
          x=支出詳細の最上部(支払いの見出し1行が小さく + 支出の半券が大きい) */
-const psTk=(p,x,o)=>ticket(Object.assign({stub:spStub(xSp(x)),t:'自分の支出',s:`<span class="ps-cat">${esc(catPath(x.cat))}</span>${x.amt!==p.amt?payBar(p,x):''}`,amt:yen(x.amt)},o));
+const psTk=(p,x,o)=>ticket(Object.assign({stub:spStub(xSp(x)),t:'自分の支出',s:`<span class="ps-cat">${esc(catPath(x.cat))}</span>${x.amt!==p.amt?payBar(p,x):''}${debtTag(p)}`,amt:yen(xAmt(x))},o));
 function payShell(pid,{mode='row',xid}={}){
   const p=A[pid];if(!p)return '';
   const x=xid?X[xid]:(p.x&&X[p.x]),xk=xid||p.x;
   const tot=`<span class="ps-tot">合計 <b>${yen(p.amt)}</b></span>`;
   if(mode==='pay')return x?`<div class="ps ps-pay">${psTk(p,x,{href:`#/x/${xk}`,chev:true})}</div>`:'';
   if(mode==='x'){
-    const d=xDate(x),pct=Math.round(x.amt/p.amt*100),owed=p.adv&&p.adv[2]==='未精算';
+    const d=xDate(x),pct=Math.round(x.amt/p.amt*100),bal=balanceOf(p);
     return `<div class="ps ps-x"><a class="ps-h" href="#/a/${pid}"><span class="ps-ic">${IC.pay}</span><span class="ps-l">${esc(payLabel(p))} · ${fmtMDW(d)}${p.time?` ${esc(p.time)}`:''}</span>${tot}${IC.chev}</a>`
-      +ticket({cls:'lg fill',label:`自分の支出 ${yen(x.amt)}`,stub:spStub(xSp(x)),t:yen(x.amt),s:`支払い ${yen(p.amt)} の ${pct}%${owed?' '+tag('未精算',{cls:'warn'}):''}`})+`</div>`;
+      +ticket({cls:'lg fill',label:`自分の支出 ${yen(x.amt)}`,stub:spStub(xSp(x)),t:yen(x.amt),s:`<span class="ps-pct">支払い ${yen(p.amt)} の ${pct}%</span>${bal.open?tag(balanceText(bal),{cls:'warn ps-bal'}):''}`})+`</div>`;
   }
   if(mode==='kid'){
     const go_=`event.preventDefault();event.stopPropagation();go('#/a/${pid}')`,go_x=`event.preventDefault();event.stopPropagation();go('#/x/${xk}')`;
@@ -256,7 +260,7 @@ function itemEd(P,o){
   ed.tg=i=>{ed.open=ed.open===i?-1:i;o.redraw()};
   ed.set=(i,k,v)=>{const it=o.items()[i];if(!it)return;
     if(k==='price'){it.price=num(v);o.upd(i)}else if(k==='tax'){it.tax=+v;o.redraw()}else it[k]=v};
-  ed.add=()=>{o.items().push({n:'',price:0,tax:8,b:'自分'});ed.open=o.items().length-1;o.redraw();foc('.ie-o .ie-n')};
+  ed.add=()=>{o.items().push({n:'',price:0,tax:8,users:['me']});ed.open=o.items().length-1;o.redraw();foc('.ie-o .ie-n')};
   ed.del=i=>{o.items().splice(i,1);ed.open=-1;o.redraw()};
   ed.ladd=i=>{const it=o.items()[i];if(!it)return;if(!it.lines)it.lines=[{n:'',k:'amt',v:it.price||0,sg:1}];it.lines.push({n:'',k:'amt',v:0,sg:1});ed.open=i;o.redraw();foc('.ie-o .ie-l .ie-ln')};
   ed.lset=(i,j,k,v,re)=>{const l=((o.items()[i]||{}).lines||[])[j];if(!l)return;
@@ -300,6 +304,7 @@ const go=h=>{location.hash=h};
 const goBack=()=>{history.length>1?history.back():go('#/home')};
 let lastTab='home';
 function render(keepScroll){
+  if(typeof moneyInstall==='function')moneyInstall(); /* v4.16 新しく作った支出・支払いにも計算値を付ける */
   CUR=parseHash();const r=ROUTES[CUR.name]||ROUTES.activities;
   const y=scrollY;
   const safe=(fn,id,q)=>{try{return fn(id,q)}catch(e){console.error(e);return appbar('表示できません')+banner('warn',`この画面を表示できませんでした。<br><small>${esc(e.message)}</small>`)}};
@@ -641,7 +646,7 @@ function openCreate(){
 }
 
 /* ---------- 保存(このブラウザ) ---------- */
-const SKEY='prmock-v4.14'; /* v4.14で活動の中に活動(w2 › c1)を入れたので、古い保存データは読まない */
+const SKEY='prmock-v4.16'; /* v4.16: 支払い(paid・users)と支出(basis)を分けた。古い保存データは読まない(読んだ場合も moneyMigrate で移す) */
 /* 予定・ToDoは PLN だけを保存する(EV・TD は PLN の見え方なので保存しない) */
 function save(){try{plSettle();localStorage.setItem(SKEY,JSON.stringify({A,X,E,PLN,TYPES,CATS,NOTES,MEMOS,LISTS,TYPE_PROPS,EXTRA:typeof EXTRA!=='undefined'?EXTRA:{}}))}catch(e){}}
 function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(!s)return;
@@ -650,6 +655,7 @@ function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(!s
   plSettle();
   if(s.EXTRA&&typeof EXTRA!=='undefined')Object.assign(EXTRA,s.EXTRA);
   Object.values(A).forEach(a=>(a.items||[]).forEach(itemMigrate));
+  moneyMigrate();moneyInstall();
   /* v4.4: 茶色の系統の旧カテゴリ色(テラコッタ・マスタード)と近すぎた色を、保存データでも置き換える */
   const RECOLOR={'#E07A4F':'#DC97AA','#E3B341':'#B3D8EA','#9AB3D6':'#B3D8EA','#D9789B':'#F2C6D3','#5E6E91':'#8796B5','#3E9AA0':'#7FB5B9','#D0607F':'#DC97AA','#6FB07A':'#9CC7A3','#4C8BC9':'#8DB0DD','#7FC8E8':'#B3D8EA','#F2A7C0':'#F2C6D3','#8A9BB8':'#A9B4C6'}; /* v4.9: カテゴリの色を落ち着いた淡い色に(チカチカしない) */
   Object.values(CATS).forEach(c=>{if(c.c&&RECOLOR[c.c.toUpperCase()])c.c=RECOLOR[c.c.toUpperCase()]});

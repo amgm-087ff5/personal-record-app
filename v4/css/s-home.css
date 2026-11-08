@@ -146,9 +146,12 @@ a.hm-tile:active{transform:scale(.985)}
 /* 今日の支出・未精算の中の数字の位置 */
 .hm-root .hm-tile .hm-amt{margin-top:2px}
 /* 未精算(1行): 題名・金額・相手を横に並べる */
-.hm-root .hm-owe{flex-direction:row;align-items:center;gap:12px;min-height:56px}
+.hm-root .hm-owe{gap:8px;min-height:56px}
+/* v4.16 未精算: 貸し・借りを1行ずつ(種類・金額・相手) */
+.hm-root .hm-ow-l{display:flex;align-items:center;gap:12px;width:100%;min-width:0}
+.hm-root .hm-ow-k{flex:none;min-width:2.5em;font:600 14px/1.4 var(--font);color:var(--tx-2)}
 .hm-root .hm-owe .hm-amt{margin-top:0}
-.hm-root .hm-owe .hm-sub{margin-left:auto}
+.hm-root .hm-owe .hm-sub{margin-left:auto;min-width:0;overflow:hidden}
 
 /* すぐメモ: 入力(へこんだ面)+保存、最新のメモ1件 */
 .hm-root .hm-memo{display:flex;align-items:center;gap:8px;min-height:52px;padding:4px 4px 4px 14px;border-radius:14px;background:var(--sunk)}
