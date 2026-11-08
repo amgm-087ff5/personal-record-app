@@ -19,24 +19,17 @@ function crDay(date){
 function crGuessCat(eid){if(!eid)return 'eatout';const t=E[eid].t;
   if(t.some(x=>isUnder(x,'cafe')))return 'cafe';if(t.some(x=>isUnder(x,'food')))return 'eatout';
   if(t.some(x=>isUnder(x,'super')))return 'cook';if(t.some(x=>isUnder(x,'drug')))return 'daily';return 'eatout';}
-/** 支払い + 自分の支出(子)を作る。品目の負担から自分の分を計算。図の画像と重複判定用ハッシュは EXTRA に入れる */
+/** 支払い + 自分の支出(子)を作る。v4.16: 中身は makePayment(js/money.js)。品目は users(使った人)。
+   互換: 品目に b(自分/半分/相手)だけがある時は users に読み替える。o.basis/o.me/o.n で自分の負担の決め方 */
 function crPayment(o){
   const day=crDay(o.date);let shopId=crFindEnt(o.shop);
   if(!shopId&&o.register&&o.shop)shopId=crNewEnt(o.shop.trim(),[o.shopType||'shop']);
-  const roles=[['支払先',shopId,o.shop||'(店なし)'],['支払者','me']];if(o.with)roles.push(['同席',o.with]);
-  const amt=o.items.reduce((s,i)=>s+itemAmt(i),0);
-  const aid=uid('p'),xid=uid('x');
-  /* 親: 選んだ活動(期間)の中、無ければ日の直下 */
   const parent=o.act&&A[o.act]&&A[o.act].type!=='日記'?o.act:day;
-  const mine=o.items.filter(i=>i.b!=='相手').map(i=>({n:i.n,price:i.b==='半分'?Math.floor(itemAmt(i)/2):itemAmt(i),b:i.b==='半分'?'1/2':'全額'}));
-  const xamt=mine.reduce((s,i)=>s+i.price,0);
-  const who=o.with?E[o.with].n.split(' ').pop():'相手';
-  A[aid]={type:'支払い',parent,time:o.time,title:'支払い',pay:o.pay||'現金',amt,roles,
-    items:o.items.map(i=>{const r={n:i.n,price:itemAmt(i),tax:i.tax||10,b:i.b==='相手'?who:i.b};const ln=lnSave(i);if(ln)r.lines=ln;return r}),x:xamt?xid:undefined};
-  if(o.with&&amt-xamt>0)A[aid].adv=[o.with,amt-xamt,'未精算'];
-  if(xamt){X[xid]={pay:aid,amt:xamt,cat:o.cat||crGuessCat(shopId),memo:'',items:mine};
-    /* カテゴリが都度指定の項目だけ、入力時に選んだ値を持つ */
-    if(o.fx&&catFx(X[xid].cat)===null)X[xid].fx=o.fx;if(o.sp&&catSp(X[xid].cat)===null)X[xid].sp=o.sp}
+  const other=o.with||'other';
+  const items=o.items.map(i=>({...i,users:i.users&&i.users.length?i.users:(i.b==='半分'?['me',other]:i.b==='相手'?[other]:['me'])}));
+  const aid=makePayment({parent,time:o.time,items,amt:o.amt,payee:[shopId,o.shop||'(店なし)'],roles:o.with?[['同席',o.with]]:[],
+    paid:o.paid,how:o.pay||'現金',basis:o.basis,me:o.me,n:o.n,cat:o.cat||crGuessCat(shopId),fx:o.fx,sp:o.sp,memo:o.memo});
+  const kids=A[parent].kids;if(kids[kids.length-1]===aid)kids.pop(); /* 下の共通処理で入れる */
   A[parent].kids.push(aid);
   EXTRA.attach=EXTRA.attach||{};EXTRA.hashes=EXTRA.hashes||{};
   if(o.img)EXTRA.attach[aid]=o.img;

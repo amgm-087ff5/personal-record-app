@@ -256,7 +256,7 @@ function itemEd(P,o){
   ed.tg=i=>{ed.open=ed.open===i?-1:i;o.redraw()};
   ed.set=(i,k,v)=>{const it=o.items()[i];if(!it)return;
     if(k==='price'){it.price=num(v);o.upd(i)}else if(k==='tax'){it.tax=+v;o.redraw()}else it[k]=v};
-  ed.add=()=>{o.items().push({n:'',price:0,tax:8,b:'自分'});ed.open=o.items().length-1;o.redraw();foc('.ie-o .ie-n')};
+  ed.add=()=>{o.items().push({n:'',price:0,tax:8,users:['me']});ed.open=o.items().length-1;o.redraw();foc('.ie-o .ie-n')};
   ed.del=i=>{o.items().splice(i,1);ed.open=-1;o.redraw()};
   ed.ladd=i=>{const it=o.items()[i];if(!it)return;if(!it.lines)it.lines=[{n:'',k:'amt',v:it.price||0,sg:1}];it.lines.push({n:'',k:'amt',v:0,sg:1});ed.open=i;o.redraw();foc('.ie-o .ie-l .ie-ln')};
   ed.lset=(i,j,k,v,re)=>{const l=((o.items()[i]||{}).lines||[])[j];if(!l)return;
@@ -300,6 +300,7 @@ const go=h=>{location.hash=h};
 const goBack=()=>{history.length>1?history.back():go('#/home')};
 let lastTab='home';
 function render(keepScroll){
+  if(typeof moneyInstall==='function')moneyInstall(); /* v4.16 新しく作った支出・支払いにも計算値を付ける */
   CUR=parseHash();const r=ROUTES[CUR.name]||ROUTES.activities;
   const y=scrollY;
   const safe=(fn,id,q)=>{try{return fn(id,q)}catch(e){console.error(e);return appbar('表示できません')+banner('warn',`この画面を表示できませんでした。<br><small>${esc(e.message)}</small>`)}};
@@ -641,7 +642,7 @@ function openCreate(){
 }
 
 /* ---------- 保存(このブラウザ) ---------- */
-const SKEY='prmock-v4.14'; /* v4.14で活動の中に活動(w2 › c1)を入れたので、古い保存データは読まない */
+const SKEY='prmock-v4.16'; /* v4.16: 支払い(paid・users)と支出(basis)を分けた。古い保存データは読まない(読んだ場合も moneyMigrate で移す) */
 /* 予定・ToDoは PLN だけを保存する(EV・TD は PLN の見え方なので保存しない) */
 function save(){try{plSettle();localStorage.setItem(SKEY,JSON.stringify({A,X,E,PLN,TYPES,CATS,NOTES,MEMOS,LISTS,TYPE_PROPS,EXTRA:typeof EXTRA!=='undefined'?EXTRA:{}}))}catch(e){}}
 function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(!s)return;
@@ -650,6 +651,7 @@ function load(){try{const s=JSON.parse(localStorage.getItem(SKEY)||'null');if(!s
   plSettle();
   if(s.EXTRA&&typeof EXTRA!=='undefined')Object.assign(EXTRA,s.EXTRA);
   Object.values(A).forEach(a=>(a.items||[]).forEach(itemMigrate));
+  moneyMigrate();moneyInstall();
   /* v4.4: 茶色の系統の旧カテゴリ色(テラコッタ・マスタード)と近すぎた色を、保存データでも置き換える */
   const RECOLOR={'#E07A4F':'#DC97AA','#E3B341':'#B3D8EA','#9AB3D6':'#B3D8EA','#D9789B':'#F2C6D3','#5E6E91':'#8796B5','#3E9AA0':'#7FB5B9','#D0607F':'#DC97AA','#6FB07A':'#9CC7A3','#4C8BC9':'#8DB0DD','#7FC8E8':'#B3D8EA','#F2A7C0':'#F2C6D3','#8A9BB8':'#A9B4C6'}; /* v4.9: カテゴリの色を落ち着いた淡い色に(チカチカしない) */
   Object.values(CATS).forEach(c=>{if(c.c&&RECOLOR[c.c.toUpperCase()])c.c=RECOLOR[c.c.toUpperCase()]});
