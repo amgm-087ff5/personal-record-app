@@ -1,5 +1,5 @@
 /* =====================================================================
-   作成フロー(中央の＋から開く): レシート・支出・予定・出来事・日記・エンティティ
+   作成フロー(中央の＋から開く): 支払いを記録(手で入力・レシートから読み取る)・出来事・予定・ToDo・日記・メモ・エンティティ
    画面ルートは持たず、シートで入力して保存後に各詳細へ移動する。
    名前は cr 接頭辞。入力は oninput で状態へ書き戻し、構造が変わる時だけ描き直す。
    ===================================================================== */
@@ -76,8 +76,9 @@ function crActSync(id,st,d,t,set){const el=document.getElementById(id);if(el)el.
 
 /* ---------- 登録 ---------- */
 /* 主の行(青の塗り)= タブごとに「そのタブで一番よく作るもの」1つだけ。
-   ホーム・家計簿・設定=レシートで支払い / 記録=出来事 / 予定=予定 / メモ=メモ / ToDo=ToDo(plan.js) / エンティティ=エンティティ */
-CREATE.push({id:'receipt',label:'レシートで支払い',icon:'pay',color:'var(--ev)',primaryOn:['home','ledger','settings'],onclick:'openReceipt()'});
+   ホーム・家計簿・設定=支払いを記録 / 記録=出来事 / 予定=予定 / メモ=メモ / ToDo=ToDo(plan.js) / エンティティ=エンティティ */
+/* v4.17 支払いの記録は1つの入口。手で入力が既定、レシートはその中の「読み取る」手段の1つ(支払い方法ではない) */
+CREATE.push({id:'payment',label:'支払いを記録',icon:'pay',color:'var(--ev)',primaryOn:['home','ledger','settings'],onclick:'openPayment()'});
 CREATE.push({id:'happening',label:'出来事',icon:'moment',color:'var(--ev)',primaryOn:['activities'],onclick:'openNewHappening()'});
 CREATE.push({id:'event',label:'予定',icon:'future',color:'var(--plan)',primaryOn:['activities'],onclick:'openNewEvent()'});
 CREATE.push({id:'entity',label:'エンティティ',icon:'kin',color:'var(--kin)',primaryOn:['entities'],onclick:'openNewEntity()'});
@@ -120,20 +121,23 @@ function crAskHtml(st,cat,fn){
   if(catSp(cat)===null)rows.push(`<div class="field"><label>特別感</label>${ldMini([['日常','日常'],['非日常','非日常']],st.sp||'',`${fn}('sp','$v')`)}</div>`);
   return rows.length?sh('このカテゴリは都度指定')+list(rows):'';
 }
-/* ---------- ＋支出(金額だけ) ---------- */
+/* ---------- 支払いを記録(手で入力。上に「レシートから読み取る」)v4.17 ---------- */
 let CQ={amt:'',shop:'',date:TODAY,root:'food',cat:'eatout'};
 /* o.stay: ホームの入力欄から開いた時は、保存後に元の画面に留まる(記録の画面へ移動しない) */
-function openQuickExpense(o){CQ={amt:'',shop:'',date:TODAY,time:crNowHM(),root:'food',cat:'eatout',stay:!!(o&&o.stay)};crQeRender()}
+function openQuickExpense(o){CQ={amt:'',shop:'',date:TODAY,time:crNowHM(),how:PAY_METHODS[0],root:'food',cat:'eatout',stay:!!(o&&o.stay)};crQeRender()}
+const openPayment=openQuickExpense;
 function crQeX(k,v){CQ[k]=CQ[k]===v?'':v;crQeRender()}
 function crQeChildren(root){return Object.keys(CATS).filter(k=>CATS[k].p===root)}
 function crQeRoot(k){CQ.root=k;const ks=crQeChildren(k);CQ.cat=ks.length?ks[0]:k;crQeRender()}
 function crQeRender(){
   const kids=crQeChildren(CQ.root);
-  const body=`<div class="list">
+  const body=`<div class="btnrow"><button class="btn ghost block cr-ocr" type="button" onclick="openReceipt()">${IC.camera}レシートから読み取る</button></div>
+  <div class="list">
     <div class="field"><label>金額</label><input class="amt num" id="cr-qe-amt" inputmode="numeric" autofocus placeholder="¥0" value="${esc(CQ.amt)}" oninput="CQ.amt=this.value"></div>
     <div class="field"><label>日付</label><input type="date" value="${CQ.date}" oninput="CQ.date=this.value;crActSync('cr-qe-act',CQ,CQ.date,CQ.time,'CQ.act=this.value')"></div>
     <div class="field"><label>店</label><input value="${esc(CQ.shop)}" placeholder="店名を入力" oninput="CQ.shop=this.value;crSugUpdate('cr-sug-qe',this.value,'crQePick')"></div>
     <div class="cr-sug" id="cr-sug-qe">${crPlaceSug(CQ.shop,'crQePick')}</div>
+    <div class="field"><label>支払い方法</label>${payMethodSelect(CQ.how,'CQ.how=this.value')}</div>
     ${crActField(CQ,CQ.date,CQ.time,'CQ.act=this.value','cr-qe-act')}
   </div>
   ${sh('カテゴリ')}
@@ -141,13 +145,13 @@ function crQeRender(){
   ${kids.length?`<div class="list">
     <div class="field"><label>小分類</label><select onchange="CQ.cat=this.value;crQeRender()">${kids.map(k=>`<option value="${k}" ${CQ.cat===k?'selected':''}>${esc(CATS[k].n)}</option>`).join('')}</select></div></div>`:''}
   ${crAskHtml(CQ,CQ.cat,'crQeX')}`;
-  crPanel('金額だけで支払い',body,{right:{label:'支払いを保存',onclick:'crQeSave()'}});
+  crPanel('支払いを記録',body,{right:{label:'支払いを保存',onclick:'crQeSave()'}});
 }
 function crQePick(k){CQ.shop=E[k].n;crQeRender()}
 function crQeSave(){
   const amt=+String(CQ.amt).replace(/[^\d]/g,'');if(!amt){toast('金額を入れてください');return}
   const cat=CQ.cat;const shop=(CQ.shop||'').trim();const time=crNowHM();const date=CQ.date||TODAY;
-  const aid=crPayment({date,time,shop,register:false,items:[{n:CATS[cat].n,price:amt,tax:10,users:['me']}],cat,fx:CQ.fx,sp:CQ.sp,act:crActResolve(CQ,date,time)});
+  const aid=crPayment({date,time,shop,register:false,items:[{n:CATS[cat].n,price:amt,tax:10,users:['me']}],pay:CQ.how,cat,fx:CQ.fx,sp:CQ.sp,act:crActResolve(CQ,date,time)});
   closeSheet();save();
   if(CQ.stay){rerender();toast('支払いを保存しました')}
   else{go('#/a/'+aid);toast('支払いを保存しました(自分の支出=全額)')}
@@ -318,9 +322,9 @@ function crEntSave(){
   CN=null;closeSheet();save();go('#/e/'+id);toast(`「${n}」を追加しました`);
 }
 
-/* ---------- レシートで支払い(複数枚・重複判定) ---------- */
+/* ---------- レシートから読み取る(支払いを記録する手段の1つ。複数枚・重複判定) ---------- */
 const CR_MAXR=20;
-const CR_PAYS=['現金','カード ••1234','電子マネー'];
+const CR_PAYS=PAY_METHODS;
 /* モックの読み取り結果(実際の画像は読まない) */
 const CR_POOL={
   super:{shop:'スーパー青葉台',date:TODAY,time:'16:20',items:[['牛乳',238,8],['食器用洗剤',298,10],['バナナ',158,8],['食パン',178,8],['食パン',178,8]]},
@@ -346,7 +350,7 @@ let CRS={rc:null,idx:-1,mode:'batch',td:{},open:false};
 
 function openReceipt(){
   crBT=[];CRS={rc:null,idx:-1,mode:'batch',td:{},open:false};
-  crPanel('レシートで支払い',`<div class="cr-tiles">
+  crPanel('レシートから読み取る',`<div class="cr-tiles">
     <label class="cr-tile"><input type="file" accept="image/*" capture="environment" hidden onchange="crAddFiles(this.files)">${ico('camera','var(--ev)')}<span>撮影する</span><small>1枚</small></label>
     <label class="cr-tile"><input type="file" accept="image/*" multiple hidden onchange="crAddFiles(this.files)">${ico('photo','var(--ev)')}<span>写真を選ぶ</span><small>最大${CR_MAXR}枚</small></label>
   </div>
@@ -413,7 +417,7 @@ function crBatchView(){
   const n=crBT.length,done=crBT.filter(b=>b.status!=='scan').length,ok=crBT.filter(b=>b.status==='ok').length;
   const body=`<div class="cr-prog"><div class="meter"><i style="width:${n?Math.round(done/n*100):0}%;background:var(--brand)"></i></div><span class="num">${done}/${n}枚 読み取り済み</span></div>`
     +list(crBT.flatMap((b,i)=>crRowParts(b,i)),'flat');
-  crPanel('レシートで支払い',body,{full:true,top:true,footer:`<button class="btn block" type="button" ${ok?'':'disabled'} onclick="crBatchSave()">${ok?`${ok}件の支払いを保存`:'支払いを保存'}</button>`});
+  crPanel('レシートから読み取る',body,{full:true,top:true,footer:`<button class="btn block" type="button" ${ok?'':'disabled'} onclick="crBatchSave()">${ok?`${ok}件の支払いを保存`:'支払いを保存'}</button>`});
 }
 function crSkip(i){crBT[i].status='skip';crBatchView()}
 function crUnskip(i){crCheckDup(crBT[i]);crBatchView()}
@@ -501,7 +505,7 @@ function crReview(top){
       +`<div id="cr-bur">${crBurHtml()}</div></div>`:'');
   const foot=single?`<button class="btn block" type="button" onclick="crSaveSingle()">支払いを保存</button>`
     :`<button class="btn block" type="button" onclick="crConfirm()">確認済みにする</button>`;
-  crPanel('レシートで支払い',body,{full:true,top:!!top,footer:foot});
+  crPanel('レシートから読み取る',body,{full:true,top:!!top,footer:foot});
 }
 /** 誰かと分けた時の欄: 払った人 / 品目ごとの使った人 / 自分の負担(聞く時だけ)。誰とも分けない時は何も出さない */
 function crSplitHtml(rc){

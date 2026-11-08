@@ -51,10 +51,10 @@ const A={
   m1:{type:'移動',parent:'d1030',time:'19:30',end:'20:05',title:'帰宅',roles:[['出発','minato'],['到着','home']]},
   h1:{type:'出来事',parent:'d1029',time:'14:00',end:'15:30',title:'物件の内見',roles:[['プロジェクト','proj1']]},
   s2:{type:'買い物',parent:'d1029',time:'18:25',end:'18:50',title:'夕食の買い物',roles:[['場所','super']],kids:['p2']},
-  p2:{type:'支払い',parent:'s2',time:'18:40',title:'支払い',amt:2684,roles:[['支払先','super']],paid:[{who:'me',amt:2684,how:'カード ••1234'}],
+  p2:{type:'支払い',parent:'s2',time:'18:40',title:'支払い',amt:2684,roles:[['支払先','super']],paid:[{who:'me',amt:2684,how:'クレジットカード ••1234'}],
       items:[{n:'牛乳',price:238,users:['me'],tax:8},{n:'卵',price:268,users:['me'],tax:8,memo:'特売'},{n:'卵',price:268,users:['me'],tax:8},{n:'鶏もも肉',price:612,lines:[{n:'',k:'amt',v:680},{n:'値引き',k:'pct',v:-10}],users:['me'],tax:8},{n:'キッチンペーパー',price:398,users:['me'],tax:10},{n:'その他',price:900,users:['me'],tax:8,unk:1}],x:'x2'},
-  p3:{type:'支払い',parent:'d1028',time:'08:20',title:'支払い',amt:620,roles:[['支払先',null,'ベーカリー木漏れ日']],paid:[{who:'me',amt:620,how:'現金'}],items:[{n:'クロワッサン',price:280,users:['me'],tax:8},{n:'カレーパン',price:340,users:['me'],tax:8}],x:'x3'},
-  p4:{type:'支払い',parent:'d1027',time:'20:05',title:'支払い',amt:1280,roles:[['支払先','drug']],paid:[{who:'me',amt:1280,how:'カード ••1234'}],items:[{n:'洗剤',price:680,users:['me'],tax:10},{n:'歯ブラシ',price:600,users:['me'],tax:10}],x:'x4'},
+  p3:{type:'支払い',parent:'d1028',time:'08:20',title:'支払い',amt:620,roles:[['支払先',null,'ベーカリー木漏れ日']],paid:[{who:'me',amt:620,how:'Suica'}],items:[{n:'クロワッサン',price:280,users:['me'],tax:8},{n:'カレーパン',price:340,users:['me'],tax:8}],x:'x3'},
+  p4:{type:'支払い',parent:'d1027',time:'20:05',title:'支払い',amt:1280,roles:[['支払先','drug']],paid:[{who:'me',amt:1280,how:'QRコード決済'}],items:[{n:'洗剤',price:680,users:['me'],tax:10},{n:'歯ブラシ',price:600,users:['me'],tax:10}],x:'x4'},
 };
 /* 自分の支出(家計簿のエントリ)。v4.16: 品目は持たない(支払いの品目を参照)。金額は basis から計算(js/money.js)
    basis: 'items' = 使った分 / 'even' = 人数(n)で割り勘 / 'amount' = 金額(me)を指定(奢りなど)。cat = 既定のカテゴリ、itemCat = 品目ごとに変えた分 */
@@ -103,7 +103,7 @@ const COLORS=['#8796B5','#7FB5B9','#DC97AA','#9CC7A3','#8DB0DD','#B3D8EA','#F2C6
   if(!A[d].kids.includes(pid))A[d].kids.push(pid);
   const roles=[['支払先',shopId,shopName]];if(pid==='p8')roles.push(['同席','hanako']);if(pid==='p17')roles.push(['同席','ken']);
   /* p8 = 花子さんの誕生日に自分が奢った(使ったのは2人・自分の支出は全額) / p17 = 健さんが2人分を払い、半分ずつ(自分は借り) */
-  const paid=pid==='p17'?[{who:'ken',amt:amt*2,how:''}]:[{who:'me',amt,how:'カード ••1234'}];
+  const paid=pid==='p17'?[{who:'ken',amt:amt*2,how:''}]:[{who:'me',amt,how:'クレジットカード ••1234'}];
   const tot=pid==='p17'?amt*2:amt,users=pid==='p8'||pid==='p17'?['me',pid==='p8'?'hanako':'ken']:['me'];
   A[pid]={type:'支払い',parent:d,time,title:'支払い',amt:tot,roles,paid,items:[{n:title,price:tot,users,tax:10}],x:xid};
   X[xid]={pay:pid,basis:pid==='p8'?'amount':pid==='p17'?'even':'items',cat,sp,memo:''};

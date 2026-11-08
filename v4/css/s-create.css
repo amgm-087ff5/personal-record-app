@@ -77,3 +77,4 @@
 .field.cr-basis{flex-direction:column;align-items:stretch;gap:8px;padding:12px 14px}
 .field.cr-basis .seg{width:100%}
 .field.cr-basis .seg{margin:0}
+.cr-ocr svg.i{width:20px;height:20px;flex:none;margin-right:8px}

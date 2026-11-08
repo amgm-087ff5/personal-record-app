@@ -162,7 +162,7 @@ route('activities',(id,q)=>{
   if(CUR.name==='activities')actViewNow=['day','month'].includes(q.view)?q.view:'list';
   const view=actViewNow;
   /* 上部の大見出しの行(縮んだ時に出る丸ボタン2つ=作る)と、表示の切替の行 */
-  const tb=`<div class="act-tb"><button class="act-ib" type="button" aria-label="レシートで支払い" onclick="openReceipt()">${IC.camera}</button><button class="act-ib" type="button" aria-label="出来事を追加" onclick="openNewHappening()">${IC.plus}</button></div>`;
+  const tb=`<div class="act-tb"><button class="act-ib" type="button" aria-label="レシートから支払いを記録" onclick="openReceipt()">${IC.camera}</button><button class="act-ib" type="button" aria-label="出来事を追加" onclick="openNewHappening()">${IC.plus}</button></div>`;
   const titleRow=`<div class="lt act-lt"><h1>アクティビティ</h1>${tb}<button class="iconbtn" type="button" aria-label="検索" onclick="toast('検索はモックでは未対応です')">${IC.search}</button></div>`;
   const viewRow=`<div class="act-views">${seg([['list','リスト'],['day','日'],['month','月']],view,"actSetView('$v')")}</div>`;
   /* 日・月: まとめ・月の送り・絞り込みは出さず、期間の送りと「予定を追加」だけ。中身は plan.js の描き方 */
@@ -182,7 +182,7 @@ route('activities',(id,q)=>{
   if(want)setTimeout(()=>actLandSoon(want),0);
   /* v4.11 上部(固定の帯): 「広い形」と「1行の形」を両方描き、縮み具合 --p で見せる方を入れ替える(css/s-activities.css) */
   const mets=[{v:`${monthRec}件`,l:`${+actMonth.slice(5)}月の記録`,s:`${+actMonth.slice(5)}月`},{v:`${todayEv}件`,l:'今日の予定',s:'予定',href:'#/activities?view=day'},{v:`${todoTodayCount()}件`,l:'今日のToDo',s:'ToDo',href:'#/todo'}];
-  const acts=[{text:'レシートで支払い',icon:'camera',primary:true,onclick:'openReceipt()'},{text:'出来事',icon:'plus',onclick:'openNewHappening()'}];
+  const acts=[{text:'支払いを記録',icon:'pay',primary:true,onclick:'openPayment()'},{text:'出来事',icon:'plus',onclick:'openNewHappening()'}];
   /* v4.11 本体調整: 数字は1組だけ(2つの形を重ねない=二重に見えない・空にならない)。縮むと 数字が小さくなり、下の長いラベルが畳まれ、数字の右に短いラベルが出る */
   const metU=m=>{const inner=`<span class="n"><b class="num">${esc(m.v)}</b><span class="s">${esc(m.s)}${m.href?IC.chev:''}</span></span><span class="l">${esc(m.l)}${m.href?IC.chev:''}</span>`;return m.href?`<a class="act-m" href="${m.href}">${inner}</a>`:`<div class="act-m">${inner}</div>`};
   const full=`<div class="act-full"><div class="act-ms">${mets.map(metU).join('')}</div><div class="act-acts">${sumActs(acts)}</div></div>`;
@@ -337,7 +337,7 @@ function paidBody(){
     +pdD.rows.map((p,i)=>`<div class="ed-box"><div class="ed-h"><span class="ed-n">${esc(whoName(p.who,p.name))}</span><button class="ie-d" type="button" aria-label="この人を外す" onclick="paidDel(${i})">${IC.trash}</button></div>`
       +whoChips(people,[p.who],`paidWho(${i},'$v')`,'払った人')
       +`<label class="ie-a"><span>金額</span><input class="ie-p num" inputmode="numeric" value="${p.amt||''}" placeholder="¥0" aria-label="払った額" oninput="paidAmt(${i},this.value)"></label>`
-      +(p.who==='me'?`<label class="ie-a"><span>方法</span><input class="pd-how" value="${esc(p.how||'')}" placeholder="現金・カードなど" aria-label="支払い方法" oninput="pdD.rows[${i}].how=this.value"></label>`:'')
+      +(p.who==='me'?`<label class="ie-a"><span>支払い方法</span>${payMethodSelect(p.how||PAY_METHODS[0],`pdD.rows[${i}].how=this.value`).replace('<select ','<select class="pd-how" aria-label="支払い方法" ')}</label>`:'')
       +`</div>`).join('')
     +`<div id="pd-sum" style="margin-top:12px">${paidSumHtml(a.amt)}</div>`;
 }
@@ -345,11 +345,11 @@ function paidBody(){
 function paidUpd(){const a=A[pdD.id],d=a.amt-pdSum();
   const e=document.getElementById('pd-sum');if(e)e.innerHTML=paidSumHtml(a.amt);
   crFooter(`<button class="btn block" type="button" onclick="paidSave()" ${d?'disabled':''}>保存</button>`)}
-function paidWho(i,w){const p=pdD.rows[i];p.who=w;delete p.name;if(w!=='me')delete p.how;else if(!p.how)p.how='現金';setSheetBody(paidBody());paidUpd()}
+function paidWho(i,w){const p=pdD.rows[i];p.who=w;delete p.name;if(w!=='me')delete p.how;else if(!p.how)p.how=PAY_METHODS[0];setSheetBody(paidBody());paidUpd()}
 function paidAmt(i,v){pdD.rows[i].amt=+String(v).replace(/[^\d]/g,'')||0;paidUpd()}
 function paidDel(i){pdD.rows.splice(i,1);setSheetBody(paidBody());paidUpd()}
 function paidAdd(){const a=A[pdD.id],used=pdD.rows.map(p=>p.who),who=peopleOf(a).find(w=>!used.includes(w))||'me';
-  pdD.rows.push({who,amt:Math.max(0,a.amt-pdSum()),how:who==='me'?'現金':undefined});setSheetBody(paidBody());paidUpd()}
+  pdD.rows.push({who,amt:Math.max(0,a.amt-pdSum()),how:who==='me'?PAY_METHODS[0]:undefined});setSheetBody(paidBody());paidUpd()}
 function paidSave(){const a=A[pdD.id],rows=pdD.rows.filter(p=>p.amt>0);
   if(!rows.length||pdSum()!==a.amt){toast('払った額の合計を支払いの合計に合わせてください');return}
   const old=JSON.parse(JSON.stringify(a.paid));
@@ -435,7 +435,7 @@ function capKids(id){const ks=kidSorted(id),payK=ks.filter(c=>A[c].type==='支�
     +(payK.length>1&&mine?`<div class="xk-sum"><span>自分の支出 合計</span><b class="num">${yen(mine)}</b></div>`:'')+`</div>`}
 /** 祖先の活動を、軸の見出し用の {href,time,title,icon} の並びにする(外側が先)。子の詳細で親が子を包む */
 const ancPins=id=>ancIds(id).map(k=>({href:'#/a/'+k,time:timeText(A[k]),title:A[k].title,icon:(AX_NODE[A[k].type]||['','activity'])[1]}));
-/** 活動の中に支払いを追加: 金額だけで支払いを、日付・時刻・親=この活動にして開く */
+/** 活動の中に支払いを追加: 支払いを記録を、日付・時刻・親=この活動にして開く */
 function actPayAdd(id){const a=A[id];openQuickExpense();Object.assign(CQ,{date:dateOf(a),time:a.time,act:id});crQeRender()}
 
 /** 活動(期間)の詳細 */
@@ -462,7 +462,7 @@ function actView(id,a,d){
 function payView(id,a,d){
   const pa=parentAct(a);
   /* 主役(v4.6): 種類の札「支払い」+時刻 / 題名=支払先 / 合計は普通の大きさの1行(割合の棒の上に1回だけ) / 補足=支払い方法 */
-  const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC.pay}支払い</span><span class="tm">${esc(a.time||'')}</span></div><h1>${esc(payeeOf(a)||a.title)}</h1>${a.amt!=null?`<div class="pay-sum"><span>合計</span><b class="num">${yen(a.amt)}</b></div>`:''}${a.pay?`<div class="meta"><span>${IC.pay}${esc(a.pay)}</span></div>`:''}${paySplit(a)}${payShell(id,{mode:'pay'})}</section>`; /* v4.12: 半券は主役の中の下端(旧 .hang の └ は廃止) */
+  const cap=`<section class="cap"><div class="kind"><span class="lbl">${IC.pay}支払い</span><span class="tm">${esc(a.time||'')}</span></div><h1>${esc(payeeOf(a)||a.title)}</h1>${a.amt!=null?`<div class="pay-sum"><span>合計</span><b class="num">${yen(a.amt)}</b></div>`:''}${a.pay?`<div class="meta"><span>${esc(a.pay)}</span></div>`:''}${paySplit(a)}${payShell(id,{mode:'pay'})}</section>`; /* v4.12: 半券は主役の中の下端(旧 .hang の └ は廃止) */
   /* v4.14: 親の活動は軸の並びに出さず、主役を包む枠(anc)として出す(親が子を包む) */
   const later=[{day:d}];
   /* 交わった人・場所 = 支払いの役割(支払先・支払者) + 親の活動の同席者(whoOf と同じ考え方) */

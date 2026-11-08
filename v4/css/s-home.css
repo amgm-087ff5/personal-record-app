@@ -129,7 +129,6 @@ a.hm-tile:active{transform:scale(.985)}
 .hm-root .hm-qe input:focus{border-color:var(--me)}
 .hm-root .hm-qe-b{flex:none;height:44px;padding:0 18px;border-radius:12px;background:var(--light),var(--me-fill);color:var(--on-me);font:700 15px/1 var(--font)}
 .hm-root .hm-qe-b:active{filter:brightness(.94)}
-.hm-root .hm-qe-more{flex:none;min-height:44px;padding:0 6px;font:600 14px/1 var(--font);color:var(--me);white-space:nowrap}
 .hm-root .hm-note{font:500 12px/1.4 var(--font);color:var(--tx-3)}
 
 /* ToDo の行: 48px・チェック欄(全画面共通の .check)・題名と期限 */

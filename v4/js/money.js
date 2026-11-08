@@ -2,7 +2,7 @@
    支払い = アクティビティの事実 / 支出 = 家計簿のエントリ。同じことを2回入力しない。計算で出せるものは保存しない。
 
    支払い A[p] (type:'支払い')
-     amt   : 合計(レシートの合計。品目があれば品目の合計と同じ)
+     amt   : 支払いの合計(品目があれば品目の合計と同じ)
      paid  : [{who, amt, how}]  誰がいくら払ったか。who = 'me' | エンティティid | null(名前だけ: name)
      items : [{n, price, lines?, tax, users:[who…], memo?, unk?}]  品目と「使った人」(既定 ['me'])
      settled: 1  貸し借りを精算済み(無ければ未精算)
@@ -17,6 +17,9 @@
    計算で出すもの(保存しない): 自分の負担 xAmt / 品目ごとの自分の額 xShares / カテゴリ配分 xCats / 貸し借り balanceOf
    互換: x.amt・x.items・a.adv・a.pay は読み取り専用の計算値(保存されない)。新しいコードは関数を使う */
 
+/* 支払い方法(v4.17)。レシートは支払い方法ではなく、支払いを記録する手段の1つ(読み取り) */
+const PAY_METHODS=['現金','クレジットカード ••1234','Suica','QRコード決済','デビットカード','銀行振込'];
+const payMethodSelect=(cur,onchange)=>`<select onchange="${onchange}">${[...new Set([...PAY_METHODS,...(cur?[cur]:[])])].map(m=>`<option ${m===cur?'selected':''}>${esc(m)}</option>`).join('')}</select>`;
 const BASIS={items:'使った分',even:'割り勘',amount:'金額を指定'};
 /* who: 'me' = 自分 / エンティティid / 'other' = 名前の無いほかの人 */
 const whoName=(w,name)=>w==='me'?'自分':w&&E[w]?E[w].n:(name||'ほかの人');
