@@ -73,8 +73,10 @@ route('e',id=>{
   /* ToDo: このエンティティに結び付いた未完了のもの(期限の近い順)。人・場所にも同じ節が出る */
   const todos=Object.keys(TD).filter(k=>tdOpen(k)&&(TD[k].ent||[]).includes(id)).sort((a,b)=>(TD[a].due||'9999').localeCompare(TD[b].due||'9999'));
   const yearN=acts.filter(x=>x.d.startsWith(TODAY.slice(0,4))).length;
-  const money=acts.filter(x=>x.a.type==='支払い').reduce((s,x)=>s+(x.a.x&&X[x.a.x]?X[x.a.x].amt:0),0);
-  const owed=Object.values(A).filter(a=>a.adv&&a.adv[0]===id&&a.adv[2]==='未精算').reduce((s,a)=>s+a.adv[1],0);
+  const money=acts.filter(x=>x.a.type==='支払い').reduce((s,x)=>s+mineOf(x.a),0);
+  /* この人が関わる未精算の貸し(amt>0)と借り(amt<0) */
+  const ob=openBalances().filter(([,,b])=>b.with.includes(id));
+  const lendOpen=ob.filter(([,,b])=>b.amt>0).reduce((s,[,,b])=>s+b.amt,0), borrowOpen=ob.filter(([,,b])=>b.amt<0).reduce((s,[,,b])=>s-b.amt,0);
   const facts=(e.facts||[]).filter(f=>!f.rare),rare=(e.facts||[]).filter(f=>f.rare);
   const since=f=>{const m=(f.ver||'').match(/(\d{4})-(\d{2})〜/);return m?`${m[1]}年${+m[2]}月から`:''};
   const dl=facts.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}${since(f)?`<span class="since">${since(f)}</span>`:''}</dd>`).join('')
@@ -100,7 +102,7 @@ route('e',id=>{
     +`<section class="obj-e"><div class="tab">${enTabPath(id)}</div>`
     +`<div class="hero"><div class="grow" style="min-width:0"><h1>${esc(e.n)}</h1>`
     +`<div class="kinds">${e.t.map(t=>vtag(TYPES[t].n)).join('')}<button class="vtag add" type="button" onclick="toast('種類の追加はモックでは未対応です')">＋種類</button></div></div></div></section>`
-    +`<div class="stats"><div><b>${agoLabel(lastMet(id))}</b><span>最後に交わった</span></div><div><b>${yearN}回</b><span>今年</span></div>${money?`<div><b>${yen(money)}</b><span>${rootOf(id)==='person'?'一緒の時の自分の支出':'ここでの自分の支出'}</span></div>`:''}${owed?`<div><b style="color:var(--owe-text)">${yen(owed)}</b><span>立替・未精算</span></div>`:''}</div>`
+    +`<div class="stats"><div><b>${agoLabel(lastMet(id))}</b><span>最後に交わった</span></div><div><b>${yearN}回</b><span>今年</span></div>${money?`<div><b>${yen(money)}</b><span>${rootOf(id)==='person'?'一緒の時の自分の支出':'ここでの自分の支出'}</span></div>`:''}${lendOpen?`<div><b style="color:var(--owe-text)">${yen(lendOpen)}</b><span>貸し・未精算</span></div>`:''}${borrowOpen?`<div><b style="color:var(--owe-text)">${yen(borrowOpen)}</b><span>借り・未精算</span></div>`:''}</div>`
     +(dl?`<dl class="facts">${dl}</dl>`:'')
     +(rare.length?`<details class="en-more"><summary>ほかの情報 ${rare.length}件</summary><dl class="facts">${rare.map(f=>`<dt>${esc(f.k)}</dt><dd>${esc(f.v)}</dd>`).join('')}</dl></details>`:'')
     +(note?`<a class="en-paper en-memo" href="#/n/${id}"><span class="h">${IC.lines}エンティティのメモ<span class="grow"></span><span class="faint">更新 ${esc(note.upd)}</span></span><p>${esc((note.body[0]?note.body[0][1]:'').replace(/\{[ea]:\w+\}/g,''))}</p></a>`

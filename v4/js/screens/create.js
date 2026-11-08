@@ -147,7 +147,7 @@ function crQePick(k){CQ.shop=E[k].n;crQeRender()}
 function crQeSave(){
   const amt=+String(CQ.amt).replace(/[^\d]/g,'');if(!amt){toast('金額を入れてください');return}
   const cat=CQ.cat;const shop=(CQ.shop||'').trim();const time=crNowHM();const date=CQ.date||TODAY;
-  const aid=crPayment({date,time,shop,register:false,items:[{n:CATS[cat].n,price:amt,tax:10,b:'自分'}],cat,fx:CQ.fx,sp:CQ.sp,act:crActResolve(CQ,date,time)});
+  const aid=crPayment({date,time,shop,register:false,items:[{n:CATS[cat].n,price:amt,tax:10,users:['me']}],cat,fx:CQ.fx,sp:CQ.sp,act:crActResolve(CQ,date,time)});
   closeSheet();save();
   if(CQ.stay){rerender();toast('支払いを保存しました')}
   else{go('#/a/'+aid);toast('支払いを保存しました(自分の支出=全額)')}
@@ -338,7 +338,7 @@ async function crSha256(buf){try{const h=await crypto.subtle.digest('SHA-256',bu
   catch(e){let h=2166136261;const u=new Uint8Array(buf);for(const b of u){h^=b;h=Math.imul(h,16777619)>>>0}return 'fnv'+h.toString(16)}}
 function crThumb(f){return new Promise(res=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');const r=Math.min(1,360/im.width);c.width=im.width*r;c.height=im.height*r;c.getContext('2d').drawImage(im,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',.7))};im.src=URL.createObjectURL(f)})}
 function crToRc(k){const r=CR_POOL[k];const rc={shop:r.shop,date:r.date,time:r.time,pay:'現金',printed:crPtotal(k),register:true,with:null,
-  items:r.items.map(([n,price,tax])=>({n,price,tax,b:'自分'}))};rc.cat=crGuessCat(crFindEnt(rc.shop));return rc}
+  items:r.items.map(([n,price,tax])=>({n,price,tax,users:['me']}))};rc.cat=crGuessCat(crFindEnt(rc.shop));return rc}
 
 /** 作業中の状態。mode: batch(一覧から1枚ずつ) / single(1枚だけ) */
 let crBT=[];
@@ -425,28 +425,47 @@ function crTotal(){return CRS.rc.items.reduce((s,i)=>s+itemAmt(i),0)}
 function crTotHtml(){const rc=CRS.rc,t=crTotal();
   return list([row({cls:'plain',t:'<b>合計</b>',v:`<b class="num">${yen(t)}</b>`})],'flat')
     +(rc.printed===t?'':banner('warn',`印字 ${yen(rc.printed)} / 差 ${yen(Math.abs(rc.printed-t))}`));}
-/** 負担の計算: 自分 = 自分の品目 + 半分(切り捨て)。立替 = 合計 - 自分 */
-function crBurCalc(){const rc=CRS.rc;const total=crTotal();let mine=0;
-  rc.items.forEach(it=>{const p=itemAmt(it);if(it.b==='相手')return;mine+=it.b==='半分'?Math.floor(p/2):p});
-  return {total,mine,adv:total-mine}}
+/* 受け取る前のレシート(rc)の負担。保存(crPayFrom)と同じ決め方: money.js の xShares / itemMine と揃える */
+const crRcItems=rc=>rc.items.filter(i=>i.n&&i.price);
+/* 自分の負担の決め方を聞くのは、誰かと分けていて、ほかの人が使った品目 or ほかの人が払った時だけ */
+const crRcNeedBasis=rc=>!!rc.with&&((!!rc.payer&&rc.payer!=='me')||rc.items.some(i=>usersOf(i).some(u=>u!=='me')));
+const crRcBasis=rc=>crRcNeedBasis(rc)?(rc.basis||'items'):'items';
+/** 合計・自分の負担・貸し借り(正=貸し・負=借り)。basis: items=使った分 / even=割り勘(2人) / amount=金額指定(me) */
+function crRcCalc(rc){const its=crRcItems(rc);const total=its.reduce((s,i)=>s+itemAmt(i),0);const basis=crRcBasis(rc);
+  let mine;
+  if(basis==='items')mine=its.reduce((s,i)=>s+itemMine(i),0);
+  else if(basis==='even')mine=Math.floor(total/2);
+  else mine=Math.max(0,Math.min(rc.me==null?total:rc.me,total));
+  const paidByMe=(rc.payer||'me')==='me'?total:0;
+  return {total,mine,adv:paidByMe-mine,basis}}
 /** 受け取る前の支出の特別感: カテゴリに既定値があればそれ、無ければ入力欄で選んだ値(crAskHtml の rc.sp。crPayment と同じ) */
 const rcSp=rc=>{const v=catSp(rc.cat);return v!==null?v:(rc.sp||null)};
-function crBurHtml(){const c=crBurCalc(),sp=rcSp(CRS.rc);
-  return ticket({cls:spCls(sp),stub:spStub(sp),t:'自分の支出',s:CRS.rc.with?`相手の分・立替 ${yen(c.adv)}`:'',amt:yen(c.mine)})}
+function crBurHtml(){const rc=CRS.rc,c=crRcCalc(rc),sp=rcSp(rc);
+  return ticket({cls:spCls(sp),stub:spStub(sp),t:'自分の支出',s:rc.with?balanceText({amt:c.adv,names:[whoShort(rc.with)]}):'',amt:yen(c.mine)})}
 /** 金額だけ変わった時は本文を描き直さず、合計と負担だけ更新する */
 function crTotUpdate(){const t=document.getElementById('cr-tot');if(t)t.innerHTML=crTotHtml();const b=document.getElementById('cr-bur');if(b)b.innerHTML=crBurHtml()}
 function crItem(i,k,v){const it=CRS.rc.items[i];if(!it)return;
   if(k==='tax')it.tax=+v;else it[k]=v}
 /* 品目の編集は ui.js の itemEd('cr')。入力中は式の行と合計だけ更新する */
 itemEd('cr',{items:()=>CRS.rc.items,redraw:()=>crReview(),upd:i=>{const e=document.getElementById('ie-eq-cr-'+i);if(e)e.innerHTML=IED.cr.eq(i);crTotUpdate()}});
-function crBurSet(i,v){crItem(i,'b',v);crReview()}
+/* 使った人(品目ごと)・払った人・自分の負担・自分の金額。押したら描き直す(金額の入力だけは描き直さない) */
+function crUserSet(i,w){const it=CRS.rc.items[i];if(!it)return;toggleUser(it,w);crReview()}
+function crPayerSet(w){CRS.rc.payer=w;crReview()}
+/* 金額を指定: 既定は自分が払った額(自分が払った奢り=合計、奢られた=0)。v4.16 */
+function crBasisSet(v){const rc=CRS.rc;rc.basis=v;if(v==='amount')rc.me=(rc.payer&&rc.payer!=='me')?0:crRcCalc(rc).total;crReview()}
+function crMeSet(v){CRS.rc.me=+String(v).replace(/[^\d]/g,'')||0;crTotUpdate()}
 function crRvX(k,v){CRS.rc[k]=CRS.rc[k]===v?'':v;crReview()}
 function crAddItem(){IED.cr.add()}
 function crDelItem(i){IED.cr.del(i)}
 function crShopSet(v){CRS.rc.shop=v;CRS.rc.cat=crGuessCat(crFindEnt(v));crReview()}
 function crToggleReg(){CRS.rc.register=!CRS.rc.register;crReview()}
 function crToggleSec(){CRS.open=!CRS.open;crReview()}
-function crSetWith(v){CRS.rc.with=v||null;if(!v)CRS.rc.items.forEach(i=>i.b='自分');crReview()}
+/* 同席者を変える/外す。使った人の旧い同席者は新しい人へ読み替え、外したら自分だけに戻す */
+function crSetWith(v){const rc=CRS.rc,old=rc.with;rc.with=v||null;
+  rc.items.forEach(it=>{const u=[...new Set(usersOf(it).map(x=>x===old?rc.with:x).filter(Boolean))];it.users=u.length?u:['me']});
+  if(rc.payer!=='me'&&rc.payer!==rc.with)rc.payer='me';
+  if(!rc.with)rc.basis=undefined;
+  crReview()}
 function crShopPick(k){crShopSet(E[k].n)}
 function crTdToggle(k){CRS.td[k]=!CRS.td[k];crReview()}
 function crSugHtml(){
@@ -459,7 +478,6 @@ function crReview(top){
   const rc=CRS.rc;const single=CRS.mode==='single';const b=crBT[CRS.idx];
   const shopNew=!!rc.shop.trim()&&!crFindEnt(rc.shop);
   const catOpts=Object.keys(CATS).filter(k=>CATS[k].p).map(k=>`<option value="${k}" ${rc.cat===k?'selected':''}>${esc(catPath(k))}</option>`).join('');
-  const burBtns=i=>['自分','半分','相手'].map(v=>`<button class="cr-b" type="button" aria-pressed="${rc.items[i].b===v}" onclick="crBurSet(${i},'${v}')">${v}</button>`).join('');
   const body=(!single?`<button class="cr-back" type="button" onclick="crBatchView()">${IC.back}${crBT.length}枚の一覧に戻る</button>`:'')
     +`<div class="cr-head"><img class="cr-th" src="${rc.img}" alt="レシートの写真">${b&&b.dup?`<span class="cr-wi">${IC.warn}</span>${tag('重複の疑い',{cls:'cr-dup'})}<span class="cr-dm">${esc(b.dup.msg)}</span>`:''}</div>`
     +list([
@@ -478,12 +496,25 @@ function crReview(top){
     +crAskHtml(rc,rc.cat,'crRvX')
     +(CRS.open?`<div style="margin-top:8px">`
       +sh('誰かと分ける')+crWithChips(rc.with)
+      +crSplitHtml(rc)
       +list([`<div class="field"><label>カテゴリ</label><select onchange="CRS.rc.cat=this.value;crReview()">${catOpts}</select></div>`])
-      +(rc.with?sh('品目ごとの負担')+list(rc.items.map((it,i)=>`<div class="cr-it"><span class="cr-n ell">${esc(it.n||'品名なし')}</span><span class="cr-bur">${burBtns(i)}</span></div>`),'flat'):'')
       +`<div id="cr-bur">${crBurHtml()}</div></div>`:'');
   const foot=single?`<button class="btn block" type="button" onclick="crSaveSingle()">支払いを保存</button>`
     :`<button class="btn block" type="button" onclick="crConfirm()">確認済みにする</button>`;
   crPanel('レシートで支払い',body,{full:true,top:!!top,footer:foot});
+}
+/** 誰かと分けた時の欄: 払った人 / 品目ごとの使った人 / 自分の負担(聞く時だけ)。誰とも分けない時は何も出さない */
+function crSplitHtml(rc){
+  if(!rc.with)return '';
+  const pair=['me',rc.with];
+  let h=list([`<div class="field"><label>払った人</label>${whoChips(pair,[rc.payer||'me'],"crPayerSet('$v')",'払った人')}</div>`]);
+  h+=sh('使った人')+list(rc.items.map((it,i)=>`<div class="cr-it"><span class="cr-n ell">${esc(it.n||'品名なし')}</span><span class="cr-bur">${whoChips(pair,usersOf(it),`crUserSet(${i},'$v')`)}</span></div>`),'flat');
+  if(crRcNeedBasis(rc)){
+    const rows=[`<div class="field cr-basis"><label>自分の負担</label>${seg([['items','使った分'],['even','割り勘'],['amount','金額を指定']],crRcBasis(rc),"crBasisSet('$v')")}</div>`];
+    if(crRcBasis(rc)==='amount')rows.push(`<div class="field"><label>自分の金額</label><input class="num" inputmode="numeric" value="${rc.me||0}" placeholder="¥0" oninput="crMeSet(this.value)"></div>`);
+    h+=list(rows);
+  }
+  return h;
 }
 /** 確定: 一覧の中の1枚を確認済みにして一覧へ戻る */
 function crConfirm(){
@@ -494,8 +525,9 @@ function crConfirm(){
 }
 /** 1枚だけの保存 */
 function crPayFrom(rc,hash,img,todo){
-  const items=rc.items.filter(i=>i.n&&i.price);
-  return crPayment({date:rc.date,time:rc.time,shop:rc.shop,register:rc.register,items,pay:rc.pay,with:rc.with||null,cat:rc.cat,fx:rc.fx,sp:rc.sp,hash,img,todo,act:crActResolve(rc,rc.date,rc.time)});
+  const items=crRcItems(rc),c=crRcCalc(rc),who=rc.payer||'me';
+  return crPayment({date:rc.date,time:rc.time,shop:rc.shop,register:rc.register,items,pay:rc.pay,with:rc.with||null,cat:rc.cat,fx:rc.fx,sp:rc.sp,hash,img,todo,act:crActResolve(rc,rc.date,rc.time),
+    paid:[{who,amt:c.total,how:who==='me'?rc.pay:undefined}],basis:c.basis,me:c.basis==='amount'?(rc.me||0):undefined,n:c.basis==='even'?2:undefined});
 }
 function crSaveSingle(){
   const rc=CRS.rc;if(!rc.items.some(i=>i.n&&i.price)){toast('品目を入れてください');return}

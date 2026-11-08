@@ -93,12 +93,19 @@
 .grp-chev svg{width:16px;height:16px;transform:rotate(90deg);transition:transform .15s}
 .row.grp.open .grp-chev svg{transform:rotate(-90deg)}
 
-/* 負担の画面(シート内) */
-.bp-i{display:flex;flex-direction:column;gap:8px;padding:12px 14px}
-.bp-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font:500 15px/1.4 var(--font)}
-.bp-c{display:flex;gap:8px}
-.bp-w{display:flex;flex-direction:column;gap:12px;padding:12px 14px}
-.bp-w .ie-a{background:var(--surface-2)}
+/* 払った人・自分の負担(シート内): 人ごとの箱。中は使った人のチップ・金額・方法 */
+.it-bs .who-c{display:flex;flex-wrap:wrap;gap:8px;width:100%}
+.ed-box{display:flex;flex-direction:column;gap:8px;margin:0 var(--gutter) 10px;padding:12px;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1)}
+.ed-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ed-n{font:600 15px/1.4 var(--font);color:var(--tx)}
+.ed-box .who-c{display:flex;flex-wrap:wrap;gap:8px}
+.ed-box .who-c .cr-b{height:40px}
+.ed-box .ie-a{background:var(--surface-2)}
+.pd-how{flex:1;min-width:0;height:44px;padding:0;border:0;background:none;text-align:right;font:var(--t-body);color:var(--tx);outline:none}
+.bs-n{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px}
+.bs-n button{width:44px;height:44px;border-radius:12px;background:var(--sunk);font:600 20px/1 var(--font);color:var(--tx)}
+.bs-n b{font:600 16px/1.3 var(--font);color:var(--tx);font-variant-numeric:tabular-nums}
+.pd-st{display:flex;justify-content:flex-end;margin:8px var(--gutter) 0}
 
 /* ---------- 日のページ(/day/…): 大きな日付+日記本文 ---------- */
 .dp-date{display:flex;align-items:flex-end;gap:14px}
@@ -194,3 +201,5 @@
 /* v4.14 祖先の枠の中は幅が狭いので、内側の枠と主役の余白を詰める(半券の文字を切らない) */
 .pin-anc.in{padding:6px 6px 8px}
 .anc-in .cap{padding-left:16px;padding-right:16px}
+/* v4.16 品目の補足: 1行目=使った人、2行目=内訳・税率 */
+.row .it-u,.row .it-d{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

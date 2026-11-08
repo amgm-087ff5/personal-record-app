@@ -109,3 +109,6 @@ a.tkt-w:active .tkt,button.tkt-w:active .tkt{filter:brightness(.97)}
 .ps-x .ps-l{font:600 13px/1.35 var(--font);white-space:normal;overflow:visible}
 .ps-x .tkt-w{margin-top:10px}
 .ps-detail{padding:0 var(--gutter)}.ps-detail+.ps-detail{margin-top:8px}.ps-detail .ps-kid{margin-top:0;background:var(--surface);box-shadow:var(--e1,0 1px 3px rgba(40,70,130,.08))} /* v4.12 活動の詳細の「自分の支出」の節: 画面の左右の余白に揃え、白い面に */
+/* v4.16 支出の詳細の半券: 割合は1行、未精算の貸し借りはその下の1行 */
+.ps-x .tkt-b .s{flex-direction:column;align-items:flex-start;gap:6px}
+.ps-x .ps-pct{white-space:nowrap}

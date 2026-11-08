@@ -135,24 +135,28 @@ function kidItem(c){
   return `<span class="ka-w"><span class="ka" role="link" tabindex="0" onclick="event.preventDefault();event.stopPropagation();go('#/a/${c}')"><span class="ka-i">${IC[icon]||''}</span><span class="ka-t">${esc(p.title||p.type||'')}<small>${esc(timeText(p))}</small></span></span>${sub}</span>`;
 }
 /** 1つの支払いの棒: 自分(青) / ほかの人(灰) / 立替・未精算(琥珀の斜線) */
-function payBar(a,x){const rest=a.amt-x.amt;const owed=a.adv&&a.adv[2]==='未精算';
-  return `<span class="pbar" aria-label="支払い ${yen(a.amt)} のうち自分 ${yen(x.amt)}"><i class="me" style="flex:${x.amt}"></i>${rest>0?`<i class="${owed?'owed':'other'}" style="flex:${rest}"></i>`:''}</span>`}
+/** 貸し(自分が多く払った)が未精算か。未精算の時は、ほかの人の区間を琥珀の斜線にする */
+const owedOpen=a=>{const b=balanceOf(a);return b.amt>0&&!b.settled};
+/** 借り(自分の分を払っていない)が未精算の時の印。金額の横に出す */
+const debtTag=a=>{const b=balanceOf(a);return b.amt<0&&!b.settled?tag('借り',{cls:'warn'}):''};
+function payBar(a,x){const mine=xAmt(x),rest=a.amt-mine;
+  return `<span class="pbar" aria-label="支払い ${yen(a.amt)} のうち自分 ${yen(mine)}"><i class="me" style="flex:${mine}"></i>${rest>0?`<i class="${owedOpen(a)?'owed':'other'}" style="flex:${rest}"></i>`:''}</span>`}
 /* ---- v4.12 支払いの殻 ----
    支払い(外の面)の中に、自分の支出の半券(ticket)を埋め込む1つの部品。タイムライン・活動の中・支払い詳細・支出詳細で同じ部品を使う。
    mode: row=タイムライン・日の行(白い面。見出し=支払い詳細 / 半券=支出) /
          kid=活動の中の子(薄い面。外が <a> なので span で書く) /
          pay=支払い詳細の暗い主役の下端(半券だけ。普通の大きさ) /
          x=支出詳細の最上部(支払いの見出し1行が小さく + 支出の半券が大きい) */
-const psTk=(p,x,o)=>ticket(Object.assign({stub:spStub(xSp(x)),t:'自分の支出',s:`<span class="ps-cat">${esc(catPath(x.cat))}</span>${x.amt!==p.amt?payBar(p,x):''}`,amt:yen(x.amt)},o));
+const psTk=(p,x,o)=>ticket(Object.assign({stub:spStub(xSp(x)),t:'自分の支出',s:`<span class="ps-cat">${esc(catPath(x.cat))}</span>${x.amt!==p.amt?payBar(p,x):''}${debtTag(p)}`,amt:yen(xAmt(x))},o));
 function payShell(pid,{mode='row',xid}={}){
   const p=A[pid];if(!p)return '';
   const x=xid?X[xid]:(p.x&&X[p.x]),xk=xid||p.x;
   const tot=`<span class="ps-tot">合計 <b>${yen(p.amt)}</b></span>`;
   if(mode==='pay')return x?`<div class="ps ps-pay">${psTk(p,x,{href:`#/x/${xk}`,chev:true})}</div>`:'';
   if(mode==='x'){
-    const d=xDate(x),pct=Math.round(x.amt/p.amt*100),owed=p.adv&&p.adv[2]==='未精算';
+    const d=xDate(x),pct=Math.round(x.amt/p.amt*100),bal=balanceOf(p);
     return `<div class="ps ps-x"><a class="ps-h" href="#/a/${pid}"><span class="ps-ic">${IC.pay}</span><span class="ps-l">${esc(payLabel(p))} · ${fmtMDW(d)}${p.time?` ${esc(p.time)}`:''}</span>${tot}${IC.chev}</a>`
-      +ticket({cls:'lg fill',label:`自分の支出 ${yen(x.amt)}`,stub:spStub(xSp(x)),t:yen(x.amt),s:`支払い ${yen(p.amt)} の ${pct}%${owed?' '+tag('未精算',{cls:'warn'}):''}`})+`</div>`;
+      +ticket({cls:'lg fill',label:`自分の支出 ${yen(x.amt)}`,stub:spStub(xSp(x)),t:yen(x.amt),s:`<span class="ps-pct">支払い ${yen(p.amt)} の ${pct}%</span>${bal.open?tag(balanceText(bal),{cls:'warn ps-bal'}):''}`})+`</div>`;
   }
   if(mode==='kid'){
     const go_=`event.preventDefault();event.stopPropagation();go('#/a/${pid}')`,go_x=`event.preventDefault();event.stopPropagation();go('#/x/${xk}')`;

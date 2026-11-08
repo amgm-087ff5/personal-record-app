@@ -12,10 +12,12 @@ const AX_NAME={cat:'カテゴリ',fx:'固定・変動',sp:'特別感'};
 const ldSum=f=>Object.values(X).filter(f).reduce((a,x)=>a+x.amt,0);
 const ldTotal=m=>Object.values(m).reduce((a,b)=>a+b,0);
 /** 大分類ごとの今月の合計 */
-const ldMap=()=>{const m={};ROOTS().forEach(r=>m[r]=0);Object.values(X).forEach(x=>{m[catAnc(x.cat)[0]]+=x.amt});return m};
+const ldMap=()=>{const m={};ROOTS().forEach(r=>m[r]=0);Object.values(X).forEach(x=>{xCats(x).forEach(g=>{m[catAnc(g.cat)[0]]+=g.amt})});return m};
+/** カテゴリ k(子を含む)に計上した自分の額の合計。支出1件を品目ごとのカテゴリで配分して数える */
+const ldCatSum=k=>Object.values(X).reduce((s,x)=>s+xAmtIn(x,k,1),0);
 /** 6か月: [年月, ラベル, 大分類ごとの合計]。最後が10月(明細あり) */
 const ldMonths=()=>[...TREND.map((m,i)=>[`2026-${String(5+i).padStart(2,'0')}`,m[0],m[1]]),['2026-10','10月',ldMap()]];
-const ldMatch=x=>{if(!ldFilter)return true;const {ax,k}=ldFilter;return ax==='cat'?catAnc(x.cat).includes(k):ax==='fx'?(xFx(x)||'未指定')===k:(xSp(x)||'未指定')===k};
+const ldMatch=x=>{if(!ldFilter)return true;const {ax,k}=ldFilter;return ax==='cat'?xAmtIn(x,k,1)>0:ax==='fx'?(xFx(x)||'未指定')===k:(xSp(x)||'未指定')===k};
 const ldFilterName=()=>ldFilter.ax==='cat'?CATS[ldFilter.k].n:ldFilter.k;
 const childrenOf=k=>Object.keys(CATS).filter(c=>CATS[c].p===k);
 const catDesc=k=>[k,...childrenOf(k).flatMap(catDesc)];
@@ -56,7 +58,7 @@ function ldRows(tot,fixed,nonDaily){
   };
   const out=[];
   if(ldAxis==='cat'){
-    const sumOf=k=>ldSum(x=>catAnc(x.cat).includes(k));
+    const sumOf=k=>ldCatSum(k);
     const byAmt=(a,b)=>sumOf(b)-sumOf(a);
     ROOTS().filter(r=>sumOf(r)>0).sort(byAmt).forEach(r=>{
       out.push(brow(CATS[r].n,sumOf(r),'cat',r,catColor(r)));
@@ -79,11 +81,14 @@ function ldRows(tot,fixed,nonDaily){
 /** 支出の1件 = 半券チケット1枚。半券に特別感、本体に日付・支払先・カテゴリ・金額。
     支払いが割り勘・立替なら、自分の区間の棒を補足に小さく出す */
 function ldTicket(k,x){
-  const p=A[x.pay],d=xDate(x),rest=p.amt-x.amt,owed=p.adv&&p.adv[2]==='未精算',sp=xSp(x);
-  const pbar=rest>0?`<span class="ld-pbar" aria-hidden="true"><i class="me" style="flex:${x.amt}"></i><i class="${owed?'owed':'rest'}" style="flex:${rest}"></i></span>`:'';
+  const p=A[x.pay],d=xDate(x),full=xAmt(x),rest=p.amt-full,owed=owedOpen(p),sp=xSp(x);
+  /* カテゴリで絞った時は、そのカテゴリに計上した額を主に出し、支出の全体は補足に */
+  const byCat=ldFilter&&ldFilter.ax==='cat',cut=byCat?xAmtIn(x,ldFilter.k,1):full;
+  const cats=byCat?[ldFilter.k]:xCats(x).map(g=>g.cat);
+  const pbar=rest>0?`<span class="ld-pbar" aria-hidden="true"><i class="me" style="flex:${full}"></i><i class="${owed?'owed':'rest'}" style="flex:${rest}"></i></span>`:'';
   return ticket({href:`#/x/${k}`,cls:spCls(sp),stub:spStub(sp),t:esc(xTitle(x)),
-    s:`${fmtMDW(d)}${xTitle(x)!==shopOf(x)?` · ${esc(shopOf(x))}`:''} ${catTag(x.cat)}${pbar?' '+pbar:''}`, /* 題名=支払先の時は支払先を2回出さない */
-    amt:`${yen(x.amt)}${x.amt!==p.amt?`<small>支払い ${yen(p.amt)}</small>`:''}`});
+    s:`${fmtMDW(d)}${xTitle(x)!==shopOf(x)?` · ${esc(shopOf(x))}`:''} ${cats.map(c=>catTag(c)).join(' ')}${pbar?' '+pbar:''}${debtTag(p)?' '+debtTag(p):''}`, /* 右の列は金額だけ(借りの札は補足の行)。題名=支払先の時は支払先を2回出さない */
+    amt:`${yen(cut)}${cut!==full?`<small>支出 ${yen(full)}</small>`:''}${full!==p.amt?`<small>支払い ${yen(p.amt)}</small>`:''}`});
 }
 
 /* ---------- 家計簿(月) ---------- */
@@ -157,10 +162,34 @@ route('x',id=>{
       prop('特別感',ldMini([['日常','日常'],['非日常','非日常']],xSp(x),`ldSetSp('${id}','$v')`),x.sp!==undefined?over:catSp(x.cat)===null?tag('都度指定',{cls:'warn'}):''),
       prop('メモ',`<input class="ld-in" value="${esc(x.memo||'')}" placeholder="メモを書く" oninput="ldMemo('${id}',this.value)">`)
     ])
+    +(xCats(x).length>1?sh('カテゴリの内訳')+list(xCats(x).map(g=>row({lead:ldSq(g.cat),t:esc(catPath(g.cat)),v:yen(g.amt),amt:true}))):'')
     +sh('品目',itemGroups(x.items).length,{label:'編集',icon:'edit',onclick:`ipOpen('${x.pay}')`})
-    +list([...itemsList(id,x.items,{x:1}),
-      row({cls:'plain',t:'<b>品目の合計 = 自分の支出</b>',v:`<b class="num" style="color:var(--me)">${yen(x.items.reduce((s,i)=>s+i.price,0))}</b>`})],'flat');
+    +list([...ldItemRows(id),
+      row({cls:'plain',t:`自分の負担 · ${BASIS[x.basis]}`,s:ldBasisText(x),v:`<b class="num" style="color:var(--me)">${yen(xAmt(x))}</b>`,chev:1,onclick:`openBasis('${x.pay}')`})],'flat');
 },{tab:'ledger'});
+
+/** 自分の負担の式(補足の文) */
+const ldBasisText=x=>x.basis==='even'?`${yen(payTotal(A[x.pay]))} ÷ ${x.n||2}人`:x.basis==='amount'?'金額を指定':'使った品目の合計';
+/** 品目の行(自分の額・負担の種類・既定と違うカテゴリだけ印)。押すと、その品目のカテゴリを選ぶ */
+function ldItemRows(id){const x=X[id];
+  return xItems(x).map(o=>row({onclick:`ldItemCatPick('${id}',${o.i})`,t:esc(o.n),
+    s:`${esc(o.b)}${o.price!==o.full?` · 品目 ${yen(o.full)}`:''}${o.cat!==x.cat?` ${catTag(o.cat)}`:''}`,
+    v:yen(o.price),amt:true,chev:1}));
+}
+/** この品目のカテゴリを選ぶシート(カテゴリの木から1つ) */
+function ldItemCatPick(id,i){
+  const x=X[id],cur=(x.itemCat&&x.itemCat[i])||x.cat;
+  const item=k=>row({onclick:`ldSetItemCat('${id}',${i},'${k}')`,lead:ldSq(k),t:esc(CATS[k].n),v:k===cur?`<span class="ld-chk">${IC.check}</span>`:null,cls:depthCls(k)});
+  openSheet({title:'この品目のカテゴリ',body:list(ROOTS().flatMap(r=>[item(r),...childrenOf(r).map(item)]))});
+}
+/** 品目のカテゴリを保存。既定と同じなら itemCat から消す。取り消しで元に戻す */
+function ldSetItemCat(id,i,k){
+  const x=X[id],snap=x.itemCat?JSON.stringify(x.itemCat):null,map={...(x.itemCat||{})};
+  if(k===x.cat)delete map[i];else map[i]=k;
+  if(Object.keys(map).length)x.itemCat=map;else delete x.itemCat;
+  closeSheet();save();rerender();
+  toast('この品目のカテゴリを変えました',()=>{if(snap===null)delete x.itemCat;else x.itemCat=JSON.parse(snap)});
+}
 
 /* ---------- カテゴリの管理 ---------- */
 function ldEditBody(){
@@ -214,7 +243,7 @@ function ldDelCat(){
 
 /* カテゴリの木: 1枚の面の中に並べる。子は .ld-kids の縦の細い線で親に繋ぐ(字下げ) */
 route('cats',()=>{
-  const sumOf=k=>ldSum(x=>catAnc(x.cat).includes(k));
+  const sumOf=k=>ldCatSum(k);
   const defs=k=>{
     const f=catFx(k),sp=catSp(k);
     const parts=[f?`<span class="${CATS[k].fx!==undefined?'':'faint'}">${f}</span>`:`<span class="faint">固定・変動は都度指定</span>`];

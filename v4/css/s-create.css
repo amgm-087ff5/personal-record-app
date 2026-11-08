@@ -54,7 +54,7 @@
 .cr-b::before{content:"";position:absolute;inset:-6px 0}
 .cr-b[aria-pressed="true"]{background:var(--brand-soft);color:var(--brand);font-weight:600}
 .ie-tax .cr-b{height:40px;min-width:64px}
-.bp-c .cr-b{flex:1;height:44px;font-size:14px}
+
 .it-bs .cr-b{flex:1;height:44px}
 
 /* ---- 合計 ---- */
@@ -73,3 +73,7 @@
 /* v4.16 使った人・払った人のチップ(js/money.js whoChips)。複数選べる。選んでいる人=薄い青(自分の操作) */
 .who-c{display:flex;flex-wrap:wrap;gap:8px}
 .who-c .cr-b{height:36px;min-width:56px;padding:0 14px;border-radius:999px}
+/* v4.16 自分の負担の選択は名前の下に全幅(3つの選択肢が狭い列で切れない) */
+.field.cr-basis{flex-direction:column;align-items:stretch;gap:8px;padding:12px 14px}
+.field.cr-basis .seg{width:100%}
+.field.cr-basis .seg{margin:0}
