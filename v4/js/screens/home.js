@@ -130,15 +130,15 @@ function hmMoney(){
     +`<div class="hm-wk"><div><span class="hm-k">この7日間 ${md(hmAdd(TODAY,-6))}〜${md(TODAY)}</span><b class="hm-amt2 num">${yen(thisW)}</b></div>`
     +`<div class="hm-wk-b"><span class="hm-sub num">前の7日間 ${yen(prevW)}</span>${rate==null?'':tag(`${rate>=0?'+':'−'}${Math.abs(rate)}%`)}</div></div>`
     +`<form class="hm-qe" onsubmit="hmQeGo();return false"><input id="hm-qe-amt" class="num" inputmode="numeric" placeholder="¥ 金額" aria-label="金額" autocomplete="off">`
-    +`<button class="hm-qe-b" type="submit">記録</button><button class="hm-qe-more" type="button" onclick="openQuickExpense({stay:true})">詳しく</button></form>`
+    +`<button class="hm-qe-b" type="submit">次へ</button></form>`
         +`</section>`;
 }
 /** 入力した金額で支払いのシートを開く(カテゴリを選んで保存するだけ)。保存後はホームに留まる */
 function hmQeGo(){
   const el=document.getElementById('hm-qe-amt');
   const v=String(el?el.value:'').replace(/[^\d]/g,'');
-  if(!v||+v===0){toast('金額を入れてください');return}
-  openQuickExpense({stay:true});CQ.amt=v;crQeRender();
+  /* v4.17 押すと「支払いを記録」のシート(ここでは保存しない)。金額が空ならそのまま開く */
+  openQuickExpense({stay:true});if(v&&+v>0){CQ.amt=v;crQeRender()}
 }
 /** ToDo(全幅): 今日までの未完了を最大3件。チェック欄・題名・期限(期限切れは赤の札) */
 function hmTodoTile(){

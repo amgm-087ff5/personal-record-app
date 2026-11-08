@@ -333,7 +333,7 @@ function recordEvent(id){
   if(e.pay){
     /* 支払いの予定は支払い + 自分の支出として作る(money.js の makePayment。親の kids にも入る) */
     aid=makePayment({parent:day,time:e.s||'09:00',items:[{n:e.t,price:e.pay.amt,users:['me'],tax:10}],
-      payee:[placeId,placeName||e.t],roles:(e.who||[]).map(w=>['同席',w]),how:'カード ••1234',cat:e.pay.cat});
+      payee:[placeId,placeName||e.t],roles:(e.who||[]).map(w=>['同席',w]),how:'クレジットカード ••1234',cat:e.pay.cat});
   }else{
     aid=uid('c');
     /* 予定の時刻の範囲のまま活動(期間)にする。種類は内容から推定せず「出来事」。終日は時刻の範囲が無いので1つの時刻 */
