@@ -1,0 +1,2 @@
+/* 画面: create の見た目(仮置き。画面担当が書く。値は tokens の変数だけ) */
+.cr_title{font-size:var(--fs-display);font-weight:700;line-height:1.2;padding:var(--sp-5) 0 var(--sp-3)}

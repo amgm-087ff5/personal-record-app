@@ -1,0 +1,132 @@
+/* =====================================================================
+   個人記録 UI v5 — 基礎(core 担当)
+   地・画面の余白・ナビ・シート・トースト・作成の一覧・2列。
+   色・影・角丸・文字・余白は tokens.css の変数だけ。
+   レイアウトの寸法(ナビの列幅など)は下の --lay-* に1回だけ書く。
+   ===================================================================== */
+:root{
+  --lay-fab:56px;      /* ＋の大きさ */
+  --lay-col:64px;      /* ＋の列の幅 */
+  --lay-rail:96px;     /* 幅900以上の左のレール */
+  --lay-sw-w:52px;     /* 切替のつまみ */
+  --lay-sw-h:30px;
+  --lay-pane:440px;    /* 幅1100以上の一覧の幅 */
+  --lay-sheet:560px;   /* 幅900以上のシートの幅 */
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%;color-scheme:light dark;background:var(--bg)}
+body{min-height:100dvh;font-family:var(--font);font-size:var(--fs-body);line-height:1.55;color:var(--tx);background:var(--window),var(--bg);background-attachment:fixed;-webkit-font-smoothing:antialiased;font-feature-settings:"palt" 1}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit;background:none;border:0}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--me);outline-offset:2px;border-radius:var(--r-tag)}
+.num{font-variant-numeric:tabular-nums}
+.grow{flex:1;min-width:0}
+.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+svg.i{width:20px;height:20px;flex:none}
+
+/* ---- 画面の地 ---- */
+#app{max-width:720px;margin:0 auto;min-height:100dvh;padding-bottom:var(--page-end)}
+.screen{padding-inline:var(--gutter);animation:scr-in var(--t-mid) var(--ease)}
+@keyframes scr-in{from{opacity:.4;transform:translate3d(0,4px,0)}}
+.err{margin:var(--sp-5) var(--gutter);padding:var(--sp-4);border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1);color:var(--tx);display:grid;gap:var(--sp-2)}
+.err small{color:var(--tx-2);font-size:var(--fs-cap)}
+.appbar.scrolled{box-shadow:0 1px 0 var(--line)}
+
+/* ---- 幅1100以上: 一覧+詳細の2列 ---- */
+@media (min-width:1100px){
+  #app{max-width:none;margin:0;display:grid;grid-template-columns:minmax(0,var(--lay-pane)) minmax(0,1fr)}
+  #app .pane-l{height:100dvh;overflow-y:auto;position:sticky;top:0;border-right:1px solid var(--line);padding-inline:var(--gutter)}
+  #app .pane-r{min-width:0;max-width:760px;width:100%;justify-self:center;padding-inline:var(--gutter)}
+  #app.solo{grid-template-columns:minmax(0,720px);justify-content:center}
+  #app.solo .pane-l{border-right:0;height:auto;overflow:visible;position:static;width:100%}
+  .pane-l .sel{box-shadow:inset 3px 0 0 var(--me)}
+  .pane-l .sel.row{background:var(--me-soft)}
+}
+
+/* ---- ナビ(狭い幅: 下に浮く。2枚を窓で切り替え) ---- */
+.nav{position:fixed;left:max(10px,calc(50% - 350px));right:max(10px,calc(50% - 350px));bottom:calc(10px + env(safe-area-inset-bottom));z-index:40;height:var(--nav-h);border-radius:var(--r-lg);background:color-mix(in srgb,var(--surface) 97%,transparent);box-shadow:var(--e3);backdrop-filter:blur(14px) saturate(1.4);touch-action:none;user-select:none;-webkit-user-select:none;-webkit-user-drag:none}
+.nav-in{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) var(--lay-col) repeat(2,minmax(0,1fr));align-items:stretch;width:100%;max-width:720px;height:100%;margin:0 auto}
+.nav-cell{position:relative;min-width:0;height:100%;overflow:hidden}
+.nav .nav-strip{position:absolute;left:0;right:0;top:0;height:200%;display:flex;flex-direction:column;transform:translate3d(0,0,0);transition:transform var(--t-slow) cubic-bezier(.3,1.3,.5,1)}
+.nav .nav-strip>a,.nav .nav-blank{flex:0 0 50%;height:auto}
+.nav-blank{display:block;pointer-events:none}
+.nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-1);height:100%;min-width:0;font-size:var(--fs-min);font-weight:500;line-height:1;color:var(--tx-3);position:relative;white-space:nowrap}
+.nav a .pill{width:56px;height:30px;border-radius:var(--r-pill);display:grid;place-items:center;transition:background var(--t-mid) var(--ease)}
+.nav a .pill svg{width:24px;height:24px}
+.nav a[aria-current="page"]{color:var(--me)}
+.nav a[aria-current="page"] .pill{background:var(--me-soft);color:var(--me)}
+.nav a:focus-visible{outline-offset:-4px}
+.nav .badge{position:absolute;top:var(--sp-2);left:calc(50% + var(--sp-2));min-width:16px;height:16px;padding:0 var(--sp-1);border-radius:8px;background:var(--late);color:var(--on-fill);font-size:var(--fs-min);line-height:16px;font-weight:600;text-align:center}
+.nav .nav-sw{position:absolute;right:var(--sp-4);top:-39px;z-index:1;width:var(--lay-sw-w);height:var(--lay-sw-h);display:grid;place-items:center;color:var(--tx-2);background:var(--surface);border-radius:var(--r-pill);box-shadow:var(--e3);padding:0}
+.nav .nav-sw::before{content:"";position:absolute;left:50%;top:50%;width:48px;height:48px;transform:translate(-50%,-50%)}
+.nav .nav-sw svg.i{width:var(--lay-sw-w);height:var(--lay-sw-h)}
+.nav .nav-sw.dot::after{content:"";position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:50%;background:var(--late);box-shadow:0 0 0 2px var(--surface)}
+.nav .fab-slot{display:grid;place-items:center}
+.nav .fab{width:var(--lay-fab);height:var(--lay-fab);border-radius:var(--r-fab);background:var(--light),var(--me-fill);color:var(--on-fill);display:grid;place-items:center;box-shadow:var(--e3),var(--fill-sh);transform:translateY(-14px);transition:transform var(--t-fast) var(--ease)}
+.nav .fab:active{transform:translateY(-12px) scale(.96)}
+.nav .fab svg.i{width:26px;height:26px}
+.nav.dr .nav-strip{transition:none}
+.nav.dr{touch-action:none}
+.nav.dr .nav-strip{will-change:transform}
+.nav.land a:not([inert]) .pill{animation:nav-pill var(--t-slow) ease-out var(--t-fast) both}
+@keyframes nav-pill{from{transform:scale(.92)}to{transform:scale(1)}}
+
+/* ---- 幅900以上: 左のレール(7つ全部) ---- */
+@media (min-width:900px){
+  .nav{left:0;right:auto;top:0;bottom:0;width:var(--lay-rail);height:auto;border-radius:0;touch-action:auto;box-shadow:none;border-right:1px solid var(--line)}
+  #app{padding-left:var(--lay-rail)}
+  .nav-in.rail{display:flex;flex-direction:column;height:auto;max-width:none;padding-top:var(--sp-2)}
+  .nav-in.rail>a{flex:none;height:var(--nav-h)}
+  .nav-in.rail .fab-slot{height:calc(var(--nav-h) * 1.5)}
+  .nav-in.rail .fab{transform:none}
+  .nav-in.rail .fab:active{transform:scale(.96)}
+  .nav-sw{display:none}
+}
+
+/* ---- シート(下から。幅900以上は中央の面) ---- */
+.scrim{position:fixed;inset:0;z-index:60;background:color-mix(in srgb,var(--tx) 40%,transparent);opacity:0;transition:opacity var(--t-mid) var(--ease);pointer-events:none}
+.scrim.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:61;margin:0 auto;max-width:720px;max-height:92dvh;display:flex;flex-direction:column;background:var(--surface);color:var(--tx);border-radius:var(--r-lg) var(--r-lg) 0 0;box-shadow:var(--e3);transform:translate3d(0,105%,0);transition:transform var(--t-mid) var(--ease);outline:none;overflow:hidden}
+.sheet.full{height:96dvh}
+.sheet.on{transform:translate3d(0,0,0)}
+.sheet.under{transform:translate3d(0,-10px,0) scale(.97)}
+.sheet.dragging{transition:none}
+.sheet.under.on{transform:translate3d(0,-10px,0) scale(.97)}
+.sheet-grab{width:36px;height:4px;border-radius:2px;background:var(--line-strong);margin:var(--sp-2) auto 0;flex:none;touch-action:none}
+.sheet-h{display:flex;align-items:center;gap:var(--sp-1);min-height:52px;padding:0 var(--sp-2) 0 var(--sp-1);flex:none;touch-action:none}
+.sheet-x{width:var(--tap);height:var(--tap);display:grid;place-items:center;border-radius:var(--r-pill);color:var(--tx-2);flex:none}
+.sheet-x:active{background:var(--sunk)}
+.sheet-t{flex:1;min-width:0;text-align:center;font-size:var(--fs-title);font-weight:700;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheet-sp{width:var(--tap);flex:none}
+.sheet-b{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:var(--sp-2) var(--gutter) var(--sp-4)}
+.sheet-f{flex:none;display:grid;justify-items:stretch;gap:var(--sp-1);padding:var(--sp-3) var(--gutter) calc(var(--sp-3) + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+.sheet-f .btn{height:48px;border-radius:var(--r-md);background:var(--light),var(--me-fill);color:var(--on-fill);box-shadow:var(--fill-sh);font-size:var(--fs-body);font-weight:600;display:flex;align-items:center;justify-content:center;width:100%}
+.sheet-f .btn:disabled{opacity:.45;pointer-events:none}
+.sheet-s{min-height:var(--tap);color:var(--me);font-size:var(--fs-body);font-weight:500;justify-self:center;padding:0 var(--sp-3)}
+.sheet-ask{position:relative;flex:0 0 auto;display:flex;flex-direction:column;background:var(--surface)}
+.sheet-ask .ask-b{flex:1;display:grid;place-items:center;padding:var(--sp-5) var(--gutter)}
+.ask-t{font-size:var(--fs-title);font-weight:700;text-align:center}
+.sheet.asking > :not(.sheet-ask){display:none}
+.sheet.asking > .sheet-f{display:none}
+
+/* 作成の一覧 */
+.cr-list{display:grid;gap:var(--sp-2);padding-bottom:var(--sp-2)}
+.cr-item{display:flex;align-items:center;gap:var(--sp-3);width:100%;min-height:56px;padding:var(--sp-3) var(--sp-4);border-radius:var(--r-md);background:var(--dcard);box-shadow:var(--e1);color:var(--tx);font-size:var(--fs-body);font-weight:500;text-align:left}
+.cr-item:active{background:var(--sunk)}
+.cr-item.primary{background:var(--light),var(--me-fill);color:var(--on-fill);box-shadow:var(--fill-sh)}
+.cr-item svg.i{width:24px;height:24px;color:currentColor}
+
+/* ---- トースト(積み重ねる。下のナビの上) ---- */
+.toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + 34px + env(safe-area-inset-bottom));z-index:80;display:flex;flex-direction:column;align-items:center;gap:var(--sp-2);width:max-content;max-width:calc(100% - 32px);pointer-events:none}
+@media (min-width:900px){.toasts{bottom:var(--sp-5)}}
+.toast{display:flex;align-items:center;gap:var(--sp-4);min-height:48px;padding:0 var(--sp-2) 0 var(--sp-4);border-radius:var(--r-sm);background:var(--surface);color:var(--tx);box-shadow:var(--e3);font-size:var(--fs-cap);font-weight:500;opacity:0;transform:translate3d(0,8px,0);transition:opacity var(--t-mid) var(--ease),transform var(--t-mid) var(--ease);pointer-events:none}
+.toast.on{opacity:1;transform:translate3d(0,0,0);pointer-events:auto}
+.toast-u{min-height:var(--tap);padding:0 var(--sp-3);color:var(--me);font-weight:600}
+
+/* ---- 動きを減らす設定 ---- */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
