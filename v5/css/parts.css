@@ -1,6 +1,7 @@
 /* =====================================================================
    共通部品の見た目(parts.js と対)。値は tokens.css の変数だけ。
    意味は DESIGN.md 5章。評価済みの形(9章)は v4 の見た目を保つ。
+   例外: 切れ込みの mask の #000 / transparent、影の幾何(グロー・半券の影)は値を直書き。
    ===================================================================== */
 
 [class*="p-"]{box-sizing:border-box}
@@ -30,9 +31,9 @@
 .p-ibtn:active{background:var(--sunk)}
 .p-ibtn .p-ic{width:22px;height:22px}
 
-/* 大見出し(タブの最上位)。28 */
+/* 大見出し(タブの最上位)。28。題は折り返さない */
 .p-largetitle{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-5) var(--gutter) var(--sp-3)}
-.p-lt-h{flex:1;min-width:0;margin:0;font:700 var(--fs-display)/1.2 var(--font);color:var(--tx)}
+.p-lt-h{flex:1;min-width:0;margin:0;font:700 var(--fs-display)/1.2 var(--font);color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .p-lt-acts{display:flex;align-items:center;gap:var(--sp-1);flex:none}
 
 /* 詳細の上部バー。下線はスクロールで出る */
@@ -68,18 +69,22 @@ a.p-row:active,button.p-row:active,a.p-obj:active,button.p-obj:active{background
 .p-prop-v{flex:1;min-width:0;font:500 var(--fs-body)/1.4 var(--font);color:var(--tx);overflow-wrap:anywhere}
 
 /* ---------- 日・月 ---------- */
-/* 日のカード: 白い面、輪郭が発光(うっすら)。今日だけ強く光る。日を大きく(36) */
+/* 日のカード: 白い面、輪郭が発光(うっすら)。日を大きく(36) */
 .p-daycard{display:flex;align-items:center;gap:var(--sp-4);margin:var(--sp-3) var(--gutter);padding:var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-3);
   background:var(--dcard);border-radius:var(--r-md);color:var(--tx);text-decoration:none;
   box-shadow:0 0 0 1px color-mix(in srgb,var(--glow) 22%,transparent),0 0 10px -2px color-mix(in srgb,var(--glow) 22%,transparent),var(--e1),var(--hl)}
 .p-daycard:active{background:var(--sunk)}
-.p-daycard.is-today{box-shadow:0 0 0 1.5px var(--glow),0 0 12px 1px color-mix(in srgb,var(--glow) 60%,transparent),0 0 28px 2px color-mix(in srgb,var(--glow-hi) 45%,transparent),var(--e2),var(--hl)}
+/* 今日のカード: カード全体を塗る(v4.11 で確定した今日の札の塗り)。文字は --on-fill */
+.p-daycard.is-today{background:var(--light),var(--me-fill);color:var(--on-fill);box-shadow:var(--fill-sh),var(--hl-fill)}
+.p-daycard.is-today:active{background:var(--light),var(--me-fill);filter:brightness(.96)}
+.p-daycard.is-today .p-dc-h b,.p-daycard.is-today .p-dc-today,.p-daycard.is-today .p-dc-sum,.p-daycard.is-today .p-dc-diary{color:var(--on-fill)}
+.p-daycard.is-today .p-dc-sum,.p-daycard.is-today .p-dc-diary{opacity:.85}
 .p-dc-num{width:calc(var(--fs-hero) * 2);height:calc(var(--fs-hero) * 2);flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-1);
   border-radius:var(--r-md);background:var(--surface-2);color:var(--me)}
 .p-dc-num b{font:700 var(--fs-hero)/1 var(--font);font-variant-numeric:tabular-nums}
 .p-dc-num small{font:600 var(--fs-min)/1 var(--font)}
-/* 今日の日付の塊だけ塗り(v4.9 の今日カードの塗りを、日付の塊に残す) */
-.p-daycard.is-today .p-dc-num{background:var(--light),var(--me-fill);color:var(--on-fill);box-shadow:var(--fill-sh)}
+/* 今日の日付の塊は、塗りの上の薄い白い面 */
+.p-daycard.is-today .p-dc-num{background:color-mix(in srgb,var(--on-fill) 18%,transparent);color:var(--on-fill)}
 .p-dc-body{flex:1;min-width:0;display:grid;gap:var(--sp-1)}
 .p-dc-h{display:flex;align-items:center;gap:var(--sp-2);min-width:0}
 .p-dc-h b{font:600 var(--fs-title)/1.3 var(--font);font-variant-numeric:tabular-nums;color:var(--tx)}
@@ -117,21 +122,32 @@ a.p-axrow:active .p-ax-c{background:linear-gradient(90deg,var(--sunk),transparen
 /* いまの線: 赤い横線と赤い時刻(点は付けない) */
 .p-now{display:grid;grid-template-columns:var(--tc-now,calc(var(--sp-6) * 2)) minmax(0,1fr);align-items:center;height:var(--sp-5)}
 .p-now-t{padding-right:var(--sp-2);text-align:right;font:600 var(--fs-cap)/1 var(--font);color:var(--late)}
-.p-now-ln{height:2px;border-radius:2px;background:var(--late);margin-right:var(--gutter)}
+.p-now-ln{height:2px;border-radius:var(--r-tag);background:var(--late);margin-right:var(--gutter)}
 /* 軸の端: 過去は実線が消える方向、未来は点線が消える方向 */
 .p-axedge{position:relative;display:grid;grid-template-columns:calc(var(--sp-6) * 2) minmax(0,1fr);align-items:center;min-height:var(--row)}
 .p-axedge::before{content:"";position:absolute;left:calc(var(--sp-6) * 2 + var(--sp-6) / 2 - 1px);top:0;bottom:0;width:2px;background:var(--axis)}
 .p-axedge.is-past::before{-webkit-mask:linear-gradient(transparent,#000);mask:linear-gradient(transparent,#000)}
 .p-axedge.is-future::before{background:repeating-linear-gradient(to bottom,var(--axis-future) 0 4px,transparent 4px 8px);-webkit-mask:linear-gradient(#000,transparent);mask:linear-gradient(#000,transparent)}
 .p-axedge span{grid-column:2;padding:0 var(--gutter) 0 var(--sp-2);font:500 var(--fs-cap)/1.4 var(--font);color:var(--tx-3)}
-/* カプセル(詳細の主役): 起きた=塗り / 予定=点線・中抜き / 遅れ=赤の点線 */
+/* カプセル(詳細の主役): 起きた=塗り / 予定=点線・中抜き / 遅れ=赤の点線 / 瞬間=小さい白い面 */
 .p-capsule{display:flex;flex-direction:column;gap:var(--sp-1);margin:var(--sp-3) var(--gutter);padding:var(--sp-4) var(--sp-5);border-radius:var(--r-lg);text-decoration:none;color:var(--tx)}
 .p-capsule.is-done{background:var(--light),var(--ev);color:var(--on-fill);box-shadow:var(--e2),var(--hl-fill)}
 .p-capsule.is-plan{background:none;border:2px dashed var(--plan)}
 .p-capsule.is-late{background:none;border:2px dashed var(--late)}
+/* 種類の札: カプセルの上に、小さいアイコン+種類名 */
+.p-cap-k{display:inline-flex;align-items:center;gap:var(--sp-1);font:600 var(--fs-cap)/1 var(--font);opacity:.9}
+.p-cap-k .p-ic{width:16px;height:16px}
 .p-cap-t{font:500 var(--fs-cap)/1 var(--font);opacity:.85}
 .p-cap-h{font:700 var(--fs-title)/1.3 var(--font)}
 .p-cap-s{font:400 var(--fs-cap)/1.4 var(--font);opacity:.9}
+/* 瞬間: 小さい白い面(--surface・--e1)。時刻を大きく、左に小さい四角の節 */
+.p-capsule.is-moment{flex-direction:row;align-items:center;gap:var(--sp-3);margin:var(--sp-3) var(--gutter);padding:var(--sp-3) var(--sp-4);border-radius:var(--r-md);background:var(--surface);color:var(--tx);box-shadow:var(--e1),var(--hl)}
+.p-capsule.is-moment .p-cap-k{color:var(--tx-2);opacity:1}
+.p-capsule.is-moment .p-cap-s{color:var(--tx-3);opacity:1}
+.p-mo-node{width:var(--sp-4);height:var(--sp-4);flex:none;border-radius:var(--r-tag);background:var(--ev)}
+.p-mo-body{flex:1;min-width:0;display:grid;gap:var(--sp-1)}
+.p-mo-t{font:700 var(--fs-hero)/1 var(--font);font-variant-numeric:tabular-nums;color:var(--tx)}
+.p-mo-h{font:600 var(--fs-title)/1.3 var(--font);color:var(--tx)}
 
 /* ---------- 半券(自分の支出) ---------- */
 /* 切れ込みは mask で抜く。影は外側の filter で付ける(mask で影が消えないように) */
@@ -143,7 +159,7 @@ a.p-axrow:active .p-ax-c{background:linear-gradient(90deg,var(--sunk),transparen
 /* 半券(切り取る部分)。日常・非日常・未設定で色は変えない(v4.6) */
 .p-tk-stub{width:var(--stub);flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--sp-1);padding:var(--sp-2) var(--sp-1);
   background:var(--light),var(--me-fill);color:var(--on-fill);font:600 var(--fs-min)/1.2 var(--font);text-align:center}
-.p-tk-sp{display:flex;flex-direction:column;align-items:center;gap:2px;font:700 var(--fs-cap)/1.2 var(--font)}
+.p-tk-sp{display:flex;flex-direction:column;align-items:center;gap:var(--sp-1);font:700 var(--fs-cap)/1.2 var(--font)}
 .p-tk-sp .p-ic{width:16px;height:16px}
 .p-tk-none{font:500 var(--fs-min)/1.2 var(--font);opacity:.8}
 /* 本体: 点線の切り取り線を左に */
@@ -151,10 +167,10 @@ a.p-axrow:active .p-ax-c{background:linear-gradient(90deg,var(--sunk),transparen
 .p-tk-t{display:block;font:600 var(--fs-body)/1.35 var(--font);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .p-tk-s{display:flex;align-items:center;flex-wrap:wrap;gap:var(--sp-1) var(--sp-2);margin-top:var(--sp-1);font:400 var(--fs-cap)/1.35 var(--font);color:var(--tx-3)}
 .p-tk-cat{min-width:0}
-.p-tk-amt{flex:none;font:700 17px/1 var(--font);text-align:right;color:var(--tx)}
+.p-tk-amt{flex:none;font:700 var(--fs-body)/1 var(--font);text-align:right;color:var(--tx)}
 .p-ticket .p-chev{align-self:center}
 .p-ticket:active .p-tk{filter:brightness(.97)}
-/* 大きさ: sm=活動の中 / md=既定 / lg=支出の詳細の最上部 */
+/* 大きさ: sm=活動の中 / md=既定 / lg=支出の詳細の最上部(題と補足を上、金額をその下に積む) */
 .p-ticket.is-sm{--stub:50px;--nt:6px;min-height:52px}
 .p-ticket.is-sm .p-tk{min-height:52px;border-radius:var(--r-sm)}
 .p-ticket.is-sm .p-tk-stub{padding:var(--sp-1) 2px;font:600 var(--fs-min)/1.2 var(--font)}
@@ -164,10 +180,12 @@ a.p-axrow:active .p-ax-c{background:linear-gradient(90deg,var(--sunk),transparen
 .p-ticket.is-lg{--stub:68px;--nt:10px;min-height:112px}
 .p-ticket.is-lg .p-tk{min-height:112px;border-radius:var(--r-lg)}
 .p-ticket.is-lg .p-tk-stub{font-size:var(--fs-min)}
-.p-ticket.is-lg .p-tk-body{padding:var(--sp-4);align-items:flex-start}
-.p-ticket.is-lg .p-tk-t{font:700 var(--fs-title)/1.3 var(--font);overflow:visible;white-space:normal}
+.p-ticket.is-lg .p-tk-body{flex-direction:column;align-items:stretch;gap:var(--sp-2);padding:var(--sp-4) var(--sp-6) var(--sp-4) var(--sp-4)}
+.p-ticket.is-lg .p-tk-body>.p-grow{flex:none}
+.p-ticket.is-lg .p-tk-t{font:700 var(--fs-title)/1.3 var(--font);overflow:visible;white-space:normal;word-break:keep-all}
 .p-ticket.is-lg .p-tk-s{font-size:var(--fs-cap)}
-.p-ticket.is-lg .p-tk-amt{font:700 var(--fs-hero)/1.1 var(--font);font-variant-numeric:tabular-nums}
+.p-ticket.is-lg .p-tk-amt{font:700 var(--fs-hero)/1.1 var(--font);font-variant-numeric:tabular-nums;text-align:left}
+.p-ticket.is-lg .p-chev{position:absolute;right:var(--sp-4);top:50%;transform:translateY(-50%)}
 /* 塗りの上に置く時: 半券を白い殻(--surface)で包む。半券の青が地の灰に触れないように */
 .p-ticket.is-fill{padding:var(--sp-1);border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--e1),var(--hl)}
 .p-ticket.is-fill .p-tk{border-radius:var(--r-md)}
@@ -190,12 +208,13 @@ a.p-axrow:active .p-ax-c{background:linear-gradient(90deg,var(--sunk),transparen
 .p-pay-tk{display:block;cursor:pointer}
 /* 支払い詳細の主役の下端(塗りの上): 半券は白い殻で包む */
 .p-pay.is-pay{margin-top:var(--sp-4)}
-/* 支出の詳細の最上部: 小さい見出し+大きい半券 */
+/* 支出の詳細の最上部: 小さい見出し+割合の1行+大きい半券 */
 .p-pay.is-x{display:grid;gap:var(--sp-2);padding:var(--sp-3);border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--e1),var(--hl)}
 .p-pay.is-x .p-pay-l{font:600 var(--fs-cap)/1.35 var(--font);white-space:normal;overflow:visible}
 .p-pay.is-x .p-pay-h{min-height:var(--tap)}
+.p-pay-ratio{padding:0 var(--sp-1);font:500 var(--fs-cap)/1.2 var(--font);color:var(--tx-2)}
 
-/* お金の棒: 自分=青 / ほかの人=灰 / 未精算=琥珀の斜線(線の間は透明) */
+/* お金の棒: 自分=青 / ほかの人=灰 / 未精算=琥珀の斜線(線の間は透明)。自分以外の分がある時だけ出す */
 .p-bar{display:flex;height:6px;min-width:56px;border-radius:var(--r-pill);overflow:hidden}
 .p-bar i{display:block;height:100%}
 .p-bar .me{background:var(--me-fill)}
@@ -214,12 +233,12 @@ a.p-axrow:active .p-ax-c{background:linear-gradient(90deg,var(--sunk),transparen
 /* 縁の参照: 緑のドット+名前。未登録は中抜き */
 .p-ref{display:inline-flex;align-items:center;gap:var(--sp-1);max-width:100%;color:var(--tx);font:600 var(--fs-cap)/1.3 var(--font);text-decoration:none;vertical-align:middle}
 .p-ref::before{inset:calc(var(--sp-4) * -1) calc(var(--sp-2) * -1)}
-.p-dot{width:10px;height:10px;flex:none;border-radius:50%;background:var(--kin)}
+.p-dot{width:10px;height:10px;flex:none;border-radius:var(--r-pill);background:var(--kin)}
 .p-dot.is-unreg{background:none;box-shadow:inset 0 0 0 2px var(--kin)}
 .p-ref.is-unreg{color:var(--tx-2)}
 /* タグ: データに付いた分類(角丸6) */
 .p-tag{display:inline-flex;align-items:center;gap:var(--sp-1);min-height:24px;padding:0 var(--sp-2);border-radius:var(--r-tag);background:var(--surface-2);color:var(--tx-2);font:500 var(--fs-min)/1 var(--font);white-space:nowrap;vertical-align:middle}
-.p-tag-bar{width:4px;height:12px;flex:none;border-radius:2px;background:var(--cc)}
+.p-tag-bar{width:4px;height:12px;flex:none;border-radius:var(--r-tag);background:var(--cc)}
 .p-tag.is-owe{background:var(--owe-soft);color:var(--owe)}
 .p-tag.is-late{background:var(--late-soft);color:var(--late)}
 
@@ -243,7 +262,7 @@ a.p-axrow:active .p-ax-c{background:linear-gradient(90deg,var(--sunk),transparen
 .p-check-m .p-ic{width:16px;height:16px}
 /* 切替: 48x28 */
 .p-toggle{position:relative;display:inline-flex;align-items:center;width:48px;height:28px;flex:none;padding:0 var(--sp-1);border:0;border-radius:var(--r-pill);background:var(--sunk);cursor:pointer}
-.p-toggle-k{width:22px;height:22px;border-radius:50%;background:var(--surface);box-shadow:var(--e1);transition:transform var(--t-fast) var(--ease)}
+.p-toggle-k{width:22px;height:22px;border-radius:var(--r-pill);background:var(--surface);box-shadow:var(--e1);transition:transform var(--t-fast) var(--ease)}
 .p-toggle.is-on{background:var(--me-fill)}
 .p-toggle.is-on .p-toggle-k{transform:translateX(20px)}
 .p-field{display:grid;gap:var(--sp-1);margin:var(--sp-2) var(--gutter);padding:var(--sp-3) var(--sp-4);border-radius:var(--r-md);background:var(--surface)}
@@ -258,24 +277,24 @@ a.p-axrow:active .p-ax-c{background:linear-gradient(90deg,var(--sunk),transparen
 .p-sum-m{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:var(--sp-1);min-height:var(--tap);padding:0 var(--sp-2);border:0;background:none;color:var(--tx-2);text-align:left;text-decoration:none;min-width:0;cursor:pointer}
 .p-sum-m+.p-sum-m{border-left:1px solid var(--line)}
 .p-sum-m b{font:600 var(--fs-title)/1.2 var(--font);color:var(--tx);white-space:nowrap}
-.p-sum-m span{display:flex;align-items:center;gap:2px;font:500 var(--fs-min)/1.3 var(--font);color:var(--tx-2);white-space:nowrap}
+.p-sum-m span{display:flex;align-items:center;gap:var(--sp-1);font:500 var(--fs-min)/1.3 var(--font);color:var(--tx-2);white-space:nowrap}
 .p-sum-m:active{background:var(--surface-2)}
 .p-sum-acts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--sp-2);margin-top:var(--sp-3)}
 .p-sum-btn{height:var(--tap);min-height:48px;padding:0 var(--sp-3);min-width:0}
 .p-empty{display:grid;justify-items:center;gap:var(--sp-3);padding:var(--sp-6) var(--gutter);text-align:center}
-.p-empty-ic{width:var(--sp-6);height:var(--sp-6);padding:var(--sp-2);border-radius:var(--r-pill);color:var(--tx-3);box-shadow:inset 0 0 0 1px var(--line-strong)}
-.p-empty-ic{width:calc(var(--sp-6) * 2);height:calc(var(--sp-6) * 2)}
+.p-empty-ic{width:calc(var(--sp-6) * 2);height:calc(var(--sp-6) * 2);padding:var(--sp-2);border-radius:var(--r-pill);color:var(--tx-3);box-shadow:inset 0 0 0 1px var(--line-strong)}
 .p-empty-t{margin:0;font:500 var(--fs-cap)/1.5 var(--font);color:var(--tx-2)}
 .p-banner{display:flex;align-items:flex-start;gap:var(--sp-3);margin:var(--sp-2) var(--gutter);padding:var(--sp-3) var(--sp-4);border-radius:var(--r-md);font:500 var(--fs-cap)/1.5 var(--font);color:var(--tx)}
 .p-banner .p-ic{width:18px;height:18px;margin-top:2px}
-.p-banner.is-warn{background:var(--owe-soft);}
-.p-banner.is-warn .p-ic{color:var(--owe)}
+/* 警告: 琥珀は貸し借りだけ。警告は地より一段濃い面と枠、注意のアイコン(--tx-2) */
+.p-banner.is-warn{background:var(--surface-2);border:1px solid var(--line-strong)}
+.p-banner.is-warn .p-ic{color:var(--tx-2)}
 .p-banner.is-info{background:var(--me-soft)}
 .p-banner.is-info .p-ic{color:var(--me)}
 .p-banner-b{flex:1;min-width:0}
 /* 読み取った値の印(淡い青灰)。確かめると消える */
 .p-readmark{display:inline-flex;align-items:center;gap:var(--sp-1);padding:0;border:0;background:none;color:var(--unread);font:500 var(--fs-min)/1 var(--font);text-decoration:underline dashed;text-underline-offset:3px}
-.p-readmark::before{content:"";width:6px;height:6px;flex:none;border-radius:50%;border:1.5px solid var(--unread)}
+.p-readmark::before{content:"";width:6px;height:6px;flex:none;border-radius:var(--r-pill);border:1.5px solid var(--unread)}
 .p-readmark.is-btn{position:relative;min-height:var(--tap);padding:0 var(--sp-2)}
 .p-readmark.is-btn::before{align-self:center}
 /* 進み具合 */

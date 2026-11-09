@@ -80,6 +80,7 @@
   out+=sec('見出し・バー',
     '<div class="g-box">'+
     largeTitle('家計簿',{actions:[{label:'カテゴリ',icon:'cats',on:'void 0'},{label:'支払いを記録',primary:true,on:'void 0'}]})+
+    largeTitle('自分の支出の長い題でも折り返さない題',{actions:[{label:'検索',icon:'search',iconOnly:true,on:'void 0'},{label:'追加',icon:'plus',iconOnly:true,on:'void 0'}]})+
     largeTitle('アクティビティ',{actions:[{label:'追加',icon:'plus',on:'void 0'}]})+
     appbar('10月30日(金)',{actions:[{label:'その他',icon:'more',on:'void 0'}]})+
     sh('関わったエンティティ',{count:2})+
@@ -89,7 +90,7 @@
   /* 2. 面・行・属性 */
   out+=sec('面・行・属性',
     '<div class="g-box">'+
-    list([row({t:'田中 花子',s:'同僚・割り勘メンバー',right:'¥1,000',href:'#/e/hanako'}),row({t:'自分の負担',s:'使った分',right:'¥2,240',on:'void 0'}),row({t:'読み取りのみ',s:'項目が空',chev:false})])+
+    list([row({t:'田中 花子',s:'同僚・割り勘メンバー',right:'¥1,000',href:'#/e/hanako'}),row({t:'自分の負担',s:'使った分',right:'¥2,240',on:'void 0'}),row({t:'読み取りのみ',s:'項目が空',chev:false}),row({t:'合計(rightHtml)',rightHtml:'<b>¥2,240</b> <small>税込</small>',chev:false})])+
     objRow({t:'ラーメン青葉',s:'10月30日 13:05',right:'¥4,580',href:'#/a/p1'})+
     list([prop('支払先','らーめん青葉'),prop('支払い方法','現金',{on:'void 0'}),prop('日付','10月30日(金)')])+
     '</div>');
@@ -115,9 +116,12 @@
     axEdge('これから',true);
   out+=sec('時間軸・いまの線・軸の端',
     '<div class="g-box">'+axBody+
-    capsule({kind:'done',time:'13:05',title:'らーめん青葉',sub:'支払い ¥4,580'})+
-    capsule({kind:'plan',time:'15:00',title:'歯医者',sub:'予定'})+
-    capsule({kind:'late',time:'11:00',title:'記録にする?',sub:'過ぎた予定'})+
+    capsule({kind:'done',kindLabel:'支払い',kindIcon:'pay',time:'13:05',title:'らーめん青葉',sub:'支払い ¥4,580'})+
+    capsule({kind:'done',kindLabel:'会話',kindIcon:'talk',time:'12:00',end:'13:10',title:'花子さんとランチ',sub:'らーめん青葉'})+
+    capsule({kind:'plan',kindLabel:'予定',kindIcon:'schedule',time:'15:00',title:'歯医者',sub:'予定'})+
+    capsule({kind:'late',kindLabel:'予定',kindIcon:'schedule',time:'11:00',title:'記録にする?',sub:'過ぎた予定'})+
+    capsule({kind:'moment',kindLabel:'',time:'08:00',title:'起床'})+
+    capsule({kind:'moment',kindLabel:'体調',kindIcon:'spark',time:'07:30',title:'よく眠れた'})+
     '</div>');
 
   /* 5. 半券・支払い */

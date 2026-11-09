@@ -41,6 +41,7 @@ const PARTS_IC={
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.1"/>',
   bell:'<path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15Z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
   repeat:'<path d="M4 11V9a3 3 0 0 1 3-3h12M16 3l3 3-3 3M20 13v2a3 3 0 0 1-3 3H5M8 21l-3-3 3-3"/>',
+  pin:'<path d="M9 4h6l-1 5 3 3v1H7v-1l3-3-1-5z"/><path d="M12 13v7"/>',
   place:'<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/>',
   people:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"/>',
   link:'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
@@ -68,11 +69,11 @@ function iconBtn(name,label,on,cls=''){
   return `<button class="p-ibtn ${cls}" type="button" aria-label="${esc(label)}" onclick="${on}">${icon(name)}</button>`}
 
 /* ---------- 見出し・バー ---------- */
-/** タブの最上位の大見出し。actions=[{label,icon,on,primary}]。icon だけ=丸いボタン、primary=塗りの文字ボタン */
+/** タブの最上位の大見出し。actions=[{label,icon,on,primary,iconOnly}]。主以外は icon だけの丸いボタン(label は読み上げ名)。iconOnly=true なら主でも icon だけ、primary=塗りの文字ボタン */
 function largeTitle(title,o={}){
   return `<header class="p-largetitle"><h1 class="p-lt-h">${esc(title)}</h1><div class="p-lt-acts">${(o.actions||[]).map(pAction).join('')}</div></header>`}
 function pAction(a){
-  if(a.icon&&!a.primary)return iconBtn(a.icon,a.label,a.on);
+  if(a.icon&&(a.iconOnly||!a.primary))return iconBtn(a.icon,a.label,a.on);
   return `<button class="p-btn ${a.primary?'p-btn-fill':'p-btn-tonal'}" type="button" onclick="${a.on}">${a.icon?icon(a.icon):''}${esc(a.label)}</button>`}
 /** 詳細の上部バー(戻る + 題 + 右の操作)。下にスクロールすると下線が出る(下の監視で付く) */
 function appbar(title='',o={}){
@@ -83,12 +84,13 @@ function sh(title,o={}){
   return `<div class="p-sh"><h2 class="p-sh-h">${esc(title)}</h2>${o.count!=null&&o.count!==''?`<span class="p-sh-n num">${esc(o.count)}</span>`:''}<span class="p-grow"></span>${o.act?`<button class="p-sh-act" type="button" onclick="${o.act.on}">${esc(o.act.label)}</button>`:''}</div>`}
 
 /* ---------- 面・行・属性 ---------- */
-/** 行の中身(row と objRow で共通)。o={t,s,right,href,on,lead,chev} */
+/** 行の中身(row と objRow で共通)。o={t,s,right,rightHtml,href,on,lead,chev}。rightHtml は esc しない HTML(呼び手が esc 済み) */
 function pRowHTML(o,cls){
   const tag=o.href?'a':o.on?'button':'div';
   const at=o.href?`href="${esc(o.href)}"`:o.on?`type="button" onclick="${o.on}"`:'';
   const chev=(o.href||o.on)&&o.chev!==false;
-  return `<${tag} class="${cls}" ${at}>${o.lead?`<span class="p-row-lead">${o.lead}</span>`:''}<span class="p-row-body"><span class="p-row-t">${esc(o.t)}</span>${o.s!=null&&o.s!==''?`<span class="p-row-s">${esc(o.s)}</span>`:''}</span>${o.right!=null&&o.right!==''?`<span class="p-row-r num">${esc(o.right)}</span>`:''}${chev?`<span class="p-chev">${icon('chev')}</span>`:''}</${tag}>`}
+  const right=o.rightHtml?`<span class="p-row-r num">${o.rightHtml}</span>`:(o.right!=null&&o.right!==''?`<span class="p-row-r num">${esc(o.right)}</span>`:'');
+  return `<${tag} class="${cls}" ${at}>${o.lead?`<span class="p-row-lead">${o.lead}</span>`:''}<span class="p-row-body"><span class="p-row-t">${esc(o.t)}</span>${o.s!=null&&o.s!==''?`<span class="p-row-s">${esc(o.s)}</span>`:''}</span>${right}${chev?`<span class="p-chev">${icon('chev')}</span>`:''}</${tag}>`}
 /** 枠線の面の中の行(影なし。行はオブジェクトではない) */
 function row(o={}){return pRowHTML(o,'p-row')}
 /** 枠線の面。rows は row() の結果の配列 */
@@ -123,11 +125,13 @@ function nowLine(){const t=typeof NOW!=='undefined'?NOW:'13:20';
   return `<div class="p-now" aria-label="いま ${esc(t)}"><span class="p-now-t num">${esc(t)}</span><span class="p-now-ln"></span></div>`}
 /** 軸の端(過去の続き・未来の続き。薄れて消える) */
 function axEdge(text,future){return `<div class="p-axedge ${future?'is-future':'is-past'}"><span>${esc(text)}</span></div>`}
-/** カプセル(詳細の主役)。kind: done=塗り(起きた) / plan=点線・中抜き(予定) / late=赤の点線(過ぎた予定)
-    o={time,title,sub(HTML),href} */
+/** カプセル(詳細の主役)。kind: done=塗り(起きた) / plan=点線・中抜き(予定) / late=赤の点線(過ぎた予定) / moment=瞬間(小さい白い面・時刻を大きく・左に節)
+    o={time,title,sub(HTML),href,kindLabel(種類の名前。例 '会話'),kindIcon(PARTS_IC の名前)} */
 function capsule(o={}){
   const tag=o.href?'a':'div';const at=o.href?`href="${esc(o.href)}"`:'';const k=o.kind||'done';
-  return `<${tag} class="p-capsule is-${k}" ${at}>${o.time?`<span class="p-cap-t num">${esc(o.time)}</span>`:''}<b class="p-cap-h">${esc(o.title||'')}</b>${o.sub?`<span class="p-cap-s">${o.sub}</span>`:''}</${tag}>`}
+  const kind=o.kindLabel?`<span class="p-cap-k">${o.kindIcon?icon(o.kindIcon):''}${esc(o.kindLabel)}</span>`:'';
+  if(k==='moment')return `<${tag} class="p-capsule is-moment" ${at}><span class="p-mo-node" aria-hidden="true"></span><span class="p-mo-body">${kind}${o.time?`<b class="p-mo-t num">${esc(o.time)}</b>`:''}<span class="p-mo-h">${esc(o.title||'')}</span>${o.sub?`<span class="p-cap-s">${o.sub}</span>`:''}</span></${tag}>`;
+  return `<${tag} class="p-capsule is-${k}" ${at}>${kind}${o.time?`<span class="p-cap-t num">${esc(o.time)}</span>`:''}<b class="p-cap-h">${esc(o.title||'')}</b>${o.sub?`<span class="p-cap-s">${o.sub}</span>`:''}</${tag}>`}
 
 /* ---------- 半券・支払い ---------- */
 /** 半券の中身。日常 / ✦非日常 / 未設定 */
@@ -140,9 +144,11 @@ function ticket(o={}){
   const tag=o.href?'a':o.onclick?'button':'div';
   const at=o.href?`href="${esc(o.href)}"`:o.onclick?`type="button" onclick="${o.onclick}"`:'';
   return `<${tag} class="p-ticket is-${o.size||'md'} ${o.fill?'is-fill':''}" ${at} ${o.label?`aria-label="${esc(o.label)}"`:''}><span class="p-tk"><span class="p-tk-stub">${pStub(o.stub)}</span><span class="p-tk-body"><span class="p-grow"><span class="p-tk-t">${esc(o.title||'')}</span>${o.sub?`<span class="p-tk-s">${o.sub}</span>`:''}</span>${o.amt!=null?`<span class="p-tk-amt num">${esc(o.amt)}</span>`:''}${o.href?`<span class="p-chev">${icon('chev')}</span>`:''}</span></span></${tag}>`}
-/** お金の棒(自分=青 / ほかの人=灰 / 未精算=琥珀の斜線)。支払い aid の内訳 */
+/** 自分以外が使った品目・自分以外が払った分がある支払いか(無ければお金の棒は出さない) */
+const pShared=a=>payItems(a).some(i=>usersOf(i).some(u=>u!=='me'))||paidOf(a).some(q=>q.who!=='me');
+/** お金の棒(自分=青 / ほかの人=灰 / 未精算=琥珀の斜線)。支払い aid の内訳。割り勘・立替の無い支払いは出さない */
 function payBar(aid){
-  const p=A[aid];const x=p&&p.x&&X[p.x];if(!x)return '';
+  const p=A[aid];const x=p&&p.x&&X[p.x];if(!x||!pShared(p))return '';
   const mine=xAmt(x),rest=Math.max(0,p.amt-mine);const b=balanceOf(p);const owed=b.amt>0&&!b.settled;
   return `<span class="p-bar" role="img" aria-label="支払い ${yen(p.amt)} のうち自分 ${yen(mine)}"><i class="me" style="flex:${mine}"></i>${rest>0?`<i class="${owed?'owe':'other'}" style="flex:${rest}"></i>`:''}</span>`}
 /** 割合の棒+凡例。segs=[{v, kind:'me'|'other'|'owe', label, href}] */
@@ -158,12 +164,14 @@ function payShell(aid,o={}){
   const bal=balanceOf(p);
   const tot=`<span class="p-pay-tot">合計 <b class="num">${yen(p.amt)}</b></span>`;
   const xTk=(extra)=>x?ticket(Object.assign({stub:xSp(x),title:'自分の支出',
-    sub:`<span class="p-tk-cat">${esc(catPath(x.cat))}</span>${x.amt!==p.amt?payBar(aid):''}${bal.open?tag(balanceText(bal),{kind:'owe'}):''}`,
+    sub:`<span class="p-tk-cat">${esc(catPath(x.cat))}</span>${payBar(aid)}${bal.open?tag(balanceText(bal),{kind:'owe'}):''}`,
     amt:yen(xAmt(x))},extra)):'';
   if(mode==='pay')return x?`<div class="p-pay is-pay">${xTk({size:'md',fill:true,href:xHref})}</div>`:'';
   if(mode==='x'){
     const d=xDate(x);
-    return `<div class="p-pay is-x"><a class="p-pay-h" href="${payHref}"><span class="p-pay-ic">${icon('pay')}</span><span class="p-pay-l">${esc(payLabel(p))} · ${esc(fmtMDW(d))}${p.time?` ${esc(p.time)}`:''}</span>${tot}</a>${x?xTk({size:'lg',fill:true,href:xHref,label:'自分の支出'}):''}</div>`}
+    /* 割合の1行は棒の上(棒と同じく、自分以外の分がある時だけ) */
+    const ratio=x&&pShared(p)&&p.amt?`<span class="p-pay-ratio num">支払い ${esc(yen(p.amt))} の ${Math.round(xAmt(x)*100/p.amt)}%</span>`:'';
+    return `<div class="p-pay is-x"><a class="p-pay-h" href="${payHref}"><span class="p-pay-ic">${icon('pay')}</span><span class="p-pay-l">${esc(payLabel(p))} · ${esc(fmtMDW(d))}${p.time?` ${esc(p.time)}`:''}</span>${tot}</a>${ratio}${x?xTk({size:'lg',fill:true,href:xHref,label:'自分の支出'}):''}</div>`}
   if(mode==='kid'){
     const g1=`event.stopPropagation();go('${payHref}')`,g2=`event.stopPropagation();go('${xHref}')`;
     return `<div class="p-pay is-kid"><span class="p-pay-h" role="link" tabindex="0" onclick="${g1}"><span class="p-pay-ic">${icon('pay')}</span><span class="p-pay-l">${esc(payeeOf(p)||'支払い')}</span>${p.time?`<small class="p-pay-tm num">${esc(p.time)}</small>`:''}${tot}</span>${x?`<span class="p-pay-tk" role="link" tabindex="0" onclick="${g2}">${xTk({size:'sm'})}</span>`:''}</div>`}

@@ -1,2 +1,103 @@
-/* 画面: entities の見た目(仮置き。画面担当が書く。値は tokens の変数だけ) */
-.en_title{font-size:var(--fs-display);font-weight:700;line-height:1.2;padding:var(--sp-5) 0 var(--sp-3)}
+/* =====================================================================
+   画面: エンティティ(縁)・種類 — 接頭辞 en-。値は tokens.css の変数だけ
+   ===================================================================== */
+
+/* ---------- 一覧 #/entities ---------- */
+.en-search{position:relative;margin:var(--sp-2) var(--gutter) var(--sp-3)}
+.en-search>.p-ic{position:absolute;left:var(--sp-3);top:50%;margin-top:-12px;width:24px;height:24px;color:var(--tx-3);pointer-events:none;z-index:1}
+.en-search .p-input{padding-left:var(--sp-6)}
+.en-g{margin-bottom:var(--sp-2)}
+.en-gh{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-5) var(--gutter) var(--sp-1)}
+.en-gn{font-size:var(--fs-cap);color:var(--tx-3)}
+.en-row{align-items:center}
+.en-row .p-row-lead{align-self:center}
+.en-side{display:flex;flex-direction:column;align-items:flex-end;gap:var(--sp-1);flex:none}
+.en-ago{font-size:var(--fs-cap);color:var(--tx-2);white-space:nowrap}
+.en-ago-k{font-size:var(--fs-min);color:var(--tx-3);white-space:nowrap}
+/* 種類の chips: 1行の横スクロール(折り返さない。v4 と同じ) */
+.en-chips{overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.en-chips::-webkit-scrollbar{display:none}
+.en-chips .p-chips{flex-wrap:nowrap;width:max-content;min-width:100%;padding-top:0}
+.en-chips .p-chip{flex:none}
+/* 12週の棒: 週ごとの登場数。高さで段を分ける(色は縁の色) */
+.en-strip{display:inline-flex;align-items:flex-end;gap:2px;height:var(--sp-4)}
+.en-strip i{width:var(--sp-1);height:var(--sp-1);border-radius:2px;background:var(--line-strong)}
+.en-strip i.h1{height:var(--sp-2);background:var(--kin)}
+.en-strip i.h2{height:var(--sp-3);background:var(--kin)}
+.en-strip i.h3{height:var(--sp-4);background:var(--kin)}
+
+/* ---------- 詳細 #/e/… ---------- */
+.en-detail{padding-bottom:var(--sp-5)}
+/* フォルダのタブ: 種類のパンくず。本体の上に付く */
+.en-tab{position:relative;z-index:1;display:inline-flex;flex-wrap:wrap;align-items:center;gap:0;margin:var(--sp-3) var(--gutter) -1px;padding:0 var(--sp-4);
+  min-height:var(--tap);border-radius:var(--r-md) var(--r-md) 0 0;background:var(--kin-soft);color:var(--tx-2);font-size:var(--fs-cap);font-weight:600;box-shadow:inset 0 2px 0 var(--kin)}
+.en-tab a{display:inline-flex;align-items:center;justify-content:center;min-width:var(--tap);min-height:var(--tap);color:var(--tx);text-decoration:none}
+.en-sep{margin:0 var(--sp-1);color:var(--tx-3)}
+/* 縁の色の面: 縁の色を薄く混ぜた面+大きい輪郭(縁の色の線) */
+.en-hero{margin:0 var(--gutter);padding:var(--sp-5);border-radius:0 var(--r-lg) var(--r-lg) var(--r-lg);color:var(--tx);
+  background:var(--light),linear-gradient(135deg,var(--kin-soft),var(--surface));
+  box-shadow:inset 0 0 0 2px var(--kin),var(--e2),var(--hl)}
+.en-hero h1{margin:0;font-size:var(--fs-display);font-weight:700;line-height:1.25;overflow-wrap:anywhere}
+.en-kinds{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2);margin-top:var(--sp-3)}
+.en-kinds .p-chip{background:var(--surface);color:var(--tx-2)}
+/* 数字の帯: 最後に交わった / 今年 / 自分の支出 / 貸し・借り */
+.en-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(calc(var(--sp-6) * 3),1fr));gap:var(--sp-2) var(--sp-4);
+  margin:var(--sp-3) var(--gutter) 0;padding:var(--sp-4);border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1),var(--hl)}
+.en-stats>div{display:flex;flex-direction:column;gap:var(--sp-1);min-width:0}
+.en-stats b{font-size:var(--fs-title);font-weight:700;color:var(--tx);overflow-wrap:anywhere}
+.en-stats span{font-size:var(--fs-min);color:var(--tx-3)}
+.en-stats .en-owe{color:var(--owe)}
+/* 事実・関係の表(1枚の属性の面) */
+.en-facts{margin-top:var(--sp-3);overflow:hidden}
+.en-facts .p-prop:first-child{border-top:0}
+.en-fact .p-prop-v{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2)}
+.en-since{margin-left:auto;font-size:var(--fs-min);color:var(--tx-3);white-space:nowrap}
+.en-dir{font-size:var(--fs-cap);color:var(--tx-3)}
+.en-more{margin:var(--sp-3) var(--gutter) 0;overflow:hidden;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1)}
+.en-more summary{display:flex;align-items:center;justify-content:center;min-height:var(--tap);font-size:var(--fs-cap);color:var(--me);cursor:pointer;list-style:none}
+.en-more summary::-webkit-details-marker{display:none}
+.en-more .en-facts{margin:0;border-radius:0;box-shadow:none}
+/* 角を折った紙(エンティティのメモ): 右上が折れ、左の線が綴じ目(縁の色) */
+.en-paper{position:relative;display:block;margin:var(--sp-3) var(--gutter) 0;padding:var(--sp-3) var(--sp-5) var(--sp-3) var(--sp-4);
+  color:var(--tx);background:linear-gradient(225deg,transparent 0 var(--sp-5),var(--surface) var(--sp-5));
+  border-radius:var(--sp-1) 0 var(--r-sm) var(--r-sm);box-shadow:var(--e1)}
+.en-paper::before{content:"";position:absolute;left:0;top:var(--sp-3);bottom:var(--sp-3);width:var(--sp-1);border-radius:0 var(--sp-1) var(--sp-1) 0;background:var(--kin)}
+.en-paper::after{content:"";position:absolute;top:0;right:0;width:var(--sp-5);height:var(--sp-5);background:linear-gradient(225deg,transparent 50%,var(--line) 50%)}
+.en-paper-h{display:flex;align-items:center;gap:var(--sp-2);min-height:var(--tap);font-size:var(--fs-cap);color:var(--tx-2)}
+.en-paper-h b{font-weight:600}
+.en-paper-h small{font-size:var(--fs-min);color:var(--tx-3)}
+.en-paper-h .p-ic{width:var(--sp-4);height:var(--sp-4)}
+.en-paper p{margin:var(--sp-1) 0 0;font-size:var(--fs-body);color:var(--tx);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.en-empty .en-paper-h{color:var(--me)}
+/* 時間軸: 糸の色は縁の色。事実の変化はひし形 */
+.en-thread{margin-top:var(--sp-2)}
+.en-thread .p-axrow::before{background:var(--kin)}
+.en-thread .p-axrow.is-future::before{background:repeating-linear-gradient(to bottom,var(--kin) 0 4px,transparent 4px 8px)}
+.en-thread .p-axrow.is-fact .p-ax-node{width:10px;height:10px;border-radius:2px;background:var(--kin);transform:rotate(45deg)}
+.en-thread .en-role{display:block;margin-bottom:var(--sp-1)}
+.en-edge{display:block;text-align:left;padding:0 var(--gutter)}
+.en-more-btn{min-height:var(--tap);padding:0 var(--sp-3);border:0;background:none;font-size:var(--fs-cap);color:var(--me);cursor:pointer}
+.en-todo{align-items:center}
+.en-todo-a{flex:1;min-width:0;min-height:var(--tap);justify-content:center;display:flex;flex-direction:column;gap:var(--sp-1);text-decoration:none;color:inherit}
+.en-pri{margin-left:var(--sp-2);color:var(--me);font-size:var(--fs-cap);font-weight:700;line-height:1}
+
+/* ---------- 種類の木 #/types ---------- */
+.en-tree{margin-top:var(--sp-3)}
+.en-tr{position:relative;padding-left:calc(var(--gutter) + var(--sp-5) * var(--d));gap:var(--sp-1)}
+.en-guide{position:absolute;top:0;bottom:0;left:calc(var(--gutter) + var(--sp-5) * var(--gi) + var(--sp-4));width:0;border-left:1px solid var(--line-strong)}
+.en-tg,.en-tg-none{width:var(--tap);height:var(--tap);flex:none;display:grid;place-items:center;border:0;background:none;color:var(--tx-3);cursor:pointer}
+.en-tr-main{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:var(--sp-1);min-height:var(--tap);padding:var(--sp-1) 0;border:0;background:none;text-align:left;color:var(--tx);font:inherit;cursor:pointer}
+.en-tr-s{font-size:var(--fs-cap);color:var(--tx-3);overflow-wrap:anywhere}
+.en-tr-n{flex:none;min-width:var(--sp-5);text-align:right;font-size:var(--fs-cap);color:var(--tx-2)}
+
+/* ---------- 編集シート ---------- */
+.en-rel{display:grid;gap:var(--sp-2);padding:var(--sp-3) var(--gutter);border-top:1px solid var(--line)}
+.en-rel .p-seg{justify-self:start}
+.en-fields .p-field{margin:0 var(--gutter) var(--sp-2)}
+.en-none{margin:0 var(--gutter);font-size:var(--fs-cap);color:var(--tx-3)}
+.en-add{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap}
+.en-add .p-input{flex:1;min-width:0}
+.en-mini{min-height:var(--tap);padding:0 var(--sp-3);flex:none}
+.en-pin{flex:1;min-width:0}
+.en-foot{display:flex;justify-content:center;padding:var(--sp-3) var(--gutter)}
+.en-foot .p-btn{min-width:50%}

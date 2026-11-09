@@ -1,2 +1,175 @@
-/* 画面: timeline の見た目(仮置き。画面担当が書く。値は tokens の変数だけ) */
-.tl_title{font-size:var(--fs-display);font-weight:700;line-height:1.2;padding:var(--sp-5) 0 var(--sp-3)}
+/* =====================================================================
+   画面: アクティビティ(リスト・日・月)と日のページ。値は tokens の変数だけ。
+   上部の縮み: 札(.tl-sum::before)の縮み・月の送り・絞り込みの移動は transform と opacity だけ(--p・--e・--fo・--fi は js が決める)。
+   ===================================================================== */
+
+/* ---------- 上部(リスト): 固定・縮む。高さは 346(56+48+4+130+48+60) ---------- */
+.tl-top{--gutter:var(--page-x);position:fixed;top:0;left:0;width:100%;z-index:30;box-sizing:border-box;overflow:hidden;contain:layout paint;pointer-events:none}
+.tl-top>*{pointer-events:auto}
+/* 背景: 上部の全部の高さ。縮んだ分(146px)だけ上へ。一覧のスクロールと同じ速さで、下端を一覧の上端に合わせる */
+.tl-top::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--bg);pointer-events:none;
+  transform:translate3d(0,calc(-146px*var(--p,0)),0);will-change:transform}
+/* 下端の影(縮むほど濃くなる) */
+.tl-top::after{content:"";position:absolute;left:0;top:100%;width:100%;height:var(--sp-3);z-index:-1;pointer-events:none;
+  background:linear-gradient(color-mix(in srgb,var(--tx) 14%,transparent),transparent);
+  opacity:var(--p,0);transform:translate3d(0,calc(-146px*var(--p,0)),0);will-change:transform,opacity}
+/* 1) 大見出し: 高さ 56。文字は 1→0.68 に縮む(--e) */
+.tl-ttl{position:relative;height:56px;display:flex;align-items:center;padding:0 var(--gutter)}
+.tl-ttl .p-largetitle{padding:0;flex:1;min-width:0}
+.tl-ttl .p-lt-h{transform-origin:0 50%;transform:translate3d(0,calc(-3px*var(--e,0)),0) scale(calc(1 - .32*var(--e,0)));will-change:transform}
+/* 丸いボタン2つ(作る): 縮んだ時だけ出る(--fi) */
+.tl-tb{position:absolute;right:var(--gutter);top:50%;margin-top:-22px;display:flex;gap:var(--sp-2);
+  opacity:var(--fi,0);transform:translate3d(0,calc(6px*(1 - var(--fi,0))),0);will-change:transform,opacity}
+.tl-top:not(.is-line) .tl-tb{visibility:hidden}
+/* 2) 表示の切替: 高さ 48。縮むと少し上へ */
+.tl-seg{height:48px;display:flex;align-items:center;padding:0 var(--gutter);transform:translate3d(0,calc(-8px*var(--e,0)),0);will-change:transform}
+.tl-seg .p-seg{width:100%}
+.tl-seg .p-seg-i{flex:1;min-height:var(--tap)}
+/* 3) まとめ: 高さ 130。札の白は縮む(scaleY で 130→40)。中身はフェードで消す */
+.tl-sum{position:relative;height:130px;margin-top:var(--sp-1)}
+.tl-sum::before{content:"";position:absolute;left:var(--gutter);right:var(--gutter);top:0;height:100%;box-sizing:border-box;border-radius:var(--r-lg);
+  background:var(--surface);box-shadow:var(--e1),var(--hl);transform-origin:50% 0;transform:scaleY(calc(1 - .6923*var(--e,0)));will-change:transform}
+.tl-sum .p-sum{position:relative;margin:0;height:100%;box-sizing:border-box;background:none;box-shadow:none;padding:var(--sp-3) var(--sp-4)}
+.tl-sum .p-sum-ms,.tl-sum .p-sum-acts{opacity:var(--fo,1)}
+.tl-top.is-fold .tl-sum .p-sum-acts{visibility:hidden}
+.tl-sum .p-sum-acts{margin-top:var(--sp-3)}
+.tl-mini{position:absolute;left:calc(var(--gutter) + var(--sp-4));top:var(--sp-3);display:flex;gap:var(--sp-4);
+  opacity:var(--fi,0);pointer-events:none;will-change:opacity}
+.tl-mini-n{display:flex;align-items:baseline;gap:var(--sp-1);font:500 var(--fs-cap)/1.2 var(--font);color:var(--tx-2)}
+.tl-mini-n b{font:600 var(--fs-title)/1.2 var(--font);color:var(--tx)}
+/* 4) 月の送り: 高さ 48。札の下端へ上がる(縮みと同じ量 90) */
+.tl-mn{position:relative;z-index:2;height:48px;display:flex;align-items:center;background:var(--bg);
+  transform:translate3d(0,calc(-90px*var(--e,0)),0);will-change:transform}
+.tl-mn .p-period{flex:1;margin:0 var(--gutter)}
+/* 5) 絞り込み: 高さ 60。札の下へ潜り、40% で消す(一覧の絞り込みだけ。縮んだ時は出さない) */
+.tl-chips{position:relative;z-index:1;height:60px;display:flex;align-items:center;
+  transform:translate3d(0,calc(-146px*var(--p,0)),0);opacity:var(--fo,1);will-change:transform,opacity}
+.tl-top.is-fold .tl-chips{visibility:hidden}
+.tl-chips .p-chips{flex-wrap:nowrap;overflow-x:auto;width:100%;box-sizing:border-box;scrollbar-width:none}
+.tl-chips .p-chip{flex:none;min-height:var(--tap)}
+
+/* ---------- 上部が無い表示(日・月) ---------- */
+.tl-head{padding-top:var(--sp-2)}
+.tl-head .p-largetitle{padding:var(--sp-5) 0 var(--sp-3)}
+.tl-per{display:flex;align-items:center;gap:var(--sp-2);padding-right:0}
+.tl-per .p-period{flex:1;min-width:0;margin:var(--sp-2) 0}
+.tl-per .p-ibtn{flex:none}
+.tl-body{padding-bottom:var(--sp-5)}
+/* 一覧の下の空き(今日の日を上端へ寄せるための1画面分。今日の時だけ) */
+.tl-room{height:100dvh}
+.tl-sp{height:0}
+.tl-edge-a{display:block;text-decoration:none;color:inherit}
+
+/* ---------- 一覧の1日 ---------- */
+.tl-day{position:relative}
+.tl-body .p-dc-h{flex-wrap:nowrap;white-space:nowrap}
+.tl-body .p-dc-h b,.tl-body .p-dc-today,.tl-body .p-dc-sum{white-space:nowrap}
+.tl-ac,.tl-ac-h,.tl-kids,.tl-kidbox{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+.tl-sub{min-width:0;box-sizing:border-box}
+.tl-kids .p-pay,.tl-kids .p-pay-h,.tl-kids .p-pay-tk,.tl-kids .p-ticket,.tl-kids .p-tk{min-width:0;max-width:100%;box-sizing:border-box}
+.tl-kids .p-pay-tk{display:block}
+.tl-kids .p-pay-h{flex:1 1 auto}
+.tl-ax .p-ax-c.is-raw{display:block;min-width:0;max-width:100%}
+.tl-ax .p-pay{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+.tl-ax .p-pay-h{min-width:0;max-width:100%}
+.tl-ax{position:relative;padding-bottom:var(--sp-2)}
+.tl-today{scroll-margin-top:0}
+/* 活動(入れ子): 中に子の行。子の子は左の細い線で1段深く */
+.tl-ac{display:flex;flex-direction:column;gap:var(--sp-2);min-width:0}
+.tl-ac-h{display:flex;flex-direction:column;gap:var(--sp-1);min-width:0}
+.tl-atl{position:relative;display:block;margin:calc(-1*var(--sp-3)) 0;padding:var(--sp-3) 0;font:500 var(--fs-body)/1.35 var(--font);color:var(--tx);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-atl::before{content:"";position:absolute;left:0;right:0;top:50%;height:var(--tap);transform:translateY(-50%)}
+.tl-meta{display:inline-flex;align-items:center;gap:var(--sp-2);font:500 var(--fs-cap)/1.3 var(--font);color:var(--tx-2);flex-wrap:wrap}
+.tl-meta .p-ref{font-size:var(--fs-cap)}
+.tl-rec{display:inline-flex;align-items:center;min-height:var(--sp-5);padding:0 var(--sp-2);margin-right:var(--sp-2);border-radius:var(--r-tag);
+  background:var(--late-soft);color:var(--late);font:600 var(--fs-cap)/1 var(--font)}
+.tl-kids{display:flex;flex-direction:column;gap:var(--sp-2);padding-top:var(--sp-2);border-top:1px solid var(--line)}
+.tl-kidbox{display:flex;flex-direction:column;gap:var(--sp-1);min-width:0}
+.tl-kid{display:flex;align-items:center;gap:var(--sp-2);min-height:var(--tap);padding:0 var(--sp-2);border-radius:var(--r-sm);
+  color:var(--tx);text-decoration:none;font:500 var(--fs-body)/1.3 var(--font);min-width:0}
+.tl-kid:active{background:var(--sunk)}
+.tl-kid-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-kid small{font:400 var(--fs-cap)/1 var(--font);color:var(--tx-3);flex:none}
+.tl-kid-n{flex:none;min-width:var(--sp-5);height:var(--sp-5);padding:0 var(--sp-2);border-radius:var(--r-pill);
+  display:inline-flex;align-items:center;justify-content:center;background:var(--surface-2);color:var(--tx-2);font:600 var(--fs-cap)/1 var(--font)}
+.tl-sub{margin-left:var(--sp-3);padding-left:var(--sp-3);border-left:1px solid var(--line);display:flex;flex-direction:column;gap:var(--sp-1)}
+.tl-ax .p-pay{margin-top:var(--sp-1)}
+
+/* ---------- 日のページ ---------- */
+.tl-dp{padding:var(--sp-2) 0 var(--sp-3)}
+.tl-dp-date{display:flex;align-items:flex-end;gap:var(--sp-3)}
+.tl-dp-date b{font:700 var(--fs-hero)/1 var(--font);color:var(--tx);font-variant-numeric:tabular-nums}
+.tl-dp-date span{display:flex;flex-direction:column;gap:var(--sp-1);font:600 var(--fs-title)/1.2 var(--font);color:var(--tx)}
+.tl-dp-date small{font:500 var(--fs-cap)/1.2 var(--font);color:var(--tx-2)}
+.tl-dp-text{margin:var(--sp-3) 0 0;font:400 var(--fs-body)/1.7 var(--font);color:var(--tx);text-align:left;width:100%;background:none;border:0;padding:0;min-height:var(--tap)}
+.tl-dp-text.is-none{color:var(--tx-3)}
+.tl-photos{display:flex;gap:var(--sp-2);margin-top:var(--sp-3);overflow-x:auto}
+.tl-photo{flex:none;width:72px;height:72px;border-radius:var(--r-sm);background:var(--surface-2);box-shadow:var(--e1);display:grid;place-items:center;color:var(--tx-3)}
+.tl-photo .p-ic{width:var(--sp-6);height:var(--sp-6)}
+.tl-photo-n{margin:var(--sp-1) 0 0;font:500 var(--fs-cap)/1.2 var(--font);color:var(--tx-2)}
+.tl-stats{display:flex;gap:var(--sp-5);padding:var(--sp-3) 0 var(--sp-2)}
+.tl-stats>div{display:flex;flex-direction:column;gap:var(--sp-1)}
+.tl-stats b{font:600 var(--fs-title)/1.2 var(--font);color:var(--tx);font-variant-numeric:tabular-nums}
+.tl-stats span{font:500 var(--fs-cap)/1.2 var(--font);color:var(--tx-2)}
+.tl-people{display:flex;flex-wrap:wrap;gap:var(--sp-3);padding:var(--sp-2) 0 var(--sp-3)}
+
+/* ---------- 日の時間の軸(日の表示・月の下) ---------- */
+.tl-grid{position:relative;margin-top:var(--sp-3)}
+.tl-hr{position:absolute;left:0;right:0;height:0}
+.tl-hr::before{content:"";position:absolute;left:var(--sp-6);right:0;top:0;border-top:1px solid var(--line)}
+.tl-hr span{position:absolute;left:0;top:-8px;width:var(--sp-6);font:500 var(--fs-min)/1 var(--font);color:var(--tx-3);text-align:right;padding-right:var(--sp-2);font-variant-numeric:tabular-nums}
+.tl-cols{position:absolute;left:calc(var(--sp-6) + var(--sp-2));right:0;top:0;bottom:0}
+.tl-blk{position:absolute;box-sizing:border-box;display:flex;flex-direction:column;gap:var(--sp-1);overflow:visible;text-decoration:none;
+  padding:var(--sp-1) var(--sp-2);border-radius:var(--r-sm);color:var(--on-fill);min-height:28px}
+.tl-blk::before{content:"";position:absolute;left:0;right:0;top:50%;height:var(--tap);transform:translateY(-50%)}
+.tl-blk b{font:600 var(--fs-cap)/1.3 var(--font);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-blk small{font:400 var(--fs-min)/1.2 var(--font);opacity:.9;font-variant-numeric:tabular-nums}
+.tl-blk.is-ev{background:var(--light),var(--ev);box-shadow:var(--fill-sh)}
+.tl-blk.is-moment{border-radius:var(--r-pill);padding:0 var(--sp-3);flex-direction:row;align-items:center;gap:var(--sp-2);background:var(--ev);color:var(--on-fill)}
+.tl-blk.is-moment small{display:none}
+.tl-blk.is-pay{flex-direction:row;align-items:center;gap:var(--sp-2);background:var(--ev-soft);color:var(--tx)}
+.tl-blk.is-pay b{flex:1;min-width:0}
+.tl-blk.is-pay small{color:var(--tx-2);flex:none}
+.tl-blk.is-plan{background:transparent;color:var(--tx-2);border:1.5px dashed var(--plan)}
+.tl-blk.is-late{background:var(--late-soft);color:var(--late);border:1.5px dashed var(--late)}
+.tl-blk.is-late small{color:var(--late)}
+.tl-nowl{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--late);z-index:1;pointer-events:none}
+.tl-nowl span{position:absolute;left:0;top:-9px;width:var(--sp-6);font:600 var(--fs-min)/1 var(--font);color:var(--late);text-align:right;padding-right:var(--sp-2)}
+.tl-allday{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin-top:var(--sp-3)}
+.tl-ad{display:inline-flex;align-items:center;min-height:var(--tap);padding:0 var(--sp-3);border-radius:var(--r-tag);
+  background:var(--surface);box-shadow:var(--e1);color:var(--tx);text-decoration:none;font:500 var(--fs-cap)/1 var(--font)}
+.tl-ad.is-plan{background:none;box-shadow:none;border:1.5px dashed var(--plan);color:var(--tx-2)}
+
+/* ---------- 月の見取り図 ---------- */
+.tl-cal{padding:0 var(--gutter)}
+.tl-weeks,.tl-grid7{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.tl-wk{text-align:center;padding:var(--sp-2) 0;font:500 var(--fs-min)/1 var(--font);color:var(--tx-3)}
+.tl-cell{position:relative;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:var(--sp-1);
+  padding:var(--sp-1) 0;border:0;border-radius:var(--r-sm);background:none;color:var(--tx);font:500 var(--fs-body)/1 var(--font);cursor:pointer}
+.tl-cell:active{background:var(--sunk)}
+.tl-cell b{font-variant-numeric:tabular-nums}
+.tl-cell.is-blank{min-height:0;pointer-events:none}
+.tl-cell.is-hol{background:var(--surface-2);color:var(--tx-3)}
+.tl-cell.is-today b{color:var(--me)}
+.tl-cell.is-sel{background:var(--me-soft)}
+.tl-cell.is-sel b{color:var(--me)}
+.tl-marks{display:flex;gap:2px;justify-content:center;min-height:6px}
+.tl-marks i{display:block;width:10px;height:4px;border-radius:var(--r-pill);background:var(--ev)}
+.tl-marks i.plan{background:none;border:1.5px dashed var(--plan);height:4px}
+.tl-marks i.pay{width:10px;height:6px;border-radius:0;background:var(--plan)}
+.tl-lg i.pay{width:10px;height:6px;border-radius:0;background:var(--plan)}
+.tl-dwrite{display:block;min-height:var(--tap);margin:0 var(--gutter);padding:0 var(--sp-2);border:0;background:none;color:var(--me);font:600 var(--fs-cap)/1 var(--font);text-align:left;cursor:pointer}
+.tl-td{display:inline-flex;align-items:center;gap:2px;font:500 var(--fs-min)/1 var(--font);color:var(--tx-2)}
+.tl-td .p-ic{width:var(--sp-3);height:var(--sp-3)}
+.tl-lg{display:flex;flex-wrap:wrap;gap:var(--sp-3);padding:var(--sp-3) 0;font:500 var(--fs-cap)/1 var(--font);color:var(--tx-3)}
+.tl-lg>span{display:inline-flex;align-items:center;gap:var(--sp-1)}
+.tl-lg i{display:inline-block;width:10px;height:4px;border-radius:var(--r-pill);background:var(--ev)}
+.tl-lg i.plan{background:none;border:1.5px dashed var(--plan)}
+.tl-lg .p-ic{width:var(--sp-3);height:var(--sp-3)}
+
+/* ---------- ToDo の段(日の表示・月の下) ---------- */
+.tl-todos{display:flex;flex-direction:column}
+.tl-todo{display:flex;align-items:center;gap:var(--sp-3);min-height:var(--row);border-bottom:1px solid var(--line)}
+.tl-todo-t{position:relative;flex:1;min-width:0;font:500 var(--fs-body)/1.3 var(--font);color:var(--tx);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-todo-t::before{content:"";position:absolute;left:0;right:0;top:50%;height:var(--tap);transform:translateY(-50%)}
+.tl-todo-t.is-done{color:var(--tx-3);text-decoration:line-through}

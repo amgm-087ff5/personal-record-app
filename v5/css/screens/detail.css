@@ -1,2 +1,106 @@
-/* 画面: detail の見た目(仮置き。画面担当が書く。値は tokens の変数だけ) */
-.dt_title{font-size:var(--fs-display);font-weight:700;line-height:1.2;padding:var(--sp-5) 0 var(--sp-3)}
+/* =====================================================================
+   画面: 記録・品目・予定の詳細(detail.js と対。接頭辞 dt_)
+   値は tokens.css の変数だけ。主役は軸の切れ端に掛かったカプセル。
+   ===================================================================== */
+
+/* 軸の切れ端: 主役が軸に掛かる。過去=実線、未来=点線。上下は薄れて消える */
+.dt_ax{--ax-x:var(--gutter);position:relative;padding-left:calc(var(--ax-x) + var(--sp-6));min-width:0}
+.dt_ax::before{content:"";position:absolute;left:calc(var(--ax-x) + var(--sp-6) / 2 - 1px);top:0;bottom:0;width:2px;background:var(--axis);
+  -webkit-mask:linear-gradient(transparent,#000 var(--sp-5),#000 calc(100% - var(--sp-5)),transparent);
+          mask:linear-gradient(transparent,#000 var(--sp-5),#000 calc(100% - var(--sp-5)),transparent)}
+.dt_ax.is-future::before{background:repeating-linear-gradient(to bottom,var(--axis-future) 0 4px,transparent 4px 8px)}
+/* 主役のカプセルは軸の右側に置き、軸との間を短い線でつなぐ */
+.dt_ax>.p-capsule{position:relative;margin:var(--sp-3) var(--ax-x) var(--sp-3) 0}
+.dt_ax>.p-capsule::before{content:"";position:absolute;top:50%;right:100%;width:calc(var(--sp-6) / 2);height:2px;background:var(--axis)}
+.dt_ax>*{min-width:0}
+
+/* 祖先の枠: 親の活動を外側から包む。影なしの枠線(面を重ねない) */
+.dt_anc{margin:var(--sp-3) var(--gutter) 0;border:1px solid var(--line);border-radius:var(--r-lg);padding:0 0 var(--sp-2)}
+.dt_anc .dt_anc{margin:var(--sp-2) var(--sp-2) 0}
+.dt_anc .dt_ax{--ax-x:var(--sp-2)}
+.dt_anc_h{display:flex;align-items:center;gap:var(--sp-2);min-height:var(--tap);padding:0 var(--sp-3);color:var(--tx-2);font:500 var(--fs-cap)/1.2 var(--font);text-decoration:none}
+.dt_anc_i{display:grid;color:var(--tx-2)}
+.dt_anc_i .p-ic{width:16px;height:16px}
+.dt_anc_tm{color:var(--tx-3)}
+.dt_anc_t{flex:1;min-width:0;font:600 var(--fs-cap)/1.3 var(--font);color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dt_anc .p-chev .p-ic{width:16px;height:16px}
+
+/* 活動の中の子: 支払いは殻、それ以外は白い小行。3段まで字下げ(案内線) */
+.dt_kids{display:grid;gap:var(--sp-2);margin:0 var(--ax-x) var(--sp-3) 0}
+.dt_kid{display:flex;align-items:center;gap:var(--sp-2);min-height:var(--tap);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1);color:var(--tx);text-decoration:none;font:500 var(--fs-cap)/1.3 var(--font)}
+.dt_kid_i{display:grid;place-items:center;color:var(--tx-2)}
+.dt_kid_i .p-ic{width:16px;height:16px}
+.dt_kid_tm{flex:none;color:var(--tx-3)}
+.dt_kid_t{flex:1;min-width:0;font:500 var(--fs-body)/1.3 var(--font);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dt_kid_n{flex:none;color:var(--tx-3);font:500 var(--fs-min)/1 var(--font)}
+.dt_sub{display:grid;gap:var(--sp-2);margin:var(--sp-2) 0 0 var(--sp-3);padding-left:var(--sp-3);border-left:1px solid var(--line-strong)}
+.dt_add{display:flex;align-items:center;justify-content:center;gap:var(--sp-2);width:100%;min-height:var(--tap);border:1px dashed var(--line-strong);border-radius:var(--r-md);background:none;color:var(--me);font:600 var(--fs-cap)/1 var(--font);cursor:pointer}
+.dt_add .p-ic{width:18px;height:18px}
+
+/* 日の札の下の本文・添付 */
+.dt_body{margin:var(--sp-2) var(--gutter) 0;font:400 var(--fs-body)/1.6 var(--font);color:var(--tx);white-space:pre-wrap}
+.dt_att{margin:var(--sp-2) var(--gutter) 0;border-radius:var(--r-md);overflow:hidden;box-shadow:var(--e1)}
+.dt_att img{display:block;width:100%;height:auto}
+
+/* 読み取った値の確定・貸し借り・精算 */
+.dt_rm{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin:var(--sp-2) var(--ax-x) 0 0}
+.dt_bal{display:flex;align-items:center;flex-wrap:wrap;gap:var(--sp-2) var(--sp-3);margin:var(--sp-2) var(--gutter) 0}
+.dt_bal_s{font:500 var(--fs-cap)/1 var(--font);color:var(--tx-3)}
+.dt_bal .p-btn{margin-left:auto}
+.dt_note{margin:var(--sp-2) var(--gutter) 0;font:500 var(--fs-cap)/1.4 var(--font);color:var(--tx-3)}
+
+/* 行動の並び: 下の大きい操作 / 控えめの操作 */
+.dt_act{padding:var(--sp-5) var(--gutter) 0}
+.dt_wide{width:100%}
+.dt_quiet{display:flex;align-items:center;justify-content:center;gap:var(--sp-2);width:100%;min-height:var(--tap);margin-top:var(--sp-3);border:0;border-radius:var(--r-md);background:var(--surface-2);color:var(--tx-2);font:600 var(--fs-cap)/1 var(--font);cursor:pointer}
+.dt_quiet .p-ic{width:18px;height:18px}
+.dt_row{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);min-height:var(--tap);margin:var(--sp-2) var(--gutter) 0;font:500 var(--fs-cap)/1.3 var(--font);color:var(--tx-2)}
+
+/* 品目の詳細の主役(名前・金額・税率) */
+.dt_hero{margin:var(--sp-3) var(--gutter) 0;padding:var(--sp-5) var(--sp-4);border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--e2),var(--hl);display:grid;justify-items:center;gap:var(--sp-2);text-align:center}
+.dt_hero_n{font:700 var(--fs-title)/1.3 var(--font);color:var(--tx)}
+.dt_hero_a{font:700 var(--fs-hero)/1.1 var(--font);color:var(--tx);font-variant-numeric:tabular-nums}
+.dt_hero_m{font:400 var(--fs-cap)/1.4 var(--font);color:var(--tx-3)}
+
+/* 使った人・払った人のチップ(押せる44px) */
+.dt_chips{display:flex;flex-wrap:wrap;gap:var(--sp-2);padding:0 var(--gutter)}
+.dt_who_row{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin-top:var(--sp-2)}
+.dt_who{min-height:var(--tap);padding:0 var(--sp-4);border:0;border-radius:var(--r-pill);background:var(--surface-2);color:var(--tx-2);font:500 var(--fs-cap)/1 var(--font);cursor:pointer}
+.dt_who[aria-pressed="true"]{background:var(--me-soft);color:var(--me);font-weight:600}
+
+/* シートの中の箱・役割の行 */
+.dt_box{margin:var(--sp-2) var(--gutter) 0;padding:var(--sp-3) var(--sp-4);border:1px solid var(--line);border-radius:var(--r-md)}
+.dt_bh{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2)}
+.dt_bh>b{font:600 var(--fs-body)/1.3 var(--font);color:var(--tx)}
+.dt_role{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) var(--tap);gap:var(--sp-2);align-items:center;margin:var(--sp-2) var(--gutter) 0}
+.dt_role .p-input{min-width:0}
+.dt_role_n{grid-column:1 / -1}
+.dt_n{display:grid;place-items:center;width:var(--sp-5);height:var(--sp-5);border-radius:var(--r-tag);background:var(--surface-2);color:var(--tx-2);font:600 var(--fs-min)/1 var(--font)}
+
+/* 予定の ToDo の行 */
+.dt_td{display:flex;align-items:center;gap:var(--sp-3);min-height:var(--row);padding:var(--sp-2) var(--sp-4);border-top:1px solid var(--line)}
+.dt_td:first-child{border-top:0}
+.dt_td_t{display:flex;align-items:center;min-height:var(--tap);flex:1;min-width:0;color:var(--tx);font:500 var(--fs-body)/1.4 var(--font);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dt_td_t.is-done{color:var(--tx-3);text-decoration:line-through}
+.dt_td .p-chev{flex:none}
+
+/* 予定・記録の属性の中の文字(アイコンは小さく) */
+.dt_meta{display:flex;flex-wrap:wrap;gap:var(--sp-1) var(--sp-3);font:500 var(--fs-cap)/1.4 var(--font)}
+.dt_meta>span{display:inline-flex;align-items:center;gap:var(--sp-1)}
+.dt_meta .p-ic{width:16px;height:16px}
+
+/* 移動の主役: 出発・到着の2行(地名は縁ならリンク) */
+.dt_route{display:flex;align-items:center;flex-wrap:wrap;gap:var(--sp-1) var(--sp-2);margin-top:var(--sp-1);font:500 var(--fs-cap)/1.4 var(--font)}
+.dt_route_k{min-width:2.5em;opacity:.85}
+.dt_route b{font-weight:600}
+/* 塗りのカプセルの上では、縁の名前と点を白に(文字は --on-fill) */
+.p-capsule.is-done .p-ref{color:var(--on-fill)}
+.p-capsule.is-done .p-dot{background:var(--on-fill)}
+.p-capsule.is-done .p-dot.is-unreg{background:none;box-shadow:inset 0 0 0 2px var(--on-fill)}
+/* 割合の棒は軸の内側に収める */
+.dt_ax>.p-split{margin:var(--sp-2) var(--ax-x) 0 0}
+/* 品目の補足は2行まで折り返す */
+.dt_items .p-row-s{white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+
+/* 詳細の全体: 右端の「編集」の当たり判定が画面の外へはみ出さないように(横の広がりだけ詰める) */
+.dt_pg .p-sh-act::before{left:0;right:0}

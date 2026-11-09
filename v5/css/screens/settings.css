@@ -1,2 +1,14 @@
-/* 画面: settings の見た目(仮置き。画面担当が書く。値は tokens の変数だけ) */
-.st_title{font-size:var(--fs-display);font-weight:700;line-height:1.2;padding:var(--sp-5) 0 var(--sp-3)}
+/* =====================================================================
+   設定(#/settings) — 接頭辞 st-。色・影・角丸・文字・余白は tokens.css の変数だけ。
+   節ごとに1枚の面(parts の list)。赤は使わない。
+   ===================================================================== */
+
+.st{display:grid;gap:var(--sp-2);padding-top:var(--sp-4);padding-bottom:var(--sp-5)}
+.st .p-sh{padding-inline:var(--sp-1)}
+.st .p-list{margin:0}
+.st .p-row{min-height:var(--row)}
+.st-theme{padding:var(--sp-3) var(--sp-4)}
+.st-theme .p-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}
+.st-theme .p-seg-i{min-height:var(--tap);padding:0 var(--sp-2);white-space:nowrap}
+.st-file{display:none}
+.st-list-add{display:grid;padding:0 var(--sp-1)}

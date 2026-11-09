@@ -261,13 +261,15 @@ const xFx=x=>x.fx!==undefined?setv(x.fx):catFx(x.cat);
 const ROOTS=()=>Object.keys(CATS).filter(k=>!CATS[k].p);
 const mdw=d=>{const dt=new Date(d);return `${dt.getMonth()+1}/${dt.getDate()}(${'日月火水木金土'[dt.getDay()]})`};
 const addDays=(d,n)=>{const dt=new Date(d);dt.setDate(dt.getDate()+n);return dt.toISOString().slice(0,10)};
-const repOn=(e,d)=>e.rep&&d>e.d&&+d.slice(8)===+e.d.slice(8);
+/* 繰り返し: 毎日 / 毎週◯曜 / 毎月◯日(v5 で毎日・毎週にも対応) */
+const repDow=d=>'日月火水木金土'[new Date(d+'T00:00:00').getDay()];
+const repOn=(e,d)=>{if(!e.rep||!(d>e.d))return false;if(e.rep==='毎日')return true;if(e.rep.startsWith('毎週'))return repDow(d)===e.rep.charAt(2);if(e.rep.startsWith('毎月')){const m=e.rep.match(/(\d+)日/);return +d.slice(8)===(m?+m[1]:+e.d.slice(8))}return false};
 /** 並び順の時刻: 終日(または時刻のない予定)は先頭 */
 const evSortKey=e=>(e.all||!e.s?'0':e.s);
 const evOn=d=>Object.entries(EV).filter(([k,e])=>e.d===d||(e.d2&&e.d<=d&&d<=e.d2)||repOn(e,d)).sort((a,b)=>evSortKey(a[1]).localeCompare(evSortKey(b[1])));
 const actsOn=d=>Object.entries(A).filter(([k,a])=>a.type!=='日記'&&a.parent&&dateOf(a)===d);
 const placeOf=e=>e.place?(e.place[0]?E[e.place[0]].n:e.place[1]):'';
-const nextOn=e=>{if(!e.rep)return e.d;const dom=String(+e.d.slice(8)).padStart(2,'0');let y=+TODAY.slice(0,4),m=+TODAY.slice(5,7);let d=`${y}-${String(m).padStart(2,'0')}-${dom}`;if(d<=TODAY){m++;if(m>12){m=1;y++}d=`${y}-${String(m).padStart(2,'0')}-${dom}`}return d};
+const nextOn=e=>{if(!e.rep||e.d>TODAY)return e.d;for(let i=1;i<=366;i++){const d=addDays(TODAY,i);if(repOn(e,d))return d}return e.d};
 const tdOpen=k=>!TD[k].done;
 const catSp=k=>{for(const c of catAnc(k).reverse())if(CATS[c].sp!==undefined)return setv(CATS[c].sp);return null};
 const xSp=x=>x.sp!==undefined?setv(x.sp):catSp(x.cat);
@@ -353,7 +355,7 @@ function typePropRename(key,oldName,newName){const cur=TYPE_PROPS[key]||[];if(!c
 /** 本文を保存: 版+1・更新日時。sections = [[見出し, 本文]] */
 function noteSave(id,sections){if(!E[id])return notOk('縁が見つかりません');const body=(sections||[]).map(([h,t])=>[String(h||''),String(t||'')]);const old=NOTES[id];const log=[];logSet(log,NOTES,id,{upd:memoNow(),ver:((old&&old.ver)||0)+1,body,subs:old&&old.subs?old.subs.map(s=>s.slice()):[]});save();return okUndo(log,'メモを保存')}
 /** サブページを足す(メモが無い時は断る)。更新日時だけ進める(版は本文の保存で進む) */
-function noteSubAdd(id,name,note=''){const old=NOTES[id];if(!old)return notOk('先にメモを書いてください');const n=String(name||'').trim();if(!n)return notOk('名前を入れてください');const log=[];logSet(log,NOTES,id,{...old,upd:memoNow(),subs:[...(old.subs||[]),[n,String(note||'')]]});save();return okUndo(log,'サブページを足した')}
+function noteSubAdd(id,name,note='',body=''){const old=NOTES[id];if(!old)return notOk('先にメモを書いてください');const n=String(name||'').trim();if(!n)return notOk('名前を入れてください');const log=[];logSet(log,NOTES,id,{...old,upd:memoNow(),subs:[...(old.subs||[]),[n,String(note||''),String(body||'')]]});save();return okUndo(log,'サブページを足した')}
 /** 更新日時の新しい順 [[縁id, メモ]] */
 const notesSorted=()=>Object.entries(NOTES).sort((a,b)=>String(b[1].upd||'').localeCompare(String(a[1].upd||'')));
 

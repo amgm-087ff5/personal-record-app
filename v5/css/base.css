@@ -29,7 +29,7 @@ svg.i{width:20px;height:20px;flex:none}
 
 /* ---- 画面の地 ---- */
 #app{max-width:720px;margin:0 auto;min-height:100dvh;padding-bottom:var(--page-end)}
-.screen{padding-inline:var(--gutter);animation:scr-in var(--t-mid) var(--ease)}
+.screen{--gutter:0px;padding-inline:var(--page-x);overflow-x:clip;animation:scr-in var(--t-mid) var(--ease)}
 @keyframes scr-in{from{opacity:.4;transform:translate3d(0,4px,0)}}
 .err{margin:var(--sp-5) var(--gutter);padding:var(--sp-4);border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1);color:var(--tx);display:grid;gap:var(--sp-2)}
 .err small{color:var(--tx-2);font-size:var(--fs-cap)}
@@ -130,3 +130,6 @@ svg.i{width:20px;height:20px;flex:none}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
 }
+
+/* 2列の時は列が余白を持つので、画面は二重に持たない */
+#app .pane-l .screen,#app .pane-r .screen{padding-inline:0}
