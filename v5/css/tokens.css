@@ -1,0 +1,103 @@
+/* =====================================================================
+   個人記録 UI v5 — トークン
+   1つの値は、ここで1回だけ定義する。意味は v5/DESIGN.md の意味表。
+   画面のCSSに色・影・角丸・文字の値を直書きしない(必ずここの変数を使う)。
+   ライト=窓辺の自然光 / ダーク=夜の空(深い紺)。墨・茶・紫は使わない。
+   ===================================================================== */
+:root{
+  /* --- 地と面 --- */
+  --bg:#F1F5FC;            /* 地面: 記録が置かれる所(うっすら青み 11/03) */
+  --surface:#FAFBFD;       /* 1つのオブジェクトの面(純白はまぶしいので避ける v7) */
+  --dcard:#FFFFFF;         /* 日のカードだけ白(11/02「背景を白にしてしまって良い」) */
+  --surface-2:#F4F7FC;     /* 面の中のくぼみ(入力欄・区切られた部分) */
+  --sunk:#E6EBF3;          /* 押した時・選べない所 */
+  --line:#E3E8F0;          /* 属性の区切り線(細く淡く 11/02) */
+  --line-strong:#D5DCE7;   /* 入力欄の枠 */
+  /* --- 文字(影の青。墨にしない 10/17・11/01) --- */
+  --tx:#2E3A55;            /* 本文・題(下限 4.5:1 を満たし、黒まで濃くしない上限) */
+  --tx-2:#52607A;          /* 補足 */
+  --tx-3:#5F6B81;          /* 最小の補足(面 #FAFBFD の上で約5.2:1、地の上で約4.9:1) */
+  --on-fill:#FFFFFF;       /* 塗りの上の文字 */
+  /* --- 意味の色(1色=1意味) --- */
+  --me:#2D59B8;            /* 自分: 自分の分・自分の操作・今日 */
+  --me-fill:#3560BC;       /* 自分の塗り */
+  --me-soft:#E5ECFA;       /* 選択中・提案の面 */
+  --ev:#55688C;            /* 起きた出来事の塗り(軸を濃くした青灰) */
+  --ev-soft:#E6EAF1;
+  --kin:#13838A;           /* 縁(自分以外のエンティティ) */
+  --kin-soft:#DDF0F0;
+  --plan:#7A8496;          /* 予定・未来(点線) */
+  --late:#D3393B;          /* いま・遅れ・期限切れ(この意味だけ) */
+  --late-soft:#FBE6E6;
+  --owe:#B86A0E;           /* 貸し借り・未精算(琥珀。斜線もこの意味だけ) */
+  --owe-soft:#FCF1E2;
+  --ok:#2E8A57;            /* 完了の手応え(トーストの印のみ) */
+  --unread:#8796B5;        /* 読み取り値(未確認)の印。確かめたら --me の塗りに変わる */
+  /* --- 時間軸 --- */
+  --axis:#C9D2DF;          /* 過去の軸(実線) */
+  --axis-future:#C9D2DF;   /* 未来の軸(点線で描く) */
+  --glow:#9CC4FF;          /* 日のカードの発光(今日は強く、他の日はうっすら 11/02) */
+  --glow-hi:#CFE2FF;
+  /* --- 光と影(光は左上から。丸いグラデのみ。斜めの帯なし 11/04) --- */
+  --light:radial-gradient(130% 120% at 0% 0%,rgba(255,255,255,.22),rgba(255,255,255,0) 55%);
+  --hl:inset 0 1px 0 rgba(255,255,255,.9);
+  --hl-fill:inset 0 1px 0 rgba(255,255,255,.35);
+  --e1:0 1px 2px rgba(40,70,130,.06),0 4px 14px -6px rgba(60,100,180,.14);   /* 独立したオブジェクト */
+  --e2:0 2px 6px rgba(30,50,100,.07),0 12px 28px -10px rgba(40,80,170,.22);  /* そのページの主役 */
+  --e3:0 10px 30px -8px rgba(24,40,80,.26),0 2px 6px rgba(24,40,80,.08);     /* 浮いた操作(＋・シート・トースト) */
+  --fill-sh:0 6px 16px -6px color-mix(in srgb,var(--me-fill) 55%,transparent); /* 塗りが帯びる影 */
+  --window:radial-gradient(120% 70% at 0% 0%,rgba(255,226,180,.18),transparent 60%),
+           radial-gradient(120% 80% at 100% 100%,rgba(150,178,230,.14),transparent 60%);
+  /* --- 角丸 --- */
+  --r-tag:6px; --r-sm:10px; --r-md:14px; --r-lg:20px; --r-fab:18px; --r-pill:999px;
+  /* --- 文字(段階は5つ。ここ以外の大きさは使わない) --- */
+  --font:"IBM Plex Sans JP",system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+  --fs-hero:36px;   /* 主役の量(金額・日付) */
+  --fs-display:28px;/* タブの大見出し */
+  --fs-title:20px;  /* 主役の名前・節見出し */
+  --fs-body:15px;   /* 行の題・本文 */
+  --fs-cap:13px;    /* 補足・ラベル */
+  --fs-min:12px;    /* 最小(曜日・単位)。これ未満は使わない */
+  /* --- 余白(4の刻み) --- */
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --gutter:16px;    /* 画面の左右(部品の外側の余白) */
+  --page-x:16px;    /* 画面の左右の余白は .screen が1回だけ持つ。中の --gutter は 0 になる */
+  --row:56px;       /* 行の最小の高さ */
+  --tap:44px;       /* 押せる所の最小 */
+  --nav-h:64px;
+  --page-end:calc(var(--nav-h) + 104px + env(safe-area-inset-bottom));
+  /* --- 動き --- */
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --t-fast:.12s; --t-mid:.24s; --t-slow:.4s;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121A2A; --surface:#1A2335; --dcard:#1E2940; --surface-2:#1F2A3E; --sunk:#0E1522; --line:#28324A; --line-strong:#344060;
+  --tx:#E4E9F1; --tx-2:#B8C1CF; --tx-3:#8E99AB;
+  --me:#7FA3F0; --me-fill:#3D66C8; --me-soft:#1E2A44; --ev:#5B6E94; --ev-soft:#232E44;
+  --kin:#4FC1C6; --kin-soft:#123236; --plan:#8D97A8; --late:#FF6B66; --late-soft:#3B1A1A;
+  --owe:#E9A24E; --owe-soft:#33261A; --ok:#6CC290; --unread:#7F8CA8;
+  --axis:#3A4560; --axis-future:#3A4560; --glow:#4F7BD6; --glow-hi:#7FA3F0;
+  --light:radial-gradient(130% 120% at 0% 0%,rgba(255,255,255,.14),rgba(255,255,255,0) 55%);
+  --hl:inset 0 1px 0 rgba(255,255,255,.05); --hl-fill:inset 0 1px 0 rgba(255,255,255,.18);
+  --e1:0 1px 2px rgba(0,0,0,.3),0 4px 14px -6px rgba(0,0,0,.45);
+  --e2:0 2px 6px rgba(0,0,0,.35),0 12px 28px -10px rgba(0,0,0,.55);
+  --e3:0 10px 30px -8px rgba(0,0,0,.6),0 2px 6px rgba(0,0,0,.35);
+  --window:radial-gradient(140% 60% at 50% 110%,rgba(120,150,220,.18),transparent 65%);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#121A2A; --surface:#1A2335; --dcard:#1E2940; --surface-2:#1F2A3E; --sunk:#0E1522; --line:#28324A; --line-strong:#344060;
+  --tx:#E4E9F1; --tx-2:#B8C1CF; --tx-3:#8E99AB;
+  --me:#7FA3F0; --me-fill:#3D66C8; --me-soft:#1E2A44; --ev:#5B6E94; --ev-soft:#232E44;
+  --kin:#4FC1C6; --kin-soft:#123236; --plan:#8D97A8; --late:#FF6B66; --late-soft:#3B1A1A;
+  --owe:#E9A24E; --owe-soft:#33261A; --ok:#6CC290; --unread:#7F8CA8;
+  --axis:#3A4560; --axis-future:#3A4560; --glow:#4F7BD6; --glow-hi:#7FA3F0;
+  --light:radial-gradient(130% 120% at 0% 0%,rgba(255,255,255,.14),rgba(255,255,255,0) 55%);
+  --hl:inset 0 1px 0 rgba(255,255,255,.05); --hl-fill:inset 0 1px 0 rgba(255,255,255,.18);
+  --e1:0 1px 2px rgba(0,0,0,.3),0 4px 14px -6px rgba(0,0,0,.45);
+  --e2:0 2px 6px rgba(0,0,0,.35),0 12px 28px -10px rgba(0,0,0,.55);
+  --e3:0 10px 30px -8px rgba(0,0,0,.6),0 2px 6px rgba(0,0,0,.35);
+  --window:radial-gradient(140% 60% at 50% 110%,rgba(120,150,220,.18),transparent 65%);
+  color-scheme:dark;
+}

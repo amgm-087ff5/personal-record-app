@@ -1,0 +1,60 @@
+/* 画面: ToDo・ToDo の詳細・予定と ToDo の作成(接頭辞 pl_)。値は tokens の変数だけ */
+
+/* 一覧の下の入力欄 */
+.pl_qa{display:flex;align-items:center;gap:var(--sp-2);margin:var(--sp-2) var(--gutter) var(--sp-3)}
+.pl_qa .p-input{flex:1;min-width:0}
+.pl_qa .p-btn{flex:none}
+
+/* ToDo の行(影のある白い面) */
+.pl_task{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-2)}
+.pl_task-c{flex:none;display:grid;place-items:center;min-width:var(--tap);min-height:var(--tap)}
+.pl_task-a{display:flex;align-items:center;gap:var(--sp-2);flex:1;min-width:0;min-height:var(--tap);color:inherit;text-decoration:none}
+.pl_task-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--sp-1)}
+.pl_task-t{font:500 var(--fs-body)/1.4 var(--font);color:var(--tx);overflow-wrap:anywhere}
+.pl_task .p-ic{flex:none;color:var(--tx-3)}
+.pl_task.is-done .pl_task-t{color:var(--tx-3)}
+
+/* 行の下の小さい情報(期限・リスト・予定名・手順の数) */
+.pl_meta{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1) var(--sp-2);font:400 var(--fs-cap)/1.3 var(--font);color:var(--tx-2)}
+.pl_m{font:400 var(--fs-cap)/1.3 var(--font);color:var(--tx-2)}
+.pl_pri{margin-left:var(--sp-1);color:var(--me);font-weight:700}
+.pl_done{color:var(--tx-3);text-decoration:line-through}
+
+/* ToDo の詳細: 大きいチェック欄+題名の面 */
+.pl_card{margin:var(--sp-2) var(--gutter) 0;padding:var(--sp-4);background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e2),var(--hl)}
+.pl_tk{display:flex;align-items:flex-start;gap:var(--sp-3)}
+.pl_big{width:28px;height:28px;margin-top:var(--sp-2)}
+.pl_tk-in{flex:1;min-width:0;min-height:var(--tap);padding:var(--sp-1) var(--sp-2);border:1px solid transparent;border-radius:var(--r-sm);background:none;color:var(--tx);font:600 var(--fs-title)/1.35 var(--font)}
+.pl_tk-in:focus{border-color:var(--line-strong);background:var(--surface-2)}
+.pl_tk-in.is-done{color:var(--tx-3);text-decoration:line-through}
+.pl_tk-m{display:flex;flex-wrap:wrap;gap:var(--sp-1) var(--sp-3);margin-top:var(--sp-3);padding-left:calc(28px + var(--sp-3));font:400 var(--fs-cap)/1.3 var(--font);color:var(--tx-2)}
+.pl_tk-m .p-tag{font-size:var(--fs-cap)}
+
+/* 結び付き(予定・縁)の行 */
+.pl_link{display:flex;align-items:center;gap:var(--sp-2);min-height:var(--row)}
+.pl_link-a{flex:1;min-width:0;min-height:var(--tap);display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1) var(--sp-2);color:var(--tx);text-decoration:none;font:500 var(--fs-body)/1.4 var(--font)}
+.pl_link .p-ref{min-height:var(--tap);display:inline-flex;align-items:center}
+.pl_link .p-sh-act{flex:none}
+
+/* 手順の行 */
+.pl_sub{display:flex;align-items:center;gap:var(--sp-2);min-height:var(--row)}
+.pl_sub .p-row-body{flex:1;min-width:0}
+.pl_sub .p-row-t{font:500 var(--fs-body)/1.4 var(--font);color:var(--tx);overflow-wrap:anywhere}
+
+/* 押して選ぶ行(枠線の面の中のボタン行) */
+.pl_pick-i{width:100%;min-height:var(--row);border:0;background:none;text-align:left;color:var(--tx);font:inherit;cursor:pointer;display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-4)}
+.pl_pick-i+.pl_pick-i,.p-row+.pl_pick-i{border-top:1px solid var(--line)}
+.pl_pick-i .p-ic{color:var(--tx-3)}
+.pl_pick-i .p-row-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--sp-1)}
+
+/* メモ・長い入力 */
+.pl_memo{display:block;width:100%;min-height:96px;box-sizing:border-box;padding:var(--sp-3) var(--sp-4);border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface-2);color:var(--tx);font:400 var(--fs-body)/1.5 var(--font);resize:vertical}
+
+/* 場所の候補(入力欄の下の押せる縁) */
+.pl_sug{display:flex;flex-wrap:wrap;gap:var(--sp-2);padding:0 var(--sp-4) var(--sp-3)}
+.pl_sug:empty{display:none}
+
+/* 作成シートの中の人の候補 */
+.pl_sheet-chips{padding:var(--sp-2) var(--gutter) var(--sp-3)}
+
+.pl_end{height:var(--page-end)}

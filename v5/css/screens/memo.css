@@ -1,0 +1,89 @@
+/* =====================================================================
+   メモ(#/memo・#/notes・#/n/{id}) — 接頭辞 mm-。色・影・角丸・文字・余白は tokens.css の変数だけ。
+   角を折った紙: 右上を切り、折り返しの三角を --line で描く(DESIGN の「角を折った紙」)。
+   ===================================================================== */
+
+.mm{display:grid;gap:var(--sp-4);padding-top:var(--sp-4);padding-bottom:var(--sp-5)}
+.mm[hidden],.mm-grp[hidden],.mm-card[hidden]{display:none!important}
+
+/* 角を折った紙 */
+.mm-paper{position:relative;border-radius:var(--r-md);background:var(--surface);box-shadow:var(--e1),var(--hl)}
+.mm-paper::after{content:"";position:absolute;top:0;right:0;width:var(--sp-5);height:var(--sp-5);border-top-right-radius:var(--r-md);background:linear-gradient(to bottom left,var(--bg) 50%,var(--line) 50%);pointer-events:none}
+/* 綴じ目: 縁に綴じた紙(links あり・エンティティのメモ)の左の青緑の細い線(DESIGN 3章。色=縁) */
+.mm-paper.is-bound::before{content:"";position:absolute;left:0;top:var(--sp-4);bottom:var(--sp-4);width:3px;border-radius:0 3px 3px 0;background:var(--kin);pointer-events:none}
+
+/* 検索 */
+.mm-search{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:var(--sp-2);padding:0 var(--sp-3);border-radius:var(--r-md);background:var(--surface-2);color:var(--tx-3)}
+.mm-search .p-input{min-height:var(--tap);background:none;box-shadow:none;border:0}
+.mm-search .p-ic{width:var(--sp-5);height:var(--sp-5)}
+
+/* 書く欄 */
+.mm-compose{display:grid;gap:var(--sp-3);padding:var(--sp-4)}
+.mm-ta{width:100%;min-height:calc(var(--sp-6) * 2);resize:none;overflow:hidden;background:none;font:400 var(--fs-body)/1.7 var(--font);color:var(--tx)}
+.mm-ta::placeholder,.mm-ed-body::placeholder,.mm-ed-t::placeholder{color:var(--tx-3)}
+.mm-refs .p-ref{min-height:var(--tap)}
+.mm-refs{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-2) var(--sp-3);font:500 var(--fs-cap)/1.3 var(--font);color:var(--tx-2)}
+.mm-acts{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:var(--sp-2)}
+.mm-acts .p-btn-tonal{margin-right:auto}
+.mm-pick{display:grid}
+
+/* 紙の一覧 */
+.mm-list{display:grid;gap:var(--sp-5)}
+.mm-grp{display:grid;gap:var(--sp-2)}
+.mm-cards{display:grid;gap:var(--sp-3)}
+.mm-card{display:grid;gap:var(--sp-2);padding:var(--sp-4) var(--sp-5) var(--sp-4) var(--sp-4);color:var(--tx);text-decoration:none;cursor:pointer}
+.mm-card:active{background:var(--sunk)}
+.mm-body{font:400 var(--fs-body)/1.65 var(--font);color:var(--tx);white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.mm-card.is-short .mm-body{-webkit-line-clamp:2}
+.mm-meta{display:flex;align-items:center;flex-wrap:wrap;gap:var(--sp-2) var(--sp-3);font:500 var(--fs-cap)/1.3 var(--font);color:var(--tx-2)}
+.mm-time{color:var(--tx-3)}
+.mm-pin{display:inline-flex;align-items:center;margin-left:auto;color:var(--me)}
+.mm-pin .p-ic{width:var(--sp-5);height:var(--sp-5)}
+.mm-rec{display:inline-flex;align-items:center;gap:var(--sp-1);min-height:var(--tap);color:var(--ev);font:600 var(--fs-cap)/1.3 var(--font);text-decoration:none}
+.mm-rec .p-ic{width:var(--sp-4);height:var(--sp-4)}
+.mm-cards .mm-card .mm-refs{gap:var(--sp-1) var(--sp-3)}
+.mm-none{padding:var(--sp-4) 0;text-align:center;font:500 var(--fs-cap)/1.3 var(--font);color:var(--tx-2)}
+
+/* エンティティのメモの紙(一覧) */
+.mm-note{gap:var(--sp-1)}
+.mm-note-h{display:flex;align-items:center;gap:var(--sp-2);font:700 var(--fs-body)/1.4 var(--font);color:var(--tx);min-width:0}
+.mm-note-h b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mm-note-h .p-dot{flex:none}
+.mm-dt{font:500 var(--fs-cap)/1.3 var(--font);color:var(--tx-3)}
+.mm-ln{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font:400 var(--fs-cap)/1.5 var(--font);color:var(--tx-2);white-space:pre-line;word-break:break-word}
+
+/* 編集のシート */
+.mm-ed{display:grid;gap:var(--sp-4)}
+.mm-ed-paper{padding:var(--sp-4)}
+.mm-ed-paper::after{display:none}
+.mm-ed-body{width:100%;min-height:calc(var(--sp-6) * 3);resize:vertical;background:none;font:400 var(--fs-body)/1.7 var(--font);color:var(--tx)}
+.mm-ed-sec{display:grid;gap:var(--sp-2);padding:var(--sp-4)}
+.mm-ed-sec::after{display:none}
+.mm-ed-top{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--sp-1)}
+.mm-ed-h{min-height:var(--tap);font:700 var(--fs-title)/1.3 var(--font);background:none;box-shadow:none;border:0;padding:0 var(--sp-1)}
+.mm-ed-t{width:100%;min-height:calc(var(--sp-6) * 3);resize:vertical;background:var(--surface-2);border-radius:var(--r-md);padding:var(--sp-3);font:400 var(--fs-body)/1.7 var(--font);color:var(--tx)}
+.mm-del{width:100%;justify-content:center;color:var(--tx-2);background:var(--surface-2);box-shadow:none}
+.mm-del .p-ic{width:var(--sp-5);height:var(--sp-5)}
+.mm-ed .p-list{margin:0}
+.mm-ed .p-row{min-height:var(--row)}
+.mm-ed .p-btn{align-self:start}
+
+/* エンティティのメモ(#/n) */
+.mm-n{padding-top:var(--sp-2)}
+.mm-owner{display:inline-flex;align-items:center;gap:var(--sp-2);min-height:var(--tap);padding:0 var(--sp-4);border-radius:var(--r-pill);background:var(--kin-soft);color:var(--tx);font:600 var(--fs-cap)/1 var(--font);text-decoration:none}
+.mm-doc{display:grid;gap:var(--sp-3);padding:var(--sp-5) var(--sp-5) var(--sp-6)}
+.mm-doc-h{display:grid;gap:var(--sp-1);padding-right:var(--sp-5)}
+.mm-doc-t{font:700 var(--fs-display)/1.25 var(--font);color:var(--tx)}
+.mm-doc-m{font:500 var(--fs-cap)/1.4 var(--font);color:var(--tx-2)}
+.mm-sec-h{margin-top:var(--sp-3);font:700 var(--fs-title)/1.3 var(--font);color:var(--tx)}
+.mm-p{font:400 var(--fs-body)/1.8 var(--font);color:var(--tx)}
+.mm-none-p{color:var(--tx-3)}
+.mm-in-e{display:inline-flex;align-items:center;gap:var(--sp-1);min-height:var(--tap);padding:0 var(--sp-2);margin:0 var(--sp-1);border-radius:var(--r-pill);background:var(--kin-soft);color:var(--tx);font:600 var(--fs-cap)/1 var(--font);text-decoration:none;vertical-align:middle}
+.mm-in-a{display:inline-flex;align-items:center;min-height:var(--tap);color:var(--ev);font-weight:600;text-decoration:underline;text-underline-offset:var(--sp-1)}
+.mm-subs{display:grid;gap:var(--sp-2)}
+.mm-subs .p-list{margin:0}
+.mm-sub{width:100%;text-align:left;cursor:pointer}
+.mm-sub .p-chev{transition:transform var(--t-fast) var(--ease)}
+.mm-sub .p-chev.is-open{transform:rotate(180deg)}
+.mm-sub-x{padding:0 var(--sp-4) var(--sp-3);font:500 var(--fs-cap)/1.5 var(--font);color:var(--tx-2)}
+.mm-notes .mm-notes-l{margin-top:var(--sp-2)}
