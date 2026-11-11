@@ -17,7 +17,7 @@
 .sec{display:flex;align-items:baseline;gap:var(--s2);padding:0 var(--s1);margin-bottom:calc(var(--s3) * -1);min-height:28px}
 .sec h2{font-size:var(--fs-cap);font-weight:750;color:var(--tx-2);letter-spacing:.04em}
 .sec-n{font-size:var(--fs-cap);font-weight:700;color:var(--tx-3)}
-.sec-a{margin-left:auto;font-size:var(--fs-cap);font-weight:700;color:var(--me);min-height:44px;margin-block:-10px;padding:0 var(--s2);margin-right:calc(var(--s2) * -1);display:inline-flex;align-items:center}
+.sec-a{margin-left:auto;min-width:44px;justify-content:flex-end;font-size:var(--fs-cap);font-weight:700;color:var(--me);min-height:44px;margin-block:-10px;padding:0 var(--s2);margin-right:calc(var(--s2) * -1);display:inline-flex;align-items:center}
 .screen > section{display:flex;flex-direction:column;gap:var(--s5)}
 
 /* ---------- ボタン ---------- */
@@ -58,7 +58,7 @@ a.row:active,button.row:active,button.prop:active{background:var(--card-2)}
 .stat{position:relative;display:flex;flex-direction:column;gap:2px;padding:var(--s3) var(--s4);min-height:64px;justify-content:center;text-align:left}
 .stat + .stat::before{content:"";position:absolute;left:0;top:var(--s3);bottom:var(--s3);width:1px;background:var(--line)}
 .stat b{font-size:var(--fs-title);font-weight:800;letter-spacing:-.02em;line-height:1.2;font-variant-numeric:tabular-nums}
-.stat span{font-size:var(--fs-min);color:var(--tx-3);font-weight:600}
+.stat > span{font-size:var(--fs-min);color:var(--tx-3);font-weight:600}
 .stat.owe b{color:var(--owe)}.stat.late b{color:var(--now)}.stat.me b{color:var(--me)}
 a.stat:active,button.stat:active{background:var(--card-2)}
 

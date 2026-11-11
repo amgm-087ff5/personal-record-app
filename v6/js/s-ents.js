@@ -149,7 +149,7 @@ function enNums(id, st) {
   const items = [
     { v: st.last ? relDay(st.last) : '<span class="en-none">まだなし</span>', l: '最後に交わった' },
     { v: `${st.year}<small>回</small>`, l: '今年' },
-    { v: amt(st.spend, { cls: st.spend ? '' : 'mute' }), l: person ? '一緒の時の自分の支出' : 'ここでの自分の支出' },
+    { v: amt(st.spend, { cls: st.spend ? '' : 'mute' }), l: person ? '一緒の時の支出' : 'ここでの支出' },
   ];
   const nx = st.next;
   return `<section class="en-nums">${stats(items)}

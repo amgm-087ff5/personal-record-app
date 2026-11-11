@@ -21,7 +21,8 @@ JS = r"""() => {
     if (el.matches('a[href],button,[onclick],select,input,textarea')) {
       const r = el.getBoundingClientRect(); let ok = r.height >= 43.5 && r.width >= 43.5;
       for (const ps of ['::after', '::before']) { if (ok) break; const b = getComputedStyle(el, ps); if (b.content !== 'none' && b.position === 'absolute') { const t = parseFloat(b.top) || 0, l = parseFloat(b.left) || 0; if (r.height - 2 * t >= 43.5 && (r.width - 2 * l >= 43.5 || r.width >= 60)) ok = true; } }
-      if (!ok && r.height >= 43.5 && r.width >= 24 && el.closest('.chips,.seg,.cal-g,.mnav,.wk,.sky-in,.hg-in')) ok = true;
+      if (!ok && r.height >= 43.5 && r.width >= 24 && el.closest('.chips,.seg,.cal-g,.mnav,.wk,.hg-in')) ok = true;
+      if (!ok && el.matches('.sky-b')) ok = true;   /* 帯の上の期間は、幅が時間の長さ(同じ物は下の一覧からも開ける) */
       if (!ok) { const p = el.closest('.row,.prop,.field,.task,.rv-i'); if (p && p !== el && p.getBoundingClientRect().height >= 44 && r.height >= 30 && r.width >= 30) ok = true; }
       if (!ok) taps.push(`${Math.round(r.width)}x${Math.round(r.height)}「${(el.getAttribute('aria-label')||el.textContent).trim().slice(0,12)}」<${el.className}>`);
     }

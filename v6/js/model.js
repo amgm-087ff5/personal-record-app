@@ -117,7 +117,7 @@ const placeOf = a => { const r = rolesOf(a, '場所', '支払先', '到着')[0];
 /** 支払先の名前 */
 const payeeOf = a => { const r = rolesOf(a, '支払先')[0]; return r ? roleName(r) : ''; };
 /** 題。支払いは「支払先」(無ければ「支払い」) */
-const actTitle = a => !a ? '' : isPay(a) ? (payeeOf(a) || a.title || '支払い') : (a.title || KINDS[a.kind].n);
+const actTitle = a => !a ? '' : isPay(a) ? (a.title || payeeOf(a) || '支払い') : (a.title || KINDS[a.kind].n);
 
 /* ---- 繰り返し ---- */
 function repOn(t, d) {

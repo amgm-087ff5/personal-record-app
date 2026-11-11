@@ -168,7 +168,7 @@ route('cats', () => {
     const own = [row({ on: `lgCatOpen(${q(k)})`, cls: `lg-n d${Math.min(depth, 3)}`, lead: `<i class="lg-sw" style="background:${catColor(k)}"></i>`, tHtml: esc(c.n),
       sHtml: [c.fx !== undefined ? tagOf(c.fx, '固定・', '変動') : '', c.sp !== undefined ? tagOf(c.sp, '日常・', '非日常') : ''].join('') || '', right: amt(catSum(ym, k), { cls: catSum(ym, k) ? '' : 'mute' }), chev: true })];
     catKids(k).forEach(x => own.push(...lines(x, depth + 1)));
-    own.push(row({ on: `lgCatNew(${q(k)})`, cls: `lg-n lg-add d${Math.min(depth + 1, 3)}`, lead: ic('plus'), t: '子を足す' }));
+    if (depth === 0) own.push(row({ on: `lgCatNew(${q(k)})`, cls: `lg-n lg-add d1`, lead: ic("plus"), t: "子を足す" }));
     return own;
   };
   return `<div class="screen s-cats">

@@ -53,18 +53,17 @@ function pyMine(id, a) {
   const sp = xSp(id), fx = xFx(id);
   const basisX = x.basis === 'even' ? `<div class="py-ex"><span>人数</span><div class="py-step"><button onclick="pyN(${q(id)},-1)" aria-label="人数を減らす">−</button><b class="num">${x.n || 2}人</b><button onclick="pyN(${q(id)},1)" aria-label="人数を増やす">＋</button></div></div>`
     : x.basis === 'amount' ? `<div class="py-ex"><span>自分の負担</span>${input({ value: x.me || 0, mode: 'numeric', onchange: `pyMe(${q(id)},this.value)`, cls: 'num', label: '自分の負担' })}</div>` : '';
-  const opt = (k, items, cur, fn) => `<div class="py-opt"><span class="prop-k">${k}</span>${seg(items, cur, pyFn(fn, id))}</div>`;
   return `<section>${sec('自分の支出')}
-    <div class="card pad py-mine"><div class="py-mine-h"><span class="py-k">自分の負担</span>${b.amt ? (b.open ? tag(balanceText(b), 'owe') : tag('精算済み')) : ''}</div>
+    ${split || b.amt ? `<div class="card pad py-mine"><div class="py-mine-h"><span class="py-k">自分の負担</span>${b.amt ? (b.open ? tag(balanceText(b), 'owe') : tag('精算済み')) : ''}</div>
       ${amt(mine, { cls: 'hero' })}
       ${split ? `<div class="py-sp">${splitBar(id)}<span class="mini">合計 ${yen(total)} のうち ${Math.round(mine / (total || 1) * 100)}%</span></div>` : ''}
-      ${b.amt ? `<div class="py-bal">${b.settled ? `<span class="mini">${esc(balanceText(b))}</span>` : ''}${btn(b.settled ? '未精算に戻す' : '精算済みにする', `pySettle(${q(id)},${!b.settled})`, 'sec', { sm: 1 })}</div>` : ''}</div>
+      ${b.amt ? `<div class="py-bal">${b.settled ? `<span class="mini">${esc(balanceText(b))}</span>` : ''}${btn(b.settled ? '未精算に戻す' : '精算済みにする', `pySettle(${q(id)},${!b.settled})`, 'sec', { sm: 1 })}</div>` : ''}</div>` : ''}
     ${rows([
       others ? `<div class="py-opt"><span class="prop-k">負担の決め方</span>${seg(PY_BASIS, x.basis || 'items', pyFn('pyBasis', id))}${basisX}</div>` : '',
       prop('カテゴリ', catTag(x.cat, { path: 1 }), { on: `pyCatPick(${q(id)})` }),
-      opt('特別感', [['', catSp(x.cat) ? `既定(${catSp(x.cat)})` : '既定'], ['日常', '日常'], ['非日常', '非日常']], x.sp || '', 'pySp'),
-      opt('固定・変動', [['', catFx(x.cat) ? `既定(${catFx(x.cat)})` : '既定'], ['固定', '固定'], ['変動', '変動']], x.fx || '', 'pyFx'),
-      `<label class="py-opt"><span class="prop-k">メモ</span><textarea class="input area" rows="2" placeholder="メモ" onchange="pyMemo(${q(id)},this.value)" aria-label="メモ">${esc(x.memo || '')}</textarea></label>`])}
+      prop('特別感', `${esc(sp || '未設定')}${x.sp ? '' : '<span class="mini">カテゴリの既定</span>'}`, { on: `pyOptPick(${q(id)},'sp')` }),
+      prop('固定・変動', `${esc(fx || '未設定')}${x.fx ? '' : '<span class="mini">カテゴリの既定</span>'}`, { on: `pyOptPick(${q(id)},'fx')` }),
+      prop('メモ', x.memo ? esc(x.memo) : '<span class="mini">なし</span>', { on: `pyMemoSheet(${q(id)})` })])}
     ${cs.length >= 2 ? `${sec('カテゴリの内訳')}${rows(cs.map(c => row({ tHtml: catTag(c.cat), right: amt(c.amt) })))}` : ''}</section>`;
 }
 /** 品目。同じ名前・金額・使った人が続く時は「×2」にまとめる(データはそのまま) */
@@ -104,6 +103,14 @@ function pyPaid(id, a) {
 /* ---- 詳細の操作(全部 model の関数。done が取り消しと描き直しを受け持つ) ---- */
 const pyConfirm = id => done(payConfirm(id));
 const pySettle = (id, on) => done(paySettle(id, on));
+function pyOptPick(id, f) {
+  const x = xOf(id), def = f === 'sp' ? catSp(x.cat) : catFx(x.cat), opts = f === 'sp' ? ['日常', '非日常'] : ['固定', '変動'];
+  pick({ title: f === 'sp' ? '特別感' : '固定・変動', items: opts.map(k => ({ k, label: k })), cur: x[f] || null, none: { label: def ? `カテゴリの既定(${def})` : 'カテゴリの既定' }, on: k => done(expUpdate(id, { [f]: k || null })) });
+}
+function pyMemoSheet(id) {
+  const cur = (xOf(id) || {}).memo || '';
+  openSheet({ title: '支出のメモ', body: textarea({ id: 'py-memo-t', rows: 4, value: cur, auto: 1, label: 'メモ' }), dirty: () => val('py-memo-t') !== cur, primary: { label: 'メモを保存', on: () => done(expUpdate(id, { memo: val('py-memo-t').trim() || null }), { close: 1 }) } });
+}
 function pyXAdd(id) { const a = A(id), r = rolesOf(a, '支払先')[0]; done(expUpdate(id, { basis: 'even', n: Math.max(2, peopleOf(id).length), cat: catGuess(r ? (r.e ? { e: r.e } : { name: r.name }) : null) })); }
 function pyBasis(id, k) { const x = xOf(id), p = { basis: k }; if (k === 'even') p.n = x.n || Math.max(2, peopleOf(id).length); if (k === 'amount') p.me = x.me != null ? x.me : xAmt(id); done(expUpdate(id, p)); }
 const pyN = (id, d) => done(expUpdate(id, { n: Math.max(2, Math.min(99, (xOf(id).n || 2) + d)) }), { quiet: 1 });

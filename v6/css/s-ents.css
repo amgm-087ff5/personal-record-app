@@ -108,3 +108,5 @@
 .en-tr .row-m{flex-direction:row;align-items:baseline;gap:var(--s3)}
 .en-tr{min-height:48px}
 .sheet-b > section{display:flex;flex-direction:column;gap:var(--s5)}
+.en-ty-x{position:relative}
+.en-ty-x::after{content:"";position:absolute;inset:-9px -10px}

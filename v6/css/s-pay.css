@@ -102,3 +102,4 @@
 .py-scan{position:absolute;left:0;right:0;top:0;height:3px;background:var(--me);box-shadow:0 0 14px 3px var(--me-line);animation:py-scan 1s linear forwards}
 @keyframes py-scan{from{top:0}to{top:calc(100% - 3px)}}
 @media (prefers-reduced-motion:reduce){.py-scan{animation:none;display:none}}
+.py-pl{min-height:44px}
