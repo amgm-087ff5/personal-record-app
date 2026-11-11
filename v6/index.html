@@ -21,7 +21,7 @@ try { var __t = localStorage.getItem('prmock-v6-theme') || 'auto'; document.docu
 (function () {
   var V = '?v=' + encodeURIComponent(window.BUILD.split('·').pop().trim() + (window.__BUST || ''));
   var CSS = ['fonts/mplus2.css', 'css/tokens.css', 'css/base.css', 'css/parts.css', 'css/screens.css', 'css/s-detail.css', 'css/s-pay.css', 'css/s-ledger.css', 'css/s-ents.css', 'css/s-todo.css', 'css/s-memo.css', 'css/s-misc.css'];
-  var JS = ['js/model.js', 'js/core.js', 'js/parts.js', 'js/s-home.js', 'js/s-timeline.js', 'js/s-detail.js', 'js/s-pay.js', 'js/s-ledger.js', 'js/s-ents.js', 'js/s-todo.js', 'js/s-memo.js', 'js/s-misc.js', 'js/zz-stubs.js'];
+  var JS = ['js/model.js', 'js/core.js', 'js/parts.js', 'js/s-home.js', 'js/s-timeline.js', 'js/s-detail.js', 'js/s-pay.js', 'js/s-ledger.js', 'js/s-ents.js', 'js/s-todo.js', 'js/s-memo.js', 'js/s-misc.js'];
   CSS.forEach(function (f) { document.write('<link rel="stylesheet" href="' + f + V + '">'); });
   JS.forEach(function (f) { document.write('<script src="' + f + V + '"><\/script>'); });
 })();

@@ -46,6 +46,7 @@ function dtHero(id, a) {
     <div class="dt-k">${kindIc(a)}${title !== k.n ? `<span>${esc(k.n)}</span>` : ''}${tags}</div>
     <h1 class="dt-t" data-bar-watch>${esc(title)}</h1>
     <div class="dt-when num">${esc(dtWhen(a))}</div>
+    ${a.pay && a.pay.plan ? `<div class="dt-amt">${amt(a.pay.plan.amt, { cls: 'big' })}${catTag(a.pay.plan.cat)}${a.pay.plan.how ? `<span class="mini">${esc(a.pay.plan.how)}</span>` : ''}</div>` : ''}
     ${a.planned ? `<div class="mini num">予定は ${a.planned.start}${a.planned.end ? '–' + a.planned.end : ''}</div>` : ''}
     <a class="dt-date" href="#/day/${a.date}">${ic('cal')}<span>${fmtFull(a.date)}</span><small>${relDay(a.date)}</small>${ic('chev', 'row-chev')}</a>
     ${meta ? `<div class="dt-meta">${meta}</div>` : ''}
@@ -166,7 +167,7 @@ function dtRecOpen(id) {
   const fields = pay
     ? `${field('金額', input({ value: DTR.amt || '', mode: 'numeric', ph: '0', oninput: "dtRIn('amt',this.value)", auto: 1 }))}${field('支払い方法', select({ value: DTR.how, options: DB.methods.map(m => [m, m]), onchange: "dtRIn('how',this.value)" }))}${field('時刻', input({ type: 'time', value: DTR.start, oninput: "dtRIn('start',this.value)" }))}`
     : DTR.allDay ? '' : `<div class="grid2">${field('開始', input({ type: 'time', value: DTR.start, oninput: "dtRIn('start',this.value)" }))}${field('終了', input({ type: 'time', value: DTR.end, oninput: "dtRIn('end',this.value)" }))}</div>`;
-  openSheet({ title: a.virt ? 'この回だけ記録にする' : '記録にする', body: sum + fields, dirty: () => JSON.stringify(DTR) !== DTR0, primary: { label: '記録にする', on: dtRecSave } });
+  openSheet({ title: a.virt ? 'この回だけ記録にする' : '記録にする', body: `<div class="dt-ed">${sum}${fields}</div>`, dirty: () => JSON.stringify(DTR) !== DTR0, primary: { label: '記録にする', on: dtRecSave } });
 }
 function dtRIn(k, v) { DTR[k] = k === 'amt' ? +String(v).replace(/\D/g, '') || 0 : v; }
 function dtRecSave() {
@@ -218,7 +219,7 @@ function dtEBody() {
     ? `${rows(row({ t: '複数日', right: toggle(d.multi, 'dtEMulti()', '複数日') }))}${d.multi ? field('終わりの日', input({ type: 'date', value: d.date2, onchange: "dtEIn('date2',this.value)" })) : ''}`
     : `<div class="grid2">${field('開始', input({ type: 'time', value: d.start, oninput: "dtEIn('start',this.value)" }))}<label class="field"><span class="field-l" id="dte-endl">${d.end ? '終了' : '終了なし(瞬間)'}</span>${input({ type: 'time', value: d.end, oninput: "dtEIn('end',this.value)", label: '終了' })}</label></div>`;
   const cands = d.rep ? [] : dtParentCands();
-  return `${d.fixedKind ? '' : dtGroup('種類', dtWrap(chips(Object.keys(KINDS).filter(x => x !== 'pay' && x !== 'holiday').map(x => [x, KINDS[x].n]), d.kind, 'dtEKind')))}
+  return `<div class="dt-ed">${d.fixedKind ? '' : dtGroup('種類', dtWrap(chips(Object.keys(KINDS).filter(x => x !== 'pay' && x !== 'holiday').map(x => [x, KINDS[x].n]), d.kind, 'dtEKind')))}
     ${field('題', input({ id: 'dte-t', value: d.title, ph: k.n, cls: 'big', oninput: "dtEIn('title',this.value)" }))}
     ${d.tpl || d.fixedKind ? '' : seg([['done', '記録'], ['plan', '予定']], d.state, 'dtEState')}
     ${field(d.tpl ? '始まりの日' : '日付', input({ type: 'date', value: d.date, onchange: 'dtEDate(this.value)' }))}
@@ -228,7 +229,7 @@ function dtEBody() {
     ${plan ? dtGroup('繰り返し', seg(DT_REPS, d.rep, 'dtERep')) + dtGroup('通知', dtWrap(chips(DT_ALARMS, d.alarm, 'dtEAlarm'))) : ''}
     ${dtGroup('関わった', `<div class="stack">${d.roles.length ? rows(d.roles.map((r, i) => `<div class="prop"><span class="prop-k">${esc(r.r)}</span><span class="prop-v">${ent(r.e, { name: r.name, link: false })}</span><button class="icon-btn" onclick="dtERoleDel(${i})" aria-label="${esc(roleName(r))}を外す">${ic('close')}</button></div>`)) : ''}${btn('足す', 'dtERoleAdd()', 'dash', { icon: 'plus' })}</div>`)}
     ${cands.length || par ? pickField('活動の中', par ? `${kindIc(par)}${esc(actTitle(par))}` : 'なし', 'dtEParent()', { emptyv: !par }) : ''}
-    ${field('メモ書き', textarea({ value: d.note, rows: 3, ph: 'メモ', oninput: "dtEIn('note',this.value)" }))}`;
+    ${field('メモ書き', textarea({ value: d.note, rows: 3, ph: 'メモ', oninput: "dtEIn('note',this.value)" }))}</div>`;
 }
 const dtERefresh = () => setSheetBody(dtEBody());
 const dtEHead = () => { setSheetTitle(dtETitle()); setSheetPrimary({ label: dtELabel(), on: dtESave }); };

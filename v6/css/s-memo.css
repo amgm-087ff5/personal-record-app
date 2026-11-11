@@ -1,1 +1,26 @@
-/* s-memo */
+/* 個人記録 v6 — メモ(接頭辞 mm)。値は tokens.css の変数だけ */
+.mm-comp{display:flex;flex-direction:column;gap:var(--s3)}
+.mm-new{padding:var(--s3) var(--s4) var(--s4)}
+.mm-ta{display:block;width:100%;min-height:84px;padding:0 var(--s3) 0 0;border:0;background:transparent;resize:none;line-height:1.7;font-weight:500;overflow:hidden}
+.mm-ta::placeholder{color:var(--tx-3);font-weight:500}
+.mm-new:focus-within{box-shadow:var(--e2),inset 0 0 0 0 transparent}
+.mm-act{display:flex;align-items:center;gap:var(--s3)}
+.mm-act span{flex:1}
+.mm-act .btn{min-height:48px}
+.mm-list{display:flex;flex-direction:column;gap:var(--s5);min-width:0}
+.mm-list > section{display:flex;flex-direction:column;gap:var(--s5)}
+.mm-i{scroll-margin-top:72px;border-radius:var(--r-md)}
+.mm-flash{animation:mm-flash 1.6s var(--ease)}
+@keyframes mm-flash{0%,45%{filter:drop-shadow(0 0 0 var(--me)) drop-shadow(0 0 6px var(--me));transform:scale(1.015)}100%{filter:none;transform:none}}
+.mm-nr{align-items:flex-start;padding-block:var(--s3)}
+.mm-nr .row-lead{width:40px}
+.mm-nr .row-t{font-size:var(--fs-body)}
+.mm-nr .row-s{flex-direction:column;align-items:flex-start;gap:var(--s1);margin-top:2px}
+.mm-nr .row-chev{align-self:center}
+.mm-ex{color:var(--tx-2);line-height:1.5;overflow-wrap:anywhere}
+.mm-lkr{display:flex;align-items:center;gap:var(--s2);min-height:48px;padding:0 var(--s1) 0 var(--s3);border-radius:var(--r-md);background:var(--card);box-shadow:inset 0 0 0 1px var(--line-2)}
+.mm-lk{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:var(--s1) var(--s2);min-height:var(--tap);color:var(--me)}
+.mm-lk svg{width:18px;height:18px}
+.mm-lk b{font-weight:700;overflow-wrap:anywhere}
+.mm-lk .mini{color:var(--tx-3)}
+#mm-find:empty{display:none}

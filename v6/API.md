@@ -64,7 +64,7 @@
 - `route(name, fn(id, qs, rest) → HTML, {tab, root})` `go(hash, {replace})` `goBack()` `rerender()`(位置を保って描き直す) `after(fn)`(描いた直後に1回) `isRerender()` `parseHash()` `currentTab()` `scroller()`
 - `openSheet({title, body, primary:{label, on, disabled}, secondary:{label, on}, dirty:()=>bool, onClose, tall, id, lead(題の右のHTML)})` / `setSheetBody(html)` `setSheetPrimary({…})` `setSheetTitle(t)` `closeSheet(force)` `closeAllSheets()` `sheetOpen()`。シートは重ねられる(選ぶシートを上に開ける)。
 - `pick({title, items:[{k, label, sub, lead(HTML), depth}], cur, multi, on(k か配列), search, create:{label:'を新しく作る', on(文字)}, none:{label}})` 選ぶシート / `menu(題, [{label, icon, sub, on}])` 操作の一覧 / `confirmSheet({title, body, ok, on})`
-- `toast(msg, {undo, bad, act:{label, on}})` / **`done(res, {msg, close, go, replace, quiet, noUndo})`** → 成功なら true(失敗は理由をトースト。成功は(close ならシートを閉じ)描き直して、取り消し付きトースト)
+- `toast(msg, {undo, bad, act:{label, on}})` / **`done(res, {msg, close, go, replace, quiet, noUndo, act:{label, on}})`** → 成功なら true(失敗は理由をトースト。成功は(close ならシートを閉じ)描き直して、取り消し付きトースト)
 - `val(id)` 入力の値 / `downloadText(名前, 文字)` / `wireSwipe(root)`(`.swipe > .swipe-in + button.swipe-act` を横スワイプで実行) / `setTheme('auto'|'light'|'dark')` `getTheme()` / `setNavBadge(tab, fn)` / `openCapture(種類?)` `openDiary(d)` `recordPlan(id)`(共通の「記録にする」) `taskCheck(id)`(共通のチェック)
 
 ## 3. parts.js(HTML を返す)

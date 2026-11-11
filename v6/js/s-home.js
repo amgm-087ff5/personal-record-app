@@ -75,9 +75,11 @@ function hmMemo() {
    1行書くと種類を推し量り、解釈を見せる(違えば種類を押して直す)。下に、種類ごとの詳しい入力への入口。 */
 let CAP = null;
 const CAP_TYPES = [['pay', '支払い', 'yen'], ['plan', '予定', 'cal'], ['task', 'ToDo', 'task'], ['memo', 'メモ', 'memo']];
-function openCapture(force) {
-  CAP = { text: '', force: force || null };
+/** o = {text}(書き出しの文字。例: エンティティの名前を入れて開く) */
+function openCapture(force, o = {}) {
+  CAP = { text: o.text || '', force: force || null };
   openSheet({ id: 'capture', title: '書く・記録する', body: capBody(), dirty: () => !!CAP.text.trim(), primary: { label: '保存', on: capSave, disabled: true } });
+  if (CAP.text) capRefresh();
 }
 function capBody() {
   return `<div class="cap-in">${textarea({ id: 'cap-t', rows: 2, ph: 'ランチ 1200 / 明日 10時 歯医者 / 牛乳 #買い物 / 思いついたこと', oninput: 'capInput(this.value)', auto: 1, label: '書く', value: CAP.text })}</div>
@@ -119,7 +121,7 @@ function capSave() {
   if (!r.ok) return done(r);
   closeSheet(true); rerender();
   const href = p.type === 'memo' ? '#/memo' : p.type === 'task' ? `#/task/${r.id}` : `#/a/${r.id}`;
-  toast(r.label, { undo: r.undo }); setTimeout(() => toast('開いて詳しく直せます', { act: { label: '開く', on: () => go(href) } }), 50);
+  toast(r.label, { undo: r.undo, act: { label: '開く', on: () => go(href) } });
 }
 
 /* ================= 日記のシート(ホーム・日のページ・＋から同じもの) ================= */

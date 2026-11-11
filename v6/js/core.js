@@ -218,12 +218,12 @@ function _pickNew() { const { o, st } = window._pick; const t = st.q.trim(); clo
 /* ---------- トースト(結果と「取り消す」。前の取り消しを消さない) ---------- */
 function toast(msg, o = {}) {
   const el = document.createElement('div'); el.className = 'toast' + (o.bad ? ' bad' : ''); el.setAttribute('role', 'status');
-  el.innerHTML = `<span class="toast-ic">${ic(o.bad ? 'warn' : 'check')}</span><span class="toast-m">${esc(msg)}</span>${o.undo ? `<button class="toast-u">取り消す</button>` : ''}${o.act ? `<button class="toast-u">${esc(o.act.label)}</button>` : ''}`;
+  el.innerHTML = `<span class="toast-ic">${ic(o.bad ? 'warn' : 'check')}</span><span class="toast-m">${esc(msg)}</span>${o.act ? `<button class="toast-u" data-act>${esc(o.act.label)}</button>` : ''}${o.undo ? `<button class="toast-u" data-undo>取り消す</button>` : ''}`;
   const kill = () => { el.classList.remove('in'); setTimeout(() => el.remove(), 220); };
-  if (o.undo) $('.toast-u', el).onclick = () => { o.undo(); kill(); rerender(); toast('取り消しました'); };
-  else if (o.act) $('.toast-u', el).onclick = () => { kill(); o.act.on(); };
+  if (o.undo) $('[data-undo]', el).onclick = () => { o.undo(); kill(); rerender(); toast('取り消しました'); };
+  if (o.act) $('[data-act]', el).onclick = () => { kill(); o.act.on(); };
   $('#toasts').appendChild(el); requestAnimationFrame(() => el.classList.add('in'));
-  setTimeout(kill, o.undo ? 6000 : o.bad ? 3600 : 2400);
+  setTimeout(kill, o.undo || o.act ? 6000 : o.bad ? 3600 : 2400);
   while ($('#toasts').children.length > 3) $('#toasts').firstChild.remove();
 }
 /** 変更の結果を受ける定型: 失敗は理由を出す。成功はトースト(取り消し付き)と描き直し。
@@ -232,7 +232,7 @@ function done(res, o = {}) {
   if (!res || !res.ok) { toast((res && res.why) || 'できませんでした', { bad: 1 }); hapt(30); return false; }
   if (o.close) closeSheet(true);
   if (o.go) { if (location.hash === o.go) rerender(); else go(o.go, { replace: o.replace }); } else rerender();
-  const msg = o.msg || res.label; if (msg && !o.quiet) toast(msg, { undo: o.noUndo ? null : res.undo });
+  const msg = o.msg || res.label; if (msg && !o.quiet) toast(msg, { undo: o.noUndo ? null : res.undo, act: o.act });
   hapt(); return true;
 }
 
