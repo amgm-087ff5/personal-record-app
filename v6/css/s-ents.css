@@ -1,0 +1,112 @@
+/* 個人記録 v6 — エンティティ(一覧・詳細・種類の木・ノート)。接頭辞 en。値は tokens.css の変数だけ */
+
+/* ---------- 一覧 ---------- */
+.en-q{position:relative}
+.en-q > svg{position:absolute;left:var(--s3);top:50%;margin-top:-10px;width:20px;height:20px;color:var(--tx-3);pointer-events:none;z-index:1}
+.en-q .input{padding-left:44px}
+.en-q .input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+.en-res{display:flex;flex-direction:column;gap:var(--s5)}
+.en-g{display:flex;flex-direction:column;gap:var(--s3)}
+.en-row .row-lead{width:auto}
+.en-row{min-height:64px}
+.en-when{display:flex;flex-direction:column;align-items:flex-end;line-height:1.35;text-align:right}
+.en-when b{font-size:var(--fs-cap);font-weight:700;color:var(--tx-2)}
+.en-when b.none{color:var(--tx-3);font-weight:600}
+.en-when small{font-size:var(--fs-min);font-weight:700;color:var(--tx-3)}
+
+/* ---------- 詳細: 名札 ---------- */
+.en-hero{display:flex;align-items:center;gap:var(--s4);padding-top:var(--s2)}
+.en-hero .av{flex:none}
+.en-hero-m{min-width:0;display:flex;flex-direction:column;gap:var(--s2)}
+.en-hero h1{font-size:var(--fs-big);font-weight:800;letter-spacing:-.02em;line-height:1.25;overflow-wrap:anywhere}
+.en-types{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.en-ty{position:relative;display:inline-flex;align-items:center;min-height:28px;border-radius:var(--r-xs);background:var(--kin-soft);color:var(--kin);font-size:var(--fs-cap);font-weight:700}
+.en-ty-n{position:relative;display:inline-flex;align-items:center;min-height:28px;padding:0 var(--s2)}
+.en-ty-n::after{content:"";position:absolute;inset:-8px -2px}
+.en-ty-x{position:relative;display:inline-grid;place-items:center;width:24px;height:28px;color:var(--kin)}
+.en-ty-x::after{content:"";position:absolute;inset:-8px -4px}
+.en-ty-x svg{width:14px;height:14px;stroke-width:2.4}
+.en-ty-n + .en-ty-x{margin-left:-6px}
+.en-ty.add{padding:0 var(--s2);gap:var(--s1);background:transparent;color:var(--tx-2);box-shadow:inset 0 0 0 1.5px var(--line-2)}
+.en-ty.add::after{content:"";position:absolute;inset:-8px -2px}
+.en-ty.add svg{width:14px;height:14px;stroke-width:2.4}
+
+/* ---------- 詳細: 数字 ---------- */
+.en-nums{display:flex;flex-direction:column;gap:var(--s3)}
+.en-none{font-size:var(--fs-cap);color:var(--tx-3);font-weight:600}
+.en-fav{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);padding:0 var(--s1)}
+.en-fav-l{font-size:var(--fs-min);font-weight:700;color:var(--tx-3)}
+.en-owe{display:flex;align-items:center;gap:var(--s3);min-height:var(--tap);padding:0 var(--s4);border-radius:var(--r-md);background:var(--owe-soft);color:var(--owe);font-weight:750}
+.en-owe b{flex:1;font-weight:750}
+.en-owe svg{width:20px;height:20px;flex:none}
+.en-owe .row-chev{color:var(--owe);opacity:.6;width:18px;height:18px}
+.en-next{position:relative;display:flex;flex-direction:column;gap:2px;padding:var(--s3) var(--s4);border-radius:var(--r-md);border:1.5px dashed var(--line-2)}
+.en-next-k{font-size:var(--fs-min);font-weight:700;color:var(--tx-3)}
+.en-next b{font-weight:750;overflow-wrap:anywhere;line-height:1.4}
+.en-wk{display:grid;grid-template-columns:repeat(12,1fr);gap:var(--s1);align-items:end;height:80px}
+.en-c{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;height:100%;min-width:0}
+.en-c b{height:14px;line-height:14px;font-size:var(--fs-min);font-weight:700;color:var(--tx-3)}
+.en-c i{display:block;width:100%;max-width:20px;border-radius:5px 5px 2px 2px;background:var(--kin);opacity:.55}
+.en-c i.z{background:var(--line-2);opacity:1;border-radius:1px}
+.en-c.now i:not(.z){opacity:1}
+.en-c.now b{color:var(--kin)}
+.en-wk-x{display:flex;justify-content:space-between;margin-top:var(--s2);font-size:var(--fs-min);font-weight:600;color:var(--tx-3)}
+
+/* ---------- 詳細: 事実・関係 ---------- */
+.prop.en-add{width:calc(100% - var(--s4));margin:var(--s1) var(--s2);min-height:48px;border:1.5px dashed var(--line-2);border-radius:var(--r-md);padding:0 var(--s3)}
+.prop.en-add::before{display:none}
+.prop.en-add .prop-k,.prop.en-add .prop-v{color:var(--tx-3)}
+.prop.en-add .prop-v{font-weight:600}
+.prop.en-add svg{width:16px;height:16px;stroke-width:2.4}
+.prop.en-more{grid-template-columns:1fr auto}
+.prop.en-more .prop-k{color:var(--tx-2);font-weight:700;font-size:var(--fs-cap)}
+.prop.en-more .row-chev{transition:transform var(--t2) var(--ease)}
+.prop.en-more.is-open .row-chev{transform:rotate(180deg)}
+.prop .en-x{margin:-6px -8px -6px 0;width:40px;height:40px}
+.prop .en-x svg{width:18px;height:18px}
+.en-chg{font-weight:650}
+
+/* ---------- 詳細: ノート・時間の軸 ---------- */
+.en-note{display:flex;flex-direction:column;gap:var(--s2);padding:var(--s4)}
+.en-note b{font-weight:750}
+.en-note p{line-height:1.7;overflow-wrap:anywhere;white-space:pre-wrap}
+.en-days{display:flex;flex-direction:column;gap:var(--s4)}
+.en-day{display:flex;flex-direction:column;gap:var(--s1)}
+.en-dh{display:flex;align-items:center;gap:var(--s2);min-height:var(--tap);padding:0 var(--s1);margin-bottom:calc(var(--s2) * -1);font-size:var(--fs-cap)}
+.en-dh b{font-weight:750;color:var(--tx-2)}
+.en-dh span{color:var(--tx-3);font-weight:600}
+
+/* ---------- 種類の木 ---------- */
+.en-th{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);padding-top:var(--s2)}
+.en-th h1{font-size:var(--fs-big);font-weight:800;letter-spacing:-.02em;line-height:1.25}
+.en-tr{padding-left:calc(var(--s4) + var(--depth,0) * 22px)}
+.en-tr.root .row-t{font-weight:800}
+.en-tr .row-r{font-weight:700;color:var(--tx-2);min-width:24px;justify-content:flex-end}
+.en-np{gap:var(--s2)}
+.en-np .input{min-height:44px;flex:1}
+.en-tg{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);min-height:52px;padding:0 var(--s4);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--e1);font-weight:650}
+#enf-warn:empty{display:none}
+
+/* ---------- ノート ---------- */
+.en-nh{display:flex;flex-direction:column;gap:var(--s2);padding-top:var(--s2)}
+.en-nh h1{font-size:var(--fs-big);font-weight:800;letter-spacing:-.02em;line-height:1.25;overflow-wrap:anywhere}
+.en-nm{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s1) var(--s3)}
+.en-nb{display:flex;flex-direction:column;gap:var(--s5)}
+.en-ns{display:flex;flex-direction:column;gap:var(--s1)}
+.en-ns h3{font-size:var(--fs-cap);font-weight:750;color:var(--kin);letter-spacing:.04em}
+.en-ns p{line-height:1.9;overflow-wrap:anywhere;white-space:pre-wrap}
+.en-sub + .en-sub{border-top:1px solid var(--line)}
+.en-sub .row-chev{transition:transform var(--t2) var(--ease)}
+.en-sub.is-open .row-chev{transform:rotate(90deg)}
+.en-sub-b{display:flex;flex-direction:column;gap:var(--s3);padding:0 var(--s4) var(--s3)}
+.en-sub-b p{line-height:1.8;overflow-wrap:anywhere;white-space:pre-wrap}
+.en-acts{display:flex;gap:var(--s2)}
+.en-nsec{display:flex;flex-direction:column;gap:var(--s2)}
+.en-nsec-h{display:flex;align-items:center;justify-content:space-between;margin:calc(var(--s2) * -1) calc(var(--s2) * -1) 0 0}
+.en-nsec-h > div{display:flex}
+.en-sp{width:var(--tap);height:var(--tap)}
+.en-tr .row-m{flex-direction:row;align-items:baseline;gap:var(--s3)}
+.en-tr{min-height:48px}
+.sheet-b > section{display:flex;flex-direction:column;gap:var(--s5)}
+.en-ty-x{position:relative}
+.en-ty-x::after{content:"";position:absolute;inset:-9px -10px}

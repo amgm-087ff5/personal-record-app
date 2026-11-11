@@ -1,0 +1,79 @@
+/* 個人記録 v6 — ToDo(接頭辞 td)。値は tokens.css の変数だけ */
+
+/* ---------- 一覧: すばやく足す ---------- */
+.td-quick{display:flex;flex-direction:column;gap:var(--s2)}
+.td-q{display:flex;gap:var(--s2);align-items:stretch}
+.td-q .input{flex:1;min-width:0}
+.td-q .btn{flex:none;min-height:48px}
+.td-pv{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s1) var(--s2);padding:0 var(--s1);min-width:0}
+.td-pv:empty{display:none}
+.td-pv-t{font-size:var(--fs-cap);font-weight:700;overflow-wrap:anywhere;margin-right:var(--s1)}
+.td-pv .pri,.td-pri{font-style:normal;font-weight:800;color:var(--now)}
+.td-list{display:flex;flex-direction:column;gap:var(--s5);min-width:0}
+.td-list > section{display:flex;flex-direction:column;gap:var(--s5)}
+
+/* 行(横スワイプで完了)。1つの面の中に並べる */
+.td-sw{border-radius:0}
+.td-sw .swipe-in{background:var(--card)}
+.td-sw .swipe-act{width:112px;border-radius:0}
+.td-sw + .td-sw .task::before{content:"";position:absolute;top:0;left:calc(var(--s4) + 26px + var(--s3));right:0;height:1px;background:var(--line)}
+.td-new{animation:td-new 1.4s var(--ease)}
+@keyframes td-new{from{background:var(--me-soft)}}
+
+/* 予定ごとのまとまり */
+.td-gs{gap:var(--s4)!important}
+.td-g{display:flex;flex-direction:column;gap:var(--s1)}
+.td-gh{display:flex;align-items:center;gap:var(--s2);min-height:var(--tap);padding:0 var(--s1);font-size:var(--fs-cap)}
+.td-gh svg:first-child{width:18px;height:18px;color:var(--done);stroke-width:2}
+.td-gh b{font-weight:750;min-width:0;overflow-wrap:anywhere}
+.td-gh .mini{margin-left:auto;padding-left:var(--s2)}
+.td-gh .row-chev{width:16px;height:16px}
+
+/* 完了(畳める) */
+.td-done{gap:var(--s2)!important}
+.td-dn{display:flex;align-items:center;gap:var(--s2);min-height:var(--tap);padding:0 var(--s1);font-size:var(--fs-cap);font-weight:750;color:var(--tx-2);letter-spacing:.04em}
+.td-dn b{color:var(--tx-3);font-weight:700}
+.td-dn svg{width:16px;height:16px;margin-left:var(--s1);color:var(--tx-3);stroke-width:2.4;transition:transform var(--t2) var(--ease)}
+.td-dn[aria-expanded="true"] svg{transform:rotate(90deg)}
+.td-dr{position:relative}
+.td-dr + .td-dr .task::before{content:"";position:absolute;top:0;left:calc(var(--s4) + 26px + var(--s3));right:0;height:1px;background:var(--line)}
+.td-dr .task{padding-right:56px}
+.td-dd{position:absolute;right:var(--s4);top:var(--s3);padding-top:3px;font-size:var(--fs-min);font-weight:650;color:var(--tx-3)}
+
+/* ---------- 詳細 ---------- */
+.td-hero{display:flex;gap:var(--s4);align-items:flex-start;padding:var(--s2) var(--s1) 0}
+.td-hero .chk{width:36px;height:36px;border-radius:12px;margin-top:5px}
+.td-hero .chk::after{inset:-8px}
+.td-hero .chk svg{width:24px;height:24px}
+.td-title{flex:1;min-width:0;font-size:var(--fs-big);font-weight:800;letter-spacing:-.02em;line-height:1.35;text-align:left;overflow-wrap:anywhere;border-radius:var(--r-sm)}
+.td-title:active{background:var(--sunk)}
+.td-hero.done .td-title{color:var(--tx-3);text-decoration:line-through;text-decoration-color:var(--line-2)}
+.td-state{display:flex;align-items:center;gap:var(--s3);padding:0 var(--s1) 0 calc(var(--s1) + 36px + var(--s4));margin-top:calc(var(--s2) * -1)}
+.td-mute{color:var(--tx-3);font-weight:500}
+.td-ri{width:18px;height:18px;color:var(--tx-3)}
+.td-memo{white-space:pre-wrap;font-weight:500;line-height:1.6}
+.prop .tgl{pointer-events:none}
+.td-lk{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s1) var(--s2);min-width:0;min-height:var(--tap);color:var(--me)}
+.td-lk svg{width:18px;height:18px}
+.td-lk .mini{color:var(--tx-3)}
+.td-chg{margin-right:calc(var(--s2) * -1)}
+
+/* 小さなやること */
+.td-pg{padding:var(--s3) var(--s4) var(--s1)}
+.td-sub{padding-right:var(--s1)}
+.td-sub .chk{width:24px;height:24px;border-radius:8px}
+.td-sub .chk svg{width:16px;height:16px}
+.td-sub.done .row-t{color:var(--tx-3);text-decoration:line-through;text-decoration-color:var(--line-2)}
+.td-x{color:var(--tx-3);flex:none}
+.td-x svg{width:20px;height:20px}
+.td-add{padding-right:var(--s1);gap:var(--s2)}
+.td-add:focus-within{background:var(--card-2)}
+.td-add .row-lead{color:var(--tx-3)}
+.td-in{flex:1;min-width:0;min-height:var(--tap);border:0;background:transparent;font-weight:600}
+.td-in::placeholder{color:var(--tx-3);font-weight:500}
+
+/* ---------- シート ---------- */
+.td-fx{display:flex;flex-direction:column;gap:var(--s4)}
+.td-cnt{font-size:var(--fs-cap);font-weight:700;color:var(--tx-3)}
+.td-g .task-s > .mini:has(rect[height="15"]){display:none}
+.td-title{min-height:44px}
