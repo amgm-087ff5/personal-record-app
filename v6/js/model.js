@@ -291,6 +291,15 @@ const unreadCount = a => !a || !a.pay ? 0 : (a.pay.unread ? Object.keys(a.pay.un
 /** 自分の負担の既定: 全部自分が使ったなら items。ほかの人がいれば null(1回だけ聞く) */
 const basisGuess = items => items.every(i => usersOf(i).length === 1 && usersOf(i)[0] === 'me') ? 'items' : null;
 
+/** 支払先からカテゴリを推し量る(同じ支払先の前回 → 支払先の種類 → 言葉)。同じことを2度入力しない */
+function catGuess(payee, text = '') {
+  if (payee) { const prev = Object.entries(DB.acts).filter(([id, a]) => a.pay && DB.exps[id] && rolesOf(a, '支払先').some(r => (payee.e && r.e === payee.e) || (payee.name && r.name === payee.name))).sort((x, y) => y[1].date.localeCompare(x[1].date))[0]; if (prev) return DB.exps[prev[0]].cat; }
+  const t = (payee && payee.e && E(payee.e) ? E(payee.e).types.map(typePath).join(' ') : '') + ' ' + ((payee && payee.name) || '') + ' ' + text;
+  const map = [[/ラーメン|飲食|ランチ|ディナー|定食|そば|寿司|外食|食堂/, 'eatout'], [/カフェ|コーヒー|パン|ベーカリー|ラテ/, 'cafe'], [/スーパー|八百|肉|魚|食材/, 'cook'], [/ドラッグ|薬|洗剤|日用/, 'daily'], [/駅|電車|JR|バス|Suica/, 'train'], [/タクシー/, 'taxi'], [/映画|本|書店|ゲーム/, 'hobby'], [/酒|ビール|居酒屋|バー/, 'alcohol'], [/宿|ホテル|旅/, 'travel']];
+  for (const [re, k] of map) if (re.test(t) && DB.cats[k]) return k;
+  return DB.cats.eatout ? 'eatout' : Object.keys(DB.cats)[0];
+}
+
 /* ---- 家計簿の集計 ---- */
 /** その月の支出 [[actId, act, 自分の額]](新しい順) */
 function expsIn(ym) {

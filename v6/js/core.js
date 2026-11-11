@@ -45,7 +45,11 @@ function _draw(el, r) {
   let html; try { html = rt.fn(r.id, r.q, r.rest); } catch (e) { console.error(e); html = `<div class="screen"><div class="empty"><p>表示できませんでした</p><button class="btn sec" onclick="go('#/home')">ホームへ</button></div></div>`; }
   el.innerHTML = html;
 }
+let _isKeep = false;
+/** いまの描画は「描き直し」か(位置合わせは初回だけにする時に使う) */
+const isRerender = () => _isKeep;
 function render(keep) {
+  _isKeep = !!keep;
   const r = parseHash(), rt = ROUTES[r.name], hash = location.hash || '#/home';
   const main = $('#main'), side = $('#side');
   const sy = keep ? scroller().scrollTop : 0, sy2 = keep && side ? side.scrollTop : 0;
