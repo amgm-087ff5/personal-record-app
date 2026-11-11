@@ -66,7 +66,7 @@ function ent(id, o = {}) {
   return e && id !== 'me' && o.link !== false ? `<a class="ent" href="#/e/${id}">${inner}</a>` : `<span class="ent ${e ? '' : 'raw'}">${inner}</span>`;
 }
 /** 役割の相手たち(場所・人)を並べる */
-const roleEnts = (a, o = {}) => (a.roles || []).filter(r => r.r !== '支払先' || o.payee).map(r => ent(r.e, { name: r.name, link: o.link, short: o.short })).join('');
+const roleEnts = (a, o = {}) => (o.roleOf && roleIn(a, o.roleOf) ? tag(roleIn(a, o.roleOf), 'kin') : '') + (a.roles || []).filter(r => (r.r !== '支払先' || o.payee) && r.e !== o.roleOf).map(r => ent(r.e, { name: r.name, link: o.link, short: o.short })).join('');
 /** 切替(1つ選ぶ)。items = [[k, label]]、fn = 関数名(k を渡す) */
 const seg = (items, cur, fn) => `<div class="seg" role="tablist">${items.map(([k, l]) => `<button role="tab" aria-selected="${k === cur}" onclick="${fn}(${q(k)})">${esc(l)}</button>`).join('')}</div>`;
 /** 絞り込み・選択のピル。items = [[k, label, 件数?]]、cur = k か配列 */
@@ -132,7 +132,7 @@ function dayHead(d, o = {}) {
   const sp = daySpend(d), today = d === TODAY, hol = actsOn(d).find(([, a]) => a.hol);
   return `<a class="dh${today ? ' is-today' : ''}${dDow(d) === 0 || hol ? ' is-hol' : ''}" href="#/day/${d}" id="d-${d}">
     <span class="dh-d num">${+d.slice(8)}</span><span class="dh-m"><b>${dowJ(d)}曜${today ? '・今日' : ''}</b><small>${today ? fmtMDJ(d) : `${relDay(d)}${hol ? ' · ' + esc(hol[1].title) : ''}`}</small></span>
-    ${sp ? `<span class="dh-r">${amt(sp)}</span>` : ''}${skyBand(d, { mini: 1 })}</a>`;
+    ${sp ? `<span class="dh-r">${amt(sp)}</span>` : ''}${skyBand(d, { mini: 1 })}${dayOf(d).diary ? `<span class="dh-diary">${esc(dayOf(d).diary)}</span>` : ''}</a>`;
 }
 /** 写真の並び(枠の色 = 撮った時刻の空) */
 const photoStrip = (d, o = {}) => { const ph = dayOf(d).photos || []; return ph.length || o.add ? `<div class="photos">${ph.map((p, i) => `<figure class="photo" style="--c:${skyAt(p.t)}" ${o.on ? `onclick="${o.on}(${q(d)},${i})"` : ''}>${ic('photo')}<figcaption><b>${esc(p.cap || '')}</b><time>${p.t}</time></figcaption></figure>`).join('')}${o.add ? `<button class="photo add" onclick="${o.add}" aria-label="写真を追加">${ic('camera')}</button>` : ''}</div>` : ''; };
@@ -152,9 +152,10 @@ function paySlip(id, o = {}) {
   const a = A(id); if (!a) return '';
   if (isPlan(a)) { const pl = a.pay.plan || {}; return `<div class="slip plan"><a class="hit" href="#/a/${id}" aria-label="${esc(actTitle(a))}"></a><div class="slip-h"><b>${esc(a.title || payeeOf(a))}</b>${amt(pl.amt || 0)}</div><div class="slip-s">${ic('repeat')}<span>${esc(repText(A(a.tpl || id)) || '支払い予定')}</span>${catTag(pl.cat)}</div></div>`; }
   const x = xOf(id), mine = xAmt(id), total = payTotal(a), b = balanceOf(id), un = unreadCount(a), shared = isShared(id);
+  const part = o.cat && x ? xCats(id).filter(g => catAnc(g.cat).includes(o.cat)).reduce((t, g) => t + g.amt, 0) : null, sp = x ? xSp(id) : null;
   return `<div class="slip${un ? ' unread' : ''}">${o.noLink ? '' : `<a class="hit" href="#/a/${id}" aria-label="支払い ${esc(payeeOf(a))} ${yen(total)}"></a>`}
-    <div class="slip-h"><b>${un && a.pay.unread && a.pay.unread.payee ? readMark(esc(actTitle(a))) : esc(actTitle(a))}</b>${amt(x ? mine : total, { cls: x ? '' : 'mute' })}</div>
-    <div class="slip-s">${x ? catTag(x.cat) : tag('自分の負担なし')}${itemsText(a) ? `<span class="slip-i">${esc(itemsText(a))}</span>` : ''}${un ? tag(`未確認 ${un}`, 'read') : ''}</div>
+    <div class="slip-h"><b>${un && a.pay.unread && a.pay.unread.payee ? readMark(esc(actTitle(a))) : esc(actTitle(a))}</b>${amt(part != null ? part : x ? mine : total, { cls: x ? '' : 'mute' })}</div>
+    <div class="slip-s">${x ? catTag(x.cat) : tag('自分の負担なし')}${sp === '非日常' ? `<span class="mini sp">${ic('spark')}非日常</span>` : x && sp == null ? tag('特別感 未設定', 'plan') : ''}${part != null && part !== mine ? tag(`支出 ${yen(mine)}`) : ''}${itemsText(a) ? `<span class="slip-i">${esc(itemsText(a))}</span>` : ''}${un ? tag(`未確認 ${un}`, 'read') : ''}</div>
     ${shared ? `<div class="slip-sp">${splitBar(id)}<span class="slip-tot">合計 ${yen(total)}</span>${b.open ? tag(balanceText(b), 'owe') : b.settled && b.amt ? tag('精算済み') : ''}</div>` : ''}</div>`;
 }
 
@@ -183,7 +184,7 @@ function tlAct(id, o = {}) {
     body = `<div class="ev ${st}"><a class="hit" href="#/a/${id}" aria-label="${esc(actTitle(a))}"></a>
       <div class="ev-h"><span class="ev-k">${kindIc(a)}${esc(KINDS[a.kind].n)}</span>${a.end ? `<span class="ev-d num">${a.start}–${a.end}${plan ? '' : ' · ' + durJ(actMins(a))}</span>` : a.date2 ? `<span class="ev-d num">${fmtMD(a.date)}–${fmtMD(a.date2)}</span>` : ''}</div>
       <b class="ev-t">${esc(actTitle(a))}</b>
-      ${roleEnts(a, { link: false }) || tasks || a.rep || a.tpl ? `<div class="ents">${roleEnts(a, { link: false })}${a.tpl || a.rep ? `<span class="mini">${ic('repeat')}${esc(repText(A(a.tpl || id)))}</span>` : ''}${tasks ? `<span class="mini">${ic('task')}${tasks}</span>` : ''}</div>` : ''}
+      ${roleEnts(a, { link: false, roleOf: o.roleOf }) || tasks || a.rep || a.tpl ? `<div class="ents">${roleEnts(a, { link: false, roleOf: o.roleOf })}${a.tpl || a.rep ? `<span class="mini">${ic('repeat')}${esc(repText(A(a.tpl || id)))}</span>` : ''}${tasks ? `<span class="mini">${ic('task')}${tasks}</span>` : ''}</div>` : ''}
       ${late ? `<button class="btn sec sm ev-rec" onclick="recordPlan(${q(id)})">${ic('check')}<span>記録にする</span></button>` : ''}
       ${o.noKids ? '' : kidRows(id)}</div>`;
   }

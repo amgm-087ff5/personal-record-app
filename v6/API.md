@@ -78,3 +78,8 @@
 - 時間: `skyBand(d, {mini})` `skyAt('HH:MM')`(色) `dayHead(d)` `photoStrip(d, {add, on})` `dayAxis(d, {memos, filter})` `tlAct(id)`(軸の1行。`<div class="tl">…</div>` の中で使う) `tlNow()` `kidRows(id)`
 - お金: `paySlip(id, {noLink})`(支払いの面) `splitBar(id)` `itemsText(a)` / `taskRow(id, {noList})` `memoCard(id, {clamp, bare, on, href})`
 - CSS の共通クラス: `.card`(白い面) `.card.pad` `.rows` `.grid2`(2列) `.stack`(縦に 8px) `.ents`(エンティティの並び) `.mini`(小さい補足) `.num`(等幅の数字) `.hit`(面全体を押せるリンク: `<div class="card" style="position:relative"><a class="hit" href></a>…中のボタンは自動で上に出る</div>`) `.clamp`
+
+## 4. v6.1 で足した共通の関数(退化の監査を受けて)
+- model.js: `shopMatches(items)` → 品目名と同じ未完了の買い物 ToDo [[taskId, task]] / `paySave({... doneTasks:[taskId]})`(同じ変更の中で ToDo を完了にし `payAct` を付ける)/ `payDup({id?, date, start, total})` → 重複の疑いのある支払い [[id, act]] / `photosOfAct(id)` [{d, i, t, cap}] と `dayAddPhoto(d, ひとこと, actId?)` / `recordsOfPlan(ひな形id)` [[id, act]] / `oldestYm()` / `listRename(id, 名前)` `listSetShop(id, エンティティid|null)` / `taskToPlan(taskId, {date, allDay, start, end})` → {id} / `planToTask(actId)` → {id} / `monthSum(ym).unset`(固定・変動が未指定の額。variable には入らない)
+- parts.js: `paySlip(id, {cat})`(そのカテゴリに計上した額を右に出し、全額と違えば「支出 ¥全額」の札)。支払いの面に特別感の印(非日常 / 未設定)。`tlAct(id, {roleOf: エンティティid})`(その相手の役割の札を出す)。`dayHead` に日記の一言。
+- core.js: トーストは3つまで表示し、残りは順番待ち(取り消しは消えない)。画面を移ると、未保存でないシートは閉じる。保存に失敗すると知らせる。

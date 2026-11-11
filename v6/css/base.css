@@ -106,3 +106,5 @@ body.has-sheet .toasts{bottom:calc(env(safe-area-inset-bottom) + 96px)}
 .toast-u{min-height:40px;padding:0 var(--s3);border-radius:var(--r-sm);color:#A9C3FF;font-weight:700;white-space:nowrap}
 .toast-u:active{background:rgba(255,255,255,.1)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+.nav-knob.has-badge::after{content:"";position:absolute;top:4px;right:6px;width:9px;height:9px;border-radius:3px;background:var(--now);box-shadow:0 0 0 2px var(--bg)}
