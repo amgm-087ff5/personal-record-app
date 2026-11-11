@@ -35,6 +35,9 @@ html:not(.ready) body{visibility:hidden}
 .nav-deck{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr 64px 1fr 1fr;align-items:stretch;padding:0 2px}
 .nav-i{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--tx-3);font-size:var(--fs-min);font-weight:600;letter-spacing:-.06em;white-space:nowrap;will-change:transform}
 .nav-i svg{width:24px;height:24px}
+/* 幅の狭い画面(360px級)では、長い題が中央の＋に当たるので短い題に替える */
+.nav-i .nav-s{display:none}
+@media (max-width:379px){.nav-i .nav-s{display:inline}.nav-i:has(.nav-s)>span:first-of-type{display:none}}
 .nav-i.is-on{color:var(--me)}
 .nav-i.is-on svg .f{fill:var(--me-soft)}
 .nav-i:active svg{transform:scale(.9)}

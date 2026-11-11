@@ -101,7 +101,7 @@ function wireBars() {
 
 /* ---------- ナビ(2枚。1枚目=毎日 / 2枚目=整理・さがす。＋は中央で動かない) ---------- */
 const NAV = [
-  [{ k: 'home', l: 'ホーム', h: '#/home' }, { k: 'acts', l: 'アクティビティ', h: '#/acts' }, null, { k: 'todo', l: 'ToDo', h: '#/todo' }, { k: 'memo', l: 'メモ', h: '#/memo' }],
+  [{ k: 'home', l: 'ホーム', h: '#/home' }, { k: 'acts', l: 'アクティビティ', s: '活動', h: '#/acts' }, null, { k: 'todo', l: 'ToDo', h: '#/todo' }, { k: 'memo', l: 'メモ', h: '#/memo' }],
   [{ k: 'ents', l: 'エンティティ', h: '#/ents' }, { k: 'ledger', l: '家計簿', h: '#/ledger' }, null, { k: 'search', l: 'さがす', h: '#/search' }, { k: 'settings', l: '設定', h: '#/settings' }],
 ];
 let _deck = 0, _navBadge = {};
@@ -111,7 +111,7 @@ const setNavBadge = (tab, fn) => { _navBadge[tab] = fn; };
 function renderNav() {
   const d = deckOf(_curTab); if (d >= 0 && !_navDrag) _deck = d;
   const item = (i, di) => { if (!i) return '<span class="nav-gap"></span>'; const n = _navBadge[i.k] ? _navBadge[i.k]() : 0;
-    return `<a class="nav-i${i.k === _curTab ? ' is-on' : ''}" href="${i.h}" data-deck="${di}" ${i.k === _curTab ? 'aria-current="page"' : ''} ${di !== _deck ? 'tabindex="-1" aria-hidden="true"' : ''}>${navIc(i.k, i.k === _curTab)}<span>${i.l}</span>${n ? `<b class="nav-badge">${n}</b>` : ''}</a>`; };
+    return `<a class="nav-i${i.k === _curTab ? ' is-on' : ''}" href="${i.h}" data-deck="${di}" ${i.k === _curTab ? 'aria-current="page"' : ''} ${di !== _deck ? 'tabindex="-1" aria-hidden="true"' : ''}>${navIc(i.k, i.k === _curTab)}<span>${i.l}</span>${i.s ? `<span class="nav-s">${i.s}</span>` : ''}${n ? `<b class="nav-badge">${n}</b>` : ''}</a>`; };
   $('#nav').innerHTML = `<div class="nav-bar" data-deck="${_deck}">${NAV.map((dk, di) => `<div class="nav-deck" data-deck="${di}">${dk.map(i => item(i, di)).join('')}</div>`).join('')}</div>
     <button class="nav-plus" onclick="openCapture()" aria-label="書く・記録する">${ic('plus')}</button>
     <button class="nav-knob${NAV[1 - _deck].some(i => i && _navBadge[i.k] && _navBadge[i.k]()) ? ' has-badge' : ''}" onclick="navToggle()" aria-label="${_deck ? '毎日のタブへ' : '整理のタブへ'}${NAV[1 - _deck].some(i => i && _navBadge[i.k] && _navBadge[i.k]()) ? '(お知らせあり)' : ''}"><i class="${_deck === 0 ? 'on' : ''}"></i><i class="${_deck === 1 ? 'on' : ''}"></i></button>`;
