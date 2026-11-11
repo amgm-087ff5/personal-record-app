@@ -83,7 +83,13 @@ addEventListener('hashchange', () => {
   for (let i = _sheets.length - 1; i >= 0; i--) { if (_sheets[i].o.dirty && _sheets[i].o.dirty()) break; closeSheet(true); }
   render();
 });
-let _rsz; addEventListener('resize', () => { clearTimeout(_rsz); _rsz = setTimeout(() => { if (!sheetOpen()) rerender(); }, 150); });
+/* 高さだけの変化(スマホのURLバーの出入り)では描き直さない。描き直すと画面全体がチラつくため。幅が変わった時だけ描き直す */
+let _rsz, _rszW = innerWidth;
+addEventListener('resize', () => {
+  if (innerWidth === _rszW) return;
+  clearTimeout(_rsz);
+  _rsz = setTimeout(() => { if (innerWidth === _rszW) return; _rszW = innerWidth; if (!sheetOpen()) rerender(); }, 150);
+});
 
 /* 上部バー: 大きい題が流れ去ったら、細いバーに題を出す */
 let _barIO;
