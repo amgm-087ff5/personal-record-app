@@ -115,13 +115,15 @@ const _pct = hm => (hm2m(hm) / 1440 * 100).toFixed(2);
 function skyBand(d, o = {}) {
   const items = actsOn(d).filter(([, a]) => !a.hol);
   const blocks = items.filter(([, a]) => a.start && !a.allDay).map(([id, a]) => {
-    const w = isSpan(a) ? Math.max(.6, actMins(a) / 14.4) : 0, cls = isPlan(a) ? (isLate(a) ? 'late' : 'plan') : 'done';
-    if (!w) return isPay(a) ? '' : `<i class="sky-m ${cls}" style="left:${_pct(a.start)}%"></i>`;
-    return o.mini || o.link === false ? `<i class="sky-b ${cls}" style="left:${_pct(a.start)}%;width:${w.toFixed(2)}%"></i>` : `<a class="sky-b ${cls}" style="left:${_pct(a.start)}%;width:${w.toFixed(2)}%" href="#/a/${id}" aria-label="${esc(actTitle(a))} ${timeText(a)}"></a>`;
+    const w = isSpan(a) ? Math.max(.7, actMins(a) / 14.4) : 0, cls = isPlan(a) ? (isLate(a) ? 'late' : 'plan') : 'done', l = +_pct(a.start);
+    if (!w) return isPay(a) ? '' : `<i class="sky-m ${cls}" style="left:${l}%;--c:${skyAt(a.start)}"></i>`;
+    /* 起きた期間だけ、その時刻の空の色が現れる(帯の地は淡い) */
+    const st = `left:${l}%;width:${w.toFixed(2)}%;background-size:${(10000 / w).toFixed(0)}% 100%;background-position:${(l / (100 - w) * 100).toFixed(2)}% 0`;
+    return o.mini || o.link === false ? `<i class="sky-b ${cls}" style="${st}"></i>` : `<a class="sky-b ${cls}" style="${st}" href="#/a/${id}" aria-label="${esc(actTitle(a))} ${timeText(a)}"></a>`;
   }).join('');
   const pays = Object.values(DB.acts).filter(a => a.pay && a.date === d && !isPlan(a) && a.start).map(a => `<i class="sky-p" style="left:${_pct(a.start)}%"></i>`).join('');
-  const now = d === TODAY ? `<i class="sky-veil" style="left:${_pct(NOW)}%"></i><i class="sky-now" style="left:${_pct(NOW)}%"></i>` : d > TODAY ? `<i class="sky-veil" style="left:0"></i>` : '';
-  return `<div class="sky${o.mini ? ' mini' : ''}" ${o.mini ? 'aria-hidden="true"' : `role="img" aria-label="${fmtMDJ(d)}の流れ"`}><div class="sky-in">${now}${blocks}${pays}</div>${o.mini ? '' : `<div class="sky-x num" aria-hidden="true"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div>`}</div>`;
+  const now = d === TODAY ? `<i class="sky-past" style="clip-path:inset(0 ${(100 - _pct(NOW)).toFixed(2)}% 0 0)"></i><i class="sky-now" style="left:${_pct(NOW)}%"></i>` : d < TODAY ? `<i class="sky-past"></i>` : '';
+  return `<div class="sky${o.mini ? ' mini' : ''}" ${o.mini ? 'aria-hidden="true"' : `role="img" aria-label="${fmtMDJ(d)}の流れ"`}><div class="sky-in"><i class="sky-bg"></i>${now}${blocks}${pays}</div>${o.mini ? '' : `<div class="sky-x num" aria-hidden="true"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div>`}</div>`;
 }
 
 /* ---------- 日 ---------- */
@@ -190,7 +192,7 @@ function tlAct(id, o = {}) {
 /** いまの線 */
 const tlNow = () => `<div class="tl-now" id="now"><time class="num">${NOW}</time><i></i></div>`;
 /** メモを軸に置く(書いた時刻) */
-const tlMemo = (id) => { const m = DB.memos[id]; return `<div class="tl-row moment memo"><time class="tl-t num">${m.at.slice(11)}</time><i class="tl-n"></i><div class="tl-c">${memoCard(id, { clamp: 2, bare: 1, noTime: 1 })}</div></div>`; };
+const tlMemo = (id) => { const m = DB.memos[id]; return `<div class="tl-row moment is-memo"><time class="tl-t num">${m.at.slice(11)}</time><i class="tl-n"></i><div class="tl-c">${memoCard(id, { clamp: 2, bare: 1, noTime: 1 })}</div></div>`; };
 /** その日の軸(記録と予定を時刻順。今日は「いま」の線を挟む)。o = {memos, filter(fn)} */
 function dayAxis(d, o = {}) {
   let items = actsOn(d).map(([id, a]) => ({ k: sortKey(a), id, a }));

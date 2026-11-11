@@ -42,8 +42,8 @@ html:not(.ready) body{visibility:hidden}
 .nav-plus{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + var(--s2) + 7px);width:56px;height:48px;margin-left:-28px;border-radius:18px;background:var(--fill-me);color:var(--on);display:grid;place-items:center;box-shadow:var(--e-me),inset 0 1px 0 rgba(255,255,255,.3);pointer-events:auto;transition:transform var(--t1) var(--ease)}
 .nav-plus svg{width:26px;height:26px;stroke-width:2.4}
 .nav-plus:active{transform:scale(.93)}
-.nav-knob{position:absolute;right:calc(var(--s3) + 14px);bottom:calc(env(safe-area-inset-bottom) + var(--s2) + var(--nav-h) + 2px);width:52px;height:30px;display:flex;align-items:center;justify-content:center;gap:4px;pointer-events:auto}
-.nav-knob::before{content:"";position:absolute;inset:6px 6px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--card) 86%,transparent);box-shadow:var(--e1);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.nav-knob{position:absolute;right:calc(var(--s3) + 14px);bottom:calc(env(safe-area-inset-bottom) + var(--s2) + var(--nav-h) - 5px);width:52px;height:44px;display:flex;align-items:center;justify-content:center;gap:4px;pointer-events:auto}
+.nav-knob::before{content:"";position:absolute;inset:13px 6px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--card) 86%,transparent);box-shadow:var(--e1);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 .nav-knob i{position:relative;width:6px;height:6px;border-radius:3px;background:var(--line-2);transition:width var(--t2) var(--spring),background var(--t2)}
 .nav-knob i.on{width:16px;background:var(--me)}
 @media (min-width:568px){.nav-knob{right:calc(50% - 268px + 14px)}}
@@ -52,20 +52,20 @@ body.has-sheet #nav{pointer-events:none}
 /* ---------- 幅の広い画面: 左にレール、(さらに広ければ)一覧+詳細 ---------- */
 @media (min-width:900px){
   #nav{display:none}
-  #shell{display:grid;grid-template-columns:88px minmax(0,1fr);height:100dvh}
+  #shell{display:grid;grid-template-columns:96px minmax(0,1fr);height:100dvh}
   #rail{display:flex;flex-direction:column;align-items:center;gap:var(--s1);padding:var(--s4) 0;border-right:1px solid var(--line);overflow:auto}
   #main,#side{overflow:auto;height:100dvh}
   .screen{padding-bottom:var(--s8)}
   .rail-logo{width:44px;height:44px;border-radius:14px;background:var(--sky);background-size:240% 100%;background-position:45% 0;color:#fff;display:grid;place-items:center;margin-bottom:var(--s3)}
-  .rail-i{position:relative;width:76px;min-height:56px;border-radius:var(--r-md);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:var(--fs-min);font-weight:600;color:var(--tx-3)}
+  .rail-i{position:relative;width:88px;white-space:nowrap;letter-spacing:-.05em;min-height:56px;border-radius:var(--r-md);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:var(--fs-min);font-weight:600;color:var(--tx-3)}
   .rail-i:hover{background:var(--card)}
   .rail-i.is-on{color:var(--me);background:var(--me-soft)}
   .rail-i .nav-badge{top:6px}
   .rail-plus{margin-top:var(--s3);width:60px;height:60px;border-radius:20px;background:var(--fill-me);color:var(--on);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:var(--fs-min);font-weight:700;box-shadow:var(--e-me)}
-  .toasts{left:88px!important}
+  .toasts{left:96px!important}
 }
 @media (min-width:1180px){
-  body.two #shell{grid-template-columns:88px minmax(400px,480px) minmax(0,1fr)}
+  body.two #shell{grid-template-columns:96px minmax(400px,480px) minmax(0,1fr)}
   body.two #side{display:block;border-left:1px solid var(--line);background:color-mix(in srgb,var(--card) 40%,transparent)}
   body.two #main .screen{max-width:none}
   body.two #main a.is-open{box-shadow:0 0 0 2px var(--me) inset;border-radius:var(--r-md)}

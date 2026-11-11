@@ -7,6 +7,7 @@ route('acts', (id, qs) => {
   if (qs.view) TLS.view = qs.view; if (qs.d && isDate(qs.d)) { TLS.d = qs.d; TLS.ym = ymOf(qs.d); } if (qs.m) TLS.ym = qs.m;
   if (!TLS.ym) TLS.ym = ymOf(TODAY); if (!TLS.d) TLS.d = TODAY;
   const v = TLS.view;
+  if (!isRerender() && !_back) after(tlLand);
   return `<div class="screen s-acts v-${v}">
     ${head('アクティビティ', { actions: iconBtn('search', 'さがす', "go('#/search')", 'on-card') + iconBtn('plus', '出来事を追加', `openActEditor({state:${v === 'list' ? "'done'" : "'plan'"},date:${q(v === 'list' ? TODAY : TLS.d)}})`, 'pri') })}
     ${seg([['list', 'リスト'], ['day', '日'], ['month', '月']], v, 'tlView')}
@@ -43,7 +44,6 @@ function tlList() {
 }
 /** 開いた時の位置: 今月は今日(いまの線)へ、ほかの月は先頭へ */
 function tlLand() { requestAnimationFrame(() => { const el = TLS.view === 'list' ? $('#d-' + TODAY) : TLS.view === 'day' ? $('.hg-now') || $('.hg-b') : null; if (el) el.scrollIntoView({ block: TLS.view === 'day' ? 'center' : 'start' }); else scroller().scrollTop = 0; }); }
-addEventListener('hashchange', () => { if (parseHash().name === 'acts' && !_back) setTimeout(tlLand, 0); });
 
 /* ---------- 日(時間に比例した1日) ---------- */
 function tlDay() {
@@ -92,11 +92,11 @@ route('day', d => {
   const known = daysWith(dAdd(d, -400), dAdd(d, 400)).concat(TODAY), prev = known.filter(x => x < d).sort().pop(), next = known.filter(x => x > d).sort()[0];
   return `<div class="screen s-day">
     ${bar(fmtFull(d), { actions: (prev ? iconBtn('up', `前の日 ${fmtMD(prev)}`, `go('#/day/${prev}',{replace:1})`) : '') + (next ? iconBtn('down', `次の日 ${fmtMD(next)}`, `go('#/day/${next}',{replace:1})`) : '') + iconBtn('pencil', '日記を書く', `openDiary(${q(d)})`) })}
-    <header class="day-h" data-bar-watch><b class="num">${+d.slice(8)}</b><div><span>${dowJ(d)}曜日${d === TODAY ? '・今日' : ''}</span><small class="num">${d.slice(0, 4)}年${+d.slice(5, 7)}月 · ${relDay(d)}</small></div></header>
+    <header class="day-h" data-bar-watch><b class="num">${+d.slice(8)}</b><div><span>${dowJ(d)}曜日${d === TODAY ? '・今日' : ''}</span><small class="num">${d.slice(0, 4)}年${+d.slice(5, 7)}月${d === TODAY ? '' : ' · ' + relDay(d)}</small></div></header>
     ${skyBand(d)}
     ${dy.diary ? `<button class="diary" onclick="openDiary(${q(d)})"><p>${esc(dy.diary)}</p></button>` : btn(d === TODAY ? '今日の日記を書く' : 'この日のことを書く', `openDiary(${q(d)})`, 'dash', { icon: 'pencil' })}
-    ${photoStrip(d, { add: `dayPhoto(${q(d)})`, on: 'dayPhotoMenu' })}
-    ${stats([{ v: `${done.length}<small>件</small>`, l: '出来事' }, ...(sp ? [{ v: amt(sp), l: '自分の支出', href: `#/ledger?m=${ymOf(d)}` }] : []), { v: `${(dy.photos || []).length}<small>枚</small>`, l: '写真' }])}
+    ${(dy.photos || []).length ? photoStrip(d, { add: `dayPhoto(${q(d)})`, on: 'dayPhotoMenu' }) : btn('写真を追加', `dayPhoto(${q(d)})`, 'dash', { icon: 'camera' })}
+    ${stats([{ v: `${done.length}<small>件</small>`, l: '出来事' }, ...(sp ? [{ v: amt(sp), l: '自分の支出', href: `#/ledger?m=${ymOf(d)}` }] : []), ...((dy.photos || []).length ? [{ v: `${dy.photos.length}<small>枚</small>`, l: '写真' }] : [])])}
     ${steps.length > 1 ? `<section>${sec('足あと')}<div class="card pad route">${steps.map(s => `<span>${esc(s)}</span>`).join(ic('move'))}</div></section>` : ''}
     ${ents.length ? `<section>${sec('この日に交わった', { n: ents.length })}<div class="card pad ents wide">${ents.map(e => ent(e)).join('')}</div></section>` : ''}
     <section>${sec('この日の流れ')}${items.length || memosOn(d).length ? dayAxis(d, { memos: 1 }) : `<div class="card">${empty({ icon: 'axis', text: 'この日の出来事は まだありません', action: { label: '出来事を追加', on: `openActEditor({state:${d > TODAY ? "'plan'" : "'done'"},date:${q(d)}})` } })}</div>`}
