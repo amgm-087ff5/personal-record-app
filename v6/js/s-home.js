@@ -51,7 +51,7 @@ function hmReview() {
     ${pend.map(([id, a]) => `<div class="rv-i rv-plan"><a class="hit" href="#/a/${id}" aria-label="${esc(actTitle(a))}"></a><span class="rv-ic">${kindIc(a)}</span><div class="rv-m"><b>${esc(actTitle(a))}</b><span class="num">${a.date === TODAY ? '' : relDay(a.date) + ' '}${timeText(a)}</span></div>${btn('記録にする', `recordPlan(${q(id)})`, 'pri', { sm: 1 })}</div>`).join('')}
     ${unread.map(([id, a]) => `<div class="rv-i rv-read"><a class="hit" href="#/a/${id}" aria-label="${esc(actTitle(a))}"></a><span class="rv-ic">${ic('receipt')}</span><div class="rv-m"><b>${readMark(esc(actTitle(a)))}</b><span>読み取った値 ${unreadCount(a)}件 · ${yen(payTotal(a))}</span></div>${btn('確かめる', `go('#/a/${id}')`, 'sec', { sm: 1 })}</div>`).join('')}
     ${bals.map(b => `<div class="rv-i rv-owe"><a class="hit" href="#/ledger?v=owe" aria-label="貸し借り"></a><span class="rv-ic">${ic('swap')}</span><div class="rv-m"><b>${esc(whoShort(b.who))}${E(b.who) ? 'さん' : ''}に${b.amt > 0 ? '貸し' : '借り'}</b><span>${b.ids.length}件 · 未精算</span></div><span class="rv-a">${amt(Math.abs(b.amt))}</span>${btn('精算済み', `hmSettle(${q(b.who)})`, 'sec', { sm: 1 })}</div>`).join('')}
-  </div>${lend && owe ? `<p class="rv-sum num">貸し ${yen(lend)} · 借り ${yen(owe)} · 差し引き ${lend >= owe ? '+' : '−'}${yen(Math.abs(lend - owe)).slice(1)}</p>` : ''}</section>`;
+  </div>${lend && owe ? `<p class="rv-sum num">貸し ${yen(lend)} · 借り ${yen(owe)} · 差し引き ${lend >= owe ? '+' : '−'}${yen(Math.abs(lend - owe))}</p>` : ''}</section>`;
 }
 function hmSettle(who) { const b = personBalances().find(x => x.who === who); if (b) done(paySettle(b.ids)); }
 /** 今日のお金: 固定費を除く。先週の同じ曜日と、この7日 */

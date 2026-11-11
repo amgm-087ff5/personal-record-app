@@ -133,3 +133,11 @@ function mmeSave() {
   done(res, { close: 1 });
 }
 function mmeDel() { done(memoRemove(MME.id), { close: 1 }); }
+
+/* Ctrl+Enter / Cmd+Enter で保存(書く欄とシートの本文) */
+document.addEventListener('keydown', ev => {
+  if (ev.key !== 'Enter' || !(ev.ctrlKey || ev.metaKey) || ev.isComposing || ev.keyCode === 229) return;
+  const id = ev.target && ev.target.id;
+  if (id === 'mm-t') { ev.preventDefault(); mmSave(); }
+  else if (id === 'mme-t' && MME) { ev.preventDefault(); mmeSave(); }
+});

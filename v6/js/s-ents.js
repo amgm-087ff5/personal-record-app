@@ -3,7 +3,7 @@
 
 /* 画面をまたいで持つ状態(描き直しても残す) */
 const ENS = { q: '', root: 'all' };                 /* 一覧: さがす文字・大分類 */
-const ENX = { rare: {}, rec: {}, sub: {} };         /* 詳細: まれな事実を開く・記録の件数・サブページの開閉 */
+const ENX = { rare: {}, rec: {}, sub: {}, tree: {} };   /* 詳細: まれな事実を開く・記録の件数・サブページの開閉 / 種類の木の開閉(鍵 → true=開く) */
 
 /* ---------- 小道具 ---------- */
 /** 種類の木を深さ優先で並べる [{k, depth}] */
@@ -17,6 +17,19 @@ const enIsPerson = id => (E(id).types || []).some(t => isUnder(t, 'person'));
 const enStamp = s => !s ? '' : (s.slice(0, 10) === TODAY ? '今日 ' : fmtMD(s.slice(0, 10)) + ' ') + s.slice(11);
 /** 履歴の期間「2020-04〜2023-03」→「2020年4月〜2023年3月」 */
 const enSpan = s => String(s || '').replace(/(\d{4})-(\d{2})/g, (_, y, m) => `${y}年${+m}月`);
+/** いちばん細かい種類の道「場所 › 店 › 飲食店 › ラーメン屋」。長い時は末尾2段 */
+const enKindPath = id => {
+  const e = E(id); if (!e || !e.types.length) return '';
+  const t = [...e.types].sort((a, b) => typeAnc(b).length - typeAnc(a).length)[0], names = typeAnc(t).map(enTypeName);
+  return names.join(' › ').length > 20 && names.length > 2 ? names.slice(-2).join(' › ') : names.join(' › ');
+};
+/** ノート本文の参照。{e:エンティティid} → 相手へのリンク、{a:記録id} → 記録へのリンク。esc した後で置き換える。plain = 文字だけ */
+function enRef(text, plain) {
+  return esc(text).replace(/\{([ea]):([^}]*)\}/g, (_, k, id) => {
+    if (k === 'e') { const e = id !== 'me' && E(id); return e ? (plain ? esc(e.n) : ent(id)) : '<span class="en-gone">名前なし</span>'; }
+    const a = A(id); return a ? (plain ? esc(actTitle(a)) : `<a class="en-aref" href="#/a/${esc(id)}">${ic('cal')}<span>${esc(actTitle(a))}</span></a>`) : '<span class="en-gone">名前なし</span>';
+  });
+}
 const enTypePick = o => pick({
   title: o.title, none: o.none, cur: o.cur, multi: o.multi, search: false, on: o.on,
   items: enTree().filter(t => !o.exclude || !o.exclude(t.k)).map(t => ({ k: t.k, label: enTypeName(t.k), depth: t.depth })),
@@ -51,13 +64,12 @@ function enQ(v) { ENS.q = v; const r = $('#en-res'); if (r) r.innerHTML = enRes(
 
 /** 一覧の行のための数字(最後に交わった・次の予定・貸し借り) */
 function enMeta() {
-  const up = upcoming(60), bal = new Map(personBalances().map(b => [b.who, b.amt])), m = {};
-  Object.keys(DB.ents).forEach(id => {
-    const last = actsOfEnt(id).find(([, a]) => !isPlan(a)), nx = up.find(([, a]) => roleIn(a, id));
-    m[id] = { last: last ? last[1].date : null, next: nx ? nx[2] : null, bal: bal.get(id) || 0 };
-  });
+  const m = {};
+  Object.keys(DB.ents).forEach(id => { const st = entStats(id); m[id] = { last: st.last, next: st.next ? st.next[2] : null, bal: st.bal || 0, weeks: st.weeks }; });
   return m;
 }
+/** 最近12週の交わりの小さな棒(0 は細い線。1件 淡・2件 中・3件以上 濃) */
+const enBars = w => `<span class="en-bars" role="img" aria-label="最近12週の交わり">${w.map(n => `<i class="${n ? 'c' + Math.min(3, n) : 'z'}"></i>`).join('')}</span>`;
 const enHay = id => { const e = DB.ents[id]; return [e.n, ...e.types.map(typePath), ...e.facts.flatMap(f => [f.v, ...(f.hist || []).map(h => h.v)])].join(' ').toLowerCase(); };
 /** 節の鍵: すべて = 大分類。大分類を選んだ時 = その直下の種類 */
 function enGroupKey(id) {
@@ -82,7 +94,7 @@ function enRes() {
 function enRow(id, m) {
   const e = DB.ents[id];
   const when = `<span class="en-when">${m.last ? `<b>${relDay(m.last)}</b>` : '<b class="none">まだなし</b>'}${m.next ? `<small>次 ${fmtMD(m.next)}</small>` : ''}</span>`;
-  return row({ cls: 'en-row', href: `#/e/${id}`, lead: avatar(id, '', 'lg'), t: e.n, sHtml: `<span>${esc(enKind(id))}</span>${m.bal ? tag(`${m.bal > 0 ? '貸し' : '借り'} ${yen(Math.abs(m.bal))}`, 'owe') : ''}`, right: when });
+  return row({ cls: 'en-row', href: `#/e/${id}`, lead: avatar(id, '', 'lg'), t: e.n, sHtml: `<span>${esc(enKindPath(id))}</span>${m.bal ? tag(`${m.bal > 0 ? '貸し' : '借り'} ${yen(Math.abs(m.bal))}`, 'owe') : ''}`, right: `${enBars(m.weeks)}${when}` });
 }
 
 /* ====================================================================
@@ -109,7 +121,7 @@ route('e', id => {
 function enHero(id, e) {
   const multi = e.types.length > 1;
   return `<header class="en-hero">${avatar(id, '', 'xl')}<div class="en-hero-m"><h1 data-bar-watch>${esc(e.n)}</h1>
-    <div class="en-types">${e.types.map(t => `<span class="en-ty"><a class="en-ty-n" href="#/types" title="${esc(typePath(t))}">${esc(enTypeName(t))}</a>${multi ? `<button class="en-ty-x" onclick="enTypeDrop(${q(id)},${q(t)})" aria-label="種類を外す ${esc(enTypeName(t))}">${ic('close')}</button>` : ''}</span>`).join('')}
+    <div class="en-types">${e.types.map(t => `<span class="en-ty"><a class="en-ty-n" href="#/types" title="${esc(typePath(t))}" aria-label="種類 ${esc(typePath(t))}">${esc(enTypeName(t))}</a>${multi ? `<button class="en-ty-x" onclick="enTypeDrop(${q(id)},${q(t)})" aria-label="種類を外す ${esc(enTypeName(t))}">${ic('close')}</button>` : ''}</span>`).join('')}
       <button class="en-ty add" onclick="enTypeAdd(${q(id)})">${ic('plus')}種類を足す</button></div></div></header>`;
 }
 function enTypeAdd(id) {
@@ -185,8 +197,8 @@ function enFactEdit(id, k) {
 }
 function enFactNew(id) { enFactOpen({ id, k: '', free: true, exists: false, v: '', orig: '', hist: [] }); }
 function enFactOpen(o) {
-  ENF = { keep: false, since: ymOf(TODAY), why: '', em: false, ...o };
-  openSheet({ id: 'enfact', title: ENF.free ? '項目を足す' : ENF.k, body: enfBody(), dirty: () => ENF.v !== ENF.orig || ENF.keep || !!(ENF.free && ENF.k.trim()), primary: enfPrimary() });
+  ENF = { keep: !!(o.exists && String(o.v || '').trim()), since: ymOf(TODAY), why: '', em: false, ...o }; ENF.keep0 = ENF.keep;
+  openSheet({ id: 'enfact', title: ENF.free ? '項目を足す' : ENF.k, body: enfBody(), dirty: () => ENF.v !== ENF.orig || ENF.keep !== ENF.keep0 || !!(ENF.free && ENF.k.trim()), primary: enfPrimary() });
 }
 const enfEm = () => ENF.exists && !ENF.v.trim();
 const enfPrimary = () => ({ label: enfEm() ? '項目を消す' : ENF.exists ? '保存' : '足す', on: enfSave, disabled: !ENF.exists && !ENF.v.trim() });
@@ -220,14 +232,16 @@ function enfSave() {
 function enRels(id) {
   const rs = relsOf(id);
   return `<section>${sec('関係', { n: rs.length || undefined, act: rs.length ? { label: '足す', on: `enRelNew(${q(id)})` } : null })}${rs.length
-    ? rows(rs.map(r => `<div class="prop"><span class="prop-k">${esc(r.role)}</span><span class="prop-v">${ent(r.other)}${r.since ? `<span class="mini">${fmtYM(r.since)}から</span>` : ''}</span><button class="icon-btn en-x" onclick="enRelDel(${r.i})" aria-label="外す ${esc(r.role)}">${ic('close')}</button></div>`))
+    ? rows(rs.map(r => `<div class="prop"><span class="prop-k">${esc(r.role)}</span><span class="prop-v">${ent(r.other)}${r.since ? `<span class="mini">${fmtYM(r.since)}から</span>` : ''}${enDir(r)}</span><button class="icon-btn en-x" onclick="enRelDel(${r.i})" aria-label="外す ${esc(r.role)}">${ic('close')}</button></div>`))
     : btn('関係を足す', `enRelNew(${q(id)})`, 'dash', { icon: 'plus' })}</section>`;
 }
+/** 関係の向きの印(お互い = swap / 一方向 = move) */
+const enDir = r => { const sym = !!(DB.rels[r.i] || {}).sym; return `<span class="en-dir" role="img" aria-label="${sym ? 'お互い' : '一方向'}">${ic(sym ? 'swap' : 'move')}</span>`; };
 function enRelDel(i) { done(relRemove(i)); }
 const EN_ROLES = [['配偶者', ''], ['友人', ''], ['家族', ''], ['勤務先', '従業員'], ['一緒に', '']];
 let ENR = null;
 function enRelNew(id) {
-  ENR = { id, role: '', inv: '', other: null, since: ymOf(TODAY) };
+  ENR = { id, role: '', inv: '', dir: 'sym', other: null, since: ymOf(TODAY) };
   openSheet({ id: 'enrel', title: '関係を足す', body: enrBody(), dirty: () => !!(ENR.role || ENR.other), primary: { label: '足す', on: enrSave, disabled: true } });
 }
 function enrBody() {
@@ -235,18 +249,21 @@ function enrBody() {
   return `${field('関係の名前', input({ id: 'enr-role', value: R.role, ph: '例: 配偶者', oninput: 'enrRole(this.value)', auto: 1 }))}
     ${chips(cands, EN_ROLES.some(([r]) => r === R.role) ? R.role : null, 'enrCand')}
     ${pickField('相手', R.other ? ent(R.other, { link: false }) : '選ぶ', 'enrOther()', { emptyv: !R.other })}
-    ${field('相手から見た呼び名', input({ id: 'enr-inv', value: R.inv, ph: 'お互い同じ', oninput: 'ENR.inv=this.value' }))}
+    ${seg([['sym', 'お互い'], ['one', '一方向']], R.dir, 'enrDir')}
+    ${R.dir === 'one' ? field('相手から見た呼び名', input({ id: 'enr-inv', value: R.inv, ph: '例: 従業員', oninput: 'enrInv(this.value)' })) : ''}
     ${field('いつから', input({ id: 'enr-s', type: 'month', value: R.since, oninput: 'ENR.since=this.value' }))}`;
 }
-const enrOk = () => !!(ENR.role.trim() && ENR.other);
+const enrOk = () => !!(ENR.role.trim() && ENR.other && (ENR.dir !== 'one' || ENR.inv.trim()));
+function enrDir(k) { ENR.dir = k; setSheetBody(enrBody()); setSheetPrimary({ label: '足す', on: enrSave, disabled: !enrOk() }); }
+function enrInv(v) { ENR.inv = v; setSheetPrimary({ label: '足す', on: enrSave, disabled: !enrOk() }); }
 function enrRole(v) { ENR.role = v; setSheetPrimary({ label: '足す', on: enrSave, disabled: !enrOk() }); }
-function enrCand(r) { ENR.role = r; ENR.inv = (EN_ROLES.find(x => x[0] === r) || [0, ''])[1]; setSheetBody(enrBody()); setSheetPrimary({ label: '足す', on: enrSave, disabled: !enrOk() }); }
+function enrCand(r) { ENR.role = r; ENR.inv = (EN_ROLES.find(x => x[0] === r) || [0, ''])[1]; ENR.dir = ENR.inv ? 'one' : 'sym'; setSheetBody(enrBody()); setSheetPrimary({ label: '足す', on: enrSave, disabled: !enrOk() }); }
 function enrOther() {
   pick({ title: '相手を選ぶ', search: true, cur: ENR.other, items: Object.keys(DB.ents).filter(k => k !== ENR.id).map(k => ({ k, label: DB.ents[k].n, sub: enKind(k), lead: avatar(k) })), on: k => { if (!k) return; ENR.other = k; setSheetBody(enrBody()); setSheetPrimary({ label: '足す', on: enrSave, disabled: !enrOk() }); } });
 }
 function enrSave() {
-  const R = ENR; if (!enrOk()) return toast('関係の名前と相手を入れてください', { bad: 1 });
-  done(relAdd({ a: R.id, b: R.other, role: R.role.trim(), inv: R.inv.trim() || undefined, since: /^\d{4}-\d{2}$/.test(R.since) ? R.since : undefined }), { close: 1 });
+  const R = ENR; if (!enrOk()) return toast(R.dir === 'one' && R.role.trim() && R.other ? '相手から見た呼び名を入れてください' : '関係の名前と相手を入れてください', { bad: 1 });
+  done(relAdd({ a: R.id, b: R.other, role: R.role.trim(), inv: R.dir === 'one' ? R.inv.trim() : undefined, since: /^\d{4}-\d{2}$/.test(R.since) ? R.since : undefined }), { close: 1 });
 }
 
 /* ---------- ノート・ToDo・メモ ---------- */
@@ -255,7 +272,7 @@ function enNote(id) {
   if (!n) return `<section>${sec('ノート')}${btn('ノートを書く', `go('#/n/${id}')`, 'dash', { icon: 'pencil' })}</section>`;
   const b = (n.body || []).filter(x => x[0] || x[1]), first = b[0];
   return `<section>${sec('ノート', { act: { label: 'ひらく', href: `#/n/${id}` } })}<article class="card en-note"><a class="hit" href="#/n/${id}" aria-label="ノートを開く"></a>
-    ${first ? `${first[0] ? `<b>${esc(first[0])}</b>` : ''}<p class="clamp" style="-webkit-line-clamp:3">${esc(first[1])}</p>` : `<p class="mini">本文なし</p>`}
+    ${first ? `${first[0] ? `<b>${esc(first[0])}</b>` : ''}<p class="clamp" style="-webkit-line-clamp:3">${enRef(first[1], 1)}</p>` : `<p class="mini">本文なし</p>`}
     <footer class="mini num">版 ${n.ver} · 更新 ${enStamp(n.upd)}</footer></article></section>`;
 }
 function enTodos(id) {
@@ -268,21 +285,50 @@ function enMemos(id) {
 }
 
 /* ---------- 時間の軸 ---------- */
-function enDays(list, asc) {
-  const m = new Map(); list.forEach(x => { const d = x[1].date; if (!m.has(d)) m.set(d, []); m.get(d).push(x); });
+/** 軸に載せるもの: {d(日。月の出来事は 'YYYY-MM-00'), id?, html?}。日ごとにまとめる */
+function enDays(list, asc, id) {
+  const m = new Map(); list.forEach(x => { if (!m.has(x.d)) m.set(x.d, []); m.get(x.d).push(x); });
   return `<div class="en-days">${[...m].map(([d, g]) => {
-    const yr = d.slice(0, 4) !== TODAY.slice(0, 4) ? d.slice(0, 4) + '年' : '';
-    const items = asc ? g : [...g].reverse();
-    return `<div class="en-day"><a class="en-dh" href="#/day/${d}"><b>${yr}${fmtFull(d)}</b><span>· ${relDay(d)}</span></a><div class="tl${d > TODAY ? ' future' : ''}">${items.map(([k]) => tlAct(k)).join('')}</div></div>`;
+    const ev = d.endsWith('-00'), yr = d.slice(0, 4) !== TODAY.slice(0, 4) ? d.slice(0, 4) + '年' : '';
+    const items = (asc || ev) ? g : [...g].reverse();
+    const hd = ev ? `<div class="en-dh"><b>${fmtYM(d.slice(0, 7))}</b></div>` : `<a class="en-dh" href="#/day/${d}"><b>${yr}${fmtFull(d)}</b><span>· ${relDay(d)}</span></a>`;
+    return `<div class="en-day">${hd}<div class="tl${d > TODAY ? ' future' : ''}">${items.map(x => x.html || tlAct(x.id, { roleOf: id })).join('')}</div></div>`;
   }).join('')}</div>`;
 }
+/** 月の出来事(瞬間の形の小さい行。押せない) */
+const enEv = (ym, icn, html) => ({ d: ym + '-00', html: `<div class="tl-row done moment"><time class="tl-t num"></time><i class="tl-n"></i><div class="tl-c"><div class="mo en-ev">${ic(icn)}<span>${html}</span></div></div></div>` });
+/** 事実の変化(履歴の終わり = 変わった月)と関係の始まり */
+function enMarks(id) {
+  const out = [], e = E(id);
+  e.facts.forEach(f => (f.hist || []).forEach((h, i) => {
+    const ym = String(h.span || '').split('〜')[1]; if (!/^\d{4}-\d{2}$/.test(ym || '')) return;
+    const nv = i === 0 ? f.v : f.hist[i - 1].v;
+    out.push(enEv(ym, 'edit', `<b>${esc(f.k)}が変わった</b> ${esc(h.v)} → ${esc(nv)}`));
+  }));
+  relsOf(id).forEach(r => { if (/^\d{4}-\d{2}$/.test(r.since || '')) out.push(enEv(r.since, 'link', `<b>関係が始まった</b> ${esc(r.role)} ${esc((E(r.other) || {}).n || '')}`)); });
+  return out;
+}
+/** 繰り返しの予定の「次の1回」(今日から60日先まで。各ひな形につき1回) */
+function enNextReps(id) {
+  const seen = new Set(), out = [];
+  for (let i = 0; i <= 60; i++) {
+    const d = dAdd(TODAY, i);
+    actsOn(d).forEach(([k, a]) => { if (!k.includes('@') || seen.has(a.tpl || k.split('@')[0]) || a.hol || isLate(a) || !roleIn(a, id)) return; seen.add(a.tpl || k.split('@')[0]); out.push({ d, id: k }); });
+  }
+  return out;
+}
 function enAxis(id) {
-  const all = actsOfEnt(id), key = x => x[1].date + sortKey(x[1]);
-  const plans = all.filter(([, a]) => isPlan(a)).sort((x, y) => key(x).localeCompare(key(y)));
-  const recs = all.filter(([, a]) => !isPlan(a)), n = ENX.rec[id] || 10;
-  if (!plans.length && !recs.length) return `<section>${sec('記録')}<div class="card">${empty({ icon: 'axis', text: 'このエンティティの記録は まだありません' })}</div></section>`;
-  return `${plans.length ? `<section>${sec('これから', { n: plans.length })}${enDays(plans, true)}</section>` : ''}
-    ${recs.length ? `<section>${sec('記録', { n: recs.length })}${enDays(recs.slice(0, n), false)}${recs.length > n ? btn(`もっと見る · 残り ${recs.length - n}件`, `enMoreRec(${q(id)})`, 'dash') : ''}</section>` : ''}`;
+  const all = actsOfEnt(id), key = x => x.d + sortKey(A(x.id));
+  const mk = ([k, a]) => ({ d: a.date, id: k });
+  const marks = enMarks(id), ym = ymOf(TODAY);
+  const plans = [...all.filter(([, a]) => isPlan(a)).map(mk), ...enNextReps(id), ...marks.filter(x => x.d.slice(0, 7) > ym)].sort((x, y) => x.id && y.id ? key(x).localeCompare(key(y)) : x.d.localeCompare(y.d));
+  const recAll = all.filter(([, a]) => !isPlan(a)).map(mk), n = ENX.rec[id] || 10, shown = recAll.slice(0, n);
+  const lim = recAll.length > n ? shown[shown.length - 1].d : '';
+  const recs = [...shown, ...marks.filter(x => x.d.slice(0, 7) <= ym && x.d >= lim)].sort((x, y) => y.d.localeCompare(x.d));
+  if (!plans.length && !recAll.length && !marks.length) return `<section>${sec('記録')}<div class="card">${empty({ icon: 'axis', text: 'このエンティティの記録は まだありません' })}</div></section>`;
+  return `${plans.length ? `<section>${sec('これから', { n: plans.filter(x => x.id).length })}${enDays(plans, true, id)}</section>` : ''}
+    <div class="tl en-nowl">${tlNow()}</div>
+    ${recs.length ? `<section>${sec('記録', { n: recAll.length })}${enDays(recs, false, id)}${recAll.length > n ? btn(`もっと見る · 残り ${recAll.length - n}件`, `enMoreRec(${q(id)})`, 'dash') : ''}</section>` : ''}`;
 }
 function enMoreRec(id) { ENX.rec[id] = (ENX.rec[id] || 10) + 20; rerender(); }
 
@@ -296,12 +342,19 @@ function openEntEditor(o = {}) {
   ENE = { id: e ? o.id : null, n: e ? e.n : (o.n || ''), types, f: {}, n0: e ? e.n : (o.n || ''), t0: types.join() };
   openSheet({ id: 'enedit', title: e ? 'エンティティを直す' : 'エンティティを足す', body: eneBody(), dirty: () => ENE.n !== ENE.n0 || ENE.types.join() !== ENE.t0 || Object.values(ENE.f).some(v => v), primary: { label: e ? '保存' : '足す', on: eneSave, disabled: !ENE.n.trim() } });
 }
-const eneProps = () => [...new Set(ENE.types.flatMap(t => propsOf(t).map(p => p[0])))].slice(0, 3);
+const eneProps = () => [...new Set(ENE.types.flatMap(t => propsOf(t).map(p => p[0])))];
 function eneBody() {
   return `${field('名前', input({ id: 'ene-n', value: ENE.n, ph: '例: 田中 花子', oninput: 'eneName(this.value)', auto: !ENE.id }))}
     ${pickField('種類', ENE.types.map(t => tag(enTypeName(t), 'kin')).join(''), 'eneTypes()')}
-    ${ENE.id ? '' : eneProps().map(k => field(k, input({ value: ENE.f[k] || '', oninput: `ENE.f[${q(k)}]=this.value` }))).join('')}`;
+    ${ENE.id ? '' : eneFields()}`;
 }
+/** 種類の項目を全部(4つ目以降は「ほかの項目」で畳む。入力済みなら開いたまま) */
+function eneFields() {
+  const ks = eneProps(), fld = k => field(k, input({ value: ENE.f[k] || '', oninput: `ENE.f[${q(k)}]=this.value` })), rest = ks.slice(3);
+  const open = ENE.more || rest.some(k => (ENE.f[k] || '').trim());
+  return ks.slice(0, 3).map(fld).join('') + (rest.length ? (open ? rest.map(fld).join('') : btn(`ほかの項目 ${rest.length}`, 'eneMore()', 'ghost', { icon: 'down' })) : '');
+}
+function eneMore() { ENE.more = true; setSheetBody(eneBody()); }
 function eneName(v) {
   const was = !!ENE.n.trim(); ENE.n = v;
   if (was !== !!v.trim()) setSheetPrimary({ label: ENE.id ? '保存' : '足す', on: eneSave, disabled: !v.trim() });
@@ -319,14 +372,21 @@ function eneSave() {
 /* ====================================================================
    種類の木  #/types
    ==================================================================== */
+/** 種類の木の開閉(既定: 深さ0と1は開き、2以上は閉じる)。閉じた行の下は隠す */
+const enOpen = (k, depth) => ENX.tree[k] != null ? ENX.tree[k] : depth < 2;
+function enTreeVis() {
+  const out = [], walk = (p, depth) => typeKids(p).forEach(k => { const kids = typeKids(k).length; out.push({ k, depth, kids }); if (kids && enOpen(k, depth)) walk(k, depth + 1); });
+  walk(null, 0); return out;
+}
+function enTreeTog(k) { ENX.tree[k] = !enOpen(k, typeAnc(k).length - 1); rerender(); }
 route('types', () => {
-  const tree = enTree(), total = Object.keys(DB.ents).length;
+  const tree = enTreeVis(), n = enTree().length, total = Object.keys(DB.ents).length;
   return `<div class="screen s-ents">
     ${bar('種類', { actions: iconBtn('plus', '種類を足す', 'enTypeNew()', 'pri') })}
-    <header class="en-th"><h1 data-bar-watch>種類</h1><span class="mini num">${tree.length}種類 · ${total}件</span></header>
-    ${tree.length ? rows(tree.map(({ k, depth }) => {
-      const np = propsOf(k).length;
-      return `<button class="row en-tr${depth ? '' : ' root'}" style="--depth:${depth}" onclick="enTypeOpen(${q(k)})"><span class="row-m"><span class="row-t">${esc(enTypeName(k))}</span><span class="row-s">項目 ${np}</span></span><span class="row-r num">${entsOfType(k).length}</span>${ic('chev', 'row-chev')}</button>`;
+    <header class="en-th"><h1 data-bar-watch>種類</h1><span class="mini num">${n}種類 · ${total}件</span></header>
+    ${tree.length ? rows(tree.map(({ k, depth, kids }) => {
+      const np = propsOf(k).length, open = enOpen(k, depth);
+      return `<div class="row en-tr${depth ? '' : ' root'}" style="--depth:${depth}">${kids ? `<button class="en-tx${open ? ' is-open' : ''}" aria-expanded="${open}" aria-label="${esc(enTypeName(k))}の中を${open ? 'たたむ' : '開く'}" onclick="enTreeTog(${q(k)})">${ic('down')}</button>` : '<span class="en-tx-sp"></span>'}<button class="en-tm" onclick="enTypeOpen(${q(k)})"><span class="row-m"><span class="row-t">${esc(enTypeName(k))}</span><span class="row-s">項目 ${np}</span></span><span class="row-r num">${entsOfType(k).length}</span>${ic('chev', 'row-chev')}</button></div>`;
     })) : `<div class="card">${empty({ icon: 'tree', text: '種類は まだありません', action: { label: '種類を足す', on: 'enTypeNew()' } })}</div>`}
   </div>`;
 }, { tab: 'ents' });
@@ -405,11 +465,11 @@ route('n', id => {
 
 function enNoteBody(id, n) {
   const body = (n.body || []).filter(b => b[0] || b[1]), subs = n.subs || [];
-  return `${body.length ? `<article class="card pad en-nb">${body.map(([h, t]) => `<div class="en-ns">${h ? `<h3>${esc(h)}</h3>` : ''}${t ? `<p>${esc(t)}</p>` : ''}</div>`).join('')}</article>` : ''}
+  return `${body.length ? `<article class="card pad en-nb">${body.map(([h, t]) => `<div class="en-ns">${h ? `<h3>${esc(h)}</h3>` : ''}${t ? `<p>${enRef(t)}</p>` : ''}</div>`).join('')}</article>` : ''}
     <section>${sec('サブページ', { n: subs.length, act: { label: '足す', on: `enSubEdit(${q(id)},null)` } })}${subs.length ? `<div class="rows">${subs.map(([name, s, t], i) => {
       const key = `${id}:${i}`, open = !!ENX.sub[key];
       return `<div class="en-sub${open ? ' is-open' : ''}"><button class="row" aria-expanded="${open}" onclick="enSubToggle(${q(key)})"><span class="row-m"><span class="row-t">${esc(name)}</span></span>${s ? `<span class="mini">${esc(s)}</span>` : ''}${ic('chev', 'row-chev')}</button>
-        ${open ? `<div class="en-sub-b">${t ? `<p>${esc(t)}</p>` : '<p class="mini">本文なし</p>'}<div class="en-acts">${btn('直す', `enSubEdit(${q(id)},${i})`, 'sec', { sm: 1, icon: 'edit' })}${btn('消す', `enSubDel(${q(id)},${i})`, 'ghost', { sm: 1, icon: 'trash' })}</div></div>` : ''}</div>`;
+        ${open ? `<div class="en-sub-b">${t ? `<p>${enRef(t)}</p>` : '<p class="mini">本文なし</p>'}<div class="en-acts">${btn('直す', `enSubEdit(${q(id)},${i})`, 'sec', { sm: 1, icon: 'edit' })}${btn('消す', `enSubDel(${q(id)},${i})`, 'ghost', { sm: 1, icon: 'trash' })}</div></div>` : ''}</div>`;
     }).join('')}</div>` : btn('サブページを足す', `enSubEdit(${q(id)},null)`, 'dash', { icon: 'plus' })}</section>`;
 }
 function enSubToggle(key) { ENX.sub[key] = !ENX.sub[key]; rerender(); }
@@ -419,12 +479,12 @@ function enSubEdit(id, i) {
   const s = i != null && DB.notes[id] ? DB.notes[id].subs[i] : null;
   ENU = { id, i, n: s ? s[0] : '', s: s ? s[1] : '', t: s ? s[2] : '' }; const o = { ...ENU };
   openSheet({ id: 'ensub', title: s ? 'サブページを直す' : 'サブページを足す', tall: 1,
-    body: `${field('名前', input({ id: 'ens-n', value: ENU.n, ph: '例: 好きな店', oninput: 'ENU.n=this.value', auto: !s }))}${field('補足', input({ id: 'ens-s', value: ENU.s, ph: '例: 3件', oninput: 'ENU.s=this.value' }))}${field('本文', textarea({ id: 'ens-t', rows: 9, value: ENU.t, oninput: 'ENU.t=this.value', label: '本文' }))}`,
+    body: `${field('名前', input({ id: 'ens-n', value: ENU.n, ph: '例: 好きな店', oninput: 'ENU.n=this.value', auto: !s }))}${field('補足', input({ id: 'ens-s', value: ENU.s, ph: '例: 3件', oninput: 'ENU.s=this.value' }))}${field('本文', textarea({ id: 'ens-t', rows: 9, value: ENU.t, oninput: 'ENU.t=this.value', label: '本文' }))}${btn('エンティティを入れる', "enRefPick('ens-t',v=>ENU.t=v)", 'sec', { icon: 'link' })}`,
     dirty: () => ENU.n !== o.n || ENU.s !== o.s || ENU.t !== o.t, primary: { label: '保存', on: () => done(noteSubSave(ENU.id, ENU.i, [ENU.n, ENU.s, ENU.t]), { close: 1 }) } });
 }
 
 /* ノートを直す(節ごとに 見出し・本文) */
-let ENN = null;
+let ENN = null;  /* cur = 今フォーカスのある本文の節 */
 const ennSig = () => JSON.stringify(ENN.secs.map(s => [s.h.trim(), s.t.trim()]).filter(s => s[0] || s[1]));
 function enNoteEdit(id) {
   const n = DB.notes[id];
@@ -434,8 +494,15 @@ function enNoteEdit(id) {
 function ennBody() {
   const last = ENN.secs.length - 1;
   return `${ENN.secs.map((s, i) => `<div class="card pad en-nsec"><div class="en-nsec-h"><span class="mini num">節 ${i + 1}</span><div>${i ? iconBtn('up', '上へ', `ennMove(${i},-1)`) : '<span class="en-sp"></span>'}${i < last ? iconBtn('down', '下へ', `ennMove(${i},1)`) : '<span class="en-sp"></span>'}${iconBtn('trash', '節を消す', `ennDel(${i})`)}</div></div>
-      ${input({ value: s.h, ph: '見出し', oninput: `ENN.secs[${i}].h=this.value`, label: `節${i + 1}の見出し` })}${textarea({ rows: 6, value: s.t, ph: '本文', oninput: `ENN.secs[${i}].t=this.value`, label: `節${i + 1}の本文` })}</div>`).join('')}
+      ${input({ value: s.h, ph: '見出し', oninput: `ENN.secs[${i}].h=this.value`, label: `節${i + 1}の見出し` })}${textarea({ id: `enn-t${i}`, rows: 6, value: s.t, ph: '本文', oninput: `ENN.secs[${i}].t=this.value`, label: `節${i + 1}の本文` }).replace('<textarea ', `<textarea onfocus="ENN.cur=${i}" `)}</div>`).join('')}
+    ${btn('エンティティを入れる', 'ennRef()', 'sec', { icon: 'link' })}
     ${btn('節を足す', 'ennAdd()', 'dash', { icon: 'plus' })}`;
+}
+/** 今フォーカスのある本文の末尾に {e:id} を足す */
+function ennRef() { const i = Math.min(ENN.cur == null ? ENN.secs.length - 1 : ENN.cur, ENN.secs.length - 1); enRefPick(`enn-t${i}`, v => { ENN.secs[i].t = v; ENN.cur = i; }); }
+function enRefPick(tid, set) {
+  pick({ title: 'エンティティを入れる', search: true, items: Object.keys(DB.ents).map(k => ({ k, label: DB.ents[k].n, sub: enKindPath(k), lead: avatar(k) })),
+    on: k => { if (!k) return; const el = document.getElementById(tid); if (!el) return; const v = el.value, nv = v + (v && !/\s$/.test(v) ? ' ' : '') + `{e:${k}}`; el.value = nv; set(nv); el.focus({ preventScroll: true }); } });
 }
 function ennMove(i, d) { const s = ENN.secs, j = i + d; if (j < 0 || j >= s.length) return; [s[i], s[j]] = [s[j], s[i]]; setSheetBody(ennBody()); }
 function ennDel(i) { ENN.secs.splice(i, 1); if (!ENN.secs.length) ENN.secs.push({ h: '', t: '' }); setSheetBody(ennBody()); }

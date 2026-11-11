@@ -4,14 +4,13 @@
 /* 状態(モジュールの変数): 月・絞り込み・開いている枝 */
 const LG = { ym: '', shown: '', f: 'all', cat: null, open: {}, owe: {} };
 const lgNow = () => ymOf(TODAY);
-const lgOldest = () => Object.keys(DB.exps).reduce((m, id) => { const a = DB.acts[id]; return a && !isPlan(a) && a.date < m ? a.date : m; }, TODAY).slice(0, 7);
 const lgDay = d => `${+d.slice(8)}日 ${dowJ(d)}曜`;
 
 /* ================= 家計簿 ================= */
 route('ledger', (id, qs) => {
   if (qs.m && /^\d{4}-(0[1-9]|1[0-2])$/.test(qs.m)) LG.ym = qs.m;
   if (!LG.ym) LG.ym = lgNow();
-  const oldest = lgOldest();
+  const oldest = oldestYm();
   if (LG.ym > lgNow()) LG.ym = lgNow(); if (LG.ym < oldest) LG.ym = oldest;
   if (LG.shown !== LG.ym) { LG.shown = LG.ym; LG.f = 'all'; LG.cat = null; LG.open = {}; }
   if (LG.cat && !DB.cats[LG.cat]) { LG.cat = null; if (LG.f === 'cat') LG.f = 'all'; }
@@ -28,7 +27,7 @@ route('ledger', (id, qs) => {
 }, { tab: 'ledger', root: 1 });
 
 const lgAddPay = () => window.openPayEditor && openPayEditor({ date: LG.ym === lgNow() ? TODAY : LG.ym + '-01' });
-function lgStep(n) { const ym = ymAdd(LG.ym, n); if (ym > lgNow() || ym < lgOldest()) return; go(`#/ledger?m=${ym}`, { replace: 1 }); }
+function lgStep(n) { const ym = ymAdd(LG.ym, n); if (ym > lgNow() || ym < oldestYm()) return; go(`#/ledger?m=${ym}`, { replace: 1 }); }
 function lgMonth(ym) { go(`#/ledger?m=${ym}`, { replace: 1 }); }
 function lgToList() { after(() => { const el = $('#lg-list'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }); }
 /** 絞り込みを選ぶ(chips)。選んでいるものをもう一度で解除 */
@@ -44,7 +43,8 @@ function lgHeroTop(ym, S) {
   let cmp = '';
   if (P.n) {
     const dd = +TODAY.slice(8), base = cur ? expsIn(prev).filter(([, a]) => +a.date.slice(8) <= dd).reduce((s, r) => s + r[2], 0) : P.total, diff = S.total - base;
-    cmp = `<div class="lg-cmp"><span>${cur ? '先月の同じ日まで' : '先月'} <b class="num">${yen(base)}</b></span><span class="lg-diff num" aria-label="差額">${diff === 0 ? '±¥0' : amt(diff, { sign: 1 })}</span></div>`;
+    const pct = base > 0 ? Math.round(diff / base * 100) : null;
+    cmp = `<div class="lg-cmp"><span>${cur ? '先月の同じ日まで' : '先月'} <b class="num">${yen(base)}</b></span><span class="lg-diff num" aria-label="差額">${diff === 0 ? '±¥0' : amt(diff, { sign: 1 })}${pct != null ? `<small class="lg-pct">${pct > 0 ? '+' : pct < 0 ? '−' : '±'}${Math.abs(pct)}%</small>` : ''}</span></div>`;
   }
   return `<div class="lg-hl">自分の支出</div>${amt(S.total, { cls: 'hero' })}${cmp}`;
 }
@@ -55,7 +55,7 @@ function lgHero(ym, S) {
     <div class="lg-stack" role="img" aria-label="大分類ごとの割合">${rs.map(r => `<i style="flex:${r.amt};background:${catColor(r.cat)}"></i>`).join('')}</div>
     <ul class="lg-leg">${top.map(r => `<li><i style="background:${catColor(r.cat)}"></i><span>${esc(catName(r.cat))}</span><b class="num">${yen(r.amt)}</b></li>`).join('')}${rest.length ? `<li><i style="background:linear-gradient(90deg,${stops})"></i><span>ほか ${rest.length}件</span><b class="num">${yen(restSum)}</b></li>` : ''}</ul></section>`;
 }
-const lgStats = S => stats([['fixed', '固定費', S.fixed], ['variable', '変動費', S.variable], ['special', '非日常', S.special]].map(([k, l, v]) => ({ v: amt(v), l, on: `lgStat('${k}')`, kind: LG.f === k ? 'me' : '' })));
+const lgStats = S => stats([['fixed', '固定費', S.fixed], ['variable', '変動費', S.variable], ['special', '非日常', S.special], ...(S.unset > 0 ? [['unset', '未指定', S.unset]] : [])].map(([k, l, v]) => ({ v: amt(v), l, on: `lgStat('${k}')`, kind: LG.f === k ? 'me' : '' }))).replace('class="stats"', `class="stats${S.unset > 0 ? ' lg-st4' : ''}"`);
 
 /* ---------- 変動費のペース(今月=青の実線・今日まで / 先月=灰の点線) ---------- */
 function lgPace(ym) {
@@ -78,17 +78,17 @@ function lgPace(ym) {
 
 /* ---------- 推移(6か月) ---------- */
 function lgTrend(ym) {
-  const now = lgNow(), oldest = lgOldest();
+  const now = lgNow(), oldest = oldestYm();
   let end = now; if (ym < ymAdd(end, -5)) end = ymAdd(ym, 5) > now ? now : ymAdd(ym, 5);
   const ms = [...Array(6)].map((_, i) => ymAdd(end, i - 5)).filter(m => m >= oldest);
   if (ms.length < 2) return '';
   const order = catKids(null), data = ms.map(m => { const S = monthSum(m); return { m, t: S.total, segs: S.roots.filter(r => r.amt > 0).sort((a, b) => order.indexOf(a.cat) - order.indexOf(b.cat)) }; });
-  const max = Math.max(1, ...data.map(d => d.t)), avg = data.reduce((s, d) => s + d.t, 0) / data.length, ap = avg / max * 100;
+  const past = data.filter(d => d.m < now), max = Math.max(1, ...data.map(d => d.t)), avg = past.reduce((s, d) => s + d.t, 0) / (past.length || 1), ap = avg / max * 100, hasAvg = past.length > 0;
   const al = ap < 22 ? 'l' : ap > 70 ? 'r' : 'c';
   return `<section>${sec('推移', { n: `${data.length}か月` })}<div class="card pad lg-tr">
-    <div class="lg-trh"><span class="lg-trl"><b class="${al} num" style="left:${ap.toFixed(1)}%">平均 ${yen(avg)}</b></span></div>
+    <div class="lg-trh"><span class="lg-trl">${hasAvg ? `<b class="${al} num" style="left:${ap.toFixed(1)}%">${past.length < data.length ? '先月までの平均' : '平均'} ${yen(avg)}</b>` : ''}</span></div>
     ${data.map(d => `<button class="lg-mr" aria-current="${d.m === ym}" onclick="lgMonth('${d.m}')" aria-label="${fmtYM(d.m)} ${yen(d.t)}"><span class="lg-ml num">${+d.m.slice(5)}月</span>
-      <span class="lg-mt"><span class="lg-mb" style="width:${(d.t / max * 100).toFixed(2)}%">${d.segs.map(r => `<i style="flex:${r.amt};background:${catColor(r.cat)}"></i>`).join('')}</span><i class="lg-avg" style="left:${ap.toFixed(2)}%"></i></span>
+      <span class="lg-mt"><span class="lg-mb" style="width:${(d.t / max * 100).toFixed(2)}%">${d.segs.map(r => `<i style="flex:${r.amt};background:${catColor(r.cat)}"></i>`).join('')}</span>${hasAvg && d.m < now ? `<i class="lg-avg" style="left:${ap.toFixed(2)}%"></i>` : ''}</span>
       <span class="lg-mv">${amt(d.t, { cls: d.t ? '' : 'mute' })}</span></button>`).join('')}</div></section>`;
 }
 
@@ -120,7 +120,9 @@ function lgOweOpen(who) { LG.owe[who] = !LG.owe[who]; rerender(); }
 function lgSettle(ids) { done(paySettle(ids)); }
 function lgOwe() {
   const ps = personBalances(); if (!ps.length) return '';
-  return `<section id="owe" class="lg-owe">${sec('貸し借り', { n: ps.length })}${ps.map(b => {
+  const lendSum = ps.filter(b => b.amt > 0).reduce((s, b) => s + b.amt, 0), borrowSum = ps.filter(b => b.amt < 0).reduce((s, b) => s - b.amt, 0);
+  const tot = `<span class="lg-ot">${lendSum > 0 ? `<span>貸し ${amt(lendSum)}</span>` : ''}${borrowSum > 0 ? `<span>借り ${amt(borrowSum)}</span>` : ''}</span>`;
+  return `<section id="owe" class="lg-owe">${sec('貸し借り', { n: ps.length + tot })}${ps.map(b => {
     const open = !!LG.owe[b.who], name = whoName(b.who), lend = b.amt > 0;
     return `<div class="card lg-p">${rows(row({ on: `lgOweOpen(${q(b.who)})`, cls: open ? 'is-open' : '', lead: avatar(b.who, name), t: E(b.who) ? name + 'さん' : name, sHtml: `${tag(lend ? '貸し' : '借り', 'owe')}<span>${b.ids.length}件 未精算</span>`, right: amt(Math.abs(b.amt)), chev: true }), 'lg-ph')}
       ${open ? `<div class="lg-pb stack">${b.ids.map(id => `<div class="lg-ps">${paySlip(id)}${b.ids.length > 1 ? `<button class="btn ghost sm" onclick="lgSettle(${q([id])})">${ic('check')}<span>精算済みにする</span></button>` : ''}</div>`).join('')}
@@ -141,7 +143,8 @@ function lgUpcoming() {
 function lgMatch(id) {
   switch (LG.f) {
     case 'fixed': return xFx(id) === '固定';
-    case 'variable': return xFx(id) !== '固定';
+    case 'variable': return xFx(id) === '変動';
+    case 'unset': return xFx(id) == null;
     case 'special': return xSp(id) === '非日常';
     case 'shared': return isShared(id);
     case 'cat': return xCats(id).some(g => catAnc(g.cat).includes(LG.cat));
@@ -149,13 +152,14 @@ function lgMatch(id) {
   }
 }
 function lgList(ym) {
-  const all = expsIn(ym), L = all.filter(([id]) => lgMatch(id)), sum = L.reduce((s, r) => s + r[2], 0);
+  const all = expsIn(ym), byCat = LG.f === 'cat' && LG.cat, L = all.filter(([id]) => lgMatch(id));
+  const amtOf = r => byCat ? xCats(r[0]).filter(g => catAnc(g.cat).includes(LG.cat)).reduce((t, g) => t + g.amt, 0) : r[2], sum = L.reduce((s, r) => s + amtOf(r), 0);
   const days = [...new Set(L.map(r => r[1].date))];
-  const chipL = [['all', 'すべて'], ['fixed', '固定費'], ['variable', '変動費'], ['special', '非日常'], ...(LG.cat ? [['cat', catName(LG.cat)]] : []), ['shared', '割り勘・立替あり']];
+  const chipL = [['all', 'すべて'], ['fixed', '固定費'], ['variable', '変動費'], ...(monthSum(ym).unset > 0 || LG.f === 'unset' ? [['unset', '未指定']] : []), ['special', '非日常'], ...(LG.cat ? [['cat', catName(LG.cat)]] : []), ['shared', '割り勘・立替あり']];
   return `<section id="lg-list">${sec('支出')}${chips(chipL, LG.f, 'lgF').replace('class="chips"', 'class="chips wrap"')}
     <div class="lg-sum"><span class="num">${L.length}件</span>${amt(sum)}</div>
-    ${L.length ? days.map(d => `<div class="lg-dg"><div class="lg-dh"><b>${lgDay(d)}${d === TODAY ? ' <span class="tag me">今日</span>' : ''}</b>${amt(L.filter(r => r[1].date === d).reduce((s, r) => s + r[2], 0), { cls: 'mute' })}</div>
-      <div class="stack">${L.filter(r => r[1].date === d).map(([id]) => paySlip(id)).join('')}</div></div>`).join('') : `<div class="card">${empty({ icon: 'filter', text: 'あてはまる支出は ありません', action: { label: 'すべて見る', on: "lgF('all')" } })}</div>`}</section>`;
+    ${L.length ? days.map(d => `<div class="lg-dg"><div class="lg-dh"><b>${lgDay(d)}${d === TODAY ? ' <span class="tag me">今日</span>' : ''}</b>${amt(L.filter(r => r[1].date === d).reduce((s, r) => s + amtOf(r), 0), { cls: 'mute' })}</div>
+      <div class="stack">${L.filter(r => r[1].date === d).map(([id]) => paySlip(id, byCat ? { cat: LG.cat } : {})).join('')}</div></div>`).join('') : `<div class="card">${empty({ icon: 'filter', text: 'あてはまる支出は ありません', action: { label: 'すべて見る', on: "lgF('all')" } })}</div>`}</section>`;
 }
 
 /* ================= カテゴリの木 ================= */
@@ -163,17 +167,23 @@ const LGC = { key: null, n: '', p: null, c: '', fx: '変動', sp: '日常', init
 route('cats', () => {
   const ym = lgNow(), roots = catKids(null);
   const tagOf = (v, a, b) => v === undefined ? '' : v === 'ask' ? tag(`${a}${b}は都度`) : tag(v);
+  /* 自分で決めている = ふつうの札 / 親から引き継ぎ = 点線の札(plan)。どちらも無ければ「都度決める」 */
+  const tagsOf = k => {
+    const c = DB.cats[k], out = [];
+    [['fx', '固定・', '変動', catFx], ['sp', '日常・', '非日常', catSp]].forEach(([f, a, b, fn]) => { if (c[f] !== undefined) out.push(tagOf(c[f], a, b)); else if (fn(k)) out.push(tag(fn(k), 'plan')); });
+    return out.length ? out.join('') : tag('都度決める');
+  };
   const lines = (k, depth) => {
     const c = DB.cats[k];
     const own = [row({ on: `lgCatOpen(${q(k)})`, cls: `lg-n d${Math.min(depth, 3)}`, lead: `<i class="lg-sw" style="background:${catColor(k)}"></i>`, tHtml: esc(c.n),
-      sHtml: [c.fx !== undefined ? tagOf(c.fx, '固定・', '変動') : '', c.sp !== undefined ? tagOf(c.sp, '日常・', '非日常') : ''].join('') || '', right: amt(catSum(ym, k), { cls: catSum(ym, k) ? '' : 'mute' }), chev: true })];
+      sHtml: tagsOf(k), right: amt(catSum(ym, k), { cls: catSum(ym, k) ? '' : 'mute' }), chev: true })];
     catKids(k).forEach(x => own.push(...lines(x, depth + 1)));
     if (depth === 0) own.push(row({ on: `lgCatNew(${q(k)})`, cls: `lg-n lg-add d1`, lead: ic("plus"), t: "子を足す" }));
     return own;
   };
   return `<div class="screen s-cats">
     ${bar('カテゴリ', { actions: iconBtn('plus', '分類を足す', 'lgCatNew()', 'pri') })}
-    ${head('カテゴリ', { sub: `${fmtYM(ym)}の額` })}
+    ${head('カテゴリ', { sub: `${Object.keys(DB.cats).length}件 · ${fmtYM(ym)}の額` })}
     ${roots.length ? roots.map(k => `<section>${rows(lines(k, 0))}</section>`).join('') : `<div class="card">${empty({ icon: 'tag', text: 'カテゴリは ありません', action: { label: '分類を足す', on: 'lgCatNew()' } })}</div>`}
     ${btn('分類を足す', 'lgCatNew()', 'dash', { icon: 'plus' })}
   </div>`;

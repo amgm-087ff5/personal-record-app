@@ -10,9 +10,9 @@ route('a', id => {
   const a = A(id);
   if (!a) return `<div class="screen s-detail">${bar('見つかりません')}<div class="card">${empty({ icon: 'day', text: 'この記録は見つかりません' })}</div>${btn('戻る', 'goBack()', 'sec', { icon: 'back', wide: 1 })}</div>`;
   const more = iconBtn('more', 'その他の操作', `dtMenu(${q(id)})`);
-  if (isPay(a) && !isPlan(a)) return `<div class="screen s-detail s-detail-pay">${bar(actTitle(a), { actions: more })}${window.payDetail ? payDetail(id) : paySlip(id, { noLink: 1 })}</div>`;
+  if (isPay(a) && !isPlan(a)) return `<div class="screen s-detail s-detail-pay">${bar(actTitle(a), { actions: more })}${window.payDetail ? payDetail(id) : paySlip(id, { noLink: 1 })}${dtPhotos(dtTid(id), a)}</div>`;
   const tid = dtTid(id), plan = isPlan(a), kids = kidsOf(id);
-  const body = a.hol ? '' : `${dtRoles(tid, a)}${dtNoteBlock(tid, a)}${dtKids(id, a, kids)}${dtTasksMemos(id, tid, a)}`;
+  const body = a.hol ? '' : `${dtRoles(tid, a)}${dtNoteBlock(tid, a)}${dtPhotos(tid, a)}${dtRecords(tid, a)}${dtKids(id, a, kids)}${dtTasksMemos(id, tid, a)}`;
   return `<div class="screen s-detail">
     ${bar(actTitle(a), { actions: more })}
     ${dtEnv(ancOf(id), dtHero(id, a))}
@@ -41,14 +41,17 @@ function dtMark(a) {
 function dtHero(id, a) {
   const plan = isPlan(a), late = isLate(a), st = plan ? (late ? 'late' : 'plan') : 'done', k = KINDS[a.kind], title = actTitle(a);
   const rep = repText(A(a.tpl || id)), tags = a.hol ? tag('祝日', 'late') : plan ? tag(late ? '過ぎた予定' : '予定', late ? 'late' : 'plan') : '';
-  const meta = [rep ? `<span class="mini">${ic('repeat')}${esc(rep)}</span>` : '', a.alarm && plan ? `<span class="mini">${ic('bell')}${esc(a.alarm)}</span>` : ''].join('');
+  const nx = a.rep && !a.virt && plan ? repNext(a) : '', diary = dayOf(a.date).diary;
+  const rel = plan && !late && !a.hol ? (a.date === TODAY ? (a.start && !a.allDay && a.start > NOW ? 'あと ' + durJ(hm2m(a.start) - hm2m(NOW)) : '') : a.date > TODAY ? relDay(a.date) : '') : '';
+  const meta = [nx ? `<span class="mini">${ic('repeat')}次回 ${fmtMD(nx)}(${dowJ(nx)})</span>` : '', rep ? `<span class="mini">${ic('repeat')}${esc(rep)}</span>` : '', a.alarm && plan ? `<span class="mini">${ic('bell')}${esc(a.alarm)}</span>` : ''].join('');
   return `<div class="dt-hero ${st}">
     <div class="dt-k">${kindIc(a)}${title !== k.n ? `<span>${esc(k.n)}</span>` : ''}${tags}</div>
     <h1 class="dt-t" data-bar-watch>${esc(title)}</h1>
-    <div class="dt-when num">${esc(dtWhen(a))}</div>
+    <div class="dt-when num">${esc(dtWhen(a))}${rel ? `<small class="dt-rel">${esc(rel)}</small>` : ''}</div>
     ${a.pay && a.pay.plan ? `<div class="dt-amt">${amt(a.pay.plan.amt, { cls: 'big' })}${catTag(a.pay.plan.cat)}${a.pay.plan.how ? `<span class="mini">${esc(a.pay.plan.how)}</span>` : ''}</div>` : ''}
     ${a.planned ? `<div class="mini num">予定は ${a.planned.start}${a.planned.end ? '–' + a.planned.end : ''}</div>` : ''}
-    <a class="dt-date" href="#/day/${a.date}">${ic('cal')}<span>${fmtFull(a.date)}</span><small>${relDay(a.date)}</small>${ic('chev', 'row-chev')}</a>
+    <a class="dt-date" href="#/day/${a.date}">${ic('cal')}<span>${fmtFull(a.date)}</span>${rel ? '' : `<small>${relDay(a.date)}</small>`}${ic('chev', 'row-chev')}</a>
+    ${diary ? `<a class="dt-diary clamp" href="#/day/${a.date}">${esc(diary)}</a>` : ''}
     ${meta ? `<div class="dt-meta">${meta}</div>` : ''}
     <div class="dt-sky">${skyBand(a.date)}${dtMark(a)}</div>
   </div>`;
@@ -59,7 +62,26 @@ function dtRoles(tid, a) {
   const groups = [];
   (a.roles || []).forEach((r, i) => { let g = groups.find(x => x.r === r.r); if (!g) groups.push(g = { r: r.r, items: [] }); g.items.push([r, i]); });
   if (!groups.length) return `<section>${btn('人・場所を足す', `dtRoleAdd(${q(tid)})`, 'dash', { icon: 'plus' })}</section>`;
-  return `<section>${sec('関わった', { act: { label: '足す', on: `dtRoleAdd(${q(tid)})` } })}${rows(groups.map(g => `<div class="prop"><span class="prop-k">${esc(g.r)}</span><span class="prop-v">${g.items.map(([r, i]) => `<span class="dt-ro">${ent(r.e, { name: r.name })}<button class="dt-rx" onclick="dtRoleDel(${q(tid)},${i})" aria-label="${esc(roleName(r))}を外す">${ic('close')}</button></span>`).join('')}</span></div>`))}</section>`;
+  const item = ([r, i]) => `<span class="dt-ro">${ent(r.e, { name: r.name })}${!r.e && r.name ? `<button class="dt-reg" onclick="dtReg(${q(tid)},${i})">登録</button>` : ''}<button class="dt-rx" onclick="dtRoleDel(${q(tid)},${i})" aria-label="${esc(roleName(r))}を外す">${ic('close')}</button></span>`;
+  return `<section>${sec('関わった', { act: { label: '足す', on: `dtRoleAdd(${q(tid)})` } })}${rows(groups.map(g => `<div class="prop"><button class="prop-k dt-rk" onclick="dtRoleRename(${q(tid)},[${g.items.map(x => x[1])}])" aria-label="${esc(g.r)}の役割を直す">${esc(g.r)}</button><span class="prop-v">${g.items.map(item).join('')}</span></div>`))}</section>`;
+}
+/** 役割名だけ選び直す(相手はそのまま) */
+function dtRoleRename(tid, idxs) {
+  const rs = (DB.acts[tid] || {}).roles || [], cur = (rs[idxs[0]] || {}).r;
+  pick({ title: '役割', cur, items: ROLES.map(r => ({ k: r, label: r })), on: r => { if (r === cur) return; done(actUpdate(tid, { roles: rs.map((x, j) => idxs.includes(j) ? { ...x, r } : x) })); } });
+}
+/** 名前だけの相手を、場所・人物・店として登録(トースト1つで両方取り消せる) */
+function dtReg(tid, i) {
+  const role = ((DB.acts[tid] || {}).roles || [])[i]; if (!role || role.e || !role.name) return;
+  const guess = ['同席', '参加'].includes(role.r) ? 'person' : 'place';
+  pick({ title: `「${role.name}」を登録`, cur: guess, items: [['place', '場所', 'place'], ['person', '人物', 'user'], ['shop', '店', 'bag']].map(([k, l, g]) => ({ k, label: l, lead: ic(g) })), on: t => dtRegDo(tid, i, t) });
+}
+function dtRegDo(tid, i, type) {
+  const rs = ((DB.acts[tid] || {}).roles || []), role = rs[i]; if (!role || role.e || !role.name) return;
+  const r1 = entAdd({ n: role.name, types: [type] }); if (!r1.ok) return toast(r1.why, { bad: 1 });
+  const r2 = actUpdate(tid, { roles: rs.map((x, j) => j === i ? { r: x.r, e: r1.id } : x) });
+  if (!r2.ok) { r1.undo(); return done(r2); }
+  done({ ok: true, label: `「${role.name}」を登録しました`, undo: () => { r2.undo(); r1.undo(); } });
 }
 /** 役割 → 相手の順に選ぶ。cb({r, e} か {r, name}) */
 function dtRolePick(cb) {
@@ -86,6 +108,30 @@ function dtEntNew(r, name, cb) {
 }
 function dtRoleAdd(tid) { dtRolePick(role => done(actUpdate(tid, { roles: [...(DB.acts[tid].roles || []), role] }))); }
 function dtRoleDel(tid, i) { done(actUpdate(tid, { roles: (DB.acts[tid].roles || []).filter((_, j) => j !== i) })); }
+
+/* ---------- 記録に付いた写真 ---------- */
+function dtPhotos(tid, a) {
+  if (!a || a.hol || isPlan(a) || a.virt || typeof photosOfAct !== 'function') return '';
+  const ps = photosOfAct(tid);
+  if (!ps.length) return `<section>${btn('写真を足す', `dtPhotoAdd(${q(tid)})`, 'dash', { icon: 'camera' })}</section>`;
+  return `<section>${sec('写真', { n: ps.length })}<div class="photos">${ps.map(p => `<button class="photo" style="--c:${skyAt(p.t)}" onclick="dtPhotoDel(${q(p.d)},${p.i})" aria-label="${esc(p.cap || '写真')}を外す">${ic('photo')}<span class="dt-pc"><b>${esc(p.cap || '')}</b><time>${p.t}</time></span></button>`).join('')}<button class="photo add" onclick="dtPhotoAdd(${q(tid)})" aria-label="写真を足す">${ic('camera')}<span class="dt-pc">写真を足す</span></button></div></section>`;
+}
+let DTP = null;
+function dtPhotoAdd(tid) {
+  DTP = { tid, v: '' };
+  openSheet({ title: '写真を足す', body: field('ひとこと', input({ id: 'dtp', ph: 'ひとこと', oninput: 'DTP.v=this.value', auto: 1 })), dirty: () => !!DTP.v, primary: { label: '足す', on: () => done(dayAddPhoto(DB.acts[DTP.tid].date, DTP.v.trim(), DTP.tid), { close: 1 }) } });
+}
+function dtPhotoDel(d, i) { done(dayRemovePhoto(d, i)); }
+
+/* ---------- 繰り返しの予定: 記録になった回 ---------- */
+const DTMORE = {};
+function dtRecords(tid, a) {
+  const t = DB.acts[tid]; if (!t || !t.rep || typeof recordsOfPlan !== 'function') return '';
+  const rs = recordsOfPlan(tid); if (!rs.length) return '';
+  const shown = DTMORE[tid] ? rs : rs.slice(0, 5);
+  return `<section>${sec('記録になった回', { n: rs.length })}${rows(shown.map(([k, r]) => row({ lead: kindIc(r), t: `${fmtMD(r.date)}(${dowJ(r.date)})`, s: r.start && !r.allDay ? r.start : '', right: isPay(r) ? amt(payTotal(r)) : '', href: '#/a/' + k, chev: 1 })))}${rs.length > shown.length ? btn('もっと見る', `dtMoreRec(${q(tid)})`, 'ghost', { wide: 1 }) : ''}</section>`;
+}
+function dtMoreRec(tid) { DTMORE[tid] = 1; rerender(); }
 
 /* ---------- メモ書き ---------- */
 const dtNoteBlock = (tid, a) => `<section>${a.note ? `<button class="card pad dt-note" onclick="dtNote(${q(tid)})"><p>${esc(a.note)}</p></button>` : btn('メモを書く', `dtNote(${q(tid)})`, 'dash', { icon: 'pencil' })}</section>`;
@@ -135,6 +181,7 @@ function dtMenu(id) {
   const a = A(id), tid = dtTid(id), many = a.virt || a.rep;
   const items = [{ label: '直す', icon: 'edit', on: () => dtEdit(id) }];
   if (!many && !a.hol) items.push(a.parent ? { label: '活動の外に出す', icon: 'up', on: () => done(actMove(id, null)) } : { label: '活動の中に入れる', icon: 'down', on: () => dtMoveIn(id) });
+  if (isPlan(a) && !a.pay && !a.virt && !a.hol && !isPay(a)) items.push({ label: 'ToDoにする', icon: 'task', on: () => { const r = planToTask(id); done(r, { go: r.ok ? '#/task/' + r.id : undefined, replace: 1 }); } });
   if (!isPay(a) && !a.hol) items.push({ label: '複製', sub: '同じ内容で今日に', icon: 'plus', on: () => dtDup(id) });
   items.push({ label: many ? 'すべての回を消す' : '消す', icon: 'trash', on: () => dtRemove(id) });
   menu(actTitle(a), items);
@@ -199,12 +246,13 @@ function openActEditor(o = {}) {
     else if (state === 'plan') { const nx = (Math.floor(hm2m(NOW) / 60) + 1) * 60; s = nx >= 1440 ? '23:00' : dtHM(nx); e = dtHM(nx >= 1440 ? 1439 : nx + 60); }
     else { s = dtHM(hm2m(NOW) - 60); e = NOW; }
     if (e <= s || KINDS[kind].moment) e = '';
-    d = { id: '', tpl: false, fixedKind: false, kind, title: seed ? seed.title || '' : '', state, stateSet: !!(o.state || seed), date, multi: false, date2: '', allDay, start: s, end: e, rep: '', alarm: '', parent: o.parent || '', note: '', amt: 0,
+    d = { id: '', kindSet: !!(o.kind && KINDS[o.kind]) || !!seed, tpl: false, fixedKind: false, kind, title: seed ? seed.title || '' : '', state, stateSet: !!(o.state || seed), date, multi: false, date2: '', allDay, start: s, end: e, rep: '', alarm: '', parent: o.parent || '', note: '', amt: 0,
       roles: seed ? (seed.ents || []).map(x => ({ r: isUnder(E(x).types[0], 'place') ? '場所' : isUnder(E(x).types[0], 'project') ? 'プロジェクト' : '同席', e: x })) : [] };
   }
   DTE = d; DTE0 = JSON.stringify(d);
-  openSheet({ title: dtETitle(), tall: 1, body: dtEBody(), dirty: () => JSON.stringify(DTE) !== DTE0, primary: { label: dtELabel(), on: dtESave } });
+  openSheet({ title: dtETitle(), tall: 1, body: dtEBody(), dirty: () => JSON.stringify(DTE) !== DTE0, primary: { label: dtELabel(), on: dtESave, disabled: dtENone() } });
 }
+const dtENone = () => !DTE.id && !DTE.title.trim() && DTE.kind === 'event' && !DTE.kindSet;
 const dtETitle = () => DTE.id ? (DTE.tpl ? '繰り返しの予定を直す' : DTE.state === 'plan' ? '予定を直す' : '記録を直す') : DTE.state === 'plan' ? '予定を追加' : '出来事を記録';
 const dtELabel = () => DTE.id ? '保存' : DTE.state === 'plan' ? '予定を追加' : '記録する';
 const dtGroup = (label, html) => `<div class="field"><span class="field-l">${esc(label)}</span>${html}</div>`;
@@ -227,17 +275,18 @@ function dtEBody() {
     ${time}
     ${d.kind === 'pay' ? field('金額', input({ value: d.amt || '', mode: 'numeric', ph: '0', oninput: "dtEIn('amt',this.value)" })) : ''}
     ${plan ? dtGroup('繰り返し', seg(DT_REPS, d.rep, 'dtERep')) + dtGroup('通知', dtWrap(chips(DT_ALARMS, d.alarm, 'dtEAlarm'))) : ''}
-    ${dtGroup('関わった', `<div class="stack">${d.roles.length ? rows(d.roles.map((r, i) => `<div class="prop"><span class="prop-k">${esc(r.r)}</span><span class="prop-v">${ent(r.e, { name: r.name, link: false })}</span><button class="icon-btn" onclick="dtERoleDel(${i})" aria-label="${esc(roleName(r))}を外す">${ic('close')}</button></div>`)) : ''}${btn('足す', 'dtERoleAdd()', 'dash', { icon: 'plus' })}</div>`)}
+    ${dtGroup('関わった', `<div class="stack">${d.roles.length ? rows(d.roles.map((r, i) => `<div class="prop"><button class="prop-k dt-rk" onclick="dtERoleSet(${i})" aria-label="${esc(r.r)}の役割を直す">${esc(r.r)}</button><span class="prop-v"><button class="dt-rp" onclick="dtEPartner(${i})" aria-label="相手を選び直す">${ent(r.e, { name: r.name, link: false })}</button></span><button class="icon-btn" onclick="dtERoleDel(${i})" aria-label="${esc(roleName(r))}を外す">${ic('close')}</button></div>`)) : ''}${btn('足す', 'dtERoleAdd()', 'dash', { icon: 'plus' })}</div>`)}
     ${cands.length || par ? pickField('活動の中', par ? `${kindIc(par)}${esc(actTitle(par))}` : 'なし', 'dtEParent()', { emptyv: !par }) : ''}
     ${field('メモ書き', textarea({ value: d.note, rows: 3, ph: 'メモ', oninput: "dtEIn('note',this.value)" }))}</div>`;
 }
 const dtERefresh = () => setSheetBody(dtEBody());
-const dtEHead = () => { setSheetTitle(dtETitle()); setSheetPrimary({ label: dtELabel(), on: dtESave }); };
+const dtEHead = () => { setSheetTitle(dtETitle()); setSheetPrimary({ label: dtELabel(), on: dtESave, disabled: dtENone() }); };
 function dtEIn(k, v) {
-  DTE[k] = k === 'amt' ? +String(v).replace(/\D/g, '') || 0 : v;
+  const was = dtENone(); DTE[k] = k === 'amt' ? +String(v).replace(/\D/g, '') || 0 : v;
+  if (k === 'title' && was !== dtENone()) dtEHead();
   if (k === 'end') { const el = document.getElementById('dte-endl'); if (el) el.textContent = v ? '終了' : '終了なし(瞬間)'; }
 }
-function dtEKind(k) { DTE.kind = k; if (KINDS[k].moment) DTE.end = ''; dtERefresh(); }
+function dtEKind(k) { DTE.kind = k; DTE.kindSet = 1; dtEHead(); if (KINDS[k].moment) DTE.end = ''; dtERefresh(); }
 function dtEState(s) { DTE.state = s; DTE.stateSet = 1; if (s === 'done') { DTE.rep = ''; DTE.alarm = ''; } dtERefresh(); dtEHead(); }
 function dtEDate(v) {
   DTE.date = v;
@@ -251,6 +300,8 @@ function dtEMulti() { DTE.multi = !DTE.multi; DTE.date2 = DTE.multi ? (DTE.date2
 function dtERep(k) { DTE.rep = k; dtERefresh(); }
 function dtEAlarm(k) { DTE.alarm = k; dtERefresh(); }
 function dtERoleAdd() { dtRolePick(role => { DTE.roles.push(role); dtERefresh(); }); }
+function dtERoleSet(i) { const cur = DTE.roles[i].r; pick({ title: '役割', cur, items: ROLES.map(r => ({ k: r, label: r })), on: r => { DTE.roles[i] = { ...DTE.roles[i], r }; dtERefresh(); } }); }
+function dtEPartner(i) { dtEntPick(DTE.roles[i].r, role => { DTE.roles[i] = role; dtERefresh(); }); }
 function dtERoleDel(i) { DTE.roles.splice(i, 1); dtERefresh(); }
 function dtEParent() {
   pick({ title: '活動の中', cur: DTE.parent || null, none: { label: 'なし' }, items: dtParentCands().map(([k, p]) => ({ k, label: actTitle(p), sub: timeText(p), lead: kindIc(p) })), on: k => { DTE.parent = k || ''; dtERefresh(); } });

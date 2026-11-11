@@ -111,3 +111,8 @@
 .lg-ud{width:48px}
 .lg-n .row-r .amt{min-width:76px;text-align:right}
 .lg-n:not(:has(.row-chev)) .row-r{margin-right:30px}
+.lg-pct{margin-left:var(--s2);font-size:var(--fs-cap);font-weight:700;color:var(--tx-2)}
+.lg-st4 .stat{padding-left:var(--s3);padding-right:var(--s2)}
+.lg-st4 .stat b{font-size:var(--fs-body)}
+.lg-ot{display:inline-flex;flex-wrap:wrap;gap:0 var(--s3);margin-left:var(--s2);font-size:var(--fs-cap);font-weight:700;color:var(--owe)}
+.lg-ot .amt{font-size:inherit}
