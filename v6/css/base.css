@@ -32,7 +32,8 @@ html:not(.ready) body{visibility:hidden}
 #nav{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:0 var(--s3) calc(env(safe-area-inset-bottom) + var(--s2));pointer-events:none;touch-action:none}
 .nav-bar{position:relative;height:var(--nav-h);max-width:536px;margin:0 auto;border-radius:var(--r-xl);background:color-mix(in srgb,var(--card) 86%,transparent);
   -webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);box-shadow:var(--e3);overflow:hidden;pointer-events:auto}
-.nav-deck{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr 64px 1fr 1fr;align-items:stretch;padding:0 2px}
+.nav-deck{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr 64px 1fr 1fr;align-items:stretch;padding:0 2px;pointer-events:none}
+.nav-deck .nav-i{pointer-events:auto}
 .nav-i{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--tx-3);font-size:var(--fs-min);font-weight:600;letter-spacing:-.06em;white-space:nowrap;will-change:transform}
 .nav-i svg{width:24px;height:24px}
 /* 幅の狭い画面(360px級)では、長い題が中央の＋に当たるので短い題に替える */
