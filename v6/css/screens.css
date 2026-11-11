@@ -128,3 +128,22 @@ i.p{box-shadow:inset 0 0 0 1.2px var(--tx-3)}
 .route{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s1) var(--s2);font-size:var(--fs-cap);font-weight:650}
 .route svg{width:16px;height:16px;color:var(--line-2);stroke-width:2.2}
 .ents.wide{gap:var(--s2) var(--s4)}
+
+/* ホーム: 今日の流れ(帯の中身を言葉で) */
+.flow{display:flex;flex-direction:column;border-top:1px solid var(--line);padding-top:var(--s1)}
+.fl{display:grid;grid-template-columns:44px 14px minmax(0,1fr) auto;align-items:center;gap:var(--s2);min-height:44px;font-size:var(--fs-cap)}
+.fl time{font-weight:650;color:var(--tx-3);text-align:right}
+.fl > i{justify-self:center;width:8px;height:8px;border-radius:2.5px;background:var(--done);transform:rotate(45deg)}
+.fl.span > i{transform:none;width:6px;height:18px;border-radius:3px}
+.fl.plan > i,.fl.late > i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line-2)}
+.fl.late > i{box-shadow:inset 0 0 0 1.5px var(--now)}
+.fl b{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fl.plan b{color:var(--tx-2)}
+.fl > span{color:var(--tx-3);font-weight:600}
+.fl-more{min-height:44px;text-align:left;padding-left:66px;font-size:var(--fs-cap);font-weight:700;color:var(--me)}
+.rv-sum{font-size:var(--fs-min);font-weight:650;color:var(--tx-3);text-align:right;padding:0 var(--s1)}
+.tl-first{text-align:center;font-size:var(--fs-min);font-weight:650;color:var(--tx-3);padding:var(--s2) 0}
+i.pp{background:var(--me-line)}
+
+.mc-m i.pp{width:8px;height:5px;border-radius:2px}
+.cal-l i.pp{width:8px;height:5px;border-radius:2px}

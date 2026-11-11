@@ -190,9 +190,11 @@ route('task', id => {
     ${rows([
       prop('期限', dueV, { on: `tdDueSheet(${I})` }),
       prop('リスト', esc(tdListName(t.list)), { on: `tdListEdit(${I})` }),
+      ...((DB.lists[t.list] || {}).shop && E(DB.lists[t.list].shop) ? [prop('店', ent(DB.lists[t.list].shop))] : []),
       prop('優先', `<span class="tgl" aria-hidden="true" aria-checked="${!!t.pri}"><i></i></span><span>${t.pri ? '優先' : 'ふつう'}</span>`, { on: `tdSet(${I},{pri:${t.pri ? 'null' : 1}})` }),
       prop('繰り返し', t.rep ? `${ic('repeat', 'td-ri')}<span>${esc(tdRepText(t))}</span>` : tdMute('なし'), { on: `tdRepEdit(${I})` }),
       actRow,
+      ...(t.done ? [] : [row({ lead: ic('cal'), t: '予定にする', on: `tdPlanOpen(${I})`, chev: 1 })]),
       prop('エンティティ', (t.ents || []).length ? tdEntsV(t.ents) : tdMute('なし'), { on: `tdEntEdit(${I})` }),
       prop('メモ', t.memo ? `<span class="td-memo">${esc(t.memo)}</span>` : tdMute('書く'), { on: `tdMemoEdit(${I})` }),
     ])}
@@ -203,6 +205,30 @@ route('task', id => {
       `<div class="row td-add"><span class="row-lead">${ic('plus')}</span><input id="td-sub" class="td-in" type="text" placeholder="小さなやることを足す" ${tdEnter(`tdSubAdd(${I})`)} aria-label="小さなやること" autocomplete="off" enterkeyhint="done"><button class="btn ghost" onmousedown="event.preventDefault()" onclick="tdSubAdd(${I})">足す</button></div>`])}</section>
   </div>`;
 }, {});
+
+/** 予定にする: 日付・終日・開始と終了 → taskToPlan */
+let TDP = null;
+function tdPlanOpen(id) {
+  const t = DB.tasks[id]; if (!t) return;
+  const h = Math.min(+NOW.slice(0, 2) + 1, 22), s0 = pad2(h) + ':00', e0 = pad2(h + 1) + ':00';
+  TDP = { id, date: t.due || TODAY, allDay: true, start: s0, end: e0 };
+  TDP.o = JSON.stringify([TDP.date, TDP.allDay, TDP.start, TDP.end]);
+  openSheet({ id: 'td-plan', title: '予定にする', body: tdPlanBody(), dirty: () => JSON.stringify([TDP.date, TDP.allDay, TDP.start, TDP.end]) !== TDP.o, primary: { label: '予定にする', on: tdPlanSave } });
+}
+function tdPlanBody() {
+  const e = TDP;
+  return `<div class="stack">${field('日付', input({ id: 'tdp-d', type: 'date', value: e.date, oninput: 'TDP.date=this.value', onchange: 'TDP.date=this.value', label: '日付' }))}
+    ${rows(row({ t: '終日', right: toggle(e.allDay, 'tdPlanAll()', '終日') }))}
+    ${e.allDay ? '' : `<div class="grid2">${field('開始', input({ id: 'tdp-s', type: 'time', value: e.start, oninput: 'TDP.start=this.value', onchange: 'TDP.start=this.value', label: '開始' }))}${field('終了', input({ id: 'tdp-e', type: 'time', value: e.end, oninput: 'TDP.end=this.value', onchange: 'TDP.end=this.value', label: '終了' }))}</div>`}</div>`;
+}
+function tdPlanAll() { TDP.allDay = !TDP.allDay; setSheetBody(tdPlanBody()); }
+function tdPlanSave() {
+  const e = TDP; if (!isDate(e.date)) return toast('日付を入れてください', { bad: 1 });
+  if (!e.allDay && !isHM(e.start)) return toast('開始の時刻を入れてください', { bad: 1 });
+  if (!e.allDay && e.end && isHM(e.end) && e.end < e.start) return toast('終了は開始より後にしてください', { bad: 1 });
+  const r = taskToPlan(e.id, e.allDay ? { date: e.date, allDay: true } : { date: e.date, allDay: false, start: e.start, end: isHM(e.end) ? e.end : undefined });
+  done(r, { close: 1, go: '#/a/' + r.id, replace: 1 });
+}
 
 /** 直して保存(全て taskUpdate → done) */
 function tdSet(id, patch, o = {}) { return done(taskUpdate(id, patch), o); }
@@ -254,8 +280,34 @@ function tdDup(id) {
 function tdLists() { openSheet({ id: 'td-lists', title: 'リスト', body: tdListsBody() }); }
 function tdListsBody() {
   const open = tdOpen();
-  return `${rows(Object.keys(DB.lists).map(k => row({ lead: ic('list'), t: DB.lists[k].n, right: `<span class="num td-cnt">${open.filter(([, t]) => t.list === k).length}</span>${iconBtn('trash', `${DB.lists[k].n}を消す`, `tdListDel(${q(k)})`)}` })))}
+  return `${rows(Object.keys(DB.lists).map(k => { const sh = DB.lists[k].shop, se = sh && E(sh);
+    return `<div class="row td-lr"><button class="td-lm" onclick="tdListOpen(${q(k)})" aria-label="${esc(DB.lists[k].n)}を直す"><span class="row-lead">${ic('list')}</span><span class="row-m"><span class="row-t">${esc(DB.lists[k].n)}</span>${se ? `<span class="row-s"><span class="mini">${ic('place')}${esc(se.n)}</span></span>` : ''}</span></button><span class="row-r"><span class="num td-cnt">${open.filter(([, t]) => t.list === k).length}</span>${iconBtn('trash', `${DB.lists[k].n}を消す`, `tdListDel(${q(k)})`)}</span></div>`; }))}
     <div class="td-q"><input id="tdl-in" class="input" type="text" placeholder="リストの名前" ${tdEnter('tdListAdd()')} aria-label="リストの名前" autocomplete="off"><button class="btn pri" onmousedown="event.preventDefault()" onclick="tdListAdd()">${ic('plus')}<span>足す</span></button></div>`;
+}
+/** リストを直す: 名前と、買い物用の既定の店 */
+let TDL = null;
+function tdListOpen(k) {
+  const l = DB.lists[k]; if (!l) return;
+  TDL = { id: k, n: l.n, shop: l.shop || null, n0: l.n, shop0: l.shop || null };
+  openSheet({ id: 'td-list', title: 'リストを直す', body: tdListBody(), dirty: () => TDL.n !== TDL.n0 || TDL.shop !== TDL.shop0, primary: { label: '直す', on: tdListSave } });
+}
+function tdListBody() {
+  const e = TDL;
+  return `<div class="stack">${field('名前', input({ id: 'tdl-n', value: e.n, oninput: 'TDL.n=this.value', label: '名前' }))}
+    ${pickField('既定の店(買い物用)', e.shop && E(e.shop) ? ent(e.shop, { link: false }) : 'なし', 'tdListShop()', { emptyv: !e.shop })}</div>`;
+}
+function tdListShop() {
+  pick({ title: '既定の店', cur: TDL.shop, none: { label: 'なし' }, search: true, items: entsOfType('place').map(id => ({ k: id, label: E(id).n, sub: E(id).types[0] ? typePath(E(id).types[0]) : '', lead: avatar(id) })), on: k => { TDL.shop = k || null; setSheetBody(tdListBody()); } });
+}
+function tdListSave() {
+  const e = TDL, rs = [];
+  if (e.n !== e.n0) { const r = listRename(e.id, e.n); if (!r.ok) return done(r); rs.push(r); }
+  if (e.shop !== e.shop0) { const r = listSetShop(e.id, e.shop); if (!r.ok) { rs.reverse().forEach(x => x.undo()); return done(r); } rs.push(r); }
+  if (!rs.length) return closeSheet(true);
+  const res = { ok: true, label: rs[0].label, undo() { rs.slice().reverse().forEach(x => x.undo()); } };
+  if (!done(res, { close: 1, quiet: 1 })) return;
+  tdFix(); tdListsRefresh();
+  toast(res.label, { undo: () => { res.undo(); tdFix(); tdListsRefresh(); } });
 }
 function tdListsRefresh(focus) { const i = $('#tdl-in'); if (!i) return; i.closest('.sheet-b').innerHTML = tdListsBody(); if (focus) { const n = $('#tdl-in'); n && n.focus({ preventScroll: true }); } }
 function tdListDone(res, msg) {

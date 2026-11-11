@@ -138,7 +138,7 @@ route('settings', () => {
       row({ lead: ic('tag'), t: 'カテゴリ', right: `<span class="mini num">${Object.keys(DB.cats).length}</span>`, href: '#/cats', chev: 1 }),
       row({ lead: ic('tree'), t: '種類', right: `<span class="mini num">${Object.keys(DB.types).length}</span>`, href: '#/types', chev: 1 }),
       row({ lead: ic('list'), t: 'ToDoのリスト', right: `<span class="mini num">${Object.keys(DB.lists).length}</span>`, href: '#/todo', chev: 1 })])}</section>
-    <section>${sec('このアプリ')}${rows([prop('版', esc(window.BUILD || '不明')), prop('文字', 'M PLUS 2(SIL OFL)')])}
+    <section>${sec('このアプリ')}${rows([prop('版', esc(window.BUILD || '不明')), prop('今日', `<span class="num">${fmtFull(TODAY)} ${NOW}</span>`), prop('文字', 'M PLUS 2(SIL OFL)'), row({ lead: ic('undo'), t: '前の版を開く', sHtml: ['v5', 'v4', 'v3'].map(v => `<a class="ms-old" href="../${v}/">${v}</a>`).join('') })])}
       <p class="ms-note">${ic('info')}<span>データはこの端末の中だけに保存されます</span></p></section>
   </div>`;
 }, { tab: 'settings', root: 1 });

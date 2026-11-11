@@ -79,7 +79,9 @@ const _stack = [];
 addEventListener('hashchange', () => {
   const h = location.hash || '#/home';
   if (_stack.length > 1 && _stack[_stack.length - 2] === h) { _stack.pop(); _back = true; } else _stack.push(h);
-  _depth = _stack.length - 1; render();
+  _depth = _stack.length - 1;
+  for (let i = _sheets.length - 1; i >= 0; i--) { if (_sheets[i].o.dirty && _sheets[i].o.dirty()) break; closeSheet(true); }
+  render();
 });
 let _rsz; addEventListener('resize', () => { clearTimeout(_rsz); _rsz = setTimeout(() => { if (!sheetOpen()) rerender(); }, 150); });
 
@@ -106,7 +108,7 @@ function renderNav() {
     return `<a class="nav-i${i.k === _curTab ? ' is-on' : ''}" href="${i.h}" data-deck="${di}" ${i.k === _curTab ? 'aria-current="page"' : ''} ${di !== _deck ? 'tabindex="-1" aria-hidden="true"' : ''}>${navIc(i.k, i.k === _curTab)}<span>${i.l}</span>${n ? `<b class="nav-badge">${n}</b>` : ''}</a>`; };
   $('#nav').innerHTML = `<div class="nav-bar" data-deck="${_deck}">${NAV.map((dk, di) => `<div class="nav-deck" data-deck="${di}">${dk.map(i => item(i, di)).join('')}</div>`).join('')}</div>
     <button class="nav-plus" onclick="openCapture()" aria-label="書く・記録する">${ic('plus')}</button>
-    <button class="nav-knob" onclick="navToggle()" aria-label="${_deck ? '毎日のタブへ' : '整理のタブへ'}"><i class="${_deck === 0 ? 'on' : ''}"></i><i class="${_deck === 1 ? 'on' : ''}"></i></button>`;
+    <button class="nav-knob${NAV[1 - _deck].some(i => i && _navBadge[i.k] && _navBadge[i.k]()) ? ' has-badge' : ''}" onclick="navToggle()" aria-label="${_deck ? '毎日のタブへ' : '整理のタブへ'}${NAV[1 - _deck].some(i => i && _navBadge[i.k] && _navBadge[i.k]()) ? '(お知らせあり)' : ''}"><i class="${_deck === 0 ? 'on' : ''}"></i><i class="${_deck === 1 ? 'on' : ''}"></i></button>`;
   $('#rail').innerHTML = `<div class="rail-logo">${ic('sky')}</div>${NAV.flat().filter(Boolean).map(i => `<a class="rail-i${i.k === _curTab ? ' is-on' : ''}" href="${i.h}">${navIc(i.k, i.k === _curTab)}<span>${i.l}</span>${_navBadge[i.k] && _navBadge[i.k]() ? `<b class="nav-badge">${_navBadge[i.k]()}</b>` : ''}</a>`).join('')}<button class="rail-plus" onclick="openCapture()">${ic('plus')}<span>書く</span></button>`;
   _navApply(_deck, null, false);
 }
@@ -216,15 +218,17 @@ function _pickTap(k) { const { o, st } = window._pick; if (o.multi) { if (k == n
 function _pickNew() { const { o, st } = window._pick; const t = st.q.trim(); closeSheet(true); o.create.on(t); }
 
 /* ---------- トースト(結果と「取り消す」。前の取り消しを消さない) ---------- */
+const _toastQ = [];
 function toast(msg, o = {}) {
+  if ($('#toasts').children.length >= 3) { _toastQ.push([msg, o]); return; }
   const el = document.createElement('div'); el.className = 'toast' + (o.bad ? ' bad' : ''); el.setAttribute('role', 'status');
   el.innerHTML = `<span class="toast-ic">${ic(o.bad ? 'warn' : 'check')}</span><span class="toast-m">${esc(msg)}</span>${o.act ? `<button class="toast-u" data-act>${esc(o.act.label)}</button>` : ''}${o.undo ? `<button class="toast-u" data-undo>取り消す</button>` : ''}`;
-  const kill = () => { el.classList.remove('in'); setTimeout(() => el.remove(), 220); };
+  let dead = false;
+  const kill = () => { if (dead) return; dead = true; el.classList.remove('in'); setTimeout(() => { el.remove(); const n = _toastQ.shift(); if (n) toast(n[0], n[1]); }, 220); };
   if (o.undo) $('[data-undo]', el).onclick = () => { o.undo(); kill(); rerender(); toast('取り消しました'); };
   if (o.act) $('[data-act]', el).onclick = () => { kill(); o.act.on(); };
   $('#toasts').appendChild(el); requestAnimationFrame(() => el.classList.add('in'));
   setTimeout(kill, o.undo || o.act ? 6000 : o.bad ? 3600 : 2400);
-  while ($('#toasts').children.length > 3) $('#toasts').firstChild.remove();
 }
 /** 変更の結果を受ける定型: 失敗は理由を出す。成功はトースト(取り消し付き)と描き直し。
     o = {msg, close(シートを閉じる), go(移動先), quiet, noUndo} → 成功なら true */
@@ -233,6 +237,7 @@ function done(res, o = {}) {
   if (o.close) closeSheet(true);
   if (o.go) { if (location.hash === o.go) rerender(); else go(o.go, { replace: o.replace }); } else rerender();
   const msg = o.msg || res.label; if (msg && !o.quiet) toast(msg, { undo: o.noUndo ? null : res.undo, act: o.act });
+  if (res.warn) toast(res.warn, { bad: 1 });
   hapt(); return true;
 }
 

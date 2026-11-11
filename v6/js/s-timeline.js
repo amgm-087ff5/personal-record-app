@@ -11,6 +11,7 @@ route('acts', (id, qs) => {
   return `<div class="screen s-acts v-${v}">
     ${head('アクティビティ', { actions: iconBtn('search', 'さがす', "go('#/search')", 'on-card') + iconBtn('plus', '出来事を追加', `openActEditor({state:${v === 'list' ? "'done'" : "'plan'"},date:${q(v === 'list' ? TODAY : TLS.d)}})`, 'pri') })}
     ${seg([['list', 'リスト'], ['day', '日'], ['month', '月']], v, 'tlView')}
+    ${v === 'list' ? tlSummary() : ''}
     ${v === 'list' ? tlList() : v === 'day' ? tlDay() : tlMonth()}
   </div>`;
 }, { tab: 'acts', root: 1 });
@@ -25,6 +26,12 @@ const tlMatch = k => k === 'all' ? null : (a, id) => { const m = x => k === 'pla
 const monthNav = (ym, fn, o = {}) => `<div class="mnav"><button class="icon-btn" onclick="${fn}(-1)" aria-label="前の月" ${o.noPrev ? 'disabled' : ''}>${ic('back')}</button><b class="num">${fmtYM(ym)}</b><button class="icon-btn" onclick="${fn}(1)" aria-label="次の月" ${o.noNext ? 'disabled' : ''}>${ic('chev')}</button></div>`;
 
 /* ---------- リスト ---------- */
+/** まとめ: この月の記録・今日の予定・今日までの ToDo(押すと移る) */
+function tlSummary() {
+  const ym = TLS.ym, n = Object.values(DB.acts).filter(a => !a.parent && !a.rep && !isPlan(a) && ymOf(a.date) === ym).length;
+  const pl = actsOn(TODAY, { state: 'plan' }).filter(([, a]) => !a.hol).length, td = tasksDue().length;
+  return stats([{ v: `${n}<small>件</small>`, l: `${+ym.slice(5)}月の記録` }, { v: `${pl}<small>件</small>`, l: '今日の予定', on: `tlFilter('plan')` }, { v: `${td}<small>件</small>`, l: '今日までのToDo', href: '#/todo', kind: Object.values(DB.tasks).some(taskLate) ? 'late' : '' }]);
+}
 function tlList() {
   const ym = TLS.ym, cur = ym === ymOf(TODAY), first = ym + '-01', last = `${ym}-${pad2(ymDays(ym))}`;
   const end = cur && dAdd(TODAY, 14) > last ? dAdd(TODAY, 14) : last, f = tlMatch(TLS.filter);
@@ -37,9 +44,9 @@ function tlList() {
     return `<section class="tl-day">${dayHead(d)}${has || d === TODAY ? dayAxis(d, { filter: f, memos: !f }) : ''}${d === TODAY && !dayOf(d).diary ? btn('今日の日記を書く', `openDiary(${q(d)})`, 'dash', { icon: 'pencil' }) : ''}</section>`;
   }).join('');
   const later = cur ? upcoming(400).filter(([, , d]) => d > end).length : 0;
-  const oldest = Object.values(DB.acts).reduce((m, a) => !a.rep && a.date < m ? a.date : m, TODAY);
+  const oldest = oldestYm() + '-01';
   return `<div class="tl-sticky">${monthNav(ym, 'tlMonthStep', { noPrev: ym <= ymOf(oldest), noNext: ym >= ymAdd(ymOf(TODAY), 12) })}${chips(chipsL, TLS.filter, 'tlFilter')}</div>
-    ${body || `<div class="card">${empty({ icon: 'axis', text: TLS.filter === 'all' ? 'この月の記録は ありません' : 'あてはまる記録は ありません', action: { label: '出来事を追加', on: "openActEditor({state:'done'})" } })}</div>`}
+    ${ym <= ymOf(oldest) && body ? `<p class="tl-first">これより前の記録は ありません</p>` : ''}${body || `<div class="card">${empty({ icon: 'axis', text: TLS.filter === 'all' ? 'この月の記録は ありません' : 'あてはまる記録は ありません', action: { label: '出来事を追加', on: "openActEditor({state:'done'})" } })}</div>`}
     ${later ? `<a class="tl-more" href="#/acts?view=month&m=${ymAdd(ymOf(end), 1)}">これより先の予定 <b class="num">${later}</b>件${ic('chev')}</a>` : ''}`;
 }
 /** 開いた時の位置: 今月は今日(いまの線)へ、ほかの月は先頭へ */
@@ -69,13 +76,13 @@ function tlMonth() {
   const ym = TLS.ym, n = ymDays(ym), lead = dDow(ym + '-01'), sel = ymOf(TLS.d) === ym ? TLS.d : '';
   const cells = [...Array(lead)].map(() => '<span></span>').concat([...Array(n)].map((_, i) => {
     const d = `${ym}-${pad2(i + 1)}`, items = actsOn(d), hol = items.some(([, a]) => a.hol);
-    const dn = items.filter(([, a]) => !isPlan(a)).length, pl = items.filter(([, a]) => isPlan(a) && !a.hol).length, td = Object.values(DB.tasks).filter(t => t.due === d && !t.done).length;
-    const marks = [...Array(Math.min(3, dn)).fill('<i class="d"></i>'), ...Array(Math.min(3, pl)).fill('<i class="p"></i>')].slice(0, 4).join('');
+    const dn = items.filter(([, a]) => !isPlan(a)).length, pl = items.filter(([, a]) => isPlan(a) && !a.hol && !a.pay).length, pp = items.filter(([, a]) => isPlan(a) && a.pay).length, td = Object.values(DB.tasks).filter(t => t.due === d && !t.done).length;
+    const marks = [...Array(Math.min(3, dn)).fill('<i class="d"></i>'), ...Array(Math.min(3, pl)).fill('<i class="p"></i>'), ...Array(Math.min(2, pp)).fill('<i class="pp"></i>')].slice(0, 4).join('');
     return `<button class="mc${d === TODAY ? ' today' : ''}${d === sel ? ' sel' : ''}${hol || dDow(d) === 0 ? ' hol' : ''}" onclick="tlPick(${q(d)})" aria-label="${fmtFull(d)} 記録${dn}件 予定${pl}件" aria-pressed="${d === sel}"><b class="num">${i + 1}</b><span class="mc-m">${marks}</span>${td ? `<i class="mc-t" aria-hidden="true"></i>` : ''}</button>`;
   }));
   const tasks = sel ? Object.entries(DB.tasks).filter(([, t]) => t.due === sel) : [];
   return `<div class="card cal">${monthNav(ym, 'tlMonthStep')}<div class="cal-w">${[...DOW].map(w => `<span>${w}</span>`).join('')}</div><div class="cal-g">${cells.join('')}</div>
-      <div class="cal-l" aria-hidden="true"><span><i class="d"></i>記録</span><span><i class="p"></i>予定</span><span><i class="mc-t"></i>ToDo</span></div></div>
+      <div class="cal-l" aria-hidden="true"><span><i class="d"></i>記録</span><span><i class="p"></i>予定</span><span><i class="pp"></i>支払い予定</span><span><i class="mc-t"></i>ToDo</span></div></div>
     ${sel ? `<section class="tl-day">${dayHead(sel)}${actsOn(sel).length ? dayAxis(sel, { memos: 1 }) : `<div class="card">${empty({ icon: 'cal', text: 'この日の予定・記録は ありません', action: { label: '予定を追加', on: `openActEditor({state:'plan',date:${q(sel)}})` } })}</div>`}</section>
       ${tasks.length ? `<section>${sec('この日が期限のToDo', { n: tasks.length })}${rows(tasks.map(([id]) => taskRow(id)).join(''))}</section>` : ''}` : ''}`;
 }
@@ -83,6 +90,7 @@ function tlMonth() {
 /* ================= 日のページ ================= */
 route('day', d => {
   if (!isDate(d)) d = TODAY;
+  if (d === TODAY && !isRerender() && !_back) after(() => requestAnimationFrame(() => { const el = $('#now'); if (el) el.scrollIntoView({ block: 'center' }); }));
   const dy = dayOf(d), items = actsOn(d), done = items.filter(([, a]) => !isPlan(a)), sp = daySpend(d);
   const all = [...items.map(i => i[0]), ...items.flatMap(([id]) => id.includes('@') ? [] : descOf(id))].map(id => [id, A(id)]);
   const ents = [...new Set(all.flatMap(([, a]) => (a.roles || []).filter(r => r.e && r.r !== '支払先').map(r => r.e)))];

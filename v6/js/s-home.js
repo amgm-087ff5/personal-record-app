@@ -3,7 +3,7 @@
 
 /* ================= ホーム ================= */
 route('home', () => {
-  const up = upcoming(0).filter(([, a]) => a.start && !a.allDay)[0];
+  const up = upcoming(0).filter(([, a]) => a.start && !a.allDay && a.start > NOW)[0];
   const allDay = actsOn(TODAY).filter(([, a]) => a.allDay && !a.hol);
   const hol = actsOn(TODAY).find(([, a]) => a.hol);
   const doing = actsOn(TODAY).find(([, a]) => a.start && a.end && a.start <= NOW && NOW < a.end);
@@ -14,6 +14,7 @@ route('home', () => {
       ${skyBand(TODAY)}
       ${allDay.length ? `<div class="ents">${allDay.map(([id, a]) => `<a class="tag plan" href="#/a/${id}">${esc(actTitle(a))}</a>`).join('')}</div>` : ''}
       ${up ? hmNext(up) : `<div class="now-none">${ic('check')}<span>今日の予定は ここまで</span></div>`}
+      ${hmFlow()}
     </section>
     <button class="quick" onclick="openCapture()">${ic('plus')}<span>書く・記録する</span><kbd>ランチ 1200</kbd></button>
     ${hmReview()}
@@ -24,6 +25,15 @@ route('home', () => {
   </div>`;
 }, { tab: 'home', root: 1 });
 
+/** 今日の流れ: 帯の中身を言葉で(時刻順。直近の3件と、これからの予定。前は畳む) */
+let HM_ALL = false;
+function hmFlow() {
+  const items = actsOn(TODAY).filter(([, a]) => !a.hol && !a.allDay && a.start); if (!items.length) return '';
+  const past = items.filter(([, a]) => !isPlan(a)), rest = items.filter(([, a]) => isPlan(a));
+  const hide = HM_ALL ? 0 : Math.max(0, past.length - 3), shown = [...past.slice(hide), ...rest].sort(byTime);
+  const line = ([id, a]) => { const st = isPlan(a) ? (isLate(a) ? 'late' : 'plan') : 'done'; return `<a class="fl ${st}${isSpan(a) ? ' span' : ''}" href="#/a/${id}"><time class="num">${a.start}</time><i></i><b>${esc(actTitle(a))}</b>${isPay(a) && !isPlan(a) ? amt(xOf(id) ? xAmt(id) : payTotal(a)) : a.end ? `<span class="num">–${a.end}</span>` : ''}</a>`; };
+  return `<div class="flow">${hide ? `<button class="fl-more" onclick="HM_ALL=true;rerender()">これより前 ${hide}件</button>` : ''}${shown.map(line).join('')}</div>`;
+}
 /** 次の予定(点線の札)。残り時間を大きく */
 function hmNext([id, a]) {
   const left = hm2m(a.start) - hm2m(NOW), tasks = tasksOfAct(id).filter(([, t]) => taskOpen(t));
@@ -36,11 +46,12 @@ function hmNext([id, a]) {
 function hmReview() {
   const pend = pendingPlans(), unread = Object.entries(DB.acts).filter(([, a]) => unreadCount(a)), bals = personBalances();
   const n = pend.length + unread.length + bals.length; if (!n) return '';
+  const lend = bals.filter(b => b.amt > 0).reduce((t, b) => t + b.amt, 0), owe = bals.filter(b => b.amt < 0).reduce((t, b) => t - b.amt, 0);
   return `<section>${sec('確かめる', { n })}<div class="rv">
     ${pend.map(([id, a]) => `<div class="rv-i rv-plan"><a class="hit" href="#/a/${id}" aria-label="${esc(actTitle(a))}"></a><span class="rv-ic">${kindIc(a)}</span><div class="rv-m"><b>${esc(actTitle(a))}</b><span class="num">${a.date === TODAY ? '' : relDay(a.date) + ' '}${timeText(a)}</span></div>${btn('記録にする', `recordPlan(${q(id)})`, 'pri', { sm: 1 })}</div>`).join('')}
     ${unread.map(([id, a]) => `<div class="rv-i rv-read"><a class="hit" href="#/a/${id}" aria-label="${esc(actTitle(a))}"></a><span class="rv-ic">${ic('receipt')}</span><div class="rv-m"><b>${readMark(esc(actTitle(a)))}</b><span>読み取った値 ${unreadCount(a)}件 · ${yen(payTotal(a))}</span></div>${btn('確かめる', `go('#/a/${id}')`, 'sec', { sm: 1 })}</div>`).join('')}
     ${bals.map(b => `<div class="rv-i rv-owe"><a class="hit" href="#/ledger?v=owe" aria-label="貸し借り"></a><span class="rv-ic">${ic('swap')}</span><div class="rv-m"><b>${esc(whoShort(b.who))}${E(b.who) ? 'さん' : ''}に${b.amt > 0 ? '貸し' : '借り'}</b><span>${b.ids.length}件 · 未精算</span></div><span class="rv-a">${amt(Math.abs(b.amt))}</span>${btn('精算済み', `hmSettle(${q(b.who)})`, 'sec', { sm: 1 })}</div>`).join('')}
-  </div></section>`;
+  </div>${lend && owe ? `<p class="rv-sum num">貸し ${yen(lend)} · 借り ${yen(owe)} · 差し引き ${lend >= owe ? '+' : '−'}${yen(Math.abs(lend - owe))}</p>` : ''}</section>`;
 }
 function hmSettle(who) { const b = personBalances().find(x => x.who === who); if (b) done(paySettle(b.ids)); }
 /** 今日のお金: 固定費を除く。先週の同じ曜日と、この7日 */

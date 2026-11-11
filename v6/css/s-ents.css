@@ -79,7 +79,12 @@
 /* ---------- 種類の木 ---------- */
 .en-th{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);padding-top:var(--s2)}
 .en-th h1{font-size:var(--fs-big);font-weight:800;letter-spacing:-.02em;line-height:1.25}
-.en-tr{padding-left:calc(var(--s4) + var(--depth,0) * 22px)}
+.en-tr{padding:0 var(--s4) 0 calc(var(--s1) + var(--depth,0) * 20px);gap:0}
+.en-tx,.en-tx-sp{flex:none;width:var(--tap);height:48px}
+.en-tx{display:grid;place-items:center;color:var(--tx-3)}
+.en-tx svg{width:18px;height:18px;stroke-width:2.2;transition:transform var(--t2) var(--ease)}
+.en-tx:not(.is-open) svg{transform:rotate(-90deg)}
+.en-tm{flex:1;min-width:0;display:flex;align-items:center;gap:var(--s3);min-height:48px;text-align:left}
 .en-tr.root .row-t{font-weight:800}
 .en-tr .row-r{font-weight:700;color:var(--tx-2);min-width:24px;justify-content:flex-end}
 .en-np{gap:var(--s2)}
@@ -110,3 +115,24 @@
 .sheet-b > section{display:flex;flex-direction:column;gap:var(--s5)}
 .en-ty-x{position:relative}
 .en-ty-x::after{content:"";position:absolute;inset:-9px -10px}
+
+/* ---------- v6.1: 12週の棒・関係の向き・ノートの参照・軸の出来事 ---------- */
+.en-row .row-r{gap:var(--s3)}
+.en-bars{flex:none;display:flex;align-items:center;gap:2px;width:60px;height:18px}
+.en-bars i{flex:1;height:18px;border-radius:1px;background:var(--kin)}
+.en-bars i.z{height:2px;background:var(--line-2)}
+.en-bars i.c1{opacity:.3}
+.en-bars i.c2{opacity:.6}
+.en-bars i.c3{opacity:1}
+.en-dir{display:inline-grid;place-items:center;width:20px;height:20px;color:var(--tx-3)}
+.en-dir svg{width:16px;height:16px}
+.en-gone{color:var(--tx-3);font-weight:600}
+.en-aref{display:inline-flex;align-items:center;gap:var(--s1);color:var(--me);font-weight:650;vertical-align:bottom}
+.en-aref svg{width:16px;height:16px;flex:none}
+.en-ns p .ent,.en-sub-b p .ent{vertical-align:bottom}
+.en-ev{height:auto;min-height:44px;padding:var(--s2) var(--s1);align-items:flex-start;color:var(--tx-3);font-weight:600;font-size:var(--fs-cap)}
+.en-ev svg{margin-top:2px;flex:none}
+.en-ev b{color:var(--tx-2);font-weight:700}
+.en-ev span{min-width:0;overflow-wrap:anywhere}
+.en-dh:not(a){pointer-events:none}
+.en-nowl{margin:var(--s2) 0}

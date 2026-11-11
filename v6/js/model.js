@@ -308,10 +308,10 @@ function expsIn(ym) {
 }
 /** 月のまとめ {total, fixed, variable, special, roots:[{cat, amt}], n} */
 function monthSum(ym) {
-  const r = { total: 0, fixed: 0, variable: 0, special: 0, roots: new Map(), n: 0 };
+  const r = { total: 0, fixed: 0, variable: 0, special: 0, unset: 0, roots: new Map(), n: 0 };
   expsIn(ym).forEach(([id, , amt]) => {
     r.total += amt; r.n++;
-    if (xFx(id) === '固定') r.fixed += amt; else r.variable += amt;
+    if (xFx(id) === '固定') r.fixed += amt; else if (xFx(id) === '変動') r.variable += amt; else r.unset += amt;
     if (xSp(id) === '非日常') r.special += amt;
     xCats(id).forEach(g => { const k = catRoot(g.cat); r.roots.set(k, (r.roots.get(k) || 0) + g.amt); });
   });
@@ -403,9 +403,9 @@ function commit(label, fn) {
   const after = _snap(), patch = [];
   for (const t of TABLES) { for (const k in after[t]) if (before[t][k] !== after[t][k]) patch.push([t, k, before[t][k]]); for (const k in before[t]) if (!(k in after[t])) patch.push([t, k, before[t][k]]); }
   const relsB = before._rels !== after._rels ? before._rels : null, metB = before._methods !== after._methods ? before._methods : null;
-  _recIdx = null; save();
+  _recIdx = null; const saved = save();
   return {
-    ok: true, label, ...extra, undo() {
+    ok: true, label, ...(saved ? {} : { warn: '保存できませんでした(端末の空きを確かめてください)' }), ...extra, undo() {
       for (const [t, k, prev] of patch) { if (prev === undefined) delete DB[t][k]; else DB[t][k] = JSON.parse(prev); }
       if (relsB) DB.rels = JSON.parse(relsB); if (metB) DB.methods = JSON.parse(metB);
       _recIdx = null; save();
@@ -416,7 +416,7 @@ const _str = (v, msg) => { const s = String(v == null ? '' : v).trim(); if (!s &
 
 /* ---- 日 ---- */
 const daySetDiary = (d, text) => commit('日記を保存', () => { DB.days[d] = { photos: [], ...DB.days[d], diary: String(text || '').trim() }; });
-const dayAddPhoto = (d, cap) => commit('写真を追加', () => { const o = DB.days[d] = { diary: '', photos: [], ...DB.days[d] }; o.photos = [...(o.photos || []), { t: d === TODAY ? NOW : '12:00', cap: String(cap || '') }]; });
+const dayAddPhoto = (d, cap, act) => commit('写真を追加', () => { const o = DB.days[d] = { diary: '', photos: [], ...DB.days[d] }; o.photos = [...(o.photos || []), { t: d === TODAY ? NOW : '12:00', cap: String(cap || ''), ...(act ? { act } : {}) }]; });
 const dayRemovePhoto = (d, i) => commit('写真を外した', () => { const o = DB.days[d]; if (!o || !o.photos[i]) fail('写真が見つかりません'); o.photos = o.photos.filter((_, j) => j !== i); });
 
 /* ---- アクティビティ(記録・予定) ---- */
@@ -468,7 +468,7 @@ const planRecord = (id, o = {}) => commit('記録にしました', () => {
   if (src.virt) { nid = uid('a'); base.src = src.tpl; delete base.tpl; }
   if (base.pay && base.pay.plan) {            /* 支払い予定 → 支払い + 支出 */
     const pl = base.pay.plan, amt = o.amt || pl.amt;
-    base.pay = { payers: [{ who: 'me', amt, how: o.how || pl.how || DB.methods[0] }], items: [], amt };
+    base.pay = { payers: [{ who: 'me', amt, how: o.how || pl.how || DB.methods[0] }], items: [{ n: src.title || payeeOf(src) || '支払い', price: amt, tax: TAX_DEFAULT, users: ['me'] }] };
     if (base.allDay) { delete base.allDay; base.start = o.start || '09:00'; }
     DB.exps[nid] = { basis: 'items', cat: pl.cat };
   }
@@ -518,6 +518,7 @@ const paySave = o => commit(o.id ? '支払いを保存しました' : '支払い
   DB.acts[id] = _cleanAct({ ...old, kind: 'pay', title: '', date: o.date, start: o.start || NOW, end: null, allDay: 0, state: 'done', parent: o.parent || null, roles, note: o.note, pay });
   if (!DB.acts[id].parent) delete DB.acts[id].parent;
   _fitExp(id, o.exp || DB.exps[id] || { basis: 'items', cat: 'eatout' });
+  (o.doneTasks || []).forEach(k => { const t = DB.tasks[k]; if (t && !t.done) { t.done = DB.acts[id].date; t.payAct = id; } });
   return { id };
 });
 /** 支出だけ直す(カテゴリ・決め方・特別感・メモ・品目別カテゴリ) */
@@ -549,7 +550,7 @@ const taskToggle = id => commit('', () => {
   return { done: true };
 });
 const taskRemove = id => commit('ToDoを消しました', () => { if (!DB.tasks[id]) fail('ToDoが見つかりません'); delete DB.tasks[id]; });
-const listAdd = n => commit('リストを追加', () => { const id = uid('l'); DB.lists[id] = { n: _str(n, 'リストの名前を入れてください') }; return { id }; });
+const listAdd = n => commit(`リスト「${String(n || '').trim()}」を追加しました`, () => { const id = uid('l'); DB.lists[id] = { n: _str(n, 'リストの名前を入れてください') }; return { id }; });
 const listRemove = id => commit('リストを消しました', () => { if (Object.keys(DB.lists).length <= 1) fail('リストは1つ以上必要です'); if (Object.values(DB.tasks).some(t => t.list === id && !t.done)) fail('未完了のToDoがあるので先に移してください'); delete DB.lists[id]; const f = Object.keys(DB.lists)[0]; Object.values(DB.tasks).forEach(t => { if (t.list === id) t.list = f; }); });
 /** 「明日 牛乳 #買い物 !」のような1行を解釈 → {t, due?, list?, pri?} */
 function parseTask(s) {
@@ -588,6 +589,43 @@ function parseQuick(s) {
   return { type: 'memo', body: raw, ents };
 }
 
+
+/* ---- 買い物リストとの連動・重複・行き来(ToDo ⇄ 予定) ---- */
+/** 品目の名前と同じ、未完了の買い物 ToDo(リストに店 shop があるもの)[[taskId, task]] */
+function shopMatches(items) {
+  const names = new Set((items || []).map(i => String(i.n || '').trim()).filter(Boolean));
+  return Object.entries(DB.tasks).filter(([, t]) => !t.done && DB.lists[t.list] && DB.lists[t.list].shop && names.has(t.t.trim()));
+}
+/** 重複の疑い: 同じ日・同じ合計・時刻が5分以内の支払い [[id, act]](o = {id?, date, start, total}) */
+function payDup(o) {
+  return Object.entries(DB.acts).filter(([id, a]) => a.pay && !isPlan(a) && id !== o.id && a.date === o.date && payTotal(a) === o.total && o.total > 0 && Math.abs(hm2m(a.start) - hm2m(o.start || NOW)) <= 5);
+}
+/** その記録に付いた写真 [{d, i, t, cap}] */
+const photosOfAct = id => { const a = A(id); if (!a) return []; return (dayOf(a.date).photos || []).map((p, i) => ({ ...p, d: a.date, i })).filter(p => p.act === id); };
+/** 繰り返しの予定の、記録になった回(新しい順)[[id, act]] */
+const recordsOfPlan = tid => Object.entries(DB.acts).filter(([, a]) => a.src === tid).sort((x, y) => y[1].date.localeCompare(x[1].date));
+/** いちばん古い月(記録か日記のある月) */
+const oldestYm = () => ymOf([...Object.values(DB.acts).filter(a => !a.rep).map(a => a.date), ...Object.keys(DB.days).filter(d => DB.days[d].diary)].reduce((m, d) => d < m ? d : m, TODAY));
+const listRename = (id, n) => commit('リストの名前を直しました', () => { const l = DB.lists[id]; if (!l) fail('リストが見つかりません'); const v = _str(n, 'リストの名前を入れてください'); if (Object.entries(DB.lists).some(([k, x]) => k !== id && x.n === v)) fail('同じ名前のリストがあります'); l.n = v; });
+/** リストの既定の店(エンティティ id か null) */
+const listSetShop = (id, eid) => commit('既定の店を直しました', () => { const l = DB.lists[id]; if (!l) fail('リストが見つかりません'); if (eid && DB.ents[eid]) l.shop = eid; else delete l.shop; });
+/** ToDo を予定にする(ToDo は消える。エンティティ・メモ・繰り返しは引き継ぐ)。o = {date, allDay, start, end} → {id} */
+const taskToPlan = (tid, o) => commit('予定にしました', () => {
+  const t = DB.tasks[tid]; if (!t) fail('ToDoが見つかりません');
+  const id = uid('a');
+  DB.acts[id] = _cleanAct({ kind: 'event', title: t.t, date: o.date, allDay: o.allDay ? 1 : 0, start: o.start, end: o.end, state: 'plan', roles: (t.ents || []).map(e => ({ r: DB.ents[e] && isUnder(DB.ents[e].types[0], 'place') ? '場所' : DB.ents[e] && isUnder(DB.ents[e].types[0], 'project') ? 'プロジェクト' : '同席', e })), note: t.memo, rep: t.rep });
+  delete DB.tasks[tid]; return { id };
+});
+/** 予定を ToDo にする(予定は消える。支払い予定・繰り返しのひな形の仮の回は不可)→ {id} */
+const planToTask = aid => commit('ToDoにしました', () => {
+  const a = DB.acts[aid]; if (!a || !isPlan(a)) fail('予定が見つかりません'); if (a.pay) fail('支払い予定は ToDo にできません');
+  const id = uid('t'), ents = (a.roles || []).filter(r => r.e).map(r => r.e);
+  DB.tasks[id] = { t: a.title, due: a.date, list: Object.keys(DB.lists)[0], ...(ents.length ? { ents } : {}), ...(a.note ? { memo: a.note } : {}), ...(a.rep ? { rep: a.rep } : {}) };
+  for (const t of Object.values(DB.tasks)) if (t.act === aid) delete t.act;
+  [aid, ...descOf(aid)].forEach(k => { delete DB.acts[k]; delete DB.exps[k]; });
+  return { id };
+});
+
 /* ---- メモ ---- */
 const memoAdd = (body, o = {}) => commit('メモを保存しました', () => { const id = uid('m'); const m = { body: _str(body, '本文を入れてください'), at: nowStamp(), ents: (o.ents || []).slice() }; if (o.act) m.act = o.act; DB.memos[id] = m; return { id }; });
 const memoUpdate = (id, patch) => commit('メモを直しました', () => { const m = DB.memos[id]; if (!m) fail('メモが見つかりません'); if (patch.body !== undefined) m.body = _str(patch.body, '本文を入れてください'); if (patch.ents) m.ents = patch.ents.slice(); if ('act' in patch) { if (patch.act) m.act = patch.act; else delete m.act; } });
@@ -595,7 +633,7 @@ const memoPin = id => commit('', () => { const m = DB.memos[id]; if (!m) fail('�
 const memoRemove = id => commit('メモを消しました', () => { if (!DB.memos[id]) fail('メモが見つかりません'); delete DB.memos[id]; });
 
 /* ---- エンティティ・関係・種類・ノート ---- */
-const entAdd = o => commit('エンティティを追加', () => { const n = _str(o.n, '名前を入れてください'); const types = (o.types || []).filter(t => DB.types[t]); if (!types.length) fail('種類を選んでください'); const id = uid('e'); DB.ents[id] = { n, types, facts: (o.facts || []).filter(f => f.k && f.v).map(f => ({ k: f.k, v: f.v })) }; return { id }; });
+const entAdd = o => commit(`「${String(o.n || '').trim()}」を追加しました`, () => { const n = _str(o.n, '名前を入れてください'); const types = (o.types || []).filter(t => DB.types[t]); if (!types.length) fail('種類を選んでください'); const id = uid('e'); DB.ents[id] = { n, types, facts: (o.facts || []).filter(f => f.k && f.v).map(f => ({ k: f.k, v: f.v })) }; return { id }; });
 const entUpdate = (id, patch) => commit('直しました', () => {
   const e = DB.ents[id]; if (!e) fail('エンティティが見つかりません');
   if (patch.n !== undefined) e.n = _str(patch.n, '名前を入れてください');
@@ -625,7 +663,7 @@ const entRemove = id => commit('エンティティを消しました', () => {
 });
 const relAdd = o => commit('関係を追加', () => { if (!DB.ents[o.a] && o.a !== 'me') fail('相手を選んでください'); if (!DB.ents[o.b]) fail('相手を選んでください'); if (o.a === o.b) fail('自分自身とは結べません'); DB.rels = [...DB.rels, { a: o.a, b: o.b, role: _str(o.role, '関係の名前を入れてください'), ...(o.inv ? { inv: o.inv } : { sym: 1 }), ...(o.since ? { since: o.since } : {}) }]; });
 const relRemove = i => commit('関係を外しました', () => { if (!DB.rels[i]) fail('関係が見つかりません'); DB.rels = DB.rels.filter((_, j) => j !== i); });
-const typeAdd = (n, p) => commit('種類を追加', () => { const key = uid('ty'); DB.types[key] = { n: _str(n, '名前を入れてください'), props: [], ...(p && DB.types[p] ? { p } : {}) }; return { key }; });
+const typeAdd = (n, p) => commit(`種類「${String(n || '').trim()}」を追加しました`, () => { const key = uid('ty'); DB.types[key] = { n: _str(n, '名前を入れてください'), props: [], ...(p && DB.types[p] ? { p } : {}) }; return { key }; });
 const typeUpdate = (key, patch) => commit('種類を直しました', () => {
   const t = DB.types[key]; if (!t) fail('種類が見つかりません');
   if (patch.n !== undefined) t.n = _str(patch.n, '名前を入れてください');
@@ -641,7 +679,7 @@ const noteSubSave = (eid, i, sub) => commit('サブページを保存しまし�
 const noteSubRemove = (eid, i) => commit('サブページを消しました', () => { const n = DB.notes[eid]; if (!n || !n.subs[i]) fail('サブページが見つかりません'); n.subs = n.subs.filter((_, j) => j !== i); });
 
 /* ---- カテゴリ・支払い方法 ---- */
-const catAdd = (n, p) => commit('カテゴリを追加', () => { const key = uid('c'); const used = new Set(Object.values(DB.cats).map(c => c.c)); DB.cats[key] = { n: _str(n, '名前を入れてください'), ...(p && DB.cats[p] ? { p } : { c: CAT_COLORS.find(c => !used.has(c)) || CAT_COLORS[0], fx: '変動', sp: '日常' }) }; return { key }; });
+const catAdd = (n, p) => commit(`カテゴリ「${String(n || '').trim()}」を追加しました`, () => { const key = uid('c'); const used = new Set(Object.values(DB.cats).map(c => c.c)); DB.cats[key] = { n: _str(n, '名前を入れてください'), ...(p && DB.cats[p] ? { p } : { c: CAT_COLORS.find(c => !used.has(c)) || CAT_COLORS[0], fx: '変動', sp: '日常' }) }; return { key }; });
 const catUpdate = (key, patch) => commit('カテゴリを直しました', () => {
   const c = DB.cats[key]; if (!c) fail('カテゴリが見つかりません');
   if (patch.n !== undefined) c.n = _str(patch.n, '名前を入れてください');

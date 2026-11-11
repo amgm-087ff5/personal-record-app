@@ -34,6 +34,7 @@ function pyHero(id, a) {
   return `<section class="py-hero">
     ${par ? `<a class="py-in" href="#/a/${a.parent}">${kindIc(par)}<span>${esc(actTitle(par))}の中</span></a>` : ''}
     <div class="py-ph">${avatar(pr && pr.e, pr && pr.name, 'lg')}<h1 class="py-payee" data-bar-watch>${head}</h1></div>
+    ${pr && !pr.e && !plan ? `<button class="btn sec sm py-reg" onclick="pyReg(${q(id)})">${ic('plus')}<span>店として登録</span></button>` : ''}
     <div class="py-when"><a class="py-day" href="#/day/${a.date}">${fmtFull(a.date)}</a>${a.start && !a.allDay ? `<time class="num">${a.start}</time>` : ''}${m ? `<span class="tag">${esc(m)}</span>` : ''}</div>
     <div class="py-tot"><span>合計</span>${un.amt ? readMark(amt(total, { cls: 'big' })) : amt(total, { cls: 'big' })}</div></section>`;
 }
@@ -52,7 +53,7 @@ function pyMine(id, a) {
   const mine = xAmt(id), b = balanceOf(id), others = pyOthers(a), split = total !== mine || b.amt !== 0, cs = xCats(id);
   const sp = xSp(id), fx = xFx(id);
   const basisX = x.basis === 'even' ? `<div class="py-ex"><span>人数</span><div class="py-step"><button onclick="pyN(${q(id)},-1)" aria-label="人数を減らす">−</button><b class="num">${x.n || 2}人</b><button onclick="pyN(${q(id)},1)" aria-label="人数を増やす">＋</button></div></div>`
-    : x.basis === 'amount' ? `<div class="py-ex"><span>自分の負担</span>${input({ value: x.me || 0, mode: 'numeric', onchange: `pyMe(${q(id)},this.value)`, cls: 'num', label: '自分の負担' })}</div>` : '';
+    : x.basis === 'amount' ? `<div class="py-ex"><span>自分の負担</span>${input({ value: x.me || 0, mode: 'numeric', onchange: `pyMe(${q(id)},this.value)`, cls: 'num', label: '自分の負担' })}</div>${myPaid(a) > 0 && myPaid(a) !== (x.me || 0) ? `<div class="py-ex py-fill">${btn(`自分が払った ${yen(myPaid(a))} を入れる`, `pyMe(${q(id)},${myPaid(a)})`, 'sec', { sm: 1 })}</div>` : ''}` : '';
   return `<section>${sec('自分の支出')}
     ${split || b.amt ? `<div class="card pad py-mine"><div class="py-mine-h"><span class="py-k">自分の負担</span>${b.amt ? (b.open ? tag(balanceText(b), 'owe') : tag('精算済み')) : ''}</div>
       ${amt(mine, { cls: 'hero' })}
@@ -61,8 +62,8 @@ function pyMine(id, a) {
     ${rows([
       others ? `<div class="py-opt"><span class="prop-k">負担の決め方</span>${seg(PY_BASIS, x.basis || 'items', pyFn('pyBasis', id))}${basisX}</div>` : '',
       prop('カテゴリ', catTag(x.cat, { path: 1 }), { on: `pyCatPick(${q(id)})` }),
-      prop('特別感', `${esc(sp || '未設定')}${x.sp ? '' : '<span class="mini">カテゴリの既定</span>'}`, { on: `pyOptPick(${q(id)},'sp')` }),
-      prop('固定・変動', `${esc(fx || '未設定')}${x.fx ? '' : '<span class="mini">カテゴリの既定</span>'}`, { on: `pyOptPick(${q(id)},'fx')` }),
+      prop('特別感', `${esc(sp || '未設定')}${x.sp ? tag('この支出だけ', 'me') : '<span class="mini">カテゴリの既定</span>'}`, { on: `pyOptPick(${q(id)},'sp')` }),
+      prop('固定・変動', `${esc(fx || '未設定')}${x.fx ? tag('この支出だけ', 'me') : '<span class="mini">カテゴリの既定</span>'}`, { on: `pyOptPick(${q(id)},'fx')` }),
       prop('メモ', x.memo ? esc(x.memo) : '<span class="mini">なし</span>', { on: `pyMemoSheet(${q(id)})` })])}
     ${cs.length >= 2 ? `${sec('カテゴリの内訳')}${rows(cs.map(c => row({ tHtml: catTag(c.cat), right: amt(c.amt) })))}` : ''}</section>`;
 }
@@ -88,7 +89,8 @@ function pyItemRow(id, a, i, n, o) {
   if (unk && it.n) sub.push(tag('読めませんでした', 'read'));
   if (itemTax(it) === 8) sub.push(tag('税8%'));
   if (u.some(w => w !== 'me')) sub.push(`<span class="ents">${u.map(w => ent(w, { link: false, short: 1 })).join('')}</span>`);
-  if (xi && xi.how !== '全額') sub.push(xi.how === '奢り' ? tag('奢り') : tag(`自分 ${xi.how}`, 'me'));
+  if (xi && xi.how === '奢り') sub.push(tag('奢り'));
+  if (xi && xi.price !== xi.full) sub.push(tag(`自分 ${yen(xi.price * n)}${xi.how === '1/2' || xi.how === '按分' ? ' · ' + xi.how : ''}`, 'me'));
   if (x && x.itemCat && x.itemCat[i] && x.itemCat[i] !== x.cat) sub.push(catTag(x.itemCat[i]));
   if (it.memo) sub.push(`<span class="mini">${esc(it.memo)}</span>`);
   const price = unk && !v ? `<span class="py-ph-t">金額</span>` : it.unread ? readMark(amt(v * n)) : amt(v * n);
@@ -101,6 +103,13 @@ function pyPaid(id, a) {
   return `<section>${sec('払った人', { act: { label: '直す', on: `openPayEditor({id:${q(id)}})` } })}${rows(body)}</section>`;
 }
 /* ---- 詳細の操作(全部 model の関数。done が取り消しと描き直しを受け持つ) ---- */
+function pyReg(id) {
+  const a = DB.acts[id], pr = a && rolesOf(a, '支払先')[0]; if (!pr || pr.e) return;
+  const r1 = entAdd({ n: pr.name, types: ['shop'] }); if (!done(r1, { quiet: 1 })) return;
+  const r2 = paySave({ ...pyRebuild(id), payee: { e: r1.id } });
+  if (!r2.ok) { r1.undo(); return toast(r2.why || 'できませんでした', { bad: 1 }); }
+  rerender(); toast(`「${pr.name}」を店として登録しました`, { undo: () => { r2.undo(); r1.undo(); } });
+}
 const pyConfirm = id => done(payConfirm(id));
 const pySettle = (id, on) => done(paySettle(id, on));
 function pyOptPick(id, f) {
@@ -111,7 +120,7 @@ function pyMemoSheet(id) {
   const cur = (xOf(id) || {}).memo || '';
   openSheet({ title: '支出のメモ', body: textarea({ id: 'py-memo-t', rows: 4, value: cur, auto: 1, label: 'メモ' }), dirty: () => val('py-memo-t') !== cur, primary: { label: 'メモを保存', on: () => done(expUpdate(id, { memo: val('py-memo-t').trim() || null }), { close: 1 }) } });
 }
-function pyXAdd(id) { const a = A(id), r = rolesOf(a, '支払先')[0]; done(expUpdate(id, { basis: 'even', n: Math.max(2, peopleOf(id).length), cat: catGuess(r ? (r.e ? { e: r.e } : { name: r.name }) : null) })); }
+function pyXAdd(id) { const a = A(id), r = rolesOf(a, '支払先')[0]; done(expUpdate(id, { basis: 'items', cat: catGuess(r ? (r.e ? { e: r.e } : { name: r.name }) : null) })); }
 function pyBasis(id, k) { const x = xOf(id), p = { basis: k }; if (k === 'even') p.n = x.n || Math.max(2, peopleOf(id).length); if (k === 'amount') p.me = x.me != null ? x.me : xAmt(id); done(expUpdate(id, p)); }
 const pyN = (id, d) => done(expUpdate(id, { n: Math.max(2, Math.min(99, (xOf(id).n || 2) + d)) }), { quiet: 1 });
 const pyMe = (id, v) => done(expUpdate(id, { me: pyNum(v) }), { quiet: 1 });
@@ -144,7 +153,7 @@ function pyiBody() {
   const I = PYI, x = xOf(I.id), ppl = peopleOf(I.id);
   const lineRow = (l, j) => `<div class="py-ln-r"><div class="py-ln-n">${input({ value: l.n, ph: l.dis ? '割引の名前' : 'オプションの名前', oninput: `pyiLn(${j},'n',this.value)`, label: 'この行の名前' })}</div>
     <span class="py-sg">${l.dis ? '−' : '+'}</span>${input({ value: l.v || '', ph: '0', mode: 'numeric', oninput: `pyiLn(${j},'v',this.value)`, cls: 'num py-ln-v', label: '値' })}
-    ${l.dis ? `<button class="py-unit" onclick="pyiUnit(${j})" aria-label="円と%を切り替える">${l.k === 'pct' ? '%' : '円'}</button>` : `<span class="py-sg">${l.k === 'pct' ? '%' : '円'}</span>`}${iconBtn('close', 'この行を消す', `pyiLnDel(${j})`)}</div>`;
+    <button class="py-unit" onclick="pyiUnit(${j})" aria-label="円と%を切り替える">${l.k === 'pct' ? '%' : '円'}</button>${iconBtn('close', 'この行を消す', `pyiLnDel(${j})`)}</div>`;
   return `${field('品名', input({ id: 'pyi-n', value: PYI.n, ph: PYI.unk ? '読めませんでした' : '名前', oninput: 'pyiN(this.value)', auto: !PYI.n && !PYI.unk, label: '品名', cls: PYI.unk ? 'py-unread' : '' }))}
     ${field('金額', `<div class="py-amt-f"><i>¥</i>${input({ value: I.lines[0].v || '', ph: '0', mode: 'numeric', oninput: 'pyiV(this.value)', cls: 'big num', label: '金額' })}</div>`)}
     ${I.lines.length > 1 ? `<div class="field"><span class="field-l">オプション・割引</span>${I.lines.slice(1).map((l, j) => lineRow(l, j + 1)).join('')}</div>` : ''}
@@ -186,6 +195,18 @@ function pyiDel() { done(itemRemove(PYI.id, PYI.ix), { close: 1 }); }
    ===================================================================== */
 let PYD = null, PYD0 = '';
 const pyAsk = (cat, f) => (f === 'fx' ? catFx(cat) : catSp(cat)) == null;
+/** カテゴリが「都度決める」(ask)になっているか(祖先をたどる) */
+const pyRawAsk = (cat, f) => { for (const c of catAnc(cat).slice().reverse()) if (DB.cats[c][f] !== undefined) return DB.cats[c][f] === 'ask'; return false; };
+const pyPrtDiff = (D = PYD) => D.printed != null && !D.printedOff && D.items.length && pyTotal(D) !== D.printed ? pyTotal(D) - D.printed : 0;
+/** 保存を止める理由(無ければ空) */
+function pyBlock(D = PYD) {
+  for (const [f, l] of [['fx', '固定・変動'], ['sp', '特別感']]) if (pyRawAsk(D.cat, f) && !D[f]) return `${l}を選んでください`;
+  if (pyPrtDiff(D)) return '印字の合計と違います。品目を直すか「印字の合計を使わない」を押してください';
+  return '';
+}
+const pyDupKey = (D = PYD) => [D.date, D.start, pyTotal(D)].join('|');
+const pyDupNow = (D = PYD) => D.edit || D.dupKey !== pyDupKey(D) ? [] : payDup({ date: D.date, start: D.start, total: pyTotal(D) });
+const pyShopIds = (D = PYD) => D.shopOff ? [] : shopMatches(D.items.map(i => ({ n: i.n }))).map(([k]) => k);
 function pyCands(d) {
   const out = [], walk = (list, depth) => list.forEach(([id, a]) => { if (isPay(a)) return; if (isSpan(a) && !isPlan(a)) out.push({ id, a, depth }); walk(kidsOf(id), depth + 1); });
   walk(actsOn(d, { state: 'done' }), 0); return out;
@@ -200,11 +221,12 @@ function pyPrevMethod(payee) {
   const p = Object.values(DB.acts).filter(a => a.pay && !isPlan(a) && rolesOf(a, '支払先').some(r => (payee.e && r.e === payee.e) || (payee.name && r.name === payee.name))).sort((x, y) => (y.date + y.start).localeCompare(x.date + x.start))[0];
   const me = p && paidOf(p).find(z => z.who === 'me'); return me && me.how || null;
 }
-function pyNorm() { const D = PYD; if (pyAsk(D.cat, 'fx') && !D.fx) D.fx = '変動'; if (pyAsk(D.cat, 'sp') && !D.sp) D.sp = '日常'; }
+function pyNorm() { /* 都度決めるカテゴリに、黙って既定を入れない */ }
 function pyDraft(o) {
   const seed = window._capSeed && window._capSeed.type === 'pay' ? window._capSeed : null, cp = v => JSON.parse(JSON.stringify(v));
   let D;
-  if (o.id) {
+  if (o.draft) { D = cp(o.draft); D.batch = o.batch || 0; }
+  else if (o.id) {
     const a = DB.acts[o.id]; if (!a || !a.pay) return null;
     const pr = rolesOf(a, '支払先')[0], x = DB.exps[o.id], items = cp(a.pay.items).map(i => ({ ...i, users: usersOf(i).slice() }));
     const ppl = new Set(rolesOf(a, '同席', '参加').map(r => r.e).filter(Boolean)); items.forEach(i => i.users.forEach(u => u !== 'me' && ppl.add(u))); a.pay.payers.forEach(p => p.who && p.who !== 'me' && ppl.add(p.who));
@@ -220,9 +242,9 @@ function pyDraft(o) {
     const items = rd ? rd.items.map(i => ({ n: i.n || '', price: i.price || 0, tax: i.tax || TAX_DEFAULT, users: ['me'], ...(i.unk ? { unk: 1 } : {}), unread: 1 })) : [];
     D = { id: null, edit: 0, fromRead: rd ? 1 : 0, date, start, parent, parentTouched: o.parent !== undefined, payee, amt: rd && !rd.items.length ? rd.amt : (!rd && (o.amt || seed && seed.amt)) || 0, items,
       people: ppl, peopleTouched: false, paySet: ['me'], payAmt: {}, payHow: {}, method: pyPrevMethod(payee) || DB.methods[0], methodTouched: false,
-      cat: catGuess(payee, seed && seed.text || ''), catTouched: false, basis: 'items', n: 0, me: 0, fx: null, sp: null, memo: '', itemCat: {}, unread: rd ? { ...rd.unread } : {}, settled: false, roles: [] };
+      printed: rd && rd.items.length && rd.amt ? rd.amt : null, cat: catGuess(payee, seed && seed.text || ''), catTouched: false, basis: 'items', n: 0, me: 0, fx: null, sp: null, memo: '', itemCat: {}, unread: rd ? { ...rd.unread } : {}, settled: false, roles: [] };
   }
-  PYD = D; pyNorm(); return D;
+  if (!o.pure) PYD = D; return D;
 }
 function pyTotal(D = PYD) { return D.items.length ? D.items.reduce((s, i) => s + itemAmt(i), 0) : (+D.amt || 0); }
 const pyUsers = (D, i) => i.users.filter(u => u === 'me' || D.people.includes(u));
@@ -243,10 +265,11 @@ function pyPayDist() { const t = pyTotal(), n = PYD.paySet.length, b = Math.floo
 function openPayEditor(o = {}) {
   if (!pyDraft(o)) return toast('支払いが見つかりません', { bad: 1 });
   PYD0 = JSON.stringify(PYD);
-  openSheet({ id: 'pay-ed', title: o.id ? '支払いを直す' : '支払いを記録', tall: true, lead: o.id ? '' : `<button class="btn sec sm" onclick="pyToReceipt()">${ic('camera')}<span>レシートを読み取る</span></button>`,
-    body: pyEdBody(), dirty: () => PYD && (PYD.fromRead || JSON.stringify(PYD) !== PYD0), primary: { label: o.id ? '保存' : '支払いを保存', on: pySaveEd, disabled: pyBad() } });
+  openSheet({ id: 'pay-ed', title: o.id ? '支払いを直す' : '支払いを記録', tall: true, lead: o.id || o.batch ? '' : `<button class="btn sec sm" onclick="pyToReceipt()">${ic('camera')}<span>レシートを読み取る</span></button>`,
+    body: pyEdBody(), dirty: () => PYD && (PYD.fromRead || JSON.stringify(PYD) !== PYD0), onClose: o.batch ? pyBtBack : undefined, primary: { label: pyPrimaryLabel(), on: pySaveEd, disabled: pyBad() } });
 }
-const pyPrimary = () => setSheetPrimary({ label: PYD.edit ? '保存' : '支払いを保存', on: pySaveEd, disabled: pyBad() });
+const pyPrimaryLabel = () => PYD.edit ? '保存' : pyDupNow().length ? '重複ではないので保存' : PYD.batch ? 'この内容で確かめた' : '支払いを保存';
+const pyPrimary = () => { PYD._lbl = pyPrimaryLabel(); setSheetPrimary({ label: PYD._lbl, on: pySaveEd, disabled: pyBad() }); };
 function pyRe() { setSheetBody(pyEdBody()); pyPrimary(); }
 function pyEdBody() {
   const D = PYD, total = pyTotal(), hasIt = D.items.length > 0, need = pyNeed(), un = D.unread || {}, pp = D.people, c = pyCalc();
@@ -257,37 +280,55 @@ function pyEdBody() {
   const itemRow = (it, i) => `<div class="py-eit${it.unk ? ' py-unk' : ''}"><div class="py-eit-r">${input({ value: it.n, ph: it.unk ? '読めませんでした' : '品名', oninput: `pyItN(${i},this.value)`, cls: it.unread || it.unk ? 'py-unread' : '', label: '品名' })}
       ${it.lines ? `<span class="py-eit-a">${amt(itemAmt(it))}<small>金額行あり</small></span>` : input({ value: it.price || '', ph: '金額', mode: 'numeric', oninput: `pyItP(${i},this.value)`, cls: `num py-eit-p${it.unread ? ' py-unread' : ''}`, label: '金額' })}${iconBtn('trash', 'この品目を消す', `pyItDel(${i})`)}</div>
       ${pp.length ? chips([['me', '自分'], ...pp.map(w => [w, whoShort(w)])], pyUsers(D, it), pyFn('pyItU', i)).replace('class="chips"', 'class="chips wrap"') : ''}</div>`;
-  const askFx = pyAsk(D.cat, 'fx'), askSp = pyAsk(D.cat, 'sp');
+  const dups = pyDupNow(), fxL = [['fx', '固定・変動', ['固定', '変動'], 'pyFxEd', catFx(D.cat)], ['sp', '特別感', ['日常', '非日常'], 'pySpEd', catSp(D.cat)]];
+  const askF = f => `<div class="field${D.need && !D[f[0]] ? ' py-need' : ''}"><span class="field-l">${f[1]}</span>${seg(f[2].map(k => [k, k]), D[f[0]], f[3])}</div>`;
+  const defF = f => `<div class="field"><span class="field-l">${f[1]}</span>${seg([['_', 'カテゴリの既定'], ...f[2].map(k => [k, k])], D[f[0]] || '_', f[3])}</div>`;
   const payers = pp.length ? `<div class="field"><span class="field-l">払った人</span>${chips([['me', '自分'], ...pp.map(w => [w, whoShort(w)])], D.paySet, 'pyPayer').replace('class="chips"', 'class="chips wrap"')}
       ${D.paySet.length > 1 ? D.paySet.map(w => `<div class="py-pr"><span>${ent(w, { link: false, short: 1 })}</span>${input({ id: 'py-pa-' + w, value: D.payAmt[w] || '', mode: 'numeric', ph: '0', oninput: `pyPayAmt(${q(w)},this.value)`, cls: 'num', label: whoShort(w) + 'が払った額' })}</div>`).join('') + `<div id="py-psum">${pyPsum()}</div>` : ''}</div>` : '';
   const split = need ? `<div class="field"><span class="field-l">自分の負担</span><div class="card pad py-split">${seg(PY_BASIS, D.basis, 'pyBasisEd')}
       ${D.basis === 'even' ? `<div class="py-ex"><span>人数</span><div class="py-step"><button onclick="pyNEd(-1)" aria-label="人数を減らす">−</button><b class="num">${D.n || pp.length + 1}人</b><button onclick="pyNEd(1)" aria-label="人数を増やす">＋</button></div></div>` : ''}
-      ${D.basis === 'amount' ? `<div class="py-ex"><span>自分の負担</span>${input({ value: D.me || '', ph: '0', mode: 'numeric', oninput: 'pyMeEd(this.value)', cls: 'num', label: '自分の負担' })}</div>` : ''}
+      ${D.basis === 'amount' ? `<div class="py-ex"><span>自分の負担</span>${input({ value: D.me || '', ph: '0', mode: 'numeric', oninput: 'pyMeEd(this.value)', cls: 'num', label: '自分の負担' })}</div>${pyMyPaid() > 0 && pyMyPaid() !== (D.me || 0) ? `<div class="py-ex py-fill">${btn(`自分が払った ${yen(pyMyPaid())} を入れる`, 'pyMeFill()', 'sec', { sm: 1 })}</div>` : ''}` : ''}
       <div id="py-res">${pyRes(c)}</div></div></div>` : '';
-  return `<div class="field"><span class="field-l">金額</span>${amtB}</div>
+  return `${dups.length ? `<div class="py-dup">${banner('同じ日・同じ金額の支払いがあります', 'warn')}<div class="stack">${dups.map(([k]) => paySlip(k)).join('')}</div></div>` : ''}
+    <div class="field"><span class="field-l">金額</span>${amtB}<div id="py-prt">${pyPrt()}</div></div>
     ${pickField('支払先', un.payee && D.payee ? readMark(payeeV) : payeeV, 'pyPayee()', { emptyv: !D.payee })}
     <div class="grid2">${field('日付', input({ id: 'py-d', type: 'date', value: D.date, onchange: 'pyWhen()', label: '日付' }))}${field('時刻', input({ id: 'py-t', type: 'time', value: D.start, onchange: 'pyWhen()', label: '時刻' }))}</div>
     ${D.paySet.includes('me') ? `<div class="field"><span class="field-l">支払い方法</span>${chips(DB.methods.map(m => [m, m]), D.method, 'pyMethod').replace('class="chips"', 'class="chips wrap"')}</div>` : ''}
     ${pickField('カテゴリ', catTag(D.cat, { path: 1 }), 'pyCatEd()')}
     ${pickField('活動の中', par ? `${kindIc(par)}<span>${esc(actTitle(par))}</span><span class="mini num">${timeText(par)}</span>` : 'なし(日の直下)', 'pyParent()', { emptyv: !par })}
-    <div class="field"><span class="field-l">品目</span>${D.items.map(itemRow).join('')}${btn('品目を足す', 'pyItAdd()', 'dash', { icon: 'plus' })}</div>
+    <div class="field"><span class="field-l">品目</span>${D.items.map(itemRow).join('')}${btn('品目を足す', 'pyItAdd()', 'dash', { icon: 'plus' })}<div id="py-shop">${pyShopHtml()}</div></div>
     ${pickField('一緒の人', pp.length ? `<span class="ents">${pp.map(e => ent(e, { link: false })).join('')}</span>` : '足す', 'pyPeople()', { emptyv: !pp.length })}
     ${payers}${split}
-    ${askFx ? `<div class="field"><span class="field-l">固定・変動</span>${seg([['固定', '固定'], ['変動', '変動']], D.fx, 'pyFxEd')}</div>` : ''}
-    ${askSp ? `<div class="field"><span class="field-l">特別感</span>${seg([['日常', '日常'], ['非日常', '非日常']], D.sp, 'pySpEd')}</div>` : ''}
+    ${fxL.filter(f => pyRawAsk(D.cat, f[0])).map(askF).join('')}
+    <details class="py-more"${D.more ? ' open' : ''} ontoggle="PYD.more=this.open"><summary>くわしく</summary>${fxL.filter(f => !pyRawAsk(D.cat, f[0])).map(defF).join('')}</details>
     ${field('メモ', textarea({ rows: 2, ph: 'メモ', oninput: 'pyMemoEd(this.value)', value: D.memo, label: 'メモ' }))}`;
 }
+const pyMyPaid = (D = PYD) => D.paySet.includes('me') ? (D.paySet.length === 1 ? pyTotal(D) : (+D.payAmt.me || 0)) : 0;
+const pyMeFill = () => { PYD.me = pyMyPaid(); pyRe(); };
+function pyPrt() {
+  const d = pyPrtDiff(); if (!d) return '';
+  return `<div class="py-prt"><span class="num">印字 ${yen(PYD.printed)} · 差 ${yen(Math.abs(d))}</span>${btn('印字の合計を使わない', 'pyPrtOff()', 'sec', { sm: 1 })}</div>`;
+}
+const pyPrtOff = () => { PYD.printedOff = 1; pyRe(); };
+function pyShopHtml() {
+  const ids = pyShopIds(PYD), all = shopMatches(PYD.items.map(i => ({ n: i.n })));
+  if (!all.length) return '';
+  return `<div class="py-shop"><span class="py-shop-i">${ic('bag')}</span><div class="py-shop-m"><b>買い物リストの ${all.length}件を完了にする</b><span class="mini">${all.map(([, t]) => esc(t.t)).join('・')}</span></div>${toggle(!PYD.shopOff, 'pyShopTog()', '買い物リストを完了にする')}</div>`;
+}
+const pyShopTog = () => { PYD.shopOff = PYD.shopOff ? 0 : 1; pyShopRe(); };
+const pyShopRe = () => { const e = $('#py-shop'); if (e) e.innerHTML = pyShopHtml(); };
 const pyTotHtml = () => PYD.unread && PYD.unread.amt ? readMark(amt(pyTotal(), { cls: 'big' })) : amt(pyTotal(), { cls: 'big' });
 const pyRes = c => `<div class="py-res"><span class="py-k">自分の負担</span>${amt(c.mine, { cls: 'big' })}${c.bal ? tag(balanceText({ amt: c.bal, who: c.who }), 'owe') : ''}</div>`;
 function pyPsum() { const t = pyTotal(), s = pyPaySum(), d = t - s; return `<div class="py-psum num"><span>払った額の合計 ${yen(s)} / ${yen(t)}</span>${d ? tag(d > 0 ? `あと ${yen(d)}` : `超過 ${yen(-d)}`) : ''}</div>`; }
 /** 入力のたびに、合計・自分の負担・払った額の合計だけを書き換える(フォーカスを失わない) */
 function pyRefresh() {
   const t = $('#py-tot'); if (t) t.innerHTML = pyTotHtml(); const r = $('#py-res'); if (r) r.innerHTML = pyRes(pyCalc()); const p = $('#py-psum'); if (p) p.innerHTML = pyPsum();
-  const bad = pyBad(); if (PYD._bad !== bad) { PYD._bad = bad; pyPrimary(); }
+  const pt = $('#py-prt'); if (pt) pt.innerHTML = pyPrt();
+  const bad = pyBad(); if (PYD._bad !== bad || PYD._lbl !== pyPrimaryLabel()) { PYD._bad = bad; pyPrimary(); }
 }
 /* ---- 入力 ---- */
 function pyAmt(v) { PYD.amt = pyNum(v); delete PYD.unread.amt; if (PYD.paySet.length > 1) pyPayDist(); pyRefresh(); }
-function pyItN(i, v) { const it = PYD.items[i]; it.n = v; if (v.trim()) delete it.unk; delete it.unread; }
+function pyItN(i, v) { const it = PYD.items[i]; it.n = v; if (v.trim()) delete it.unk; delete it.unread; pyShopRe(); }
 function pyItP(i, v) { const it = PYD.items[i]; it.price = pyNum(v); delete it.unread; pyRefresh(); }
 function pyItU(i, k) { const u = PYD.items[i].users, j = u.indexOf(k); if (j >= 0) { if (u.length > 1) u.splice(j, 1); } else u.push(k); pyRe(); }
 function pyItAdd() { const D = PYD; D.items.push({ n: '', price: D.items.length ? 0 : D.amt, tax: TAX_DEFAULT, users: ['me'] }); if (D.items.length === 1) D.amt = 0; pyRe(); }
@@ -300,8 +341,8 @@ const pyMethod = m => { PYD.method = m; PYD.methodTouched = 1; pyRe(); };
 const pyBasisEd = k => { PYD.basis = k; if (k === 'even' && !PYD.n) PYD.n = PYD.people.length + 1; pyRe(); };
 const pyNEd = d => { PYD.n = Math.max(2, Math.min(99, (PYD.n || PYD.people.length + 1) + d)); pyRe(); };
 const pyMeEd = v => { PYD.me = pyNum(v); pyRefresh(); };
-const pyFxEd = k => { PYD.fx = k; pyRe(); };
-const pySpEd = k => { PYD.sp = k; pyRe(); };
+const pyFxEd = k => { PYD.fx = k === '_' ? null : k; pyRe(); };
+const pySpEd = k => { PYD.sp = k === '_' ? null : k; pyRe(); };
 const pyMemoEd = v => { PYD.memo = v; };
 function pyPayer(k) {
   const D = PYD, s = D.paySet, i = s.indexOf(k); if (i >= 0) { if (s.length > 1) s.splice(i, 1); } else s.push(k);
@@ -328,13 +369,13 @@ function pyPayee() {
   const D = PYD, cur = D.payee ? (D.payee.e ? 'e:' + D.payee.e : 'n:' + D.payee.name) : null;
   const set = p => {
     D.payee = p; delete D.unread.payee;
-    if (!D.catTouched) { const k = catGuess(p); if (k !== D.cat) { D.cat = k; D.fx = D.sp = null; pyNorm(); } }
+    if (!D.catTouched) { const k = catGuess(p); if (k !== D.cat) { D.cat = k; D.fx = D.sp = null; } }
     if (!D.methodTouched) D.method = pyPrevMethod(p) || D.method; pyRe();
   };
   pick({ title: '支払先', items, cur, search: '店・会社をさがす・新しく入れる', create: { label: 'をそのまま使う', on: t => set({ name: t }) }, on: k => set(k.startsWith('e:') ? { e: k.slice(2) } : { name: k.slice(2) }) });
 }
 function pyCatEd() {
-  pick({ title: 'カテゴリ', items: pyCatItems(), cur: PYD.cat, search: true, on: k => { if (k !== PYD.cat) { PYD.cat = k; PYD.fx = PYD.sp = null; pyNorm(); } PYD.catTouched = 1; pyRe(); } });
+  pick({ title: 'カテゴリ', items: pyCatItems(), cur: PYD.cat, search: true, on: k => { if (k !== PYD.cat) { PYD.cat = k; PYD.fx = PYD.sp = null; } PYD.catTouched = 1; pyRe(); } });
 }
 function pyParent() {
   const D = PYD, cs = pyCands(D.date);
@@ -348,14 +389,24 @@ function pyPeople() {
 }
 function pyToReceipt() { openReceipt({ replace: 1, parent: PYD.parent, date: PYD.date }); }
 /* ---- 保存 ---- */
-function pySaveEd() {
-  const D = PYD, total = pyTotal(), need = pyNeed(), mi = DB.methods[0];
+function pyBuild(D) {
+  const total = pyTotal(D), need = pyNeed(D), mi = DB.methods[0];
   const items = D.items.map(i => ({ n: i.n, ...(i.lines ? { lines: i.lines } : { price: +i.price || 0 }), tax: i.tax, users: pyUsers(D, i), memo: i.memo, unk: i.unk, unread: i.unread }));
   const payers = D.paySet.length === 1 ? [{ who: D.paySet[0], amt: total, how: D.paySet[0] === 'me' ? D.method : (D.payHow[D.paySet[0]] || mi) }] : D.paySet.map(w => ({ who: w, amt: +D.payAmt[w] || 0, how: w === 'me' ? D.method : (D.payHow[w] || mi) }));
   const exp = { basis: need ? D.basis : 'items', cat: D.cat, itemCat: Object.fromEntries(Object.entries(D.itemCat).filter(([k]) => +k < items.length)), sp: D.sp || undefined, fx: D.fx || undefined, memo: D.memo.trim() };
   if (exp.basis === 'even') exp.n = D.n || D.people.length + 1; if (exp.basis === 'amount') exp.me = D.me;
-  const r = paySave({ id: D.id || undefined, date: D.date, start: D.start, parent: D.parent, payee: D.payee, roles: [...D.roles, ...D.people.map(e => ({ r: '同席', e }))], items, amt: items.length ? undefined : total, payers,
-    settled: D.settled, unread: Object.fromEntries(Object.entries(D.unread).filter(([, v]) => v)), note: D.note, exp });
+  return { id: D.id || undefined, date: D.date, start: D.start, parent: D.parent, payee: D.payee, roles: [...D.roles, ...D.people.map(e => ({ r: '同席', e }))], items, amt: items.length ? undefined : total, payers,
+    settled: D.settled, unread: Object.fromEntries(Object.entries(D.unread).filter(([, v]) => v)), note: D.note, exp, doneTasks: pyShopIds(D) };
+}
+function pySaveEd() {
+  const D = PYD, why = pyBlock();
+  if (why) { D.need = 1; pyRe(); toast(why, { bad: 1 }); hapt(30); return; }
+  if (!D.edit && !pyDupNow().length && payDup({ date: D.date, start: D.start, total: pyTotal() }).length && D.dupKey !== pyDupKey()) {
+    D.dupKey = pyDupKey(); pyRe(); const b = $$('.sheet-b').pop(); if (b) b.scrollTop = 0; hapt(30); return;
+  }
+  const o = pyBuild(D);
+  if (D.batch) return pyBtStore(o);
+  const r = paySave(o);
   if (D.edit) return done(r, { close: 1 });
   if (!done(r, { close: 1, go: '#/a/' + (r.id || ''), quiet: 1 })) return;
   toast(r.label, { undo: r.undo });
@@ -375,10 +426,12 @@ let PYRC = null;
 const pyPaper = r => `<div class="py-paper" aria-hidden="true"><b class="py-paper-h">${r.payee ? esc(E(r.payee.e).n) : '▒▒▒▒▒▒'}</b>
   ${r.items.length ? r.items.map(i => `<div class="py-paper-r"><span>${i.n ? esc(i.n) : '▒▒▒▒'}</span><span class="num">${i.price.toLocaleString('ja-JP')}</span></div>`).join('') : `<div class="py-paper-r"><span>▒▒▒▒▒▒</span><span>▒▒▒</span></div><div class="py-paper-r"><span>▒▒▒▒</span><span>▒▒▒</span></div>`}
   <div class="py-paper-r tot"><span>合計</span><span class="num">${r.amt.toLocaleString('ja-JP')}</span></div></div>`;
+const pyRcBody = () => `<label class="btn pri wide py-file">${ic('photo')}<span>写真を選ぶ</span><input type="file" accept="image/*" multiple onchange="pyPhotos(this)" aria-label="写真を選ぶ"></label>
+  ${sec('見本から選ぶ')}<div class="py-rcs">${PY_RC.map((s, i) => `<button class="py-rc" onclick="pyRcRead(${i})">${pyPaper(s.read())}<span class="py-rc-l"><b>${esc(s.t)}</b><span>${esc(s.sub)}</span></span></button>`).join('')}</div>`;
 function openReceipt(o = {}) {
-  PYRC = { o, timer: null };
-  openSheet({ id: 'receipt', title: 'レシートを読み取る', tall: true, body: `<div class="py-rcs">${PY_RC.map((s, i) => `<button class="py-rc" onclick="pyRcRead(${i})">${pyPaper(s.read())}<span class="py-rc-l"><b>${esc(s.t)}</b><span>${esc(s.sub)}</span></span></button>`).join('')}</div>`,
-    onClose: () => { if (PYRC) clearInterval(PYRC.timer); } });
+  PYRC = { o, timer: null, rows: null, view: 'pick' };
+  openSheet({ id: 'receipt', title: 'レシートを読み取る', tall: true, body: pyRcBody(), dirty: () => !!(PYRC && PYRC.rows && PYRC.rows.length),
+    onClose: () => { if (PYRC) { clearInterval(PYRC.timer); (PYRC.rows || []).forEach(r => r.url && URL.revokeObjectURL(r.url)); } } });
 }
 function pyRcRead(i) {
   const s = PY_RC[i], r = s.read(); let p = 0;
@@ -388,4 +441,55 @@ function pyRcRead(i) {
     clearInterval(PYRC.timer); const o = PYRC.o; if (o.replace) closeAllSheets(); else closeSheet(true);
     openPayEditor(o.parent ? { read: r, parent: o.parent } : { read: r });
   }, 90);
+}
+/* ---- 写真を選ぶ(模擬: 見本の読み取り結果を順に割り当てる。最大20枚) ---- */
+function pyPhotos(inp) {
+  let fs = [...inp.files]; inp.value = ''; if (!fs.length) return;
+  if (fs.length > 20) { fs = fs.slice(0, 20); toast('最大20枚までです', { bad: 1 }); }
+  if (fs.length === 1) return pyRcRead(0);
+  PYRC.rows = fs.map((f, i) => {
+    const r = PY_RC[i % PY_RC.length].read(); if (i >= PY_RC.length) r.date = dAdd(r.date, -Math.floor(i / PY_RC.length));
+    return { i, name: f.name, url: URL.createObjectURL(f), r, p: 0, st: 'wait', skip: false };
+  });
+  PYRC.view = 'list'; PYRC.tick = 0; pyBtRender();
+  PYRC.timer = setInterval(pyBtTick, 90);
+}
+function pyBtTick() {
+  const R = PYRC; if (!R || !R.rows) return clearInterval(R && R.timer); R.tick++;
+  let busy = 0;
+  R.rows.forEach(r => {
+    if (r.st === 'ready') return; busy = 1;
+    if (R.tick < r.i * 2) return; r.st = 'reading'; r.p = Math.min(1, r.p + .09);
+    if (r.p >= 1) {
+      const rd = { ...r.r, parent: R.o.parent }, D = pyDraft({ read: rd, parent: R.o.parent, pure: 1 });
+      r.D = D; r.save = pyBuild(D); r.block = pyBlock(D); r.dup = payDup({ date: D.date, start: D.start, total: pyTotal(D) }).length > 0; r.skip = r.dup; r.st = 'ready';
+    }
+  });
+  if (R.view === 'list') pyBtRender();
+  if (!busy) clearInterval(R.timer);
+}
+const pyBtN = () => PYRC.rows.filter(r => r.st === 'ready' && !r.skip && !r.block).length;
+function pyBtRow(r) {
+  const D = r.D, name = D ? (D.payee ? (D.payee.e && E(D.payee.e) ? E(D.payee.e).n : D.payee.name) : '店名なし') : r.name;
+  const st = r.st !== 'ready' ? progress(r.st === 'wait' ? 0 : r.p, '読み取り中') : r.skip ? tag('飛ばす') : r.block ? tag('確認が要る', 'read') : r.dup ? tag('重複の疑い') : r.done ? tag('確認済み', 'me') : tag('確認待ち', 'read');
+  return `<div class="py-bt${r.skip ? ' off' : ''}"><button class="py-bt-m" onclick="pyBtOpen(${r.i})" ${r.st === 'ready' ? '' : 'disabled'}><img class="py-bt-th" src="${r.url}" alt=""><span class="py-bt-t"><b>${esc(name)}</b><span class="py-bt-s">${st}</span></span>${r.st === 'ready' ? amt(pyTotal(D)) : ''}</button>${r.st === 'ready' ? `<button class="py-bt-x" onclick="pyBtSkip(${r.i})">${r.skip ? '含める' : '飛ばす'}</button>` : ''}</div>`;
+}
+function pyBtRender() {
+  const R = PYRC; if (!R || !R.rows || R.view !== 'list') return;
+  setSheetTitle(`レシート ${R.rows.length}枚`); setSheetBody(`<div class="py-bts">${R.rows.map(pyBtRow).join('')}</div>`);
+  const n = pyBtN(), busy = R.rows.some(r => r.st !== 'ready'); setSheetPrimary({ label: `${n}件の支払いを保存`, on: pyBtSaveAll, disabled: !n || busy });
+}
+function pyBtBack() { if (PYRC && PYRC.rows) { PYRC.view = 'list'; pyBtRender(); } }
+function pyBtOpen(i) { const r = PYRC.rows[i]; if (!r || r.st !== 'ready') return; PYRC.view = 'edit'; openPayEditor({ draft: r.D, batch: i + 1 }); }
+function pyBtSkip(i) { const r = PYRC.rows[i]; r.skip = !r.skip; pyBtRender(); }
+function pyBtStore(o) {
+  const r = PYRC.rows[PYD.batch - 1]; r.D = JSON.parse(JSON.stringify(PYD)); r.D.batch = 0; r.save = o; r.block = ''; r.done = 1; r.skip = false; r.dup = false;
+  closeSheet(true);
+}
+function pyBtSaveAll() {
+  const rs = PYRC.rows.filter(r => r.st === 'ready' && !r.skip && !r.block), undos = []; let bad = '';
+  rs.forEach(r => { const x = paySave(r.save); if (x.ok) undos.push(x.undo); else bad = x.why; });
+  if (!undos.length) return toast(bad || 'できませんでした', { bad: 1 });
+  closeAllSheets(); rerender();
+  toast(`${undos.length}件の支払いを保存しました`, { undo: () => undos.slice().reverse().forEach(u => u()) }); hapt();
 }
