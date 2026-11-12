@@ -173,7 +173,8 @@ function llmSanitize(raw, n) {
 /* ---- 模擬(LLM の代わり。規則で読む) ---- */
 function llmMock(text) {
   try {
-    const parts = String(text == null ? '' : text).split(/[。、\n]+/).map(s => s.trim()).filter(Boolean);
+    /* 文 = 空行で分けた1まとまり(行の区切りは readText が読む。改行で割ると日時の行が別の文になる) */
+    const parts = typeof readBlocks === 'function' ? readBlocks(text) : String(text == null ? '' : text).split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
     const out = [];
     for (const s of parts) {
       let rc = [];

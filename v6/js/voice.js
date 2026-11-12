@@ -2,11 +2,15 @@
 'use strict';
 /* 長押し(450ms・10px 以内)で録音開始 → 離しても続く → 録音中の ＋ のタップで完了 → 雑記に置く。
    ＋(.nav-plus / .rail-plus)は renderNav で描き直されるので、要素には直接付けず document に委譲する。
-   区切り: 確定の1件どうしは半角空白、認識の再開の境目と「改行」は改行。composer は確定の1件ごとに onText へ渡す。 */
+   区切り: 確定の1件どうしは改行(話の間)、「改行」は区切りの改行の代わり、「改行」を2回続けると空行(次の記録)。
+   認識の再開の境目も間と同じ1つの改行。composer は確定の1件ごとに onText へ渡す。 */
 
 const VC_SEL = '.nav-plus,.rail-plus';
 const VC_HOLD = 450, VC_SLOP = 10, VC_MAX_FAILS = 3;
 const VC_NL = /^(改行|かいぎょう)[\s。、．.!！?？]*$/;   /* 改行だけの確定 */
+const VC_NUMRUN = /[0-9〇一二三四五六七八九十百千万][0-9〇一二三四五六七八九十百千万 ]*(?=[円時分])/g;   /* 円・時・分の直前の数字の並び */
+const VC_DIG = { 〇: '0', 一: '1', 二: '2', 三: '3', 四: '4', 五: '5', 六: '6', 七: '7', 八: '8', 九: '9' };
+const VC_KV = { 〇: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
 let vcS = { active: false, from: 'nav', onText: null, rec: null, base: '', sess: '', pend: '', cut: false, gotResult: false, fails: 0, rt: 0 };
 let vcPress = null;      /* 押している最中(長押しの判定) */
 let vcEat = false;       /* 長押しの後の離す操作の click を1回だけ抑える */
@@ -17,14 +21,27 @@ function voiceSupported() { return !!vcCls(); }
 function voiceActive() { return !!vcS.active; }
 function vcOnPlus(t) { return t && t.closest ? t.closest(VC_SEL) : null; }
 
-/* 確定・途中の1件を断片にする: 改行の言葉だけなら '\n'、それ以外は前後の空白を外して空白をまとめる */
+/* 漢数字の並び(空白を除いた形)を算用数字にする。単位(十百千万)が無ければ1文字ずつ(二〇〇→200)。算用数字と混ざる時は直さない */
+function vcNum(run) {
+  const r = run.replace(/ /g, '');
+  if (!/[十百千万]/.test(r)) return r.replace(/[〇一二三四五六七八九]/g, c => VC_DIG[c]);
+  if (/[0-9]/.test(r)) return r;
+  let total = 0, sec = 0, n = 0;
+  for (const c of r) {
+    if (c in VC_KV) n = VC_KV[c];
+    else if (c === '十' || c === '百' || c === '千') { sec += (n || 1) * { 十: 10, 百: 100, 千: 1000 }[c]; n = 0; }
+    else if (c === '万') { total += ((sec + n) || 1) * 10000; sec = 0; n = 0; }
+  }
+  return String(total + sec + n);
+}
+/* 確定・途中の1件を断片にする: 改行の言葉だけなら '\n'。それ以外は空白をまとめ、円・時・分の前の数字を算用数字にし、数字の間の空白を詰める */
 function vcPiece(t) {
   const s = String(t == null ? '' : t).trim();
   if (!s) return '';
   if (VC_NL.test(s)) return '\n';
-  return s.replace(/\s+/g, ' ');
+  return s.replace(/\s+/g, ' ').replace(VC_NUMRUN, m => vcNum(m)).replace(/(\d) +(?=\d)/g, '$1');
 }
-/* 断片をつなぐ。sep は断片どうしの区切り(確定の1件どうしは ' '、認識の再開の境目は '\n')。改行の後と、改行で始まる断片の前には空白を入れない */
+/* 断片をつなぐ。sep は断片どうしの区切り(確定の1件どうし・認識の再開の境目は '\n')。改行の後と、改行で始まる断片の前には改行を足さない */
 function vcPut(text, piece, sep) {
   if (!piece) return text;
   if (!text) return piece;
@@ -33,7 +50,7 @@ function vcPut(text, piece, sep) {
   return text + sep + piece;
 }
 /* 今までの全文 = 前の認識の分 + 今の認識の確定 + 途中 */
-function vcAll() { const s = vcS; return vcPut(vcPut(s.base, s.sess, '\n'), s.pend, ' '); }
+function vcAll() { const s = vcS; return vcPut(vcPut(s.base, s.sess, '\n'), s.pend, '\n'); }
 /* 空白の連続だけまとめる(改行は残す)。改行の前後の空白は外す */
 function vcText() { return vcAll().replace(/[^\S\n]+/g, ' ').replace(/ *\n */g, '\n').trim(); }
 
@@ -112,9 +129,9 @@ function vcRun() {
       const r = list[i]; if (!r) continue;
       const pc = vcPiece(r[0] && r[0].transcript);
       if (r.isFinal) {
-        fin = vcPut(fin, pc, ' ');
+        fin = vcPut(fin, pc, '\n');
         if (!got.has(i)) { got.add(i); if (s.from === 'composer' && pc) vcOut(s, pc); }
-      } else mid = vcPut(mid, pc, ' ');
+      } else mid = vcPut(mid, pc, '\n');
     }
     s.sess = fin; s.pend = mid;
     if (fin || mid) s.gotResult = true;
