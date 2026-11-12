@@ -1,28 +1,36 @@
-/* 個人記録 v6.2 — 入力エリア(担当 C。仕様 INBOX.md §7・§3.4・§7.4)
-   状態は IN_ で始まる最上位の変数だけ。旧「すばやく書く」(s-home.js)と同名の capOpen / capAs / _capSeed を残す。 */
+/* 個人記録 v6.3 — 入力(担当 B。仕様 INPUT2.md §2・INBOX.md §7)
+   2つのモード: 記録モード(.in-wrap.is-rec = #in-t に焦点がある間)と履歴モード(焦点が無い間)。
+   #in-t はシートが開いている間 1度も作り直さない。描き直しは履歴・帯・札・道具・操作だけ。
+   旧「すばやく書く」(s-home.js)と同名の capOpen / capAs / _capSeed を残す。 */
 'use strict';
-
-/* 部品に無い「マイク」を足す(IC は const のオブジェクト。足すだけ) */
 
 const IN_KEY_DRAFT = 'prmock-v6-inbox-draft';
 let IN_DRAFT = '';        /* 書きかけ(閉じても残す。localStorage に写す) */
 let IN_FILTER = 'all';    /* 絞り込み: all | jot | tent | add | edit | del */
 let IN_LIMIT = 200;       /* 表示する行数(「もっと前」で +200) */
 let IN_SEL = null;        /* 選択モードの雑記id の Set。null = 選択モードでない */
-let IN_FORCE = null;      /* 種類を決め打ち(openCapture(force) / 解釈の chips) */
+let IN_FORCE = null;      /* 種類の決め打ち: null(自動) | pay | plan | event | task | memo | diary */
 let IN_FOCUS = null;      /* 開いた時に合わせる {t, k} */
 let IN_NEW = null;        /* 今送った雑記id(吹き出しを出す) */
 let IN_STICK = false;     /* 次の描き直しで一番下へ */
 let IN_KEEP = false;      /* 次の描き直しで位置を保つ(もっと前) */
-let IN_AUX = '';          /* #in-aux の状態: kinds | ip | sel */
 let IN_UNDO = null, IN_UNDO_T = 0;
 let IN_SHOWN = [];        /* いま描いている雑記id(すべて選ぶ用) */
 let IN_MIC_ON = false;
+let IN_OFF = new Set();   /* 読みから取り消した役: date | time | amt | type */
+let IN_BLUR_T = 0;        /* 焦点が外れてから履歴モードへ切り替えるまでの待ち */
+const IN_KINDS = [[null, '自動'], ['pay', '支払い'], ['plan', '予定'], ['event', '出来事'], ['task', 'ToDo'], ['memo', 'メモ'], ['diary', '日記']];
+const IN_TOOLS = '<button class="in-tl" onclick="inTool(\'today\')">今日</button>'
+  + '<button class="in-tl" onclick="inTool(\'tomorrow\')">明日</button>'
+  + '<button class="in-tl" onclick="inTool(\'time\')">時刻</button>'
+  + '<button class="in-tl" onclick="inTool(\'yen\')">円</button>'
+  + '<button class="in-tl" onclick="inTool(\'nl\')">改行</button>'
+  + '<button class="icon-btn in-mic in-tl-mic" aria-label="音声で入力" aria-pressed="false" onclick="inMic()">' + ic('mic') + '</button>';
 
 /* ---------- 公開: 開く・描き直す・互換 ---------- */
 
 /** 「入力」を開く。o = {focus: 雑記id か {t,k}, filter, text(書き出し。下書きを置き換える), force(種類)}
-    既に開いていれば、その中を描き直す。 */
+    既に開いていれば、その中を描き直す。開いた直後は記録モード(入力欄に焦点)。 */
 function openInbox(o = {}) {
   if (inWrap()) {
     if (o.text != null) inSetDraft(String(o.text));
@@ -31,36 +39,32 @@ function openInbox(o = {}) {
     if (o.focus) IN_FOCUS = inFocusKey(o.focus);
     IN_SEL = null; IN_LIMIT = Math.max(IN_LIMIT, 200);
     inRedrawAll();
+    if (o.text != null || 'force' in o) inFocusT();
     return;
   }
   IN_FILTER = o.filter || 'all';
   IN_LIMIT = 200; IN_SEL = null; IN_FORCE = o.force || null;
   IN_FOCUS = o.focus ? inFocusKey(o.focus) : null;
-  IN_NEW = null; IN_STICK = false; IN_KEEP = false; IN_AUX = '';
+  IN_NEW = null; IN_STICK = false; IN_KEEP = false;
   if (o.text != null) { IN_DRAFT = String(o.text); inSaveDraft(); }
   else IN_DRAFT = inLoadDraft();
-  const s = openSheet({ id: 'inbox', title: '入力', tall: true, lead: inLead(), body: inBody(), onClose: inClosed });
-  inVVBind(true);
-  const w = s.el, t = $('#in-t', w);
-  if (t) { t.focus({ preventScroll: true }); inGrow(t); }   /* ＋を押した瞬間に入力欄へ */
-  const log = $('#in-log', w);
-  if (log) { log.scrollTop = log.scrollHeight; inAfterLog(log); }
+  const s = openSheet({ id: 'inbox', title: '記録', tall: true, body: inBody(), onClose: inClosed });
+  inWire(s.el);
+  inRefresh();
+  const t = $('#in-t', s.el);
+  if (t) { t.focus({ preventScroll: true }); inGrow(t); }   /* ＋を押した瞬間に入力欄へ(記録モード) */
   return s;
 }
 
-/** 開いていれば描き直す(雑記・未確定・履歴が変わった時に呼ぶ。開いていなければ何もしない) */
+/** 開いていれば描き直す(雑記・未確定・履歴が変わった時に呼ぶ。開いていなければ何もしない)。#in-t には触れない */
 function inRefresh() {
   const w = inWrap(); if (!w) return;
-  $('h2', w).textContent = inTitle();
-  $('.sheet-lead', w).innerHTML = inLead();
-  $('#in-top', w).innerHTML = inTop();
-  const log = $('#in-log', w), y = log.scrollTop, bottom = inAtBottom(log);
-  log.classList.toggle('is-sel', IN_SEL != null);
-  log.innerHTML = inLogHtml();
-  if (IN_STICK || (!IN_KEEP && bottom)) log.scrollTop = log.scrollHeight; else log.scrollTop = y;
-  IN_STICK = false; IN_KEEP = false;
-  if (IN_SEL) $('#in-aux', w).innerHTML = inSelBar();
-  inAfterLog(log);
+  inPaintSel(w);
+  inPaintHead(w);
+  inPaintTop(w);
+  inPaintLog(w);
+  inPaintRec(w);
+  inPaintUndo(w);
 }
 
 /** ＋(従来の呼び出しの互換)。openCapture(force, {text}) = openInbox({force, text}) */
@@ -83,49 +87,122 @@ function capAs(p, type) {
 }
 /** 旧 capSave の互換: 「記録する」(確定で作る。雑記は作らない) */
 function capSave() { inRecord(); }
-/** 旧 capRefresh の互換: 解釈の部分だけ描き直す */
+/** 旧 capRefresh の互換: 札と操作の部分だけ描き直す */
 function capRefresh() { inAux(); }
 
-/* ---------- 枠と状態 ---------- */
+/* ---------- 枠・モード・焦点 ---------- */
 
 function inWrap() { const s = _sheets.find(x => x.o.id === 'inbox'); return s ? s.el : null; }
-const inTitle = () => (IN_SEL ? (IN_SEL.size ? `${IN_SEL.size}件を選択` : '雑記を選ぶ') : '入力');
+const inIsRec = w => { const wrap = w && $('.in-wrap', w); return !!(wrap && wrap.classList.contains('is-rec')); };
+const inTitle = () => (IN_SEL ? (IN_SEL.size ? `${IN_SEL.size}件を選択` : '雑記を選ぶ') : (inIsRec(inWrap()) ? '記録' : '入力'));
 /** ヘッダーの右(選ぶ / 完了) */
 const inLead = () => (IN_SEL == null ? btn('選ぶ', 'inToggleSel()', 'ghost', { icon: 'check' }) : btn('完了', 'inToggleSel()', 'sec'));
+const inboxCountSafe = () => (typeof inboxCount === 'function' ? inboxCount() : 0);
 
-/** 本体全体(入力欄は一度だけ作る。描き直しは履歴と上の部分だけ) */
+/** 本体の骨組み。一度だけ作る(#in-t はここで作ったきり)。中身は inRefresh が描く */
 function inBody() {
-  const top = inTop(), log = inLogHtml(), aux = IN_SEL ? inSelBar() : inAuxHtml();
   return `<div class="in-wrap">
-    <div class="in-top" id="in-top">${top}</div>
-    <div class="in-log${IN_SEL != null ? ' is-sel' : ''}" id="in-log" role="log" aria-label="履歴">${log}</div>
+    <div class="in-top" id="in-top"></div>
+    <div class="in-log" id="in-log" role="log" aria-label="履歴"></div>
     <div class="in-dock">
-      <div class="in-undo" id="in-undo">${inUndoHtml()}</div>
-      <div id="in-aux">${aux}</div>
-      ${IN_SEL != null ? '' : inRowHtml()}
+      <div class="in-kinds" id="in-kinds" role="group" aria-label="種類"></div>
+      <div class="in-row">
+        <textarea id="in-t" class="in-t" rows="1" aria-label="入力" placeholder="ランチ 980 など" oninput="inInput(this)" onkeydown="inKey(event)">${esc(IN_DRAFT)}</textarea>
+        <button class="icon-btn in-mic" id="in-mic" aria-label="音声で入力" aria-pressed="false" onclick="inMic()">${ic('mic')}</button>
+        <button class="btn pri in-send-h" id="in-send" onclick="inSend()"><span>送る</span></button>
+      </div>
+      <div class="in-undo" id="in-undo"></div>
+      <div class="in-cards" id="in-cards" aria-live="polite" hidden></div>
+      <div class="in-tools" id="in-tools">${IN_TOOLS}</div>
+      <div class="in-ops" id="in-ops"></div>
+      <div class="in-aux" id="in-aux"></div>
     </div></div>`;
 }
 
-/** 選ぶ・完了で本体を作り直す(題・本体。入力欄の中身は IN_DRAFT に残っている) */
-function inRedrawAll() {
-  const w = inWrap(); if (!w) return;
-  const log0 = $('#in-log', w), y = log0 ? log0.scrollTop : 0;
-  const top = _top();
-  if (top && top.el === w) { setSheetTitle(inTitle()); setSheetBody(inBody()); }
-  else { $('h2', w).textContent = inTitle(); $('.sheet-b', w).innerHTML = inBody(); }
-  $('.sheet-lead', w).innerHTML = inLead();
-  const log = $('#in-log', w);
-  if (log) { log.scrollTop = y; inAfterLog(log); }
+/** 入力欄に焦点がある間は記録モード、外れたら(150〜200ms 待って)履歴モード */
+function inWire(w) {
+  const t = $('#in-t', w); if (!t) return;
+  t.addEventListener('focus', () => { clearTimeout(IN_BLUR_T); inRecOn(w, true); });
+  t.addEventListener('blur', () => {
+    clearTimeout(IN_BLUR_T);
+    IN_BLUR_T = setTimeout(() => { if (document.activeElement !== t) inRecOn(w, false); }, 180);
+  });
+  /* 記録モードのボタンは押しても焦点を奪わない(iOS で押す前に切り替わって click が消えるのを防ぐ) */
+  w.addEventListener('pointerdown', e => inGuard(e, w), true);
+  w.addEventListener('mousedown', e => inGuard(e, w), true);
+  /* 全画面のシートは下に引いて閉じない(ヘッダーの掴みを止める) */
+  w.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('.sheet-h')) e.stopPropagation(); }, true);
 }
-
-function inClosed() {
-  inVVBind(false);
-  IN_SEL = null; IN_FOCUS = null; IN_NEW = null;
-  clearTimeout(IN_UNDO_T); IN_UNDO = null;
-  if (IN_MIC_ON) { IN_MIC_ON = false; typeof voiceActive === 'function' && voiceActive() && typeof voiceCancel === 'function' && voiceCancel(); }
+function inGuard(e, w) {
+  const wrap = $('.in-wrap', w);
+  if (!wrap || !wrap.classList.contains('is-rec') || !e.target.closest) return;
+  if (e.target.closest('button')) e.preventDefault();
+}
+/** 記録モード ⇄ 履歴モード(class の付け外しだけ。入力欄は作り直さない) */
+function inRecOn(w, on) {
+  const wrap = w && $('.in-wrap', w); if (!wrap) return;
+  if (on && IN_SEL != null) return;
+  if (wrap.classList.contains('is-rec') === on) return;
+  wrap.classList.toggle('is-rec', on);
+  const t = $('#in-t', w);
+  if (on) { if (t) t.style.height = ''; inPaintRec(w); }
+  else { const log = $('#in-log', w); if (log) log.scrollTop = log.scrollHeight; if (t) inGrow(t); }
+  inPaintHead(w);
+}
+/** 履歴モードへ(見出しの「履歴」) */
+function inToHist() {
+  const w = inWrap(); if (!w) return;
+  const t = $('#in-t', w);
+  inRecOn(w, false);
+  if (t && document.activeElement === t) t.blur();
 }
 
 const inAtBottom = log => log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+
+function inClosed() {
+  IN_SEL = null; IN_FOCUS = null; IN_NEW = null; IN_OFF = new Set();
+  clearTimeout(IN_UNDO_T); IN_UNDO = null; clearTimeout(IN_BLUR_T);
+  if (IN_MIC_ON) { IN_MIC_ON = false; typeof voiceActive === 'function' && voiceActive() && typeof voiceCancel === 'function' && voiceCancel(); }
+}
+
+/* ---------- 描き方(部分ごと) ---------- */
+
+function inPaintSel(w) {
+  const wrap = $('.in-wrap', w);
+  if (IN_SEL != null) wrap.classList.remove('is-rec');
+  wrap.classList.toggle('is-sel', IN_SEL != null);
+  const aux = $('#in-aux', w); if (aux) aux.innerHTML = IN_SEL != null ? inSelBar() : '';
+}
+function inPaintHead(w) {
+  w = w || inWrap(); if (!w) return;
+  const h = $('h2', w); if (h) h.textContent = inTitle();
+  const lead = $('.sheet-lead', w);
+  if (lead) lead.innerHTML = inIsRec(w) && IN_SEL == null ? btn(`履歴 ${inboxCountSafe()}`, 'inToHist()', 'ghost') : inLead();
+}
+function inPaintTop(w) { const el = $('#in-top', w); if (el) el.innerHTML = inTop(); }
+function inPaintLog(w) {
+  const log = $('#in-log', w); if (!log) return;
+  const y = log.scrollTop, bottom = inAtBottom(log);
+  log.classList.toggle('is-sel', IN_SEL != null);
+  log.innerHTML = inLogHtml();
+  if (IN_STICK || (!IN_KEEP && bottom)) log.scrollTop = log.scrollHeight; else log.scrollTop = y;
+  IN_STICK = false; IN_KEEP = false;
+  inAfterLog(log);
+}
+function inPaintUndo(w) { const el = $('#in-undo', w || inWrap() || document); if (el) el.innerHTML = inUndoHtml(); }
+/** 記録モードの札・種類・操作(入力欄は触らない) */
+function inPaintRec(w) {
+  w = w || inWrap(); if (!w) return;
+  const R = inRead();
+  const kinds = $('#in-kinds', w); if (kinds) kinds.innerHTML = inKindsHtml(R);
+  const cards = $('#in-cards', w);
+  if (cards) { cards.hidden = !R; cards.innerHTML = R ? inCardsHtml(R) : ''; }
+  const ops = $('#in-ops', w); if (ops) ops.innerHTML = inOpsHtml(R);
+  const send = $('#in-send', w); if (send) send.disabled = !IN_DRAFT.trim();
+}
+/** 描き直しの一括(互換) */
+function inRedrawAll() { inRefresh(); }
+function inAux() { const w = inWrap(); if (w) inPaintRec(w); }
 
 /** 下書きの保存と読み込み(閉じても残す) */
 function inSaveDraft() { try { IN_DRAFT ? localStorage.setItem(IN_KEY_DRAFT, IN_DRAFT) : localStorage.removeItem(IN_KEY_DRAFT); } catch (e) { } }
@@ -242,55 +319,156 @@ function inAfterLog(log) {
 const inKeyEl = (log, key) => [...log.querySelectorAll('[data-key]')].find(e => e.dataset.key === key) || null;
 function inFlash(el, cls) { el.classList.add(cls); setTimeout(() => el.classList.remove(cls), 1400); }
 
+/* ---------- 読み(記録モードの札。読みは readText / readBlocks の契約どおり) ---------- */
+
+/** 入力を空行で分けた文(1文 = 1記録)。readBlocks が無ければ空行で分ける */
+function inBlocks() {
+  const t = IN_DRAFT.trim(); if (!t) return [];
+  if (typeof readBlocks === 'function') { const b = readBlocks(t) || []; return b.length ? b : [t]; }
+  return t.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+}
+/** 1文の読み。A が未完成の時は今の読み(強い時だけ候補) */
+function inReadOne(text, o) {
+  if (IN_FORCE === 'diary') return { cand: null, conf: 'none', marks: [], off: [], hint: 'diary', hintDate: TODAY };
+  if (typeof readText === 'function') {
+    const r = readText(text, { date: TODAY, time: NOW }, o) || {};
+    const cand = r.cand || null;
+    return { cand, conf: r.conf || (cand ? 'strong' : 'none'), marks: r.marks || [], off: r.off || [], hint: r.hint || null, hintDate: r.hint === 'diary' ? (r.hintDate || TODAY) : null };
+  }
+  let cand = null;
+  if (o.type && typeof candFromType === 'function') cand = candFromType(text, o.type);
+  else if (typeof ruleCandidates === 'function') cand = (ruleCandidates(text) || [])[0] || null;
+  return { cand, conf: cand ? 'strong' : 'none', marks: [], off: [], hint: null, hintDate: null };
+}
+/** 入力全体の読み {items:[{text, r}], multi}。入力が空なら null */
+function inRead() {
+  const list = inBlocks(); if (!list.length) return null;
+  const type = IN_FORCE && IN_FORCE !== 'diary' ? IN_FORCE : null, off = [...IN_OFF];
+  const items = list.map(text => ({ text, r: inReadOne(text, { type, off }) }));
+  return { items, multi: items.length > 1 };
+}
+/** いまの書きかけの候補(旧 inCand の互換。無ければ雑記の候補) */
+function inCand() {
+  const R = inRead(); const it = R && R.items[0]; if (!it) return null;
+  if (it.r.cand) return it.r.cand;
+  return typeof candFromType === 'function' ? candFromType(it.text, 'memo') : null;
+}
+/** 記録できる文か(金額の無い支払いは不可。感想の文は候補が無い) */
+const inRecOk = r => !!r.cand && !(r.cand.type === 'pay' && !(+r.cand.amt > 0));
+const inCanRecord = R => !!R && R.items.some(it => inRecOk(it.r));
+/** 読み取った種類(自動の時に光らせる) */
+const inReadKind = r => (r.hint === 'diary' ? 'diary' : r.cand ? r.cand.type : null);
+/** 札に出す中身 {ty, cls, title, facts} */
+function inCardOf(c) {
+  const nm = e => (E(e) || {}).n || '';
+  if (c.type === 'pay') return { ty: '支払い', cls: '', title: (c.payee ? (c.payee.e ? nm(c.payee.e) : c.payee.name) : c.text) || '支払い', facts: [c.amt ? yen(c.amt) : '金額なし', relDay(c.date)] };
+  if (c.type === 'event' || c.type === 'plan') return { ty: c.type === 'event' ? '出来事' : '予定', cls: c.type === 'plan' ? ' is-plan' : '', title: c.title || '', facts: [`${relDay(c.date)} ${c.start || '終日'}${c.end ? '–' + c.end : ''}`] };
+  if (c.type === 'task') return { ty: 'ToDo', cls: '', title: c.t || '', facts: c.due ? [relDay(c.due)] : [] };
+  return { ty: 'メモ', cls: '', title: String(c.body || '').split('\n')[0].slice(0, 40), facts: [] };
+}
+
+/* ---------- 記録モードの描き方(種類・札・操作) ---------- */
+
+function inKindsHtml(R) {
+  const rd = R && !R.multi ? inReadKind(R.items[0].r) : null;
+  const chips = IN_KINDS.map(([k, l]) => {
+    const on = (IN_FORCE || null) === k, read = !IN_FORCE && !!k && k === rd;
+    return `<button class="in-k${on ? ' is-on' : ''}${read ? ' is-read' : ''}" aria-pressed="${on}" onclick="inForce(${q(k)})">${esc(l)}</button>`;
+  }).join('');
+  return chips + `<button class="in-k" onclick="inKindsMenu()">ほか</button>`;
+}
+function inCardsHtml(R) {
+  if (R.multi) return inMultiCard(R);
+  const it = R.items[0], r = it.r;
+  if (!r.cand) {
+    if (r.hint === 'diary') return `<section class="in-card is-diary"><p class="in-tt clamp">${esc(it.text)}</p><div class="in-facts"><span>${esc(relDay(r.hintDate || TODAY))}</span></div><div class="in-act">${btn('日記に書く', 'inDiaryAt(0)', 'sec', { wide: 1 })}</div></section>`;
+    return `<section class="in-card is-none"><span>雑記のまま置きます</span></section>`;
+  }
+  const k = inCardOf(r.cand);
+  return `<section class="in-card${r.conf === 'weak' ? ' is-weak' : ''}">
+    <div class="in-card-h">こう記録します</div>
+    <div class="in-card-b"><span class="in-ty${k.cls}">${esc(k.ty)}</span><b class="in-tt">${esc(k.title)}</b></div>
+    ${k.facts.length ? `<div class="in-facts num">${k.facts.map(f => `<span>${esc(f)}</span>`).join('')}</div>` : ''}
+    ${inMarksHtml(r)}
+  </section>`;
+}
+/** 読んだ語の小札。押すと取り消す(取り消した語は押すと戻る)。文の一部と判断して採らなかった語は押せない */
+function inMarksHtml(r) {
+  const on = (r.marks || []).map(m => `<button class="in-mk" onclick="inOffToggle(${q(m.role)})" aria-label="${esc(m.label)}を取り消す"><span class="in-mk-c">${esc(m.label)}${ic('close')}</span></button>`);
+  const off = (r.off || []).map(m => IN_OFF.has(m.role)
+    ? `<button class="in-mk is-off" onclick="inOffToggle(${q(m.role)})" aria-label="${esc(m.label)}を戻す"><span class="in-mk-c">${esc(m.label)}${ic('undo')}</span></button>`
+    : `<span class="in-mk is-dim"><span class="in-mk-c">${esc(m.label)}</span></span>`);
+  const all = [...on, ...off];
+  return all.length ? `<div class="in-mks">${all.join('')}</div>` : '';
+}
+function inMultiCard(R) {
+  const rows = R.items.map((it, i) => {
+    const r = it.r;
+    if (inRecOk(r)) { const k = inCardOf(r.cand); return `<div class="in-row2"><span class="in-ty${k.cls}">${esc(k.ty)}</span><b class="in-tt">${esc(k.title)}</b><span class="in-facts num">${esc(k.facts[0] || '')}</span></div>`; }
+    if (r.hint === 'diary') return `<div class="in-row2"><span class="in-ty">日記</span><span class="in-tt clamp">${esc(it.text)}</span>${btn('日記に書く', `inDiaryAt(${i})`, 'sec')}</div>`;
+    return `<div class="in-row2 is-raw"><span class="in-ty">雑記</span><span class="in-tt clamp">${esc(it.text)}</span></div>`;
+  }).join('');
+  return `<section class="in-card is-multi"><div class="in-card-h">こう記録します<span class="num">${R.items.length}件</span></div>${rows}</section>`;
+}
+/** 操作の列: 雑記に置く(副)・記録する(主) */
+function inOpsHtml(R) {
+  const can = inCanRecord(R), n = R && R.multi ? R.items.filter(it => inRecOk(it.r)).length : 0;
+  const label = R && R.multi ? `記録する ${n}件` : '記録する';
+  return btn('雑記に置く', 'inSend()', 'sec', { wide: 1, disabled: !IN_DRAFT.trim() }) + btn(label, 'inRecord()', 'pri', { wide: 1, disabled: !can });
+}
+/** ほか: 詳しい入力(今までの入口)。閉じて開く */
+function inKindsMenu() {
+  menu('ほかの入力', [
+    { label: '支払い(詳しく)', icon: 'yen', on: () => capOpen('openPayEditor()') },
+    { label: 'レシートを読み取る', icon: 'camera', on: () => capOpen('openReceipt()') },
+    { label: '予定(詳しく)', icon: 'cal', on: () => capOpen("openActEditor({state:'plan'})") },
+    { label: '出来事(詳しく)', icon: 'flag', on: () => capOpen("openActEditor({state:'done'})") },
+    { label: 'ToDo(詳しく)', icon: 'task', on: () => capOpen('openTaskEditor()') },
+    { label: 'エンティティ', icon: 'people', on: () => capOpen('openEntEditor()') },
+    { label: '今日の日記を開く', icon: 'pencil', on: () => capOpen('openDiary(' + JSON.stringify(TODAY) + ')') },
+  ]);
+}
+/** 種類の決め打ち(自動 = null) */
+function inForce(k) { IN_FORCE = k || null; const w = inWrap(); if (w) inPaintRec(w); inFocusT(); }
+/** 取り消す役を切り替える(読みを取り直す) */
+function inOffToggle(role) { if (IN_OFF.has(role)) IN_OFF.delete(role); else IN_OFF.add(role); inPaintRec(); }
+/** 道具の列: カーソル位置に区切って差し込む */
+function inTool(k) {
+  const t = $('#in-t', inWrap() || document); if (!t) return;
+  const v = t.value, a = t.selectionStart != null ? t.selectionStart : v.length, b = t.selectionEnd != null ? t.selectionEnd : a;
+  const before = v.slice(0, a), after = v.slice(b);
+  let s;
+  if (k === 'yen') { if (!/\d$/.test(before)) { inFocusT(); return; } s = '円'; }
+  else if (k === 'nl') s = '\n';
+  else {
+    s = k === 'today' ? '今日' : k === 'tomorrow' ? '明日' : NOW;
+    if (before && !/\s$/.test(before)) s = ' ' + s;
+    if (after && !/^\s/.test(after)) s = s + ' ';
+  }
+  const next = before + s + after, p = before.length + s.length;
+  t.value = next; t.setSelectionRange(p, p);
+  inSetDraft(next);
+  inFocusT();
+}
+
 /* ---------- 入力(下) ---------- */
 
-function inRowHtml() {
-  return `<div class="in-row">
-    <textarea id="in-t" class="in-t" rows="1" aria-label="入力" placeholder="ランチ 980 など" oninput="inInput(this)" onkeydown="inKey(event)">${esc(IN_DRAFT)}</textarea>
-    <button class="icon-btn in-mic" id="in-mic" aria-label="音声で入力" aria-pressed="false" onclick="inMic()">${ic('mic')}</button>
-    <button class="btn pri in-send" id="in-send" onclick="inSend()" ${IN_DRAFT.trim() ? '' : 'disabled'}><span>送る</span></button>
-  </div>`;
-}
-/** 入力が空: 種類ごとの入口。入力がある: 解釈と「記録する」 */
-function inAuxHtml() {
-  const c = IN_DRAFT.trim() ? inCand() : null;
-  IN_AUX = c ? 'ip' : 'kinds';
-  if (!c) return `<div class="in-kinds" role="group" aria-label="種類を選んで入力">${inKinds().map(([i, l, on]) => `<button class="in-k" onclick="${on}">${ic(i)}<span>${esc(l)}</span></button>`).join('')}</div>`;
-  const sum = inSum(c), dis = c.type === 'pay' && !c.amt;
-  const parts = [sum.ty, ...sum.parts.filter(Boolean)].map(x => `<span>${esc(x)}</span>`).join('');
-  return `<div class="in-ip"><span class="in-guess">${parts}</span>${btn('記録する', 'inRecord()', 'sec', { sm: 1, disabled: dis })}</div>${chips(inTypes(c), c.type, 'inForce')}`;
-}
-function inKinds() {
-  return [
-    ['yen', '支払い', 'capOpen(&quot;openPayEditor()&quot;)'],
-    ['camera', 'レシートを読み取る', 'capOpen(&quot;openReceipt()&quot;)'],
-    ['flag', '出来事', `capOpen(${q("openActEditor({state:'done'})")})`],
-    ['cal', '予定', `capOpen(${q("openActEditor({state:'plan'})")})`],
-    ['task', 'ToDo', 'capOpen(&quot;openTaskEditor()&quot;)'],
-    ['memo', 'メモ', `inForce(${q('memo')})`],
-    ['people', 'エンティティ', 'capOpen(&quot;openEntEditor()&quot;)'],
-    ['pencil', '今日の日記', `capOpen(${q('openDiary(' + q(TODAY) + ')')})`],
-  ];
-}
-function inAux() { const w = inWrap(); if (!w) return; const el = $('#in-aux', w); if (el) el.innerHTML = IN_SEL != null ? inSelBar() : inAuxHtml(); }
-function inTypes(c) { const T = [['pay', '支払い'], ['plan', '予定'], ['task', 'ToDo'], ['memo', 'メモ']]; if (c && c.type === 'event') T.splice(1, 0, ['event', '出来事']); return T; }
-function inForce(k) { IN_FORCE = k; inAux(); inFocusT(); }
 function inFocusT() { const t = $('#in-t', inWrap() || document); t && t.focus({ preventScroll: true }); }
 
 /** 本文を下書きに写す。textarea の値そのものは描き直さない(焦点を失わない) */
 function inSetDraft(text) {
   IN_DRAFT = text; inSaveDraft();
+  if (!String(text).trim()) IN_OFF = new Set();
   const w = inWrap(); if (!w) return;
   const log = $('#in-log', w), atB = log ? inAtBottom(log) : false;
   const t = $('#in-t', w); if (t && t.value !== text) t.value = text;
   if (t) inGrow(t);
-  const send = $('#in-send', w); if (send) send.disabled = !text.trim();
-  const mode = text.trim() ? 'ip' : 'kinds';
-  if (mode !== IN_AUX || mode === 'ip') inAux();
+  inPaintRec(w);
   if (log && atB) log.scrollTop = log.scrollHeight;
 }
 function inInput(el) { inSetDraft(el.value); }
 function inGrow(t) {
+  if (t.closest('.is-rec')) { t.style.height = ''; return; }   /* 記録モードは残りの高さを使う(CSS) */
   const cs = getComputedStyle(t), lh = parseFloat(cs.lineHeight) || 24, max = lh * 5 + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
   t.style.height = 'auto';
   t.style.height = Math.min(t.scrollHeight, max) + 'px';
@@ -302,37 +480,45 @@ function inKey(e) {
   const fine = typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches;
   if (e.metaKey || e.ctrlKey || (fine && !e.shiftKey)) { e.preventDefault(); inSend(); }
 }
+/** 音声などの確定文を足す。前が空なら何も挟まない。前が空でなければ空白を挟む(前が改行なら挟まない)。改行だけが来たら改行を足す */
 function inAppend(t) {
-  const s = String(t || '').trim(); if (!s) return;
-  const cur = IN_DRAFT.replace(/\s+$/, '');
-  inSetDraft(cur ? cur + ' ' + s : s);
+  const raw = String(t == null ? '' : t), s = raw.trim();
+  const cur = IN_DRAFT.replace(/[ 　]+$/, '');
+  if (!s) { if (cur && /\n/.test(raw)) inSetDraft(cur + raw.replace(/[^\n]/g, '')); }
+  else inSetDraft(cur ? cur + (/\n$/.test(cur) ? '' : ' ') + s : s);
   inFocusT(); inMicPaint();
 }
 
-/** 送る = 雑記に置く(未確定の記録まで同じ1回の変更で作られる) */
+/** 雑記に置く。空行で分かれていれば文ごとに、まとめて1回の変更で置く */
 function inSend() {
   const text = IN_DRAFT.trim();
   if (!text) { inFocusT(); return; }
-  if (!(typeof jotAdd === 'function')) return;
-  const r = jotAdd(text, { src: 'text', convert: true });
+  const list = inBlocks();
+  const r = list.length > 1 ? inJotsAdd(list) : (typeof jotAdd === 'function' ? jotAdd(text, { src: 'text', convert: true }) : null);
   if (!r || !r.ok) { done(r || { ok: false, why: 'できませんでした' }); return; }
-  IN_NEW = r.id; IN_STICK = true;
+  IN_NEW = r.id || (r.ids && r.ids[0]) || null; IN_STICK = true;
   inSetDraft('');
-  inUndoShow(r, text);
   inDone(r, { quiet: 1 });
+  inUndoShow(r, text);
   inFocusT();
+}
+/** 複数の雑記を置く(jotAddMany が無ければ1文ずつ。取り消しは全部まとめて1回) */
+function inJotsAdd(list) {
+  if (typeof jotAddMany === 'function') return jotAddMany(list, { src: 'text', convert: true });
+  const undos = []; let ok = true; const ids = [];
+  for (const t of list) { const r = jotAdd(t, { src: 'text', convert: true }); if (!r || !r.ok) { ok = false; break; } ids.push(r.id); if (r.undo) undos.push(r.undo); }
+  return { ok, ids, undo: () => undos.reverse().forEach(u => u()), label: `${list.length}件を雑記に置きました` };
 }
 function inUndoShow(r, text) {
   clearTimeout(IN_UNDO_T);
-  IN_UNDO = { undo: r.undo, text, label: r.label || '雑記に置きました' };
-  inUndoPaint();
-  IN_UNDO_T = setTimeout(() => { IN_UNDO = null; inUndoPaint(); }, 3000);
+  IN_UNDO = { undo: r.undo, text, label: r.label || '置きました' };
+  inPaintUndo();
+  IN_UNDO_T = setTimeout(() => { IN_UNDO = null; inPaintUndo(); }, 3000);
 }
 function inUndoHtml() { return IN_UNDO ? `<div class="in-undo-in"><span>${esc(IN_UNDO.label)}</span>${IN_UNDO.undo ? btn('取り消す', 'inUndo()', 'ghost', { sm: 1 }) : ''}</div>` : ''; }
-function inUndoPaint() { const el = $('#in-undo', inWrap() || document); if (el) el.innerHTML = inUndoHtml(); }
 function inUndo() {
   const u = IN_UNDO; if (!u) return;
-  clearTimeout(IN_UNDO_T); IN_UNDO = null; inUndoPaint();
+  clearTimeout(IN_UNDO_T); IN_UNDO = null; inPaintUndo();
   if (u.undo) u.undo();
   if (!IN_DRAFT.trim()) inSetDraft(u.text);
   inRefresh(); rerender(); toast('取り消しました');
@@ -345,34 +531,63 @@ function inMic() {
   else { IN_MIC_ON = true; voiceStart({ from: 'composer', onText: inAppend }); }
   inMicPaint();
 }
-function inMicPaint() { const b = $('#in-mic', inWrap() || document); if (!b) return; const on = !!(typeof voiceActive === 'function' && voiceActive()); b.classList.toggle('is-rec', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
-
-/* ---------- 候補・記録 ---------- */
-
-/** いまの書きかけの解釈(入力が空なら null)。強制の種類があればそれで読み替える */
-function inCand() {
-  const t = IN_DRAFT.trim(); if (!t) return null;
-  if (IN_FORCE && typeof candFromType === 'function') return candFromType(t, IN_FORCE);
-  const c = typeof ruleCandidates === 'function' ? (ruleCandidates(t) || [])[0] : null;
-  if (c) return c;
-  return typeof candFromType === 'function' ? candFromType(t, 'memo') : { type: 'memo', body: t, ents: [] };
+/** 録音中の印(入力欄の下の 🎤 も道具の列の 🎤 も同じ) */
+function inMicPaint() {
+  const on = !!(typeof voiceActive === 'function' && voiceActive());
+  document.querySelectorAll('.in-mic').forEach(b => { b.classList.toggle('is-rec', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
 }
-/** 解釈の札に出す内容(ty と parts) */
-function inSum(c) {
-  const nm = e => (E(e) || {}).n || '';
-  if (c.type === 'pay') return { ty: '支払い', parts: [c.amt ? yen(c.amt) : '金額なし', c.payee ? (c.payee.e ? nm(c.payee.e) : c.payee.name || '') : (c.text || '')] };
-  if (c.type === 'event' || c.type === 'plan') return { ty: c.type === 'event' ? '出来事' : '予定', parts: [c.title, `${relDay(c.date)} ${c.start || '終日'}${c.end ? '–' + c.end : ''}`] };
-  if (c.type === 'task') return { ty: 'ToDo', parts: [c.t, c.due ? relDay(c.due) : ''] };
-  return { ty: 'メモ', parts: [String(c.body || '').slice(0, 30)] };
-}
-function inRoles(ids) {
-  return (ids || []).filter(e => E(e)).map(e => {
-    const ty = (E(e).types || [])[0];
-    return { r: ty && isUnder(ty, 'place') ? '場所' : ty && isUnder(ty, 'project') ? 'プロジェクト' : '同席', e };
+
+/* ---------- 記録する・日記に書く ---------- */
+
+/** 「記録する」: 札の候補を確定の記録にする(雑記は作らない)。文が複数なら文ごとに記録し、読めない文は雑記に置く */
+function inRecord() {
+  const R = inRead(); if (!R || !inCanRecord(R)) return;
+  const text = IN_DRAFT.trim();
+  if (!R.multi) {
+    const r = inSaveCand(R.items[0].r.cand);
+    if (!r) return;
+    if (!r.ok) { done(r); return; }
+    IN_FORCE = null;
+    inSetDraft('');
+    inDone(r, { quiet: 1 });
+    inUndoShow(r, text);
+    inFocusT();
+    return;
+  }
+  const undos = []; let n = 0; const raw = []; let bad = '';
+  R.items.forEach(it => {
+    const x = inRecOk(it.r) ? inSaveCand(it.r.cand) : null;
+    if (x && x.ok) { n++; if (x.undo) undos.push(x.undo); }
+    else { raw.push(it.text); if (x && x.why) bad = x.why; }
   });
+  let rawOk = false;
+  if (raw.length) { const j = inJotsAdd(raw); if (j && j.ok) { rawOk = true; if (j.undo) undos.push(j.undo); } }
+  if (!n && !rawOk) { toast(bad || 'できませんでした', { bad: 1 }); return; }
+  const label = rawOk ? `${n}件を記録・${raw.length}件は雑記に置きました` : `${n}件を記録しました`;
+  const r = { ok: true, label, undo: () => undos.slice().reverse().forEach(u => u()) };
+  IN_FORCE = null;
+  inSetDraft('');
+  inDone(r, { quiet: 1 });
+  inUndoShow(r, text);
+  inFocusT();
 }
+/** 日記に書く(感想の文)。i = 文の番号。文が1つなら入力を空にし、複数なら、その文だけ外す */
+function inDiaryAt(i) {
+  const R = inRead(), it = R && R.items[i];
+  if (!it || typeof diaryAppend !== 'function') return;
+  const text = it.text, r = diaryAppend(it.r.hintDate || TODAY, text);
+  if (!r || !r.ok) { done(r || { ok: false, why: 'できませんでした' }); return; }
+  if (R.multi) inDropBlock(i); else inSetDraft('');
+  inDone(r, { quiet: 1 });
+  inUndoShow(r, text);
+  inFocusT();
+}
+/** 文の一つを入力から外す(空行で分けて残す) */
+function inDropBlock(i) { const b = inBlocks(); b.splice(i, 1); inSetDraft(b.join('\n\n')); }
+
 /** 候補を確定の記録にする(旧 capSave と同じ。雑記は作らない) */
 function inSaveCand(c) {
+  if (!c) return null;
   const ents = c.ents || [];
   if (c.type === 'pay') return paySave({ date: c.date, start: c.start, payee: c.payee || null, amt: c.amt, exp: { basis: 'items', cat: c.cat || catGuess(c.payee, c.text) } });
   if (c.type === 'event' || c.type === 'plan') return actAdd({ kind: c.kind || 'event', title: c.title, date: c.date, start: c.start, end: c.end, allDay: c.start ? 0 : 1, state: c.type === 'event' ? 'done' : 'plan', roles: inRoles(ents) });
@@ -380,16 +595,11 @@ function inSaveCand(c) {
   if (c.type === 'memo') return memoAdd(c.body, { ents });
   return null;
 }
-/** 「記録する」: 解釈の種類で確定の記録を作る。雑記は作らない */
-function inRecord() {
-  const c = inCand(); if (!c || (c.type === 'pay' && !c.amt)) return;
-  const r = inSaveCand(c); if (!r) return;
-  if (!r.ok) { done(r); return; }
-  const href = c.type === 'memo' ? '#/memo' : c.type === 'task' ? `#/task/${r.id}` : `#/a/${r.id}`;
-  IN_FORCE = null; IN_STICK = true;
-  inSetDraft('');
-  inDone(r, { act: { label: '開く', on: () => go(href) } });
-  inFocusT();
+function inRoles(ids) {
+  return (ids || []).filter(e => E(e)).map(e => {
+    const ty = (E(e).types || [])[0];
+    return { r: ty && isUnder(ty, 'place') ? '場所' : ty && isUnder(ty, 'project') ? 'プロジェクト' : '同席', e };
+  });
 }
 
 /** 結果を受ける: done の取り消しの後にも「入力」を描き直す */
@@ -422,7 +632,7 @@ function inLlmCancel(jid) { typeof llmCancel === 'function' && llmCancel(jid); i
 
 function inToggleSel() {
   IN_SEL = IN_SEL ? null : new Set();
-  if (IN_SEL) { const a = document.activeElement; a && a.blur && a.blur(); }
+  if (IN_SEL) { const a = document.activeElement; a && a.blur && a.blur(); const w = inWrap(); w && inRecOn(w, false); }
   inRedrawAll();
 }
 function inTogSel(jid) { if (!IN_SEL) return; IN_SEL.has(jid) ? IN_SEL.delete(jid) : IN_SEL.add(jid); inRefresh(); }
@@ -464,26 +674,6 @@ function inSelDel() {
   if (n) inDone({ ok: true, label: `雑記を消しました ${n}件`, undo: undos.length ? () => { undos.reverse().forEach(u => u()); } : null });
   if (bad) toast(bad, { bad: 1 });
   inRedrawAll();
-}
-
-/* ---------- キーボードで隠れない(visualViewport) ---------- */
-
-function inVVBind(on) {
-  const vv = window.visualViewport; if (!vv) return;
-  if (on) { vv.addEventListener('resize', inVV); vv.addEventListener('scroll', inVV); }
-  else { vv.removeEventListener('resize', inVV); vv.removeEventListener('scroll', inVV); }
-}
-/** 表示域が縮んだ(キーボードが出た)時だけ、枠と本体の高さを表示域に合わせる */
-function inVV() {
-  const w = inWrap(); if (!w) return;
-  const vv = window.visualViewport, sh = $('.sheet', w);
-  if (vv.height < innerHeight - 120) {
-    w.style.top = vv.offsetTop + 'px';
-    w.style.height = vv.height + 'px';
-    sh.style.height = Math.max(160, vv.height - 40) + 'px';
-    sh.style.maxHeight = 'none';
-    const t = $('#in-t', w); if (t && document.activeElement === t) t.scrollIntoView({ block: 'nearest' });
-  } else { w.style.top = ''; w.style.height = ''; sh.style.height = ''; sh.style.maxHeight = ''; }
 }
 
 /* ---------- 下書きの保存 ---------- */
