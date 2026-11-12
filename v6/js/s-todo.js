@@ -173,6 +173,11 @@ function tdeSave() {
 /* =====================================================================
    詳細 #/task/{id}
    ===================================================================== */
+/** 未確定の帯(ToDo。確定 / 雑記を見る) */
+function tdTent(id) {
+  const t = DB.tasks[id]; if (!t || !t.tent) return '';
+  return banner(`未確定です。内容を確かめてください<div class="tent-b">${btn('確定', `window.tentConfirm && done(tentConfirm({t:'tasks',k:${q(id)}}))`, 'pri', { sm: 1, icon: 'check' })}${btn('雑記を見る', `window.openInbox && openInbox({focus:{t:'tasks',k:${q(id)}}})`, 'sec', { sm: 1 })}</div>`, 'info');
+}
 route('task', id => {
   const t = DB.tasks[id];
   if (!t) return `<div class="screen s-task">${bar('ToDo')}<div class="card">${empty({ icon: 'task', text: 'ToDoが見つかりません' })}</div>${btn('ToDoの一覧へ', "go('#/todo')", 'sec', { wide: 1 })}</div>`;
@@ -185,6 +190,7 @@ route('task', id => {
     : prop('予定・記録', tdMute('なし'), { on: `tdActEdit(${I})` });
   return `<div class="screen s-task">
     ${bar(t.t, { actions: iconBtn('more', 'その他', `tdTaskMenu(${I})`) })}
+    ${tdTent(id)}
     <div class="td-hero${t.done ? ' done' : ''}">${check(t.done, `taskCheck(${I})`, { late, label: t.done ? '未完了に戻す' : '完了' })}<button class="td-title" data-bar-watch onclick="tdTitleEdit(${I})">${esc(t.t)}</button></div>
     ${t.done ? `<div class="td-state">${tag(`完了 ${fmtMD(t.done)}`, 'me')}${btn('未完了に戻す', `taskCheck(${I})`, 'sec', { sm: 1, icon: 'undo' })}</div>` : ''}
     ${rows([

@@ -5,7 +5,7 @@
    入力欄は描き直さない。入力のたびに #ms-res だけを差し替える(フォーカスと変換中の文字を守る)。 */
 const MS = { q: '', kind: 'all', open: {}, seen: null };
 const MS_KEY = 'prmock-v6-recent';
-const MS_TYPES = [['act', 'アクティビティ'], ['item', '品目'], ['ent', 'エンティティ'], ['memo', 'メモ'], ['task', 'ToDo'], ['note', 'ノート'], ['day', '日記']];
+const MS_TYPES = [['act', 'アクティビティ'], ['item', '品目'], ['ent', 'エンティティ'], ['memo', 'メモ'], ['jot', '雑記'], ['task', 'ToDo'], ['note', 'ノート'], ['day', '日記']];
 const MS_LIMIT = 6;
 
 const msRecent = () => { try { const a = JSON.parse(localStorage.getItem(MS_KEY) || '[]'); return Array.isArray(a) ? a.filter(x => typeof x === 'string' && x).slice(0, 8) : []; } catch (e) { return []; } };
@@ -39,16 +39,18 @@ const msWhen = d => d ? `${esc(relDay(d))}` : '';
 function msRow(r, ws) {
   const a = r.type === 'act' ? A(r.id) : null;
   const lead = r.type === 'act' ? (a && !isPay(a) ? kindIc(a) : ic('yen')) : r.type === 'item' ? ic('receipt') : r.type === 'ent' ? avatar(r.id)
-    : r.type === 'memo' ? ic('memo') : r.type === 'task' ? ic('task') : r.type === 'note' ? ic('book') : ic('day');
+    : r.type === 'memo' ? ic('memo') : r.type === 'jot' ? ic('pencil') : r.type === 'task' ? ic('task') : r.type === 'note' ? ic('book') : ic('day');
   let subs = [];
   if (r.type === 'act') subs = [...msWhy(r.title, a ? [KINDS[a.kind].n, ...(a.roles || []).map(roleName), a.note] : [], ws), `<span>${esc(r.sub)} · ${msWhen(r.date)}</span>`];
   else if (r.type === 'item') { const [pid, i] = r.id.split('/'), it = A(pid) && A(pid).pay.items[+i]; subs = [...msWhy(r.title, [it && it.memo], ws), `<span>${esc(r.sub)} · ${msWhen(r.date)}</span>`]; }
   else if (r.type === 'ent') { const e = E(r.id); subs = [`<span>${msMark(r.sub, ws)}</span>`, ...msWhy(r.title, e ? e.facts.map(f => `${f.k}: ${f.v}`) : [], ws)]; }
   else if (r.type === 'memo') subs = [`<span>${esc(fmtFull(r.date))} · ${msWhen(r.date)}</span>`];
+  else if (r.type === 'jot') subs = [`<span>${esc(r.sub)} · ${msWhen(r.date)}</span>`];
   else if (r.type === 'task') subs = [`<span>${esc(r.sub)}</span>`];
   else if (r.type === 'note') subs = [`<span>更新 ${esc(fmtFull(r.date))} · ${msWhen(r.date)}</span>`];
   else subs = [`<span>${esc(r.sub)} · ${msWhen(r.date)}</span>`];
-  return row({ lead, tHtml: `<span class="ms-t">${msMark(r.title, ws, { cut: 48 })}</span>`, sHtml: subs.join(''), right: `${r.plan ? tag('予定', 'plan') : ''}${r.amt ? amt(r.amt) : ''}`, href: r.href });
+  /* 雑記は押すと「入力」の履歴の、その雑記へ(href を持たない) */
+  return row({ lead, tHtml: `<span class="ms-t">${msMark(r.title, ws, { cut: 48 })}</span>`, sHtml: subs.join(''), right: `${r.plan ? tag('予定', 'plan') : ''}${r.amt ? amt(r.amt) : ''}`, href: r.href, on: r.type === 'jot' ? `window.openInbox && openInbox({focus:${q(r.id)}})` : '' });
 }
 
 /** 「前はいくらだった?」: N回・合計(または平均)・最後 */
@@ -131,6 +133,10 @@ route('settings', () => {
         row({ lead: ic('undo'), t: '見本のデータに戻す', on: 'msReset()' })])}
       <input type="file" id="ms-file" accept="application/json,.json" hidden onchange="msFile(this)">
     </section>
+    <section>${sec('履歴', { n: DB.log.length })}${rows([
+      prop('件数', `<span class="num">${DB.log.length}</span>`),
+      row({ lead: ic('trash'), t: '履歴を消す', on: 'msLogClear()' })])}</section>
+    <section>${sec('LLM')}${msLlmBody()}</section>
     <section>${sec('支払い方法', { n: DB.methods.length })}
       ${rows(DB.methods.map(m => `<div class="row ms-m"><span class="row-m"><span class="row-t">${esc(m)}</span></span><span class="row-r">${iconBtn('trash', `${m}を消す`, `msMethodDel(${q(m)})`)}</span></div>`))}
       ${btn('支払い方法を足す', 'msMethodAdd()', 'dash', { icon: 'plus' })}</section>
@@ -144,6 +150,22 @@ route('settings', () => {
 }, { tab: 'settings', root: 1 });
 
 function msTheme(k) { setTheme(k); rerender(); }
+/* LLM(雑記を記録の候補にする)の設定。既定は模擬。DB には入らない(llmConfig / llmSetConfig) */
+const MS_LLM_MODES = [['off', '使わない'], ['mock', '模擬'], ['endpoint', 'エンドポイント']];
+function msLlmBody() {
+  const c = window.llmConfig ? llmConfig() : { mode: 'off', url: '', timeoutSec: 20 };
+  return rows([
+    `<div class="row ms-llm">${seg(MS_LLM_MODES, c.mode, 'msLlmMode')}</div>`,
+    ...(c.mode === 'endpoint' ? [`<div class="row">${field('エンドポイント', input({ id: 'ms-llm-url', type: 'url', value: c.url || '', ph: 'https://', onchange: 'msLlmSet({url:this.value})', label: 'エンドポイント' }))}</div>`] : []),
+    `<div class="row">${field('タイムアウト(秒)', input({ id: 'ms-llm-to', mode: 'numeric', value: c.timeoutSec || 20, onchange: 'msLlmSet({timeoutSec:+this.value||20})', label: 'タイムアウト(秒)' }))}</div>`]);
+}
+function msLlmMode(k) { if (window.llmSetConfig) llmSetConfig({ mode: k }); rerender(); }
+function msLlmSet(patch) { if (window.llmSetConfig) llmSetConfig(patch); }
+/** 履歴を消す(取り消せない = 確認を出す) */
+function msLogClear() {
+  confirmSheet({ title: '履歴を消す', body: `履歴 ${DB.log.length}件を消します。取り消せません。雑記や記録は残ります。`, ok: '消す',
+    on: () => { if (window.jtLogClear) jtLogClear(); rerender(); toast('履歴を消しました'); } });
+}
 function msExport() {
   downloadText(`kojin-kiroku-${TODAY}.json`, exportJSON());
   toast(`書き出しました(${Math.max(1, Math.round(dataCounts().bytes / 1024))}KB)`);

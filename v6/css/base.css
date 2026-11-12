@@ -41,6 +41,8 @@ html:not(.ready) body{visibility:hidden}
 .nav-badge{position:absolute;top:8px;left:calc(50% + 6px);min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--now);color:var(--on);font-size:var(--fs-min);font-weight:700;line-height:17px;text-align:center;font-style:normal;box-shadow:0 0 0 2px var(--card)}
 .nav-plus{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + var(--s2) + 7px);width:56px;height:48px;margin-left:-28px;border-radius:18px;background:var(--fill-me);color:var(--on);display:grid;place-items:center;box-shadow:var(--e-me),inset 0 1px 0 rgba(255,255,255,.3);pointer-events:auto;transition:transform var(--t1) var(--ease)}
 .nav-plus svg{width:26px;height:26px;stroke-width:2.4}
+.nav-plus .nav-badge,.rail-plus .nav-badge{top:-6px;left:auto;right:-6px}
+.rail-plus{position:relative}
 .nav-plus:active{transform:scale(.93)}
 .nav-knob{position:absolute;right:calc(var(--s3) + 14px);bottom:calc(env(safe-area-inset-bottom) + var(--s2) + var(--nav-h) - 5px);width:52px;height:44px;display:flex;align-items:center;justify-content:center;gap:4px;pointer-events:auto}
 .nav-knob::before{content:"";position:absolute;inset:13px 6px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--card) 86%,transparent);box-shadow:var(--e1);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}

@@ -101,9 +101,15 @@ function openMemoEditor(id) {
     dirty: mmeDirty, primary: { label: '保存', on: mmeSave }, secondary: m ? { label: '消す', on: mmeDel } : null });
 }
 const mmeDirty = () => MME.body.trim() !== MME.o.body.trim() || MME.ents.join() !== MME.o.ents || MME.act !== MME.o.act || MME.pin !== MME.o.pin;
+/** 未確定のメモの帯(編集シートの上。確定 / 雑記を見る) */
+function mmTent(id) {
+  const m = id && DB.memos[id]; if (!m || !m.tent) return '';
+  return banner(`未確定です。内容を確かめてください<div class="tent-b">${btn('確定', `mmTentOk(${q(id)})`, 'pri', { sm: 1, icon: 'check' })}${btn('雑記を見る', `window.openInbox && openInbox({focus:{t:'memos',k:${q(id)}}})`, 'sec', { sm: 1 })}</div>`, 'info');
+}
+function mmTentOk(id) { if (window.tentConfirm && done(tentConfirm({ t: 'memos', k: id })) && sheetOpen()) setSheetBody(mmeBody()); }
 function mmeBody() {
   const e = MME, a = e.act && A(e.act);
-  return `${textarea({ id: 'mme-t', rows: 6, ph: '思いついたことを書く', value: e.body, oninput: 'MME.body=this.value', auto: !e.id, label: '本文' })}
+  return `${mmTent(e.id)}${textarea({ id: 'mme-t', rows: 6, ph: '思いついたことを書く', value: e.body, oninput: 'MME.body=this.value', auto: !e.id, label: '本文' })}
     ${pickField('エンティティ', e.ents.length ? mmEntsV(e.ents) : '付ける', 'mmeEnts()', { emptyv: !e.ents.length })}
     ${a ? `<div class="field"><span class="field-l">記録</span><div class="mm-lkr"><a class="mm-lk" href="#/a/${e.act}" onclick="return mmeOpenAct(${q(e.act)})">${kindIc(a)}<b>${esc(actTitle(a))}</b><span class="mini num">${relDay(a.date)} ${timeText(a)}</span></a><button class="btn ghost sm" onclick="mmeAct()">変える</button></div></div>` : pickField('記録', 'なし', 'mmeAct()', { emptyv: 1 })}
     ${e.id ? `<div class="rows">${row({ lead: ic('pin'), t: 'ピン留め', right: toggle(e.pin, 'mmePin()', 'ピン留め') })}</div>` : ''}`;

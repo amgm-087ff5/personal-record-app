@@ -141,8 +141,7 @@ function enMore(id) {
   ]);
 }
 function enMemoNew(id) {
-  openCapture('memo');
-  try { CAP.text = E(id).n + ' '; const t = $('#cap-t'); if (t) t.value = CAP.text; capRefresh(); } catch (err) { }
+  openCapture('memo', { text: E(id).n + ' ' });
 }
 function enRemove(id) { done(entRemove(id), { go: '#/ents', replace: 1 }); }
 

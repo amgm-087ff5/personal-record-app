@@ -10,17 +10,23 @@ route('a', id => {
   const a = A(id);
   if (!a) return `<div class="screen s-detail">${bar('見つかりません')}<div class="card">${empty({ icon: 'day', text: 'この記録は見つかりません' })}</div>${btn('戻る', 'goBack()', 'sec', { icon: 'back', wide: 1 })}</div>`;
   const more = iconBtn('more', 'その他の操作', `dtMenu(${q(id)})`);
-  if (isPay(a) && !isPlan(a)) return `<div class="screen s-detail s-detail-pay">${bar(actTitle(a), { actions: more })}${window.payDetail ? payDetail(id) : paySlip(id, { noLink: 1 })}${dtPhotos(dtTid(id), a)}</div>`;
+  if (isPay(a) && !isPlan(a)) return `<div class="screen s-detail s-detail-pay">${bar(actTitle(a), { actions: more })}${dtTent(id, a)}${window.payDetail ? payDetail(id) : paySlip(id, { noLink: 1 })}${dtPhotos(dtTid(id), a)}</div>`;
   const tid = dtTid(id), plan = isPlan(a), kids = kidsOf(id);
   const body = a.hol ? '' : `${dtRoles(tid, a)}${dtNoteBlock(tid, a)}${dtPhotos(tid, a)}${dtRecords(tid, a)}${dtKids(id, a, kids)}${dtTasksMemos(id, tid, a)}`;
   return `<div class="screen s-detail">
     ${bar(actTitle(a), { actions: more })}
+    ${dtTent(id, a)}
     ${dtEnv(ancOf(id), dtHero(id, a))}
     ${plan && !a.hol ? btn(a.virt ? 'この回だけ記録にする' : '記録にする', `dtRecOpen(${q(id)})`, 'pri', { icon: 'check', wide: 1 }) : ''}
     ${body}
   </div>`;
 });
 
+/** 未確定の帯(確定 / 雑記を見る)。仮の回は、書き込みはひな形へ */
+function dtTent(id, a) {
+  const tid = dtTid(id); if (!a || !a.tent) return '';
+  return banner(`未確定です。内容を確かめてください<div class="tent-b">${btn('確定', `window.tentConfirm && done(tentConfirm({t:'acts',k:${q(tid)}}))`, 'pri', { sm: 1, icon: 'check' })}${btn('雑記を見る', `window.openInbox && openInbox({focus:{t:'acts',k:${q(tid)}}})`, 'sec', { sm: 1 })}</div>`, 'info');
+}
 /** 親の連なり: 外側から順に封筒のように入れ子にして、いちばん内側に自分 */
 function dtEnv(anc, inner) {
   return anc.reduceRight((acc, [pid, p]) => `<div class="dt-env"><a class="dt-env-h" href="#/a/${pid}">${kindIc(p)}<b>${esc(actTitle(p))}</b><span class="num">${timeText(p)}</span>${ic('chev', 'row-chev')}</a>${acc}</div>`, inner);
