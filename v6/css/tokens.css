@@ -49,7 +49,7 @@
   --r-xs:6px; --r-sm:10px; --r-md:14px; --r-lg:20px; --r-xl:26px; --r-pill:999px;
   /* --- 文字 --- */
   --font:"M PLUS 2 Variable","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
-  --fs-hero:40px; --fs-big:28px; --fs-title:19px; --fs-body:15px; --fs-cap:13px; --fs-min:12px;
+  --fs-hero:40px; --fs-big:28px; --fs-title:19px; --fs-body:15px; --fs-cap:13px; --fs-min:12px; --fs-input:16px;           /* 入力欄だけ 16px(iOS は 16px 未満だと焦点で拡大する) */
   /* --- 余白(4の刻み) --- */
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s7:32px; --s8:40px;
   --page-x:16px; --tap:44px; --nav-h:62px;

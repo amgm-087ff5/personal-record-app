@@ -378,6 +378,7 @@ function searchAll(q) {
   }
   for (const [id, e] of Object.entries(DB.ents)) if (hit(`${e.n} ${e.types.map(t => DB.types[t] ? DB.types[t].n : '').join(' ')} ${e.facts.map(f => f.v).join(' ')}`)) out.push({ type: 'ent', id, title: e.n, sub: e.types.map(t => DB.types[t].n).join('・'), date: '', href: `#/e/${id}` });
   for (const [id, m] of Object.entries(DB.memos)) if (hit(m.body)) out.push({ type: 'memo', id, title: m.body, sub: m.at, date: m.at.slice(0, 10), href: `#/memo?focus=${id}` });
+  for (const [id, j] of Object.entries(DB.jots)) if (hit(j.body) && (typeof jotState !== 'function' || jotState(id) === 'raw')) out.push({ type: 'jot', id, title: j.body, sub: `雑記 ${j.at}`, date: j.at.slice(0, 10), href: '' });   /* 変換先のある雑記は、できた記録の方が出る */
   for (const [id, t] of Object.entries(DB.tasks)) if (hit(`${t.t} ${t.memo || ''}`)) out.push({ type: 'task', id, title: t.t, sub: t.done ? '完了' : t.due ? `期限 ${fmtMD(t.due)}` : '期限なし', date: t.due || '', href: `#/task/${id}`, done: !!t.done });
   for (const [id, n] of Object.entries(DB.notes)) if (E(id) && hit(n.body.map(b => b.join(' ')).join(' ') + ' ' + n.subs.map(s => s.join(' ')).join(' '))) out.push({ type: 'note', id, title: `${E(id).n}のノート`, sub: `更新 ${n.upd}`, date: n.upd.slice(0, 10), href: `#/n/${id}` });
   for (const [d, o] of Object.entries(DB.days)) if (hit(o.diary)) out.push({ type: 'day', id: d, title: o.diary, sub: `${fmtFull(d)} の日記`, date: d, href: `#/day/${d}` });
@@ -388,26 +389,63 @@ function searchAll(q) {
    書く(変更)。全て commit を通す。戻り値 {ok:true, label, undo(), …} か {ok:false, why}
    取り消しは行単位(後から別の所を変えていても、その変更だけを戻す)
    ===================================================================== */
-const TABLES = ['days', 'acts', 'exps', 'tasks', 'lists', 'ents', 'types', 'notes', 'memos', 'cats'];
+const TABLES = ['days', 'acts', 'exps', 'tasks', 'lists', 'ents', 'types', 'notes', 'memos', 'cats', 'jots'];
 function _snap() { const s = {}; for (const t of TABLES) { s[t] = {}; for (const k in DB[t]) s[t][k] = JSON.stringify(DB[t][k]); } s._rels = JSON.stringify(DB.rels); s._methods = JSON.stringify(DB.methods); return s; }
 class Fail extends Error { }
 const fail = why => { throw new Fail(why); };
+
+/* ---- 操作の履歴(commit が自動で書く。仕様は INBOX.md §2)。DB.log = 古い順。TABLES には入れない ---- */
+const LOG_MAX = 1000;
+const LOG_PRI = ['jots', 'acts', 'tasks', 'memos', 'days', 'ents', 'notes'];     /* ログの主役にする表の優先順(lists/types/cats/rels/methods だけの変更は記録しない) */
+let _cd = 0;                    /* commit の入れ子の深さ。最も外側(0)だけがログを書く */
+let _logAt = null;              /* 見本データが履歴の時刻を指定する時だけ使う('YYYY-MM-DD HH:MM') */
+const _cut = (s, n = 80) => { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+/** 行(JSON から戻した物。消した物は消す前)→ {ty, s}。DB を引かない物は引かず、引く物(支払先の名前)は無くても落ちない */
+function _logWhat(t, k, row) {
+  try {
+    if (t === 'jots') return { ty: '雑記', s: _cut(row.body) };
+    if (t === 'acts') { if (row.pay) return { ty: '支払い', s: _cut(`${payeeOf(row) || '支払い'} ${yen(payTotal(row))}`) }; return { ty: row.state === 'plan' ? '予定' : '出来事', s: _cut(row.title) }; }
+    if (t === 'tasks') return { ty: 'ToDo', s: _cut(row.t) };
+    if (t === 'memos') return { ty: 'メモ', s: _cut(row.body) };
+    if (t === 'days') return { ty: '日記', s: _cut(row.diary || (row.photos && row.photos.length ? `写真 ${row.photos.length}枚` : '')) };
+    if (t === 'ents') return { ty: 'エンティティ', s: _cut(row.n) };
+    if (t === 'notes') return { ty: 'ノート', s: _cut(`${DB.ents[k] ? DB.ents[k].n : ''}のノート`) };
+  } catch (e) { }
+  return { ty: '', s: '' };
+}
+function _logPush(label, patch, before, after) {
+  try {
+    const by = {}; for (const [t, k] of patch) (by[t] = by[t] || []).push(k);
+    let t = LOG_PRI.find(x => by[x]), k;
+    if (!t) { if (!by.exps) return null; t = 'acts'; k = by.exps[0]; }          /* 支出だけの変更 → その支払い(act)の編集 */
+    else { const ks = by[t]; k = ks.find(x => { const row = JSON.parse(after[t][x] || before[t][x] || '{}'); return !(row.parent && ks.includes(row.parent)); }) || ks[0]; }
+    const a = after[t][k], b = before[t][k], op = b === undefined ? 'add' : a === undefined ? 'del' : 'edit';
+    const w = _logWhat(t, k, JSON.parse(a !== undefined ? a : b));
+    const e = { i: uid('l'), at: _logAt || nowStamp(), op, t, k, ty: w.ty, s: w.s, lb: label || '直しました' };
+    DB.log.push(e); if (DB.log.length > LOG_MAX) DB.log.splice(0, DB.log.length - LOG_MAX);
+    return e;
+  } catch (e) { return null; }
+}
 function commit(label, fn) {
-  const before = _snap(); let extra;
+  const before = _snap(); let extra; _cd++;
   try { extra = fn() || {}; } catch (e) {
+    _cd--;
     if (!(e instanceof Fail)) throw e;
     for (const t of TABLES) { const cur = DB[t]; for (const k of Object.keys(cur)) if (!(k in before[t])) delete cur[k]; for (const k in before[t]) if (JSON.stringify(cur[k]) !== before[t][k]) cur[k] = JSON.parse(before[t][k]); }
     DB.rels = JSON.parse(before._rels); DB.methods = JSON.parse(before._methods);
     return { ok: false, why: e.message };
   }
+  _cd--;
   const after = _snap(), patch = [];
   for (const t of TABLES) { for (const k in after[t]) if (before[t][k] !== after[t][k]) patch.push([t, k, before[t][k]]); for (const k in before[t]) if (!(k in after[t])) patch.push([t, k, before[t][k]]); }
   const relsB = before._rels !== after._rels ? before._rels : null, metB = before._methods !== after._methods ? before._methods : null;
+  const entry = _cd === 0 && patch.length ? _logPush(label, patch, before, after) : null;      /* 入れ子の commit はログを書かない */
   _recIdx = null; const saved = save();
   return {
     ok: true, label, ...(saved ? {} : { warn: '保存できませんでした(端末の空きを確かめてください)' }), ...extra, undo() {
       for (const [t, k, prev] of patch) { if (prev === undefined) delete DB[t][k]; else DB[t][k] = JSON.parse(prev); }
       if (relsB) DB.rels = JSON.parse(relsB); if (metB) DB.methods = JSON.parse(metB);
+      if (entry) DB.log = DB.log.filter(x => x.i !== entry.i);
       _recIdx = null; save();
     }
   };
@@ -584,7 +622,7 @@ function parseQuick(s) {
   const text = t.replace(/\s+/g, ' ').trim();
   if (amt) { const pe = ents.find(id => isUnder(DB.ents[id].types[0], 'place')); return { type: 'pay', amt, date: d && d.date <= TODAY ? d.date : TODAY, start: time || NOW, payee: pe ? { e: pe } : text ? { name: text } : null, text, ents }; }
   const date = d ? d.date : TODAY;
-  if ((d && date > TODAY && (time || !/[#＃]/.test(raw))) || (time && (date > TODAY || time > NOW))) return { type: 'plan', title: text || '予定', date, start: time, end: time2, ents };
+  if ((d && date > TODAY && (time || !/[#＃]/.test(raw))) || (time && (date > TODAY || (date === TODAY && time > NOW)))) return { type: 'plan', title: text || '予定', date, start: time, end: time2, ents };
   if (/[#＃!！]/.test(raw) || (d && date >= TODAY)) { const p = parseTask(raw); return { type: 'task', ...p, ents }; }
   return { type: 'memo', body: raw, ents };
 }
@@ -694,17 +732,21 @@ const methodRemove = n => commit('支払い方法を消しました', () => { if
    保存・読み込み・書き出し
    ===================================================================== */
 function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); return true; } catch (e) { return false; } }
+/** 古い形の保存データに、v6.2 で足した表を補う(書く場の雑記 jots / 操作の履歴 log) */
+function dbNormalize(d) { if (!d.jots || typeof d.jots !== 'object') d.jots = {}; if (!Array.isArray(d.log)) d.log = []; return d; }
+/** 見本の雑記と履歴を入れる(まだ入れていない時だけ。seedInbox は m-inbox.js。印は DB.ibx) */
+function dbSeedInbox() { if (!DB.ibx && typeof seedInbox === 'function') { try { seedInbox(); DB.ibx = 1; } catch (e) { console.error('seedInbox', e); } } }
 function load() {
-  try { const s = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); if (s && s.v === 6 && s.acts) { DB = s; _recIdx = null; return; } } catch (e) { }
-  DB = seed(); _recIdx = null; save();
+  try { const s = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); if (s && s.v === 6 && s.acts) { DB = dbNormalize(s); _recIdx = null; dbSeedInbox(); save(); return; } } catch (e) { }
+  DB = dbNormalize(seed()); _recIdx = null; dbSeedInbox(); save();
 }
-function resetData() { DB = seed(); _recIdx = null; save(); }
+function resetData() { DB = dbNormalize(seed()); _recIdx = null; dbSeedInbox(); save(); }
 const exportJSON = () => JSON.stringify(DB, null, 1);
 /** 書き出したファイルを読み込む(中身を確かめてから入れ替える) */
 function importJSON(text) {
   let s; try { s = JSON.parse(text); } catch (e) { return { ok: false, why: 'ファイルを読めませんでした(JSON ではありません)' }; }
   if (!s || s.v !== 6 || !s.acts || !s.ents || !s.cats) return { ok: false, why: 'このアプリ(v6)の書き出しファイルではありません' };
-  const prev = JSON.stringify(DB); DB = s; _recIdx = null; save();
+  const prev = JSON.stringify(DB); DB = dbNormalize(s); if (!DB.ibx) DB.ibx = 1; _recIdx = null; save();     /* 読み込んだ物には見本の雑記を足さない(ibx を立てる) */
   return { ok: true, undo() { DB = JSON.parse(prev); _recIdx = null; save(); } };
 }
 const dataCounts = () => ({ acts: Object.values(DB.acts).filter(a => !isPlan(a)).length, plans: Object.values(DB.acts).filter(isPlan).length, tasks: Object.keys(DB.tasks).length, memos: Object.keys(DB.memos).length, ents: Object.keys(DB.ents).length, bytes: JSON.stringify(DB).length });

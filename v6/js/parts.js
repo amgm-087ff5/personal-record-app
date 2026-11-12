@@ -5,6 +5,7 @@
 'use strict';
 /* ---------- アイコン(24格子・線)。.f = 選択中に淡く塗る面 ---------- */
 const IC = {
+  mic: '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18.5V21"/>',
   plus: '<path d="M12 5v14M5 12h14"/>', close: '<path d="M6 6l12 12M18 6L6 18"/>', back: '<path d="M15 5l-7 7 7 7"/>', chev: '<path d="M9 5l7 7-7 7"/>',
   down: '<path d="M5 9l7 7 7-7"/>', up: '<path d="M5 15l7-7 7 7"/>', check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   more: '<circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/>',
@@ -99,6 +100,8 @@ const select = o => `<select class="input" ${o.id ? `id="${o.id}"` : ''} ${o.onc
 const pickField = (label, vHtml, on, o = {}) => `<div class="field"><span class="field-l">${esc(label)}</span><button class="input pickf ${o.emptyv ? 'is-empty' : ''}" onclick="${on}"><span>${vHtml}</span>${ic('chev')}</button></div>`;
 /** 読み取った値(未確認)の印 */
 const readMark = html => `<span class="read">${html}</span>`;
+/** 未確定の札(記録・ToDo・メモの題の横。確定すると消える) */
+function tentTag(row) { return row && row.tent ? tag('未確定', 'read') : ''; }
 /** 進み具合 */
 const progress = (p, label = '') => `<div class="prog" role="progressbar" aria-valuenow="${Math.round(p * 100)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${Math.round(Math.max(0, Math.min(1, p)) * 100)}%"></i>${label ? `<span>${esc(label)}</span>` : ''}</div>`;
 
@@ -154,7 +157,7 @@ function paySlip(id, o = {}) {
   const x = xOf(id), mine = xAmt(id), total = payTotal(a), b = balanceOf(id), un = unreadCount(a), shared = isShared(id);
   const part = o.cat && x ? xCats(id).filter(g => catAnc(g.cat).includes(o.cat)).reduce((t, g) => t + g.amt, 0) : null, sp = x ? xSp(id) : null;
   return `<div class="slip${un ? ' unread' : ''}">${o.noLink ? '' : `<a class="hit" href="#/a/${id}" aria-label="支払い ${esc(payeeOf(a))} ${yen(total)}"></a>`}
-    <div class="slip-h"><b>${un && a.pay.unread && a.pay.unread.payee ? readMark(esc(actTitle(a))) : esc(actTitle(a))}</b>${amt(part != null ? part : x ? mine : total, { cls: x ? '' : 'mute' })}</div>
+    <div class="slip-h"><span class="slip-tt"><b>${un && a.pay.unread && a.pay.unread.payee ? readMark(esc(actTitle(a))) : esc(actTitle(a))}</b>${tentTag(a)}</span>${amt(part != null ? part : x ? mine : total, { cls: x ? '' : 'mute' })}</div>
     <div class="slip-s">${x ? catTag(x.cat) : tag('自分の負担なし')}${sp === '非日常' ? `<span class="mini sp">${ic('spark')}非日常</span>` : x && sp == null ? tag('特別感 未設定', 'plan') : ''}${part != null && part !== mine ? tag(`支出 ${yen(mine)}`) : ''}${itemsText(a) ? `<span class="slip-i">${esc(itemsText(a))}</span>` : ''}${un ? tag(`未確認 ${un}`, 'read') : ''}</div>
     ${shared ? `<div class="slip-sp">${splitBar(id)}<span class="slip-tot">合計 ${yen(total)}</span>${b.open ? tag(balanceText(b), 'owe') : b.settled && b.amt ? tag('精算済み') : ''}</div>` : ''}</div>`;
 }
@@ -176,24 +179,24 @@ function tlAct(id, o = {}) {
   const plan = isPlan(a), late = isLate(a), st = plan ? (late ? 'late' : 'plan') : 'done';
   const t = a.allDay || !a.start ? '終日' : a.start;
   let body;
-  if (a.hol) return `<div class="tl-row hol"><i class="tl-n"></i><div class="tl-c"><span class="hol-t">${ic('flag')}${esc(a.title)}</span></div></div>`;
+  if (a.hol) return `<div class="tl-row hol"><time class="tl-t"></time><i class="tl-n"></i><div class="tl-c"><span class="hol-t">${ic('flag')}${esc(a.title)}</span></div></div>`;
   if (isPay(a)) body = paySlip(id);
-  else if (!isSpan(a) && !plan && !a.allDay) body = `<a class="mo" href="#/a/${id}">${kindIc(a)}<b>${esc(actTitle(a))}</b>${roleEnts(a, { link: false, short: 1 })}</a>`;
+  else if (!isSpan(a) && !plan && !a.allDay) body = `<a class="mo" href="#/a/${id}">${kindIc(a)}<b>${esc(actTitle(a))}</b>${tentTag(a)}${roleEnts(a, { link: false, short: 1 })}</a>`;
   else {
     const tasks = plan ? tasksOfAct(id).filter(([, t]) => taskOpen(t)).length : 0;
     body = `<div class="ev ${st}"><a class="hit" href="#/a/${id}" aria-label="${esc(actTitle(a))}"></a>
       <div class="ev-h"><span class="ev-k">${kindIc(a)}${esc(KINDS[a.kind].n)}</span>${a.end ? `<span class="ev-d num">${a.start}–${a.end}${plan ? '' : ' · ' + durJ(actMins(a))}</span>` : a.date2 ? `<span class="ev-d num">${fmtMD(a.date)}–${fmtMD(a.date2)}</span>` : ''}</div>
-      <b class="ev-t">${esc(actTitle(a))}</b>
+      <span class="ev-tt"><b class="ev-t">${esc(actTitle(a))}</b>${tentTag(a)}</span>
       ${roleEnts(a, { link: false, roleOf: o.roleOf }) || tasks || a.rep || a.tpl ? `<div class="ents">${roleEnts(a, { link: false, roleOf: o.roleOf })}${a.tpl || a.rep ? `<span class="mini">${ic('repeat')}${esc(repText(A(a.tpl || id)))}</span>` : ''}${tasks ? `<span class="mini">${ic('task')}${tasks}</span>` : ''}</div>` : ''}
       ${late ? `<button class="btn sec sm ev-rec" onclick="recordPlan(${q(id)})">${ic('check')}<span>記録にする</span></button>` : ''}
       ${o.noKids ? '' : kidRows(id)}</div>`;
   }
-  return `<div class="tl-row ${st}${isSpan(a) || a.allDay ? ' span' : ' moment'}${isPay(a) ? ' pay' : ''}"><i class="tl-n"></i><div class="tl-c"><time class="tl-t num">${t}</time>${body}</div></div>`;
+  return `<div class="tl-row ${st}${isSpan(a) || a.allDay ? ' span' : ' moment'}${isPay(a) ? ' pay' : ''}"><time class="tl-t num">${t}</time><i class="tl-n"></i><div class="tl-c">${body}</div></div>`;
 }
-/** いまの線(線の上に針の点、右に時刻、その右へ赤い線) */
-const tlNow = () => `<div class="tl-now" id="now"><i class="tl-now-d"></i><time class="num">${NOW}</time><i class="tl-now-l"></i></div>`;
+/** いまの線 */
+const tlNow = () => `<div class="tl-now" id="now"><time class="num">${NOW}</time><i></i></div>`;
 /** メモを軸に置く(書いた時刻) */
-const tlMemo = (id) => { const m = DB.memos[id]; return `<div class="tl-row moment is-memo"><i class="tl-n"></i><div class="tl-c"><time class="tl-t num">${m.at.slice(11)}</time>${memoCard(id, { clamp: 2, bare: 1, noTime: 1 })}</div></div>`; };
+const tlMemo = (id) => { const m = DB.memos[id]; return `<div class="tl-row moment is-memo"><time class="tl-t num">${m.at.slice(11)}</time><i class="tl-n"></i><div class="tl-c">${memoCard(id, { clamp: 2, bare: 1, noTime: 1 })}</div></div>`; };
 /** その日の軸(記録と予定を時刻順。今日は「いま」の線を挟む)。o = {memos, filter(fn)} */
 function dayAxis(d, o = {}) {
   let items = actsOn(d).map(([id, a]) => ({ k: sortKey(a), id, a }));
@@ -215,7 +218,7 @@ function dayAxis(d, o = {}) {
 function taskRow(id, o = {}) {
   const t = DB.tasks[id]; if (!t) return '';
   const late = taskLate(t), a = t.act && A(t.act), sub = t.sub || [];
-  return `<div class="task${t.done ? ' done' : ''}">${check(t.done, `taskCheck(${q(id)})`, { late, label: t.t })}<a class="task-m" href="#/task/${id}"><b>${t.pri && !t.done ? '<i class="pri" aria-label="優先">!</i>' : ''}${esc(t.t)}</b>
+  return `<div class="task${t.done ? ' done' : ''}">${check(t.done, `taskCheck(${q(id)})`, { late, label: t.t })}<a class="task-m" href="#/task/${id}"><b>${t.pri && !t.done ? '<i class="pri" aria-label="優先">!</i>' : ''}${esc(t.t)}</b>${tentTag(t)}
     <span class="task-s">${t.due && !t.done ? tag(late ? `${relDay(t.due)}` : t.due === TODAY ? '今日' : `${fmtMD(t.due)} ${dowJ(t.due)}`, late ? 'late' : t.due === TODAY ? 'me' : '') : ''}${t.rep ? `<span class="mini">${ic('repeat')}</span>` : ''}${sub.length ? `<span class="mini num">${ic('list')}${sub.filter(s => s.d).length}/${sub.length}</span>` : ''}${a ? `<span class="mini">${ic('cal')}${esc(actTitle(a))}</span>` : ''}${(t.ents || []).map(e => ent(e, { link: false, short: 1 })).join('')}${!o.noList && DB.lists[t.list] ? `<span class="mini">${esc(DB.lists[t.list].n)}</span>` : ''}</span></a></div>`;
 }
 /** チェックの切替(どの画面でも同じ) */
@@ -225,7 +228,7 @@ function memoCard(id, o = {}) {
   const m = DB.memos[id]; if (!m) return '';
   const a = m.act && A(m.act);
   return `<article class="memo${m.pin ? ' pin' : ''}${o.bare ? ' bare' : ''}"><a class="hit" href="${o.href || `#/memo?focus=${id}`}" ${o.on ? `onclick="event.preventDefault();${o.on}"` : ''} aria-label="メモを開く"></a><p ${o.clamp ? `style="-webkit-line-clamp:${o.clamp}" class="clamp"` : ''}>${esc(m.body)}</p>
-    <footer>${m.pin ? ic('pin', 'memo-pin') : ''}<time class="num" ${o.noTime ? 'hidden' : ''}>${m.at.slice(0, 10) === TODAY ? m.at.slice(11) : `${fmtMD(m.at.slice(0, 10))} ${m.at.slice(11)}`}</time>${(m.ents || []).map(e => ent(e, { link: false, short: 1 })).join('')}${a ? `<span class="mini">${kindIc(a)}${esc(actTitle(a))}</span>` : ''}</footer></article>`;
+    <footer>${tentTag(m)}${m.pin ? ic('pin', 'memo-pin') : ''}<time class="num" ${o.noTime ? 'hidden' : ''}>${m.at.slice(0, 10) === TODAY ? m.at.slice(11) : `${fmtMD(m.at.slice(0, 10))} ${m.at.slice(11)}`}</time>${(m.ents || []).map(e => ent(e, { link: false, short: 1 })).join('')}${a ? `<span class="mini">${kindIc(a)}${esc(actTitle(a))}</span>` : ''}</footer></article>`;
 }
 /** 予定を記録にする(どの画面でも同じ)。支払い予定は金額を確かめてから */
 function recordPlan(id) {

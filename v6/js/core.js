@@ -72,6 +72,7 @@ function render(keep) {
   _lastHash = hash; _back = false;
   renderNav(); wireBars();
   const fns = _after; _after = []; fns.forEach(f => { try { f(); } catch (e) { console.error(e); } });
+  try { if (typeof inRefresh === 'function') inRefresh(); } catch (e) { console.error(e); }
 }
 /** 同じ画面を、スクロール位置を保って描き直す */
 const rerender = () => render(true);
@@ -83,13 +84,7 @@ addEventListener('hashchange', () => {
   for (let i = _sheets.length - 1; i >= 0; i--) { if (_sheets[i].o.dirty && _sheets[i].o.dirty()) break; closeSheet(true); }
   render();
 });
-/* 高さだけの変化(スマホのURLバーの出入り)では描き直さない。描き直すと画面全体がチラつくため。幅が変わった時だけ描き直す */
-let _rsz, _rszW = innerWidth;
-addEventListener('resize', () => {
-  if (innerWidth === _rszW) return;
-  clearTimeout(_rsz);
-  _rsz = setTimeout(() => { if (innerWidth === _rszW) return; _rszW = innerWidth; if (!sheetOpen()) rerender(); }, 150);
-});
+let _rsz; addEventListener('resize', () => { clearTimeout(_rsz); _rsz = setTimeout(() => { if (!sheetOpen()) rerender(); }, 150); });
 
 /* 上部バー: 大きい題が流れ去ったら、細いバーに題を出す */
 let _barIO;
@@ -101,7 +96,7 @@ function wireBars() {
 
 /* ---------- ナビ(2枚。1枚目=毎日 / 2枚目=整理・さがす。＋は中央で動かない) ---------- */
 const NAV = [
-  [{ k: 'home', l: 'ホーム', h: '#/home' }, { k: 'acts', l: 'アクティビティ', s: '活動', h: '#/acts' }, null, { k: 'todo', l: 'ToDo', h: '#/todo' }, { k: 'memo', l: 'メモ', h: '#/memo' }],
+  [{ k: 'home', l: 'ホーム', h: '#/home' }, { k: 'acts', l: 'アクティビティ', h: '#/acts' }, null, { k: 'todo', l: 'ToDo', h: '#/todo' }, { k: 'memo', l: 'メモ', h: '#/memo' }],
   [{ k: 'ents', l: 'エンティティ', h: '#/ents' }, { k: 'ledger', l: '家計簿', h: '#/ledger' }, null, { k: 'search', l: 'さがす', h: '#/search' }, { k: 'settings', l: '設定', h: '#/settings' }],
 ];
 let _deck = 0, _navBadge = {};
@@ -111,13 +106,15 @@ const setNavBadge = (tab, fn) => { _navBadge[tab] = fn; };
 function renderNav() {
   const d = deckOf(_curTab); if (d >= 0 && !_navDrag) _deck = d;
   const item = (i, di) => { if (!i) return '<span class="nav-gap"></span>'; const n = _navBadge[i.k] ? _navBadge[i.k]() : 0;
-    return `<a class="nav-i${i.k === _curTab ? ' is-on' : ''}" href="${i.h}" data-deck="${di}" ${i.k === _curTab ? 'aria-current="page"' : ''} ${di !== _deck ? 'tabindex="-1" aria-hidden="true"' : ''}>${navIc(i.k, i.k === _curTab)}<span>${i.l}</span>${i.s ? `<span class="nav-s">${i.s}</span>` : ''}${n ? `<b class="nav-badge">${n}</b>` : ''}</a>`; };
+    return `<a class="nav-i${i.k === _curTab ? ' is-on' : ''}" href="${i.h}" data-deck="${di}" ${i.k === _curTab ? 'aria-current="page"' : ''} ${di !== _deck ? 'tabindex="-1" aria-hidden="true"' : ''}>${navIc(i.k, i.k === _curTab)}<span>${i.l}</span>${n ? `<b class="nav-badge">${n}</b>` : ''}</a>`; };
   $('#nav').innerHTML = `<div class="nav-bar" data-deck="${_deck}">${NAV.map((dk, di) => `<div class="nav-deck" data-deck="${di}">${dk.map(i => item(i, di)).join('')}</div>`).join('')}</div>
-    <button class="nav-plus" onclick="openCapture()" aria-label="書く・記録する">${ic('plus')}</button>
+    <button class="nav-plus" onclick="openCapture()" aria-label="入力${plusN() ? `(未処理 ${plusN()}件)` : ''}">${ic('plus')}${plusN() ? `<b class="nav-badge" aria-hidden="true">${plusN() > 9 ? '9+' : plusN()}</b>` : ''}</button>
     <button class="nav-knob${NAV[1 - _deck].some(i => i && _navBadge[i.k] && _navBadge[i.k]()) ? ' has-badge' : ''}" onclick="navToggle()" aria-label="${_deck ? '毎日のタブへ' : '整理のタブへ'}${NAV[1 - _deck].some(i => i && _navBadge[i.k] && _navBadge[i.k]()) ? '(お知らせあり)' : ''}"><i class="${_deck === 0 ? 'on' : ''}"></i><i class="${_deck === 1 ? 'on' : ''}"></i></button>`;
-  $('#rail').innerHTML = `<div class="rail-logo">${ic('sky')}</div>${NAV.flat().filter(Boolean).map(i => `<a class="rail-i${i.k === _curTab ? ' is-on' : ''}" href="${i.h}">${navIc(i.k, i.k === _curTab)}<span>${i.l}</span>${_navBadge[i.k] && _navBadge[i.k]() ? `<b class="nav-badge">${_navBadge[i.k]()}</b>` : ''}</a>`).join('')}<button class="rail-plus" onclick="openCapture()">${ic('plus')}<span>書く</span></button>`;
+  $('#rail').innerHTML = `<div class="rail-logo">${ic('sky')}</div>${NAV.flat().filter(Boolean).map(i => `<a class="rail-i${i.k === _curTab ? ' is-on' : ''}" href="${i.h}">${navIc(i.k, i.k === _curTab)}<span>${i.l}</span>${_navBadge[i.k] && _navBadge[i.k]() ? `<b class="nav-badge">${_navBadge[i.k]()}</b>` : ''}</a>`).join('')}<button class="rail-plus" onclick="openCapture()" aria-label="入力${plusN() ? `(未処理 ${plusN()}件)` : ''}">${ic('plus')}<span>入力</span>${plusN() ? `<b class="nav-badge" aria-hidden="true">${plusN() > 9 ? '9+' : plusN()}</b>` : ''}</button>`;
   _navApply(_deck, null, false);
 }
+/** ＋の印: 未処理 = 雑記のまま + 未確定の記録(m-inbox.js の inboxCount) */
+const plusN = () => (typeof inboxCount === 'function' ? inboxCount() : 0);
 /* p = 0(1枚目)〜1(2枚目)。指に近い窓から先に動く */
 function _navApply(p, fx, anim) {
   const bar = $('.nav-bar'); if (!bar) return; const w = bar.offsetWidth || 1, bx = bar.getBoundingClientRect().left;

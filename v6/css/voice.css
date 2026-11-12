@@ -1,0 +1,29 @@
+/* 個人記録 v6.2 — 音声入力(担当 E。接頭辞 vc) */
+
+/* 長押しの OS メニュー・選択・拡大を止める */
+.nav-plus,.rail-plus{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.rail-plus{position:relative}
+
+/* 録音中の ＋: 赤(いま)+ 脈打つ輪 */
+.nav-plus.is-rec,.rail-plus.is-rec{background:var(--now);box-shadow:0 8px 18px -8px color-mix(in srgb,var(--now) 60%,transparent)}
+:root[data-theme="dark"] .nav-plus.is-rec,:root[data-theme="dark"] .rail-plus.is-rec{color:var(--bg)}
+.nav-plus.is-rec::after,.rail-plus.is-rec::after{content:"";position:absolute;inset:-6px;border-radius:22px;border:2px solid var(--now);opacity:0;pointer-events:none;animation:vcPulse 1.4s var(--ease) infinite}
+@keyframes vcPulse{0%{opacity:.7;transform:scale(.92)}100%{opacity:0;transform:scale(1.22)}}
+@media (prefers-reduced-motion:reduce){
+  .nav-plus.is-rec::after,.rail-plus.is-rec::after{animation:none;opacity:.6;transform:none}
+}
+
+/* 録音中の札: ナビの上(シートの上でも見える)。広い画面では本文の中央 */
+.vc-pill{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + var(--s2) + var(--nav-h) + var(--s3));z-index:70;
+  display:flex;align-items:center;gap:var(--s2);width:max-content;max-width:min(420px,calc(100vw - 2 * var(--s4)));min-height:52px;
+  padding:var(--s1) var(--s1) var(--s1) var(--s4);border-radius:var(--r-lg);background:var(--card);color:var(--tx);box-shadow:var(--e3);
+  opacity:0;transform:translate(-50%,12px);pointer-events:none;transition:opacity var(--t2),transform var(--t2) var(--ease)}
+.vc-pill.is-on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+body.has-sheet .vc-pill{bottom:calc(env(safe-area-inset-bottom) + 96px)}
+@media (min-width:900px){.vc-pill{left:calc(50% + 48px);bottom:var(--s6)}}
+.vc-dot{flex:none;width:10px;height:10px;margin-left:var(--s1);border-radius:5px;background:var(--now);animation:vcBlink 1.1s ease-in-out infinite}
+@keyframes vcBlink{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.vc-dot{animation:none}}
+.vc-txt{flex:1;min-width:0;max-width:280px;padding:var(--s2) 0;font-size:var(--fs-body);font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+.vc-stop{flex:none;min-width:44px;min-height:44px;padding:0 var(--s3);border-radius:var(--r-md);color:var(--me);font-size:var(--fs-cap);font-weight:700;white-space:nowrap}
+.vc-stop:active{background:var(--me-soft)}

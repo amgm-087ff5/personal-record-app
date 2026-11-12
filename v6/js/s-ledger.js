@@ -46,7 +46,12 @@ function lgHeroTop(ym, S) {
     const pct = base > 0 ? Math.round(diff / base * 100) : null;
     cmp = `<div class="lg-cmp"><span>${cur ? '先月の同じ日まで' : '先月'} <b class="num">${yen(base)}</b></span><span class="lg-diff num" aria-label="差額">${diff === 0 ? '±¥0' : amt(diff, { sign: 1 })}${pct != null ? `<small class="lg-pct">${pct > 0 ? '+' : pct < 0 ? '−' : '±'}${Math.abs(pct)}%</small>` : ''}</span></div>`;
   }
-  return `<div class="lg-hl">自分の支出</div>${amt(S.total, { cls: 'hero' })}${cmp}`;
+  return `<div class="lg-hl">自分の支出</div>${amt(S.total, { cls: 'hero' })}${lgTentTag(ym)}${cmp}`;
+}
+/** 未確定の支出がある月だけ、その額の札(自分の額。合計にはもう入っている) */
+function lgTentTag(ym) {
+  const v = expsIn(ym).filter(([id]) => DB.acts[id] && DB.acts[id].tent).reduce((s, r) => s + r[2], 0);
+  return v ? `<div class="lg-tent">${tag(`未確定を含む ${yen(v)}`, 'read')}</div>` : '';
 }
 function lgHero(ym, S) {
   const rs = S.roots.filter(r => r.amt > 0), top = rs.slice(0, 5), rest = rs.slice(5), restSum = rest.reduce((s, r) => s + r.amt, 0);

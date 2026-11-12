@@ -141,8 +141,7 @@ function enMore(id) {
   ]);
 }
 function enMemoNew(id) {
-  openCapture('memo');
-  try { CAP.text = E(id).n + ' '; const t = $('#cap-t'); if (t) t.value = CAP.text; capRefresh(); } catch (err) { }
+  openCapture('memo', { text: E(id).n + ' ' });
 }
 function enRemove(id) { done(entRemove(id), { go: '#/ents', replace: 1 }); }
 
@@ -296,7 +295,7 @@ function enDays(list, asc, id) {
   }).join('')}</div>`;
 }
 /** 月の出来事(瞬間の形の小さい行。押せない) */
-const enEv = (ym, icn, html) => ({ d: ym + '-00', html: `<div class="tl-row done moment"><i class="tl-n"></i><div class="tl-c"><div class="mo en-ev">${ic(icn)}<span>${html}</span></div></div></div>` });
+const enEv = (ym, icn, html) => ({ d: ym + '-00', html: `<div class="tl-row done moment"><time class="tl-t num"></time><i class="tl-n"></i><div class="tl-c"><div class="mo en-ev">${ic(icn)}<span>${html}</span></div></div></div>` });
 /** 事実の変化(履歴の終わり = 変わった月)と関係の始まり */
 function enMarks(id) {
   const out = [], e = E(id);
