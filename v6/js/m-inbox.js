@@ -5,15 +5,6 @@
 /* ---------- 小道具 ---------- */
 const _jtKind = raw => /ランチ|ディナー|朝ごはん|昼ごはん|夜ごはん|晩ごはん|朝食|昼食|夕食|夕飯|ご飯|ごはん|ラーメン|うどん|寿司|カレー|定食|焼肉|パスタ|ピザ|食べ|飲み会|カフェ|喫茶/.test(raw) ? 'meal' : /電車|バス|新幹線|タクシー|移動|出発|到着/.test(raw) ? 'move' : undefined;
 const _jtStamp = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(s);
-/** 文から日付の言葉と時刻を外す → {date?, time?, title} (date/time は言葉があった時だけ) */
-function _jtParts(raw) {
-  let t = ' ' + raw + ' ', time;
-  const d = parseDateWord(t);
-  if (d) t = t.replace(d.word, ' ');
-  t = t.replace(/(\d{1,2})[:：](\d{2})(?:\s*[-–〜~]\s*\d{1,2}[:：]\d{2})?/, (_, h, m) => { const v = `${pad2(h)}:${m}`; if (isHM(v)) time = v; return ' '; });
-  if (!time) t = t.replace(/(\d{1,2})時(半|(\d{1,2})分)?(?!間)/, (_, h, half, mi) => { const v = `${pad2(h)}:${half === '半' ? '30' : pad2(mi || 0)}`; if (isHM(v)) time = v; return ' '; });
-  return { date: d ? d.date : undefined, time, title: t.replace(/\s+/g, ' ').trim() };
-}
 /** 既定の日時(雑記を書いた時刻。無ければ今) */
 const _jtBase = at => _jtStamp(at) ? { date: at.slice(0, 10), time: at.slice(11, 16) } : { date: TODAY, time: NOW };
 function _jtWithAt(at, fn) { _logAt = at || null; try { return fn(); } finally { _logAt = null; } }
@@ -83,42 +74,147 @@ function recSummary(t, row, k) {
   return { ty: 'メモ', title: recTitle(t, row), facts: [] };
 }
 
-/* ---------- 候補(LLM を使わない) ---------- */
-/** 1行 → 候補 [cand](0件か1件)。base = {date, time} は既定の日時(雑記を書いた時刻)。無ければ今 */
-function ruleCandidates(text, base) {
-  const raw = String(text == null ? '' : text).trim();
-  const p = raw ? parseQuick(raw) : null; if (!p) return [];
-  const B = base || { date: TODAY, time: NOW };
-  const parts = _jtParts(raw), ents = p.ents || [];
-  if (p.type === 'pay') return [{ type: 'pay', amt: p.amt, date: parts.date ? p.date : B.date, start: parts.time ? p.start : B.time, payee: p.payee, text: p.text, ents }];
-  if (p.type === 'task') return [{ type: 'task', t: p.t, due: p.due, list: p.list, pri: p.pri, ents }];
-  /* 過去の日付・過ぎた時刻の文は出来事。ただし「〜したい」「思い出す」は出来事でなく思いつき(雑記のまま) */
-  const eff = parts.date || B.date;
-  const past = (parts.date && parts.date < TODAY) || (parts.time && (eff < TODAY || (eff === TODAY && parts.time < NOW)));
-  if (past) {
-    if (/たい|思い出/.test(raw)) return [];
-    const c = { type: 'event', title: parts.title || raw, date: eff, ents };
-    if (parts.time) c.start = parts.time;
-    const kind = _jtKind(raw); if (kind) c.kind = kind;
-    return [c];
+/* ---------- 読む(readText。区切り・項目・強い/弱い。決まりは INPUT2.md §1.2) ---------- */
+const RD_TYPE = { '予定': 'plan', 'メモ': 'memo', '支払い': 'pay', '出来事': 'event', 'ToDo': 'task', 'todo': 'task', 'TODO': 'task' };
+const RD_TYPE_LABEL = { plan: '予定', memo: 'メモ', pay: '支払い', event: '出来事', task: 'ToDo' };
+const RD_TYPE_WHOLE = /^(予定|メモ|支払い|出来事|ToDo|todo|TODO)$/;
+const RD_HASH_WHOLE = /^[#＃](\S+)$/;
+/* 感想の文末(かった・だった・たい・楽しみ・疲れた・形容詞の言い切り) */
+const RD_FEEL = /(かった|だった|たい|楽しみ|疲れた|(楽し|嬉し|うれし|悲し|さびし|寂し|美味し|おいし|眠|寒|暑|痛|怖|忙|面白|かわい)い|楽しい)$/;
+const RD_DATE_AT = /^(今日|きょう|明後日|あさって|明日|あした|昨日|きのう|(来週)?[日月火水木金土]曜日?|\d{1,2}[\/月]\d{1,2}日?)/;
+const RD_HM_AT = /^(\d{1,2})[:：](\d{2})(?:[-–〜~](\d{1,2})[:：](\d{2}))?/;
+const RD_JI_AT = /^(\d{1,2})時(?:(半)|(\d{1,2})分)?(?!間)/;
+const RD_AMT_AT = /^([¥￥]\s?\d[\d,]*|\d[\d,]*円)(だった|です|でした)?/;
+const RD_NUM_WHOLE = /^\d[\d,]{2,}$/;
+const RD_LEAD = /^(に|は|から|で|も|、)+/;
+const RD_YEN = /[¥￥]\s?\d|\d[\d,]*円/;
+
+/** 文の頭から1つの語を読む → {role, word, len, val, label, end?, dep?} か null。whole は区切りがまるごとの時だけ種類と数字を読む */
+function _rdAt(s, whole) {
+  let m, d;
+  if (whole && RD_TYPE_WHOLE.test(s)) { const val = RD_TYPE[s]; return { role: 'type', word: s, len: s.length, val, label: RD_TYPE_LABEL[val] }; }
+  if (whole && (m = s.match(RD_HASH_WHOLE))) return { role: 'type', word: s, len: s.length, val: 'task', label: 'ToDo', list: m[1] };
+  if ((m = s.match(RD_DATE_AT)) && (d = parseDateWord(m[0]))) return { role: 'date', word: m[0], len: m[0].length, val: d.date, label: m[0] };
+  if ((m = s.match(RD_HM_AT))) { const v = `${pad2(m[1])}:${m[2]}`; if (isHM(v)) return { role: 'time', word: m[0], len: m[0].length, val: v, end: m[3] ? `${pad2(m[3])}:${m[4]}` : null, label: v }; }
+  if ((m = s.match(RD_JI_AT))) { const v = `${pad2(m[1])}:${m[2] ? '30' : pad2(m[3] || 0)}`; if (isHM(v)) return { role: 'time', word: m[0], len: m[0].length, val: v, end: null, label: v }; }
+  if ((m = s.match(RD_AMT_AT))) { const n = +m[1].replace(/[¥￥\s,円]/g, ''); return { role: 'amt', word: m[1], len: m[1].length + (m[2] ? m[2].length : 0), val: n, label: yen(n) }; }
+  /* 3桁以上の数字だけの区切りは金額。1900〜2100 の4桁は年に見えるので金額にしない */
+  if (whole && RD_NUM_WHOLE.test(s) && !/^(19|20)\d{2}$/.test(s)) { const n = +s.replace(/,/g, ''); return { role: 'amt', word: s, len: s.length, val: n, label: yen(n) }; }
+  return null;
+}
+/** 区切り1つを読む。項目は items へ、o.off の役は読まずに文字として残す(off へ)。返り値 = 題に残る文字 */
+function _rdSeg(s, offSet, items, off) {
+  let pos = 0, lead = '', last = null;
+  for (;;) {
+    const r = s.slice(pos); if (!r) break;
+    const it = _rdAt(r, pos === 0); if (!it) break;
+    pos += it.len;
+    if (offSet.has(it.role)) { off.push({ role: it.role, word: r.slice(0, it.len), label: it.label }); lead += r.slice(0, it.len); last = null; continue; }
+    items.push(it); last = it;
   }
-  if (p.type === 'plan') return [{ type: 'plan', title: p.title, date: p.date, start: p.start, end: p.end, ents }];
-  return [];
+  const tail = s.slice(pos);
+  /* 日付・時刻の直後が「は」「も」「って」「の」なら文の一部(独立した項目でない → 弱い) */
+  if (last && (last.role === 'date' || last.role === 'time') && /^(は|も|って|の)/.test(tail)) last.dep = true;
+  /* 区切りの途中の語: 円・¥の金額は文中でも強い。日付・時刻は文の一部(弱い) */
+  let mid = '';
+  for (let i = 0; i < tail.length;) {
+    /* 数字の途中(「25時」の「5時」)からは読まない */
+    const it = i > 0 && /[\d:：]/.test(tail[i - 1]) ? null : _rdAt(tail.slice(i), false);
+    if (!it) { mid += tail[i]; i++; continue; }
+    if (offSet.has(it.role)) { off.push({ role: it.role, word: tail.slice(i, i + it.len), label: it.label }); mid += tail.slice(i, i + it.len); i += it.len; continue; }
+    if (it.role === 'amt') { items.push(it); i += it.len; continue; }
+    it.dep = true; items.push(it); mid += tail.slice(i, i + it.len); i += it.len;
+  }
+  return (lead + mid).replace(RD_LEAD, '').trim();
+}
+/** 種類の語と #リスト を除いた行ごとの文(memo の本文・弱い読みの題に使う) */
+function _rdBody(raw) {
+  return String(raw || '').split('\n')
+    .map(l => l.split(/[\s　]+/).filter(p => p && !RD_TYPE_WHOLE.test(p) && !RD_HASH_WHOLE.test(p)).join(' '))
+    .filter(Boolean).join('\n');
+}
+/** 文末が動詞の終止形(買う・行く・する 等) */
+const _rdVerbEnd = t => t.length >= 2 && /[うくすつぬぶむぐる]$/.test(t);
+/** 文に出てくるエンティティ(parseQuick と同じ当て方) */
+const _rdEnts = raw => Object.keys(DB.ents || {}).filter(id => { const e = DB.ents[id], short = e.n.split(' ').pop(); return raw.includes(e.n) || (short.length > 1 && raw.includes(short)); });
+
+/** 1つの文(空行で分けた1まとまり)を読む → {cand, conf:'strong'|'weak'|'none', marks, off, hint, hintDate}
+    base = {date, time} 既定の日時(無ければ今)。o = {type?, off?:[役…]}。o.type は種類で読み替える(cand は必ず返り、conf は strong) */
+function readText(text, base, o = {}) {
+  const raw = String(text == null ? '' : text).replace(/\r\n?/g, '\n').trim();
+  const bd = (base && base.date) || TODAY, bt = (base && base.time) || NOW;
+  const offSet = new Set(o.off || []);
+  const ents = _rdEnts(raw), pri = /[!！]/.test(raw);
+  const segs = raw.replace(/[!！]/g, ' ').split(/[\s　、。]+/).filter(Boolean);
+  const forced = o.type && o.type !== 'diary' ? o.type : null;
+  /* 感想の文は最初に見分ける。種類の語・金額(円・¥)があれば日記にしない */
+  const hasType = segs.some(s => RD_TYPE_WHOLE.test(s) || RD_HASH_WHOLE.test(s));
+  const endText = raw.replace(/[\s。、！!？?…]+$/, '');
+  if (o.type === 'diary' || (!forced && !hasType && !RD_YEN.test(raw) && RD_FEEL.test(endText))) {
+    const dm = parseDateWord(raw);
+    return { cand: null, conf: 'none', marks: [], off: dm ? [{ role: 'date', word: dm.word, label: dm.word }] : [], hint: 'diary', hintDate: dm && !offSet.has('date') ? dm.date : bd };
+  }
+  const items = [], off = [], pieces = [];
+  for (const s of segs) { const r = _rdSeg(s, offSet, items, off); if (r) pieces.push(r); }
+  const dateI = items.find(i => i.role === 'date'), timeI = items.find(i => i.role === 'time');
+  const amtI = items.find(i => i.role === 'amt'), typeI = items.find(i => i.role === 'type');
+  const weak = items.some(i => i.dep);
+  const title = (weak ? _rdBody(raw).replace(/\s+/g, ' ') : pieces.join(' ')).replace(/[!！]/g, '').replace(/\s+/g, ' ').trim();
+  const dA = dateI ? dateI.val : undefined;
+  /* 種類: 指定 → 種類の語 → 金額(支払い) → #(ToDo) → 日時(過去=出来事 / 先=予定) */
+  let type = forced || (typeI ? typeI.val : null);
+  if (!type && amtI) type = 'pay';
+  if (!type && timeI) {
+    const eff = dA || bd, past = eff < TODAY || (eff === TODAY && timeI.val < NOW);
+    type = past ? (/たい|思い出/.test(raw) ? null : 'event') : 'plan';
+  } else if (!type && dateI) {
+    if (dA > TODAY) type = _rdVerbEnd(title) ? 'task' : 'plan';
+    else if (dA === TODAY) type = /(た|だった)$/.test(title) ? 'event' : 'task';
+    else type = /たい|思い出/.test(raw) ? null : 'event';
+  }
+  /* 先の日付の支払いは今日にし、日付の言葉は off へ */
+  const dropDate = type === 'pay' && dA > TODAY;
+  if (dropDate) off.push({ role: 'date', word: dateI.word, label: dateI.label });
+  const marks = (type === 'memo' ? [typeI].filter(Boolean) : items.filter(i => !(dropDate && i === dateI))).map(i => ({ role: i.role, word: i.word, label: i.label }));
+  const none = { cand: null, conf: 'none', marks, off, hint: null, hintDate: null };
+  if (!type) return none;
+  const T = title || (forced ? raw : '');
+  const body = type === 'memo' ? (_rdBody(raw) || (forced ? raw : '')) : '';
+  if (!forced && (type === 'memo' ? !body : type === 'pay' ? !amtI && !T : !T)) return none;
+  let cand;
+  if (type === 'pay') {
+    const pe = ents.find(id => DB.ents[id] && DB.ents[id].types && isUnder(DB.ents[id].types[0], 'place'));
+    cand = { type: 'pay', amt: amtI ? amtI.val : 0, date: dA ? (dA > TODAY ? TODAY : dA) : bd, start: timeI ? timeI.val : bt, payee: pe ? { e: pe } : T ? { name: T } : null, text: T, ents };
+  } else if (type === 'task') {
+    const lst = typeI && typeI.list ? Object.keys(DB.lists).find(k => DB.lists[k].n === typeI.list) : undefined;
+    cand = { type: 'task', t: T, due: dA, list: lst, pri: pri ? 1 : undefined, ents };
+  } else if (type === 'plan') {
+    cand = { type: 'plan', title: T, date: dA || bd, start: timeI ? timeI.val : undefined, ents };
+    if (timeI && timeI.end) cand.end = timeI.end;
+  } else if (type === 'event') {
+    cand = { type: 'event', title: T, date: dA || bd, ents };
+    if (timeI) cand.start = timeI.val;
+    const kind = _jtKind(raw); if (kind) cand.kind = kind;
+  } else cand = { type: 'memo', body, ents };
+  /* 弱い読み = 文の一部の日付・時刻。種類を指定した時と種類の語がある時は確かな読み */
+  const conf = forced || typeI ? 'strong' : weak ? 'weak' : 'strong';
+  return { cand, conf, marks, off, hint: null, hintDate: null };
+}
+/** 空行(2つ以上の改行)で分けた文の配列。前後の空白を除き、空は捨てる。文の中の改行は項目の区切り */
+function readBlocks(text) {
+  return String(text == null ? '' : text).replace(/\r\n?/g, '\n').split(/\n[ \t　]*\n/).map(s => s.trim()).filter(Boolean);
+}
+
+/* ---------- 候補(LLM を使わない) ---------- */
+/** 1行 → 候補 [cand](強い読みの時だけ1件。弱い・読めない時は []) */
+function ruleCandidates(text, base) {
+  const r = readText(text, base);
+  return r.conf === 'strong' && r.cand ? [r.cand] : [];
 }
 /** 指定の種類で読み替えた候補(必ず1件)。pay で金額が無ければ amt:0 */
 function candFromType(text, type, base) {
-  const raw = String(text == null ? '' : text).trim();
-  const B = base || { date: TODAY, time: NOW };
-  const p = raw ? parseQuick(raw) : null, parts = _jtParts(raw), ents = (p && p.ents) || [];
-  const date = parts.date || B.date;
-  if (type === 'pay') {
-    if (p && p.type === 'pay') return { ...p, date: parts.date ? p.date : B.date, start: parts.time ? p.start : B.time, ents };
-    return { type: 'pay', amt: 0, date, start: parts.time || B.time, payee: parts.title ? { name: parts.title } : null, text: parts.title, ents };
-  }
-  if (type === 'task') { const q = parseTask(raw); return { type: 'task', t: q.t || raw, due: q.due, list: q.list, pri: q.pri, ents }; }
-  if (type === 'plan') return { type: 'plan', title: parts.title || raw, date, start: parts.time, ents };
-  if (type === 'event') { const c = { type: 'event', title: parts.title || raw, date, ents }; if (parts.time) c.start = parts.time; const kind = _jtKind(raw); if (kind) c.kind = kind; return c; }
-  return { type: 'memo', body: raw, ents };
+  const r = readText(text, base, { type });
+  return r.cand || { type: 'memo', body: String(text == null ? '' : text).trim(), ents: [] };
 }
 
 /* ---------- 記録にする(commit の中で呼ぶ内部関数) ---------- */
@@ -177,6 +273,30 @@ function jotAdd(text, o = {}) {
   });
   return o.at ? _jtWithAt(at, run) : run();
 }
+/** 複数の文を1回の commit で置く(各文は jotAdd と同じ。1件でも失敗したら全部置かない)。取り消し1回で全部戻る → {ids} */
+const jotAddMany = (texts, o = {}) => {
+  const list = [].concat(texts == null ? [] : texts).map(t => String(t == null ? '' : t).trim()).filter(Boolean);
+  if (!list.length) return { ok: false, why: '内容を入れてください' };
+  return commit(`${list.length}件を置きました`, () => {
+    const ids = [];
+    for (const body of list) {
+      const r = jotAdd(body, { src: o.src || 'text', convert: o.convert, at: o.at });
+      if (!r.ok) fail(r.why);
+      ids.push(r.id);
+    }
+    return { ids };
+  });
+};
+/** 日記の末尾に改行して足す(既にある日は改行でつなぐ)。commit 1回 */
+const diaryAppend = (d, text) => {
+  const add = String(text == null ? '' : text).trim();
+  if (!isDate(d)) return { ok: false, why: '日を選んでください' };
+  if (!add) return { ok: false, why: '内容を入れてください' };
+  return commit('日記に書きました', () => {
+    const cur = String((DB.days[d] && DB.days[d].diary) || '').trim();
+    DB.days[d] = { photos: [], ...DB.days[d], diary: cur ? `${cur}\n${add}` : add };
+  });
+};
 /** 雑記の本文を直す */
 const jotUpdate = (jid, o = {}) => commit('雑記を直しました', () => {
   const j = DB.jots[jid]; if (!j) fail('雑記が見つかりません');
@@ -309,4 +429,4 @@ function seedInbox() {
 }
 
 /* const で定義した公開関数も window に載せる(他の画面の window.xxx && xxx() の判定が偽にならないように) */
-Object.assign(window, { isTent, tentCount, jotsRaw, jotsSorted, inboxCount, jotUpdate, jotRemove, jotConvert, jotConvertMany, tentConfirm, tentConfirmAll });
+Object.assign(window, { isTent, tentCount, jotsRaw, jotsSorted, inboxCount, jotUpdate, jotRemove, jotConvert, jotConvertMany, tentConfirm, tentConfirmAll, readText, readBlocks, ruleCandidates, candFromType, jotAddMany, diaryAppend });

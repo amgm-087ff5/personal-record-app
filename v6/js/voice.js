@@ -1,11 +1,13 @@
-/* 個人記録 v6.2 — ＋の長押しの音声入力(担当 E。仕様 INBOX.md §3.3) */
+/* 個人記録 v6.3 — 音声入力(担当 C。接頭辞 vc。仕様 INPUT2.md §3) */
 'use strict';
 /* 長押し(450ms・10px 以内)で録音開始 → 離しても続く → 録音中の ＋ のタップで完了 → 雑記に置く。
-   ＋(.nav-plus / .rail-plus)は renderNav で描き直されるので、要素には直接付けず document に委譲する。 */
+   ＋(.nav-plus / .rail-plus)は renderNav で描き直されるので、要素には直接付けず document に委譲する。
+   区切り: 確定の1件どうしは半角空白、認識の再開の境目と「改行」は改行。composer は確定の1件ごとに onText へ渡す。 */
 
 const VC_SEL = '.nav-plus,.rail-plus';
 const VC_HOLD = 450, VC_SLOP = 10, VC_MAX_FAILS = 3;
-let vcS = { active: false, from: 'nav', onText: null, rec: null, base: '', sess: '', pend: '', gotResult: false, fails: 0, rt: 0 };
+const VC_NL = /^(改行|かいぎょう)[\s。、．.!！?？]*$/;   /* 改行だけの確定 */
+let vcS = { active: false, from: 'nav', onText: null, rec: null, base: '', sess: '', pend: '', cut: false, gotResult: false, fails: 0, rt: 0 };
 let vcPress = null;      /* 押している最中(長押しの判定) */
 let vcEat = false;       /* 長押しの後の離す操作の click を1回だけ抑える */
 let vcPill = null, vcTxt = null, vcMO = null;
@@ -15,27 +17,65 @@ function voiceSupported() { return !!vcCls(); }
 function voiceActive() { return !!vcS.active; }
 function vcOnPlus(t) { return t && t.closest ? t.closest(VC_SEL) : null; }
 
-function vcText() { return (vcS.base + vcS.sess + vcS.pend).replace(/\s+/g, ' ').trim(); }
+/* 確定・途中の1件を断片にする: 改行の言葉だけなら '\n'、それ以外は前後の空白を外して空白をまとめる */
+function vcPiece(t) {
+  const s = String(t == null ? '' : t).trim();
+  if (!s) return '';
+  if (VC_NL.test(s)) return '\n';
+  return s.replace(/\s+/g, ' ');
+}
+/* 断片をつなぐ。sep は断片どうしの区切り(確定の1件どうしは ' '、認識の再開の境目は '\n')。改行の後と、改行で始まる断片の前には空白を入れない */
+function vcPut(text, piece, sep) {
+  if (!piece) return text;
+  if (!text) return piece;
+  if (piece[0] === '\n') return text.replace(/ +$/, '') + piece;
+  if (text[text.length - 1] === '\n') return text + piece;
+  return text + sep + piece;
+}
+/* 今までの全文 = 前の認識の分 + 今の認識の確定 + 途中 */
+function vcAll() { const s = vcS; return vcPut(vcPut(s.base, s.sess, '\n'), s.pend, ' '); }
+/* 空白の連続だけまとめる(改行は残す)。改行の前後の空白は外す */
+function vcText() { return vcAll().replace(/[^\S\n]+/g, ' ').replace(/ *\n */g, '\n').trim(); }
+
 function vcPaint() {
   if (!vcTxt) return;
   const t = vcText();
   const show = t ? (t.length > 60 ? '…' + t.slice(-60) : t) : '聞いています…';
-  vcTxt.innerHTML = esc(show);
+  vcTxt.innerHTML = esc(show.replace(/\n/g, ' ↵ '));
 }
 /* ＋ に録音中の印を付ける(描き直されても付け直す) */
 function vcMark() { document.querySelectorAll(VC_SEL).forEach(el => el.classList.toggle('is-rec', vcS.active)); }
 function vcShowPill(on) { if (!vcPill) return; vcPill.classList.toggle('is-on', !!on); if (on) vcPaint(); }
 
-/* 結果の扱い: nav → 雑記に置く / composer → onText に渡す */
-function vcDeliver(text, from, onText, failMsg) {
-  if (!text) { toast(failMsg || '聞き取れませんでした', { bad: 1 }); return; }
-  if (from === 'composer') { onText && onText(text); if (failMsg) toast(failMsg, { bad: 1 }); return; }
-  if (typeof jotAdd !== 'function') { toast('雑記に置けませんでした', { bad: 1 }); return; }
-  const r = jotAdd(text, { src: 'voice' });
-  if (r && r.ok) toast('雑記に置きました', { undo: r.undo, act: { label: '開く', on: () => window.openInbox && openInbox() } });
+/* composer へ1断片を渡す。認識の再開の後の最初の断片の前に改行を1つ入れる(改行の言葉そのものが来た時は入れない) */
+function vcOut(s, piece) {
+  if (!piece || !s.onText) return;
+  if (s.cut) {
+    s.cut = false;
+    if (piece !== '\n' && s.base[s.base.length - 1] !== '\n') s.onText('\n', { live: 1 });
+  }
+  s.onText(piece, { live: 1 });
+}
+
+/* nav の終わり: 全文を置く。空行があり、空行で分ける関数があれば、空行で分けた文を一度に置く */
+function vcSave(text) {
+  const many = /\n\s*\n/.test(text) && typeof jotAddMany === 'function' && typeof readBlocks === 'function';
+  let r = null;
+  if (many) r = jotAddMany(readBlocks(text), { src: 'voice' });
+  else if (typeof jotAdd === 'function') r = jotAdd(text, { src: 'voice' });
+  else { toast('雑記に置けませんでした', { bad: 1 }); return; }
+  if (r && r.ok) toast(r.label || '雑記に置きました', { undo: r.undo, act: { label: '開く', on: () => window.openInbox && openInbox() } });
   else toast((r && r.why) || '置けませんでした', { bad: 1 });
   window.inRefresh && inRefresh();
-  if (failMsg) toast(failMsg, { bad: 1 });
+}
+
+/* 終わり(完了・やめる・止まった): nav は全文を置く。composer は確定の1件ずつ渡し済みなので、まだ確定していない文だけ渡す */
+function vcEnd(s, msg) {
+  const text = vcText();
+  if (!text) { toast(msg || '聞き取れませんでした', { bad: 1 }); return; }
+  if (s.from === 'composer') vcOut(s, vcPiece(s.pend));
+  else vcSave(text);
+  if (msg) toast(msg, { bad: 1 });
 }
 
 function vcTeardown(how) {
@@ -50,9 +90,9 @@ function vcTeardown(how) {
 /* 途中で止まった時: 聞けた分は残して知らせる */
 function vcStop(msg, open) {
   const s = vcS; if (!s.active) return;
-  const text = vcText(), from = s.from, cb = s.onText;
+  const from = s.from;
   vcTeardown('stop');
-  vcDeliver(text, from, cb, msg);
+  vcEnd(s, msg);
   if (open && from === 'nav' && window.openCapture) openCapture();
 }
 
@@ -61,15 +101,23 @@ function vcRun() {
   let rec;
   try { const C = vcCls(); rec = new C(); } catch (e) { return vcStop('この端末では音声入力が使えません', true); }
   s.rec = rec; s.gotResult = false;
+  const got = new Set();   /* この認識の中で composer へ渡し済みの確定(results の位置) */
   rec.lang = 'ja-JP'; rec.continuous = true; rec.interimResults = true;
   /* 1回の認識の中の全結果を読み直す(確定 = sess、途中 = pend)。前の区切りは base に積んである */
   rec.onresult = e => {
     if (s.rec !== rec) return;
     let fin = '', mid = '';
     const list = (e && e.results) || [];
-    for (let i = 0; i < list.length; i++) { const r = list[i]; const t = (r && r[0] && r[0].transcript) || ''; if (r && r.isFinal) fin += t; else mid += t; }
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i]; if (!r) continue;
+      const pc = vcPiece(r[0] && r[0].transcript);
+      if (r.isFinal) {
+        fin = vcPut(fin, pc, ' ');
+        if (!got.has(i)) { got.add(i); if (s.from === 'composer' && pc) vcOut(s, pc); }
+      } else mid = vcPut(mid, pc, ' ');
+    }
     s.sess = fin; s.pend = mid;
-    if ((fin + mid).trim()) s.gotResult = true;
+    if (fin || mid) s.gotResult = true;
     vcPaint();
   };
   rec.onerror = e => {
@@ -81,7 +129,9 @@ function vcRun() {
   };
   rec.onend = () => {
     if (s.rec !== rec) return;
-    s.base += s.sess + s.pend; s.sess = ''; s.pend = ''; s.rec = null;
+    if (s.from === 'composer') vcOut(s, vcPiece(s.pend));       /* 確定しないまま切れた文は渡す */
+    s.base = vcAll(); s.sess = ''; s.pend = ''; s.rec = null;
+    s.cut = !!s.base;                                           /* 次の認識の前で改行 */
     vcPaint();
     if (!s.active) return;
     s.fails = s.gotResult ? 0 : s.fails + 1;
@@ -100,7 +150,7 @@ function voiceStart(o = {}) {
     if (from === 'nav' && window.openCapture) openCapture();
     return false;
   }
-  Object.assign(vcS, { active: true, from, onText: o.onText || null, rec: null, base: '', sess: '', pend: '', gotResult: false, fails: 0 });
+  Object.assign(vcS, { active: true, from, onText: o.onText || null, rec: null, base: '', sess: '', pend: '', cut: false, gotResult: false, fails: 0 });
   if (vcMO) vcMO.observe(document.body, { childList: true, subtree: true });
   vcMark(); vcShowPill(true); hapt();
   vcRun();
@@ -110,10 +160,10 @@ function voiceStart(o = {}) {
 /* 録音を終える: 文字を返し、nav なら雑記に置く */
 function voiceFinish() {
   if (!vcS.active) return '';
-  const text = vcText(), from = vcS.from, cb = vcS.onText;
+  const s = vcS, text = vcText();
   vcTeardown('stop');
   hapt();
-  vcDeliver(text, from, cb);
+  vcEnd(s, '');
   return text;
 }
 
