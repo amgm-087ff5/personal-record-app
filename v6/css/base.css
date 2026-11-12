@@ -110,3 +110,11 @@ body.has-sheet .toasts{bottom:calc(env(safe-area-inset-bottom) + 96px)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
 .nav-knob.has-badge::after{content:"";position:absolute;top:4px;right:6px;width:9px;height:9px;border-radius:3px;background:var(--now);box-shadow:0 0 0 2px var(--bg)}
+
+/* ---------- ソフトウェアキーボード(js/kbd.js)---------- */
+/* --kb = 画面が縮まなかった端末でキーボードが覆う高さ。その分の余白を足し、最下部までスクロールできるようにする */
+.sheet-b{padding-bottom:calc(var(--s5) + var(--kb,0px))}
+.screen{padding-bottom:calc(var(--s8) + var(--kb,0px))}
+body.kb-open #nav{display:none}
+body.kb-open .toasts{bottom:var(--s3)}
+body.kb-open .sheet-f{padding-bottom:var(--s3)}
