@@ -25,7 +25,7 @@
 .btn svg{width:20px;height:20px;stroke-width:2.1}
 .btn:active{transform:scale(.97)}
 .btn.pri{background:var(--fill-me);color:var(--on);box-shadow:var(--e-me),inset 0 1px 0 rgba(255,255,255,.28)}
-.btn.sec{background:var(--me-soft);color:var(--me)}
+.btn.sec{background:var(--me-soft);color:var(--me);margin-bottom:0}
 .btn.ghost{color:var(--me);padding:0 var(--s2)}
 .btn.dash{width:100%;border:1.5px dashed var(--line-2);color:var(--tx-2);background:transparent}
 .btn.wide{flex:1;width:100%}

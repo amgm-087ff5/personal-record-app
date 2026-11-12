@@ -14,18 +14,19 @@ function cvRecCand(t, k) {
     const ents = (a.roles || []).map(r => r.e).filter(Boolean), start = a.allDay ? undefined : (a.start || undefined);
     if (isPay(a) && !isPlan(a)) {
       const pr = rolesOf(a, '支払先')[0], x = xCats(k)[0];
-      return { type: 'pay', amt: payTotal(a), date: a.date, start: a.start || NOW, payee: pr && pr.e ? { e: pr.e } : { name: payeeOf(a) || actTitle(a) }, text: payeeOf(a) || actTitle(a), cat: x && x.cat || undefined, ents };
+      return { type: 'pay', amt: payTotal(a), date: a.date, start: a.start || NOW, payee: pr && pr.e ? { e: pr.e } : { name: payeeOf(a) || actTitle(a) }, text: payeeOf(a) || actTitle(a), cat: x && x.cat || undefined, ents, note: a.note || undefined };
     }
-    if (isPlan(a)) return { type: 'plan', title: actTitle(a), date: a.date, start, end: a.end || undefined, kind: KINDS[a.kind] ? a.kind : 'event', ents };
-    return { type: 'event', title: actTitle(a), date: a.date, start, end: a.end || undefined, kind: KINDS[a.kind] ? a.kind : 'event', ents };
+    if (isPlan(a)) return { type: 'plan', title: actTitle(a), date: a.date, date2: a.date2 || undefined, start, end: a.end || undefined, kind: KINDS[a.kind] ? a.kind : 'event', ents, note: a.note || undefined };
+    return { type: 'event', title: actTitle(a), date: a.date, date2: a.date2 || undefined, start, end: a.end || undefined, kind: KINDS[a.kind] ? a.kind : 'event', ents, note: a.note || undefined };
   }
-  if (t === 'tasks') { const k2 = DB.tasks[k]; return k2 ? { type: 'task', t: k2.t, due: k2.due || undefined, list: k2.list || undefined, pri: !!k2.pri, ents: k2.ents || [] } : null; }
-  if (t === 'memos') { const m = DB.memos[k]; return m ? { type: 'memo', body: m.body, ents: m.ents || [] } : null; }
+  if (t === 'tasks') { const k2 = DB.tasks[k]; return k2 ? { type: 'task', t: k2.t, due: k2.due || undefined, list: k2.list || undefined, pri: !!k2.pri, ents: k2.ents || [], note: k2.memo || undefined, tags: k2.tags || undefined } : null; }
+  if (t === 'memos') { const m = DB.memos[k]; return m ? { type: 'memo', body: m.body, ents: m.ents || [], tags: m.tags || undefined } : null; }
   return null;
 }
 /** cand を下書き(CV.f)に写す */
 function cvFromCand(c) {
-  const f = { title: '', date: '', start: '', end: '', allDay: false, kind: 'event', amt: '', cat: '', list: '', pri: false, payeeE: '', ents: c.ents || [] };
+  /* note・tags・date2 は表に出さず、そのまま持ち越す(直して保存しても消えない) */
+  const f = { title: '', date: '', start: '', end: '', allDay: false, kind: 'event', amt: '', cat: '', list: '', pri: false, payeeE: '', ents: c.ents || [], note: c.note || '', tags: c.tags || [], date2: c.date2 || '' };
   if (c.type === 'pay') {
     const e = c.payee && c.payee.e ? E(c.payee.e) : null;
     f.payeeE = e ? c.payee.e : '';
@@ -72,7 +73,15 @@ function cvPayee() {
   const name = CV.f.title.trim(); if (!name) return null;
   const e = CV.f.payeeE; return e && E(e) && E(e).n === name ? { e } : { name };
 }
+/** 表の欄から cand を作り、表に出さない欄(備考・タグ・終わりの日)を足す */
 function cvCand() {
+  const o = cvCandBase(), f = CV.f;
+  if (f.note) o.note = f.note;
+  if (f.tags && f.tags.length) o.tags = f.tags;
+  if (f.date2 && (CV.type === 'event' || CV.type === 'plan')) o.date2 = f.date2;
+  return o;
+}
+function cvCandBase() {
   const f = CV.f, t = CV.type, ents = f.ents || [];
   if (t === 'pay') return cvStrip({ type: 'pay', amt: cvNum(f.amt), date: f.date, start: f.start, payee: cvPayee(), text: f.title.trim(), cat: f.cat || undefined, ents });
   if (t === 'event' || t === 'plan') {

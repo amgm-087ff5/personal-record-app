@@ -15,59 +15,6 @@
 
 .in-top{flex:none;padding-top:var(--s1)}
 
-/* 未確定の帯: 点線の枠(--read)と札 */
-.in-band{display:flex;min-height:52px;align-items:center;justify-content:space-between;gap:var(--s2);margin-top:var(--s2);padding:var(--s2) var(--s2) var(--s2) var(--s3);border-radius:var(--r-md);border:1.5px dashed var(--read);background:var(--card)}
-.in-band > .btn{flex:none}
-.in-band b{display:flex;align-items:center;gap:var(--s2);min-width:0;font-size:var(--fs-cap);font-weight:700;color:var(--tx-2)}
-
-/* 履歴: 古い順。最新が下 */
-.in-log{-webkit-mask-image:linear-gradient(to bottom,transparent 0,black 14px);mask-image:linear-gradient(to bottom,transparent 0,black 14px);position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:var(--s1);padding:var(--s2) 0 var(--s3)}
-.in-log > *{flex:none}
-.in-day{display:flex;justify-content:center;margin:var(--s3) 0 var(--s1)}
-.in-day span{padding:2px var(--s3);border-radius:var(--r-pill);background:var(--card-2);color:var(--tx-3);font-size:var(--fs-min);font-weight:700}
-.in-day.is-today span{background:var(--me);color:var(--on)}
-.in-more{margin:var(--s2) 0}
-
-/* 雑記 = 自分の吹き出し(右寄せの白い面) */
-.in-msg{display:flex;align-items:center;justify-content:flex-end;gap:var(--s2);padding:var(--s1) 0}
-.in-bub{max-width:min(86%,520px);min-width:0;padding:var(--s3) var(--s4);border-radius:var(--r-lg);overflow-wrap:anywhere}
-.in-bub-h{display:flex;align-items:center;gap:var(--s1);font-size:var(--fs-min);font-weight:650;color:var(--tx-3)}
-.in-ico svg{width:14px;height:14px}
-.in-bub-t{margin-top:var(--s1);font-size:var(--fs-body);line-height:1.6;color:var(--tx);white-space:pre-wrap;overflow-wrap:anywhere}
-.in-msg.is-sel .in-bub{box-shadow:var(--e1),0 0 0 2px var(--me)}
-.in-msg.is-focus .in-bub{box-shadow:var(--e2),var(--ring)}
-.in-msg.is-new{animation:inRise var(--t2) var(--ease)}
-@keyframes inRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-
-/* 入れ子の記録: 一段へこんだ面。未確定は点線の枠(--read) */
-.in-rec{margin-top:var(--s2);padding:var(--s2) var(--s3);border-radius:var(--r-md);background:var(--card-2)}
-.in-rec.is-tent{background:transparent;border:1.5px dashed var(--read)}
-.in-rec.is-focus{box-shadow:var(--ring)}
-.in-rec-h{display:flex;align-items:center;gap:var(--s1);font-size:var(--fs-min);font-weight:700;color:var(--tx-3)}
-.in-rec-t{display:block;margin-top:2px;font-size:var(--fs-body);font-weight:650;color:var(--tx);overflow-wrap:anywhere}
-.in-rec-f{display:flex;flex-wrap:wrap;gap:2px var(--s2);margin-top:2px;font-size:var(--fs-cap);color:var(--tx-3)}
-.in-act{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);margin-top:var(--s2)}
-
-/* LLM の進み */
-.in-llm{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s2);font-size:var(--fs-cap);font-weight:650;color:var(--tx-3)}
-.in-llm.is-err{color:var(--tx-2)}
-.in-dots{display:inline-flex;gap:3px}
-.in-dots i{width:4px;height:4px;border-radius:50%;background:currentColor;animation:inDot 1.2s var(--ease) infinite both}
-.in-dots i:nth-child(2){animation-delay:.15s}
-.in-dots i:nth-child(3){animation-delay:.3s}
-@keyframes inDot{0%,80%,100%{opacity:.25}40%{opacity:1}}
-
-/* 作成・直し・消し の行(面なし・小さい字・左寄せ) */
-.in-ev{display:flex;align-items:center;gap:var(--s2);width:100%;min-width:0;min-height:44px;padding:var(--s1) var(--s2);border-radius:var(--r-sm);font-size:var(--fs-cap);color:var(--tx-2);text-align:left}
-button.in-ev:active{background:var(--sunk)}
-.in-ev.is-gone{opacity:.45}
-.in-ev.is-focus{background:var(--me-soft)}
-.in-ev svg{flex:none;width:16px;height:16px;color:var(--tx-3)}
-.in-ev-v{flex:none;font-weight:650}
-.in-ev-ty{flex:none;font-weight:650;color:var(--tx-3)}
-.in-ev b{flex:1;min-width:0;font-weight:650;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.in-ev time{flex:none;color:var(--tx-3)}
-
 /* ---------- 下(入力欄・取り消しの札・記録モードの並び) ---------- */
 .in-dock{flex:none;display:flex;flex-direction:column;gap:var(--s2);padding:var(--s2) 0 calc(env(safe-area-inset-bottom) + var(--s2));border-top:1px solid var(--line)}
 .in-undo{order:-1;display:flex;justify-content:flex-end}
@@ -86,7 +33,7 @@ button.in-ev:active{background:var(--sunk)}
 .in-send-h{flex:none;min-width:72px}
 
 /* 記録モードだけに出るもの */
-.in-kinds,.in-cards,.in-tools,.in-ops{display:none}
+.in-kinds,.in-cards,.in-tools,.in-ops,.in-ins{display:none}
 
 /* 種類の列(横に流れる) */
 .in-kinds{flex:none;gap:var(--s2);overflow-x:auto;margin:0 calc(var(--page-x) * -1);padding:var(--s1) var(--page-x);scrollbar-width:none}
@@ -97,9 +44,10 @@ button.in-ev:active{background:var(--sunk)}
 .in-k.is-read{border:1.5px dashed var(--read);box-shadow:none}
 
 /* 札: 「こう記録します」。強い読み = 面 / 弱い読み = 点線 / 雑記のまま = 文字だけ */
-.in-cards{flex:0 1 auto;min-height:0;max-height:34vh;overflow-y:auto;overscroll-behavior:contain;flex-direction:column;gap:var(--s2)}
+.in-cards{flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;flex-direction:column;gap:var(--s2)}
 .in-card{display:flex;flex-direction:column;gap:var(--s1);min-width:0;padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--card-2)}
 .in-card.is-weak{background:transparent;border:1.5px dashed var(--read)}
+.in-card.is-empty{flex:1 1 auto;align-items:center;justify-content:center;background:transparent;border:1.5px dashed var(--read);font-size:var(--fs-cap);font-weight:700;color:var(--tx-3)}
 .in-card.is-none{padding:var(--s2) var(--s1);background:transparent;font-size:var(--fs-cap);font-weight:700;color:var(--tx-3)}
 .in-card-h{display:flex;align-items:center;gap:var(--s2);font-size:var(--fs-min);font-weight:700;color:var(--tx-3)}
 .in-card-b{display:flex;align-items:center;gap:var(--s2);min-width:0}
@@ -127,12 +75,22 @@ button.in-ev:active{background:var(--sunk)}
 .in-row2 .clamp{display:-webkit-box}
 .in-card.is-multi .in-card-h .num{margin-left:auto}
 
-/* 道具の列(キーボードのすぐ上。横に流れる) */
-.in-tools{flex:none;flex-direction:row;align-items:center;gap:var(--s2);overflow-x:auto;scrollbar-width:none;margin:0 calc(var(--page-x) * -1);padding:0 var(--page-x)}
-.in-tools::-webkit-scrollbar{display:none}
-.in-tl{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 var(--s3);border-radius:var(--r-pill);background:var(--card);box-shadow:var(--e1);font-size:var(--fs-cap);font-weight:700;color:var(--tx-2);white-space:nowrap}
-.in-tl:active{background:var(--card-2)}
-.in-tl-mic{width:44px;height:44px}
+/* ⑤ の道具の列: 左=日付の行の列 / 中央=音声(大きい丸) / 右=改行・¥・# (中央をそろえるため 1fr auto 1fr) */
+/* 左右の列は同じ幅(中央の音声を真ん中に)。右の3つは 44px×3 が 360 幅に入る隙間(2px)で並べる */
+.in-tools{flex:none;grid-template-columns:minmax(0,1fr) 56px minmax(0,1fr);align-items:center;gap:0}
+.in-tl-l{justify-self:start}
+.in-tl-c{justify-self:center}
+.in-tl-r{justify-self:end;display:flex;gap:2px}
+.in-tb{flex:none;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:var(--r-pill);background:var(--card);box-shadow:var(--e1);font-size:var(--fs-body);font-weight:700;color:var(--tx-2)}
+.in-tb:active{background:var(--card-2)}
+.in-tb[aria-expanded="true"]{background:var(--me-soft);color:var(--me);box-shadow:none}
+.in-mic2{width:56px;height:56px;border-radius:var(--r-pill)}
+
+/* 日付の行の列(#in-ins。左ボタンで開いた時だけ。入力欄のすぐ上。横に流れる) */
+.in-ins{flex:none;gap:var(--s2);overflow-x:auto;scrollbar-width:none;margin:0 calc(var(--page-x) * -1);padding:0 var(--page-x)}
+.in-ins::-webkit-scrollbar{display:none}
+.in-ins-b{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 var(--s3);border-radius:var(--r-pill);background:var(--card);box-shadow:var(--e1);font-size:var(--fs-cap);font-weight:700;color:var(--tx-2);white-space:nowrap}
+.in-ins-b:active{background:var(--card-2)}
 
 /* 操作の列: 雑記に置く(副)・記録する(主) */
 .in-ops{flex:none;gap:var(--s2)}
@@ -140,13 +98,20 @@ button.in-ev:active{background:var(--sunk)}
 
 /* ---------- 記録モード(.in-wrap.is-rec = #in-t に焦点がある間) ---------- */
 .in-wrap.is-rec .in-top,.in-wrap.is-rec .in-log{display:none}
-.in-wrap.is-rec .in-dock{flex:1 1 auto;min-height:0;padding:var(--s1) 0 calc(env(safe-area-inset-bottom) + var(--s4));border-top:0}
-.in-wrap.is-rec .in-kinds{display:flex}
-.in-wrap.is-rec .in-row{flex:1 1 auto;min-height:112px;align-items:stretch}
-.in-wrap.is-rec .in-t{min-height:112px;height:auto;overflow-y:auto}
+/* 並び(order): ①札 < 取り消し < ②種類 < ③操作 < 日付の列 < ④入力欄 < ⑤道具 < 選ぶ帯。①だけが残りの高さを使う */
+.in-wrap.is-rec .in-dock{flex:1 1 auto;min-height:0;gap:var(--s2);padding:var(--s1) 0 calc(env(safe-area-inset-bottom) + var(--s2));border-top:0}
+.in-wrap.is-rec .in-cards{display:flex;order:1;flex:1 1 0;min-height:0;container-type:size}
+/* 残りが 48px 以下に縮んだら ① を隠す(記録予定の枠も札も出さない) */
+@container (max-height: 48px){ .in-wrap.is-rec .in-cards > * {display:none} }
+.in-wrap.is-rec .in-undo{order:2}
+.in-wrap.is-rec .in-kinds{display:flex;order:3;flex:none;height:44px;padding-top:0;padding-bottom:0;align-items:center}
+.in-wrap.is-rec .in-ops{display:flex;order:4;flex:none}
+.in-wrap.is-rec.is-ins .in-ins{display:flex;order:5}
+.in-wrap.is-rec .in-row{display:flex;order:6;flex:none;align-items:stretch}
+.in-wrap.is-rec .in-t{flex:1 1 auto;min-height:0;height:calc(var(--fs-input) * 1.6 * 3 + var(--s3) * 2);overflow-y:auto}
 .in-wrap.is-rec #in-mic,.in-wrap.is-rec #in-send{display:none}
-.in-wrap.is-rec .in-undo{order:0}
-.in-wrap.is-rec .in-cards,.in-wrap.is-rec .in-tools,.in-wrap.is-rec .in-ops{display:flex}
+.in-wrap.is-rec .in-tools{display:grid;order:7}
+.in-wrap.is-rec .in-aux{order:8}
 
 /* 選択モード: 下の入力や札は出さない(操作の帯だけ) */
 .in-wrap.is-sel .in-row,.in-wrap.is-sel .in-undo,.in-wrap.is-sel .in-kinds,.in-wrap.is-sel .in-cards,.in-wrap.is-sel .in-tools,.in-wrap.is-sel .in-ops{display:none}

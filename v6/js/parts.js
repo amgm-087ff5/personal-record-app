@@ -34,6 +34,7 @@ const IC = {
   theme: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 000 17z" fill="currentColor"/>', undo: '<path d="M8 5L4 9l4 4M4 9h10a6 6 0 010 12h-3"/>', list: '<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.5M4.5 12h.5M4.5 18h.5"/>',
   grid: '<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>',
   hand: '<path d="M4 13l4-4 4 3 4-4 4 4M4 13v5h16v-5"/>', pencil: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/>', day: '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 14h6"/>',
+  calendar: '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M8 3v4M16 3v4"/>', enter: '<path d="M19 5v7a3 3 0 01-3 3H6"/><path d="M10 11l-4 4 4 4"/>',
 };
 const ic = (n, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n] || IC.flag}</svg>`;
 const NAV_IC = { home: 'home', acts: 'axis', todo: 'task', memo: 'memo', ents: 'people', ledger: 'wallet', search: 'search', settings: 'sliders' };
