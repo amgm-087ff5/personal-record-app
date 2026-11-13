@@ -38,10 +38,10 @@ html:not(.ready) body{visibility:hidden}
 .nav-i.is-on{color:var(--me)}
 .nav-i.is-on svg .f{fill:var(--me-soft)}
 .nav-i:active svg{transform:scale(.9)}
-.nav-badge{position:absolute;top:8px;left:calc(50% + 6px);min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--now);color:var(--on);font-size:var(--fs-min);font-weight:700;line-height:17px;text-align:center;font-style:normal;box-shadow:0 0 0 2px var(--card)}
+.nav-badge{position:absolute;top:8px;left:calc(50% + 6px);min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--over);color:var(--on);font-size:var(--fs-min);font-weight:700;line-height:17px;text-align:center;font-style:normal;box-shadow:0 0 0 2px var(--card)}
 .nav-plus{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + var(--s2) + 7px);width:56px;height:48px;margin-left:-28px;border-radius:18px;background:var(--fill-me);color:var(--on);display:grid;place-items:center;box-shadow:var(--e-me),inset 0 1px 0 rgba(255,255,255,.3);pointer-events:auto;transition:transform var(--t1) var(--ease)}
 .nav-plus svg{width:26px;height:26px;stroke-width:2.4}
-.nav-plus .nav-badge,.rail-plus .nav-badge{top:-6px;left:auto;right:-6px}
+.nav-plus .nav-badge,.rail-plus .nav-badge{top:-6px;left:auto;right:-6px;background:var(--done)}
 .rail-plus{position:relative}
 .nav-plus:active{transform:scale(.93)}
 .nav-knob{position:absolute;right:calc(var(--s3) + 14px);bottom:calc(env(safe-area-inset-bottom) + var(--s2) + var(--nav-h) - 5px);width:52px;height:44px;display:flex;align-items:center;justify-content:center;gap:4px;pointer-events:auto}
@@ -103,13 +103,13 @@ body.has-sheet .toasts{bottom:calc(env(safe-area-inset-bottom) + 96px)}
 .toast.in{opacity:1;transform:none}
 .toast-ic{width:22px;height:22px;border-radius:7px;background:var(--ok);color:#fff;display:grid;place-items:center}
 .toast-ic svg{width:15px;height:15px;stroke-width:2.6}
-.toast.bad .toast-ic{background:var(--now)}
+.toast.bad .toast-ic{background:var(--done)}
 .toast-m{padding:var(--s2) var(--s1);margin-right:auto}
 .toast-u{min-height:40px;padding:0 var(--s3);border-radius:var(--r-sm);color:#A9C3FF;font-weight:700;white-space:nowrap}
 .toast-u:active{background:rgba(255,255,255,.1)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
-.nav-knob.has-badge::after{content:"";position:absolute;top:4px;right:6px;width:9px;height:9px;border-radius:3px;background:var(--now);box-shadow:0 0 0 2px var(--bg)}
+.nav-knob.has-badge::after{content:"";position:absolute;top:4px;right:6px;width:9px;height:9px;border-radius:3px;background:var(--over);box-shadow:0 0 0 2px var(--bg)}
 
 /* ---------- ソフトウェアキーボード(js/kbd.js)---------- */
 /* --kb = 画面が縮まなかった端末でキーボードが覆う高さ。その分の余白を足し、最下部までスクロールできるようにする */

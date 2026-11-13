@@ -87,7 +87,7 @@ cand の形(`parseQuick` の戻り値に合わせる。`ents:[エンティティ
   - **録音中の ＋ のタップ = 完了**(`click` を止めて `voiceFinish()`)
   - 長押しの OS メニューを出さない(`contextmenu` を止める、CSS `-webkit-touch-callout:none; user-select:none; touch-action:manipulation`)
 - 認識は `webkitSpeechRecognition || SpeechRecognition`、`lang='ja-JP'`、`continuous=true`、`interimResults=true`。**`onend` が来ても録音中なら自動で再開**(50ms 空けて。連続の失敗は 3 回で止める)。`onerror`: `not-allowed|service-not-allowed` は「マイクを許可してください」で止める / `no-speech|aborted` は再開 / それ以外は止めて知らせる
-- 画面: 録音中は ＋ に `.is-rec`(赤 = いま。脈打つ輪)。ナビの上に `#voice-pill`(`aria-live="polite"`): 赤い点 + 途中までの文字(なければ「聞いています…」)+ 「やめる」ボタン(44px)。`prefers-reduced-motion` では脈打たない
+- 画面: 録音中は ＋ に `.is-rec`(青。脈打つ輪)。ナビの上に `#voice-pill`(`aria-live="polite"`): 青い点 + 途中までの文字(なければ「聞いています…」)+ 「やめる」ボタン(44px)。`prefers-reduced-motion` では脈打たない
 - 非対応・許可なしは `toast('この端末では音声入力が使えません', {bad:1})` を出し、`from==='nav'` なら通常の `openCapture()` を開く
 - テスト用: `window.__speechMock` があればそれを認識器のクラスとして使う
 
@@ -146,7 +146,7 @@ cand の形(`parseQuick` の戻り値に合わせる。`ents:[エンティティ
 - 履歴の行を押す: 作った/直した → 対象を開く(`go('#/a/id')` など。閉じてから)。消した → 何もしない
 - 履歴の上限: 初回は新しい 200 行を描く。一番上に「もっと前」ボタン(+200)
 ### 7.2 見た目の約束(DESIGN.md §4 に従い、新しい色・形を作らない)
-- 未確定 = `--read`(点線の枠・札 `tag('未確定','read')`)。LLM・模擬の札も `tag(…, 'read')`。赤は録音中と「いま」だけ。琥珀を使わない
+- 未確定 = `--read`(点線の枠・札 `tag('未確定','read')`)。LLM・模擬の札も `tag(…, 'read')`。赤は使わない(赤はToDoの期限切れだけ)。琥珀を使わない
 - 吹き出し = `.card`(影のある白い面)。入れ子 = `.card` の中の一段へこんだ面(既存の入れ子の部品)。履歴の行 = 面なしの `.row` 風(自作せず `row()` の系統か、`--tx-3` の小さい字)
 - 余白は 4 の刻み、文字は 12 以上、押せる所は 44px 以上、幅 360 でもはみ出さない。ライト・ダーク両方
 ### 7.3 アクセシビリティ

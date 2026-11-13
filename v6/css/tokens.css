@@ -26,8 +26,8 @@
   --done-soft:#E8ECF4;
   --kin:#0C857F;           /* エンティティ(自分以外の人・場所・物) */
   --kin-soft:#DBF2EF;
-  --now:#E5484D;           /* いま・遅れ */
-  --now-soft:#FDE8E8;
+  --over:#E5484D;          /* ToDoの期限切れ(赤はこの意味だけ) */
+  --over-soft:#FDE8E8;
   --owe:#AD6408;           /* 貸し借り・未精算 */
   --owe-soft:#FBF0DB;
   --owe-line:#E2A64B;
@@ -65,7 +65,7 @@
   --me:#7EA2F5; --me-2:#5B86EE; --me-soft:#1D2A49; --me-line:#33477A;
   --done:#93A3C6; --done-soft:#222D45;
   --kin:#4CC4BD; --kin-soft:#12322F;
-  --now:#FF6B6B; --now-soft:#3A1B1E;
+  --over:#FF6B6B; --over-soft:#3A1B1E;
   --owe:#EBA552; --owe-soft:#33271A; --owe-line:#A9772F;
   --ok:#63C795; --ok-soft:#143024; --read:#8898BA;
   --fill-me:radial-gradient(120% 140% at 12% 0%,#4F7CE6,#2F56BF 62%);

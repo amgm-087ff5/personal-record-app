@@ -8,7 +8,7 @@
 .td-pv{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s1) var(--s2);padding:0 var(--s1);min-width:0}
 .td-pv:empty{display:none}
 .td-pv-t{font-size:var(--fs-cap);font-weight:700;overflow-wrap:anywhere;margin-right:var(--s1)}
-.td-pv .pri,.td-pri{font-style:normal;font-weight:800;color:var(--now)}
+.td-pv .pri,.td-pri{font-style:normal;font-weight:800;color:var(--me)}
 .td-list{display:flex;flex-direction:column;gap:var(--s5);min-width:0}
 .td-list > section{display:flex;flex-direction:column;gap:var(--s5)}
 

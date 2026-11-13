@@ -55,7 +55,7 @@ const sec = (title, o = {}) => `<div class="sec"><h2>${esc(title)}</h2>${o.n != 
 /* ---------- 基本 ---------- */
 /** 金額。¥ は小さく。o = {cls, sign(+/− を付ける)} */
 const amt = (n, o = {}) => `<span class="amt ${o.cls || ''}">${o.sign ? (n > 0 ? '+' : n < 0 ? '−' : '±') : ''}<i>¥</i>${Math.abs(Math.round(n || 0)).toLocaleString('ja-JP')}</span>`;
-/** 札。kind = owe(貸し借り)| late(遅れ)| plan(予定)| me | kin | read(未確認)| ''(ふつう) */
+/** 札。kind = owe(貸し借り)| late(ToDoの期限切れ)| miss(過ぎた予定)| plan(予定)| me | kin | read(未確認)| ''(ふつう) */
 const tag = (text, kind = '') => `<span class="tag ${kind}">${esc(text)}</span>`;
 /** カテゴリ(色の小さい四角 + 名前)。o.path で親からの道 */
 const catTag = (k, o = {}) => `<span class="cat"><i style="background:${catColor(k)}"></i>${esc(o.path ? catPath(k) : catName(k))}</span>`;

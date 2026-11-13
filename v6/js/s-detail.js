@@ -46,7 +46,7 @@ function dtMark(a) {
 }
 function dtHero(id, a) {
   const plan = isPlan(a), late = isLate(a), st = plan ? (late ? 'late' : 'plan') : 'done', k = KINDS[a.kind], title = actTitle(a);
-  const rep = repText(A(a.tpl || id)), tags = a.hol ? tag('祝日', 'late') : plan ? tag(late ? '過ぎた予定' : '予定', late ? 'late' : 'plan') : '';
+  const rep = repText(A(a.tpl || id)), tags = a.hol ? tag('祝日') : plan ? tag(late ? '過ぎた予定' : '予定', late ? 'miss' : 'plan') : '';
   const nx = a.rep && !a.virt && plan ? repNext(a) : '', diary = dayOf(a.date).diary;
   const rel = plan && !late && !a.hol ? (a.date === TODAY ? (a.start && !a.allDay && a.start > NOW ? 'あと ' + durJ(hm2m(a.start) - hm2m(NOW)) : '') : a.date > TODAY ? relDay(a.date) : '') : '';
   const meta = [nx ? `<span class="mini">${ic('repeat')}次回 ${fmtMD(nx)}(${dowJ(nx)})</span>` : '', rep ? `<span class="mini">${ic('repeat')}${esc(rep)}</span>` : '', a.alarm && plan ? `<span class="mini">${ic('bell')}${esc(a.alarm)}</span>` : ''].join('');
