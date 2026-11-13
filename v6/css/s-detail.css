@@ -12,12 +12,12 @@
 /* 主役。記録 = 影のある白い面 / 予定 = 点線 / 過ぎた予定 = 赤の点線 */
 .dt-hero{position:relative;display:flex;flex-direction:column;gap:var(--s3);padding:var(--s4);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--e2)}
 .dt-hero.plan,.dt-hero.late{background:transparent;box-shadow:none;border:1.5px dashed var(--line-2)}
-.dt-hero.late{border-color:var(--now)}
+.dt-hero.late{border-color:var(--me)}
 .dt-k{display:flex;align-items:center;gap:var(--s2);min-height:24px;font-size:var(--fs-cap);font-weight:750;color:var(--done)}
 .dt-k svg{flex:none;width:20px;height:20px;stroke-width:2}
 .dt-k .tag{margin-left:auto}
 .dt-hero.plan .dt-k{color:var(--tx-3)}
-.dt-hero.late .dt-k{color:var(--now)}
+.dt-hero.late .dt-k{color:var(--me)}
 .dt-t{font-size:var(--fs-big);font-weight:800;letter-spacing:-.02em;line-height:1.3;overflow-wrap:anywhere}
 .dt-when{font-size:var(--fs-title);font-weight:750;letter-spacing:-.01em;color:var(--tx-2)}
 .dt-date{position:relative;display:flex;align-items:center;gap:var(--s2);min-height:var(--tap);margin-block:calc(var(--s2) * -1);color:var(--me);font-weight:700}
