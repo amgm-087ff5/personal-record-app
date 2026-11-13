@@ -180,7 +180,7 @@ function tlAct(id, o = {}) {
   const plan = isPlan(a), late = isLate(a), st = plan ? (late ? 'late' : 'plan') : 'done';
   const t = a.allDay || !a.start ? '終日' : a.start;
   let body;
-  if (a.hol) return `<div class="tl-row hol"><time class="tl-t"></time><i class="tl-n"></i><div class="tl-c"><span class="hol-t">${ic('flag')}${esc(a.title)}</span></div></div>`;
+  if (a.hol) return `<div class="tl-row hol"><i class="tl-n"></i><div class="tl-c"><span class="hol-t">${ic('flag')}${esc(a.title)}</span></div></div>`;
   if (isPay(a)) body = paySlip(id);
   else if (!isSpan(a) && !plan && !a.allDay) body = `<a class="mo" href="#/a/${id}">${kindIc(a)}<b>${esc(actTitle(a))}</b>${tentTag(a)}${roleEnts(a, { link: false, short: 1 })}</a>`;
   else {
@@ -192,12 +192,12 @@ function tlAct(id, o = {}) {
       ${late ? `<button class="btn sec sm ev-rec" onclick="recordPlan(${q(id)})">${ic('check')}<span>記録にする</span></button>` : ''}
       ${o.noKids ? '' : kidRows(id)}</div>`;
   }
-  return `<div class="tl-row ${st}${isSpan(a) || a.allDay ? ' span' : ' moment'}${isPay(a) ? ' pay' : ''}"><time class="tl-t num">${t}</time><i class="tl-n"></i><div class="tl-c">${body}</div></div>`;
+  return `<div class="tl-row ${st}${isSpan(a) || a.allDay ? ' span' : ' moment'}${isPay(a) ? ' pay' : ''}"><i class="tl-n"></i><div class="tl-c"><time class="tl-t num">${t}</time>${body}</div></div>`;
 }
-/** いまの線 */
-const tlNow = () => `<div class="tl-now" id="now"><time class="num">${NOW}</time><i></i></div>`;
+/** いまの線(線の上に針の点、右に時刻、その右へ赤い線) */
+const tlNow = () => `<div class="tl-now" id="now"><i class="tl-now-d"></i><time class="num">${NOW}</time><i class="tl-now-l"></i></div>`;
 /** メモを軸に置く(書いた時刻) */
-const tlMemo = (id) => { const m = DB.memos[id]; return `<div class="tl-row moment is-memo"><time class="tl-t num">${m.at.slice(11)}</time><i class="tl-n"></i><div class="tl-c">${memoCard(id, { clamp: 2, bare: 1, noTime: 1 })}</div></div>`; };
+const tlMemo = (id) => { const m = DB.memos[id]; return `<div class="tl-row moment is-memo"><i class="tl-n"></i><div class="tl-c"><time class="tl-t num">${m.at.slice(11)}</time>${memoCard(id, { clamp: 2, bare: 1, noTime: 1 })}</div></div>`; };
 /** その日の軸(記録と予定を時刻順。今日は「いま」の線を挟む)。o = {memos, filter(fn)} */
 function dayAxis(d, o = {}) {
   let items = actsOn(d).map(([id, a]) => ({ k: sortKey(a), id, a }));
