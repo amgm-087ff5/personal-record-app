@@ -137,6 +137,35 @@ function recIdx() {
   return _recIdx;
 }
 
+/* ---- 日本の祝日(規則で計算。1980〜2099 年に有効。春分・秋分は近似式、ハッピーマンデーは第n月曜) ---- */
+const _holCache = {};
+/** その年の祝日 {'YYYY-MM-DD': 名前}(振替休日・国民の休日を含む) */
+function holidaysOf(y) {
+  if (_holCache[y]) return _holCache[y];
+  const m = {}, key = (mo, da) => `${y}-${pad2(mo)}-${pad2(da)}`;
+  const nthMon = (mo, n) => { const first = dDow(key(mo, 1)); return 1 + ((1 - first + 7) % 7) + 7 * (n - 1); };   /* 第n月曜の日 */
+  m[key(1, 1)] = '元日';
+  m[key(1, nthMon(1, 2))] = '成人の日';
+  m[key(2, 11)] = '建国記念の日';
+  m[key(2, 23)] = '天皇誕生日';
+  m[key(3, Math.floor(20.8431 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4)))] = '春分の日';
+  m[key(4, 29)] = '昭和の日';
+  m[key(5, 3)] = '憲法記念日'; m[key(5, 4)] = 'みどりの日'; m[key(5, 5)] = 'こどもの日';
+  m[key(7, nthMon(7, 3))] = '海の日';
+  m[key(8, 11)] = '山の日';
+  m[key(9, nthMon(9, 3))] = '敬老の日';
+  m[key(9, Math.floor(23.2488 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4)))] = '秋分の日';
+  m[key(10, nthMon(10, 2))] = 'スポーツの日';
+  m[key(11, 3)] = '文化の日'; m[key(11, 23)] = '勤労感謝の日';
+  /* 振替休日: 祝日が日曜なら、次の祝日でない日 */
+  for (const d of Object.keys(m)) if (dDow(d) === 0) { let s = dAdd(d, 1); while (m[s]) s = dAdd(s, 1); m[s] = '振替休日'; }
+  /* 国民の休日: 祝日でない日で、前日と翌日が祝日 */
+  for (let d = key(1, 2); d < key(12, 31); d = dAdd(d, 1)) if (!m[d] && m[dAdd(d, -1)] && m[dAdd(d, 1)]) m[d] = '国民の休日';
+  return (_holCache[y] = m);
+}
+/** その日の祝日名(祝日でなければ空) */
+function holidayName(d) { if (!isDate(d)) return ''; return holidaysOf(+d.slice(0, 4))[d] || ''; }
+
 /** その日の、いちばん外側のもの [[id, act]](時刻順)。繰り返しの仮の回も含む。o.state で絞れる */
 function actsOn(d, o = {}) {
   const out = [];
@@ -145,6 +174,9 @@ function actsOn(d, o = {}) {
     if (a.rep) { if (repOn(a, d) && !recIdx().has(id + '@' + d)) out.push([id + '@' + d, A(id + '@' + d)]); continue; }
     if (a.date === d || (a.date2 && a.date <= d && d <= a.date2)) out.push([id, a]);
   }
+  /* 祝日は規則で計算して、どの日にも出す(保存していない。古い保存データの hol 行があれば、それを優先) */
+  const hn = holidayName(d);
+  if (hn && !DB.acts['hol' + d]) out.push(['hol' + d, { kind: 'holiday', title: hn, date: d, allDay: 1, state: 'plan', hol: 1, roles: [] }]);
   return out.filter(([, a]) => !o.state || a.state === o.state).sort(byTime);
 }
 /** 子(時刻順) */
@@ -437,18 +469,41 @@ function commit(label, fn) {
   }
   _cd--;
   const after = _snap(), patch = [];
-  for (const t of TABLES) { for (const k in after[t]) if (before[t][k] !== after[t][k]) patch.push([t, k, before[t][k]]); for (const k in before[t]) if (!(k in after[t])) patch.push([t, k, before[t][k]]); }
-  const relsB = before._rels !== after._rels ? before._rels : null, metB = before._methods !== after._methods ? before._methods : null;
+  /* patch = [表, 鍵, 前の値, 変更後の値](JSON 文字列。無い時は undefined)。取り消しは「今の値が変更後と同じ項目」だけ前に戻す */
+  for (const t of TABLES) { for (const k in after[t]) if (before[t][k] !== after[t][k]) patch.push([t, k, before[t][k], after[t][k]]); for (const k in before[t]) if (!(k in after[t])) patch.push([t, k, before[t][k], undefined]); }
+  const relsB = before._rels !== after._rels ? before._rels : null, relsA = relsB !== null ? after._rels : null;
+  const metB = before._methods !== after._methods ? before._methods : null, metA = metB !== null ? after._methods : null;
   const entry = _cd === 0 && patch.length ? _logPush(label, patch, before, after) : null;      /* 入れ子の commit はログを書かない */
   _recIdx = null; const saved = save();
   return {
     ok: true, label, ...(saved ? {} : { warn: '保存できませんでした(端末の空きを確かめてください)' }), ...extra, undo() {
-      for (const [t, k, prev] of patch) { if (prev === undefined) delete DB[t][k]; else DB[t][k] = JSON.parse(prev); }
-      if (relsB) DB.rels = JSON.parse(relsB); if (metB) DB.methods = JSON.parse(metB);
-      if (entry) DB.log = DB.log.filter(x => x.i !== entry.i);
+      let skipped = 0;
+      for (const [t, k, prev, next] of patch) skipped += _undoEntry(t, k, prev, next);
+      if (relsB !== null) { if (JSON.stringify(DB.rels) === relsA) DB.rels = JSON.parse(relsB); else skipped++; }
+      if (metB !== null) { if (JSON.stringify(DB.methods) === metA) DB.methods = JSON.parse(metB); else skipped++; }
+      if (entry && !skipped) DB.log = DB.log.filter(x => x.i !== entry.i);
       _recIdx = null; save();
+      return { ok: true, skipped };          /* skipped = 後の変更と重なって戻さなかった項目の数 */
     }
   };
+}
+/** 1行ぶんの取り消し。行(オブジェクト)なら項目ごとに、追加・削除なら行ごとに、今の値が変更後と同じ所だけ前に戻す。戻さなかった数を返す */
+function _undoEntry(t, k, prev, next) {
+  const cur = DB[t][k], curS = cur === undefined ? undefined : JSON.stringify(cur);
+  const pO = prev === undefined ? undefined : JSON.parse(prev), nO = next === undefined ? undefined : JSON.parse(next);
+  const isObj = x => x !== null && typeof x === 'object' && !Array.isArray(x);
+  if (isObj(pO) && isObj(nO) && isObj(cur)) {
+    let skipped = 0;
+    for (const f of new Set([...Object.keys(pO), ...Object.keys(nO)])) {
+      if (JSON.stringify(pO[f]) === JSON.stringify(nO[f])) continue;        /* この変更で変えていない項目は触らない */
+      if (JSON.stringify(cur[f]) !== JSON.stringify(nO[f])) { skipped++; continue; }
+      if (f in pO) cur[f] = pO[f]; else delete cur[f];
+    }
+    return skipped;
+  }
+  if (curS !== next) return 1;
+  if (prev === undefined) delete DB[t][k]; else DB[t][k] = pO;
+  return 0;
 }
 const _str = (v, msg) => { const s = String(v == null ? '' : v).trim(); if (!s && msg) fail(msg); return s; };
 
@@ -588,7 +643,7 @@ const taskToggle = id => commit('', () => {
   return { done: true };
 });
 const taskRemove = id => commit('ToDoを消しました', () => { if (!DB.tasks[id]) fail('ToDoが見つかりません'); delete DB.tasks[id]; });
-const listAdd = n => commit(`リスト「${String(n || '').trim()}」を追加しました`, () => { const id = uid('l'); DB.lists[id] = { n: _str(n, 'リストの名前を入れてください') }; return { id }; });
+const listAdd = n => commit(`リスト「${String(n || '').trim()}」を追加しました`, () => { const v = _str(n, 'リストの名前を入れてください'); if (Object.values(DB.lists).some(x => x.n === v)) fail('同じ名前のリストがあります'); const id = uid('l'); DB.lists[id] = { n: v }; return { id }; });
 const listRemove = id => commit('リストを消しました', () => { if (Object.keys(DB.lists).length <= 1) fail('リストは1つ以上必要です'); if (Object.values(DB.tasks).some(t => t.list === id && !t.done)) fail('未完了のToDoがあるので先に移してください'); delete DB.lists[id]; const f = Object.keys(DB.lists)[0]; Object.values(DB.tasks).forEach(t => { if (t.list === id) t.list = f; }); });
 /** 「明日 牛乳 #買い物 !」のような1行を解釈 → {t, due?, list?, pri?} */
 function parseTask(s) {
@@ -634,10 +689,12 @@ function shopMatches(items) {
   const names = new Set((items || []).map(i => String(i.n || '').trim()).filter(Boolean));
   return Object.entries(DB.tasks).filter(([, t]) => !t.done && DB.lists[t.list] && DB.lists[t.list].shop && names.has(t.t.trim()));
 }
-/** 重複の疑い: 同じ日・同じ合計・時刻が5分以内の支払い [[id, act]](o = {id?, date, start, total}) */
+/** 重複の疑い: 同じ写真(o.photo = 写真のハッシュ)、または同じ日・同じ合計・時刻が5分以内の支払い [[id, act]](o = {id?, date, start, total, photo?}) */
 function payDup(o) {
-  return Object.entries(DB.acts).filter(([id, a]) => a.pay && !isPlan(a) && id !== o.id && a.date === o.date && payTotal(a) === o.total && o.total > 0 && Math.abs(hm2m(a.start) - hm2m(o.start || NOW)) <= 5);
+  return Object.entries(DB.acts).filter(([id, a]) => a.pay && !isPlan(a) && id !== o.id && ((o.photo && a.photo === o.photo) || (a.date === o.date && payTotal(a) === o.total && o.total > 0 && Math.abs(hm2m(a.start) - hm2m(o.start || NOW)) <= 5)));
 }
+/** 支払いに付いたレシート写真のハッシュを覚える(paySave は作り直すので、その後に呼ぶ。act の photo は再保存でも残る) */
+const payPhotoSet = (id, hash) => commit('', () => { const a = DB.acts[id]; if (!a || !a.pay) fail('支払いが見つかりません'); if (hash) a.photo = hash; });
 /** その記録に付いた写真 [{d, i, t, cap}] */
 const photosOfAct = id => { const a = A(id); if (!a) return []; return (dayOf(a.date).photos || []).map((p, i) => ({ ...p, d: a.date, i })).filter(p => p.act === id); };
 /** 繰り返しの予定の、記録になった回(新しい順)[[id, act]] */
@@ -701,6 +758,19 @@ const entRemove = id => commit('エンティティを消しました', () => {
 });
 const relAdd = o => commit('関係を追加', () => { if (!DB.ents[o.a] && o.a !== 'me') fail('相手を選んでください'); if (!DB.ents[o.b]) fail('相手を選んでください'); if (o.a === o.b) fail('自分自身とは結べません'); DB.rels = [...DB.rels, { a: o.a, b: o.b, role: _str(o.role, '関係の名前を入れてください'), ...(o.inv ? { inv: o.inv } : { sym: 1 }), ...(o.since ? { since: o.since } : {}) }]; });
 const relRemove = i => commit('関係を外しました', () => { if (!DB.rels[i]) fail('関係が見つかりません'); DB.rels = DB.rels.filter((_, j) => j !== i); });
+/** 関係を直す。id は見ている側のエンティティ、o = {other, role(id から見た名), sym, inv(相手から見た名・一方向のみ), since?} */
+const relUpdate = (i, id, o) => commit('関係を直しました', () => {
+  const r = DB.rels[i]; if (!r || (r.a !== id && r.b !== id)) fail('関係が見つかりません');
+  if (!DB.ents[o.other]) fail('相手を選んでください'); if (o.other === id) fail('自分自身とは結べません');
+  const role = _str(o.role, '関係の名前を入れてください');
+  const inv = o.sym ? '' : _str(o.inv, '相手から見た呼び名を入れてください');
+  /* 保存形は relAdd と同じ(role は a から見た名、inv は b から見た名) */
+  const nr = r.a === id
+    ? { a: id, b: o.other, role, ...(o.sym ? { sym: 1 } : { inv }) }
+    : { a: o.other, b: id, role: o.sym ? role : inv, ...(o.sym ? { sym: 1 } : { inv: role }) };
+  if (/^\d{4}-\d{2}$/.test(o.since || '')) nr.since = o.since;
+  DB.rels = DB.rels.map((x, j) => j === i ? nr : x);
+});
 const typeAdd = (n, p) => commit(`種類「${String(n || '').trim()}」を追加しました`, () => { const key = uid('ty'); DB.types[key] = { n: _str(n, '名前を入れてください'), props: [], ...(p && DB.types[p] ? { p } : {}) }; return { key }; });
 const typeUpdate = (key, patch) => commit('種類を直しました', () => {
   const t = DB.types[key]; if (!t) fail('種類が見つかりません');
@@ -734,19 +804,44 @@ const methodRemove = n => commit('支払い方法を消しました', () => { if
 function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); return true; } catch (e) { return false; } }
 /** 古い形の保存データに、v6.2 で足した表を補う(書く場の雑記 jots / 操作の履歴 log) */
 function dbNormalize(d) { if (!d.jots || typeof d.jots !== 'object') d.jots = {}; if (!Array.isArray(d.log)) d.log = []; return d; }
+const METHOD_DEF = ['現金', 'クレジットカード ••1234', 'Suica', 'QRコード決済', 'デビットカード', '銀行振込'];
+/* 表の形: 'obj' = 鍵から引く表、'arr' = 並びの表。欠けていたら空の既定値で補う。型が違えば取り込みを断る */
+const DB_KIND = { days: 'obj', acts: 'obj', exps: 'obj', tasks: 'obj', lists: 'obj', ents: 'obj', rels: 'arr', types: 'obj', notes: 'obj', memos: 'obj', cats: 'obj', methods: 'arr', jots: 'obj', log: 'arr' };
+/** 読み込み・取り込みの共通の正規化。d を書き換えて {ok, db} か {ok:false, why} を返す */
+function dbFill(d) {
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return { ok: false, why: 'このアプリ(v6)の書き出しファイルではありません' };
+  for (const t of Object.keys(DB_KIND)) {
+    const want = DB_KIND[t];
+    if (d[t] === undefined || d[t] === null) { d[t] = want === 'arr' ? (t === 'methods' ? METHOD_DEF.slice() : []) : {}; continue; }
+    if (want === 'arr' ? !Array.isArray(d[t]) : (typeof d[t] !== 'object' || Array.isArray(d[t]))) return { ok: false, why: `保存データの「${t}」の形が違うので、読めませんでした` };
+  }
+  return { ok: true, db: dbNormalize(d) };
+}
 /** 見本の雑記と履歴を入れる(まだ入れていない時だけ。seedInbox は m-inbox.js。印は DB.ibx) */
 function dbSeedInbox() { if (!DB.ibx && typeof seedInbox === 'function') { try { seedInbox(); DB.ibx = 1; } catch (e) { console.error('seedInbox', e); } } }
+const BROKEN_KEY = 'prmock-v6-broken';
+/** 読めなかった保存データの退避。_brokenNotice は起動時のお知らせ(boot が1回だけ出す) */
+let _brokenNotice = null;
 function load() {
-  try { const s = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); if (s && s.v === 6 && s.acts) { DB = dbNormalize(s); _recIdx = null; dbSeedInbox(); save(); return; } } catch (e) { }
-  DB = dbNormalize(seed()); _recIdx = null; dbSeedInbox(); save();
+  let raw = null; try { raw = localStorage.getItem(STORE_KEY); } catch (e) { }
+  if (raw !== null) {
+    let s = null; try { s = JSON.parse(raw); } catch (e) { }
+    const c = s && s.v === 6 ? dbFill(s) : { ok: false };
+    if (c.ok) { DB = c.db; _recIdx = null; dbSeedInbox(); save(); return; }
+    /* 読めない → 壊れた元の文字列を退避してから見本で始める(退避は1件だけ。次の退避で上書き) */
+    let kept = false; try { localStorage.setItem(BROKEN_KEY, raw); kept = true; } catch (e) { }
+    _brokenNotice = kept ? '保存データを読めなかったので、見本のデータで始めました(壊れた元のデータは残してあります)' : '保存データを読めなかったので、見本のデータで始めました(退避できませんでした)';
+  }
+  DB = dbFill(seed()).db; _recIdx = null; dbSeedInbox(); save();
 }
-function resetData() { DB = dbNormalize(seed()); _recIdx = null; dbSeedInbox(); save(); }
+function resetData() { DB = dbFill(seed()).db; _recIdx = null; dbSeedInbox(); save(); }
 const exportJSON = () => JSON.stringify(DB, null, 1);
-/** 書き出したファイルを読み込む(中身を確かめてから入れ替える) */
+/** 書き出したファイルを読み込む(中身を確かめてから入れ替える。欠けた表は補い、型が違えば断る) */
 function importJSON(text) {
   let s; try { s = JSON.parse(text); } catch (e) { return { ok: false, why: 'ファイルを読めませんでした(JSON ではありません)' }; }
-  if (!s || s.v !== 6 || !s.acts || !s.ents || !s.cats) return { ok: false, why: 'このアプリ(v6)の書き出しファイルではありません' };
-  const prev = JSON.stringify(DB); DB = dbNormalize(s); if (!DB.ibx) DB.ibx = 1; _recIdx = null; save();     /* 読み込んだ物には見本の雑記を足さない(ibx を立てる) */
+  if (!s || s.v !== 6) return { ok: false, why: 'このアプリ(v6)の書き出しファイルではありません' };
+  const c = dbFill(s); if (!c.ok) return { ok: false, why: c.why };
+  const prev = JSON.stringify(DB); DB = c.db; if (!DB.ibx) DB.ibx = 1; _recIdx = null; save();     /* 読み込んだ物には見本の雑記を足さない(ibx を立てる) */
   return { ok: true, undo() { DB = JSON.parse(prev); _recIdx = null; save(); } };
 }
 const dataCounts = () => ({ acts: Object.values(DB.acts).filter(a => !isPlan(a)).length, plans: Object.values(DB.acts).filter(isPlan).length, tasks: Object.keys(DB.tasks).length, memos: Object.keys(DB.memos).length, ents: Object.keys(DB.ents).length, bytes: JSON.stringify(DB).length });
@@ -756,7 +851,7 @@ const dataCounts = () => ({ acts: Object.values(DB.acts).filter(a => !isPlan(a))
    ===================================================================== */
 function seed() {
   const T = TODAY, D = n => dAdd(T, n);
-  const db = { v: 6, born: T, days: {}, acts: {}, exps: {}, tasks: {}, lists: {}, ents: {}, rels: [], types: {}, notes: {}, memos: {}, cats: {}, methods: ['現金', 'クレジットカード ••1234', 'Suica', 'QRコード決済', 'デビットカード', '銀行振込'] };
+  const db = { v: 6, born: T, days: {}, acts: {}, exps: {}, tasks: {}, lists: {}, ents: {}, rels: [], types: {}, notes: {}, memos: {}, cats: {}, methods: METHOD_DEF.slice() };
   db.types = {
     person: { n: '人物', props: ['電話', '誕生日', '住所'] }, colleague: { n: '同僚', p: 'person', props: ['部署'] }, split: { n: '割り勘メンバー', p: 'person', props: ['略称'] },
     place: { n: '場所', props: ['住所'] }, shop: { n: '店', p: 'place', props: ['営業時間', '定休日'] }, food: { n: '飲食店', p: 'shop', props: [] }, ramen: { n: 'ラーメン屋', p: 'food', props: [] }, cafe: { n: 'カフェ', p: 'food', props: [] },
@@ -866,8 +961,6 @@ function seed() {
   act('e11', { kind: 'event', title: '不動産屋と打ち合わせ', date: D(6), start: '14:00', end: '15:00', state: 'plan', roles: [{ r: '場所', name: '不動産ファースト' }, { r: 'プロジェクト', e: 'proj1' }] });
   act('e6', { kind: 'trip', title: '温泉旅行', date: D(10), date2: D(11), allDay: 1, state: 'plan', roles: [{ r: '場所', name: '宿 山の湯' }, { r: '同席', e: 'hanako' }] });
   act('e12', { kind: 'event', title: '資源ごみの日', date: D(-7 - ((dDow(T) + 1) % 7)), allDay: 1, state: 'plan', rep: { u: 'week' } });
-  const HOL = { '2026-11-03': '文化の日', '2026-11-23': '勤労感謝の日', '2027-01-01': '元日', '2027-01-11': '成人の日', '2027-02-11': '建国記念の日', '2027-02-23': '天皇誕生日', '2027-03-21': '春分の日', '2027-04-29': '昭和の日', '2027-05-03': '憲法記念日', '2027-05-04': 'みどりの日', '2027-05-05': 'こどもの日' };
-  Object.entries(HOL).forEach(([d, n]) => { if (dDiff(d, T) > -40 && dDiff(d, T) < 90) act('hol' + d, { kind: 'holiday', title: n, date: d, allDay: 1, state: 'plan', hol: 1 }); });
   /* --- ToDo --- */
   db.tasks = {
     t2: { t: '映画のチケットを予約', due: T, list: 'inbox', act: 'e1', pri: 1 },

@@ -17,7 +17,7 @@
     document.body.classList.toggle('kb-open', !!shrunk);
   }
   function reveal() {
-    setTimeout(() => { const a = document.activeElement; if (editable(a) && a.scrollIntoView) a.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 320);
+    setTimeout(() => { const a = document.activeElement; if (editable(a) && a.scrollIntoView) a.scrollIntoView(smoothOpt({ block: 'center' })); }, 320);
   }
   addEventListener('focusin', e => { if (editable(e.target)) { upd(); reveal(); } });
   addEventListener('focusout', () => setTimeout(upd, 60));

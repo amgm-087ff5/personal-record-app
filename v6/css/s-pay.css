@@ -131,3 +131,10 @@
 .py-bt-t b{font-weight:750;overflow-wrap:anywhere}
 .py-bt-s{display:flex}
 .py-bt-x{flex:none;min-width:var(--tap);min-height:var(--tap);padding:0 var(--s2);font-size:var(--fs-cap);font-weight:700;color:var(--me)}
+/* W2: 読み取りの進み・一覧の重複・店の登録の切替 */
+.py-bts-sum{display:flex;flex-direction:column;gap:var(--s2);margin-bottom:var(--s3)}
+.py-bts-h{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3)}
+.py-bt-why{font-size:var(--fs-cap);color:var(--tx-2);overflow-wrap:anywhere}
+.py-bt-acts{display:flex;flex-direction:column;align-items:stretch;flex:none}
+.py-bt-acts .py-bt-x{min-height:var(--tap);white-space:nowrap}
+.py-regshop{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);min-height:var(--tap);margin-bottom:var(--s2);padding:0 var(--s3);border-radius:var(--r-md);background:var(--card-2);font-size:var(--fs-cap);font-weight:700}

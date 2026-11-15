@@ -3,7 +3,7 @@
 setNavBadge('todo', () => Object.values(DB.tasks).filter(taskLate).length);
 
 /* 画面の状態(描き直しても残す) */
-const TDS = { f: 'due', q: '', focus: null, done: (() => { try { return localStorage.getItem('prmock-v6-td-done') === '1'; } catch (e) { return false; } })() };
+const TDS = { f: 'due', q: '', focus: null, dn: 20, done: (() => { try { return localStorage.getItem('prmock-v6-td-done') === '1'; } catch (e) { return false; } })() };
 
 /* ---------- 小道具 ---------- */
 const tdListName = k => (DB.lists[k] || {}).n || '';
@@ -26,6 +26,8 @@ const TD_PILLS = [['', 'なし'], ['today', '今日'], ['tm', '明日'], ['nw', 
 const TD_REPS = [['day', '毎日'], ['week', '毎週'], ['month', '毎月']];
 const tdRepSub = (k, due) => !due ? '' : k === 'week' ? `${dowJ(due)}曜` : k === 'month' ? `${+due.slice(8)}日` : '';
 const tdRepText = t => !t.rep ? '' : t.rep.u === 'day' ? '毎日' : t.rep.u === 'week' ? `毎週${t.due ? ' ' + dowJ(t.due) + '曜' : ''}` : `毎月${t.due ? ' ' + +t.due.slice(8) + '日' : ''}`;
+/** 繰り返しの次回の期限(完了時に taskCheck が作る次のToDoと同じ計算) */
+const tdNextDue = t => { if (!t.rep || !t.due) return ''; const u = t.rep.u; return u === 'day' ? dAdd(t.due, 1) : u === 'week' ? dAdd(t.due, 7) : ymAdd(ymOf(t.due), 1) + t.due.slice(7); };
 /** 予定・記録の表示(札なし) */
 const tdActV = id => { const a = A(id); return a ? `${kindIc(a)}<span>${esc(actTitle(a))}</span><span class="mini num">${relDay(a.date)} ${timeText(a)}</span>` : ''; };
 const tdEntsV = ids => ids.map(e => ent(e, { link: false })).join('');
@@ -72,7 +74,9 @@ function tdBody() {
   const open = tdOpen(), f = TDS.f;
   const cnt = fn => open.filter(([, t]) => fn(t)).length;
   const items = [['due', '今日まで', tasksDue().length], ['all', 'すべて', open.length], ['linked', '予定あり', cnt(tdHasAct)], ...Object.keys(DB.lists).map(k => ['l:' + k, DB.lists[k].n, cnt(t => t.list === k)])];
-  return `${chips(items, f, 'tdFilter')}${tdSections(open)}${tdDone()}`;
+  const late = open.filter(([, t]) => taskLate(t)).length;
+  const sum = `<div class="td-sum">${late ? tag(`期限切れ ${late}`, 'late') : `<span class="mini">期限切れ なし</span>`}<span class="mini num">今日まで ${tasksDue().length}</span><span class="mini num">未完了 ${open.length}</span></div>`;
+  return `${sum}${chips(items, f, 'tdFilter')}${tdSections(open)}${tdDone()}`;
 }
 const tdSw = id => `<div class="swipe td-sw"><div class="swipe-in">${taskRow(id, { noList: TDS.f.startsWith('l:') })}</div><button class="swipe-act" onclick="taskCheck(${q(id)})">${ic('check')}<span>完了</span></button></div>`;
 const tdBlock = (title, ids) => ids.length ? `<section>${sec(title, { n: ids.length })}${rows(ids.map(tdSw))}</section>` : '';
@@ -98,11 +102,13 @@ function tdSections(openAll) {
 function tdDone() {
   const fn = tdMatch(TDS.f === 'due' ? 'all' : TDS.f), ds = Object.entries(DB.tasks).filter(([, t]) => t.done && fn(t)).sort((a, b) => b[1].done.localeCompare(a[1].done));
   if (!ds.length) return '';
-  const noList = TDS.f.startsWith('l:');
-  return `<section class="td-done"><button class="td-dn" aria-expanded="${TDS.done}" onclick="tdDoneToggle()"><span>完了</span><b class="num">${ds.length}</b>${ic('chev')}</button>${TDS.done ? rows(ds.slice(0, 20).map(([id, t]) => `<div class="td-dr">${taskRow(id, { noList })}<span class="td-dd num">${fmtMD(t.done)}</span></div>`)) : ''}</section>`;
+  const noList = TDS.f.startsWith('l:'), n = TDS.dn || 20, rest = ds.length - n;
+  return `<section class="td-done"><button class="td-dn" aria-expanded="${TDS.done}" onclick="tdDoneToggle()"><span>完了</span><b class="num">${ds.length}</b>${ic('chev')}</button>${TDS.done ? rows(ds.slice(0, n).map(([id, t]) => `<div class="td-dr">${taskRow(id, { noList })}<span class="td-dd num">${fmtMD(t.done)}</span></div>`)) + (rest > 0 ? `<div class="td-more">${btn(`もっと見る(あと ${Math.min(rest, 20)}件)`, 'tdDoneMore()', 'ghost', { wide: 1 })}</div>` : '') : ''}</section>`;
 }
 function tdDoneToggle() { TDS.done = !TDS.done; try { localStorage.setItem('prmock-v6-td-done', TDS.done ? '1' : '0'); } catch (e) { } tdRefresh(); }
-function tdFilter(k) { TDS.f = k; tdRefresh(); tdInput(TDS.q); }
+/** 完了の一覧を20件ずつ増やす */
+function tdDoneMore() { TDS.dn = (TDS.dn || 20) + 20; tdRefresh(); }
+function tdFilter(k) { TDS.f = k; TDS.dn = 20; tdRefresh(); tdInput(TDS.q); }
 function tdRefresh() { const el = $('#td-list'); if (!el) return; el.innerHTML = tdBody(); wireSwipe(el); if (typeof renderNav === 'function') renderNav(); }
 
 /** すばやく足す: 解釈して足し、欄にフォーカスを残して続けて足せる */
@@ -198,7 +204,7 @@ route('task', id => {
       prop('リスト', esc(tdListName(t.list)), { on: `tdListEdit(${I})` }),
       ...((DB.lists[t.list] || {}).shop && E(DB.lists[t.list].shop) ? [prop('店', ent(DB.lists[t.list].shop))] : []),
       prop('優先', `<span class="tgl" aria-hidden="true" aria-checked="${!!t.pri}"><i></i></span><span>${t.pri ? '優先' : 'ふつう'}</span>`, { on: `tdSet(${I},{pri:${t.pri ? 'null' : 1}})` }),
-      prop('繰り返し', t.rep ? `${ic('repeat', 'td-ri')}<span>${esc(tdRepText(t))}</span>` : tdMute('なし'), { on: `tdRepEdit(${I})` }),
+      prop('繰り返し', t.rep ? `${ic('repeat', 'td-ri')}<span>${esc(tdRepText(t))}</span>${tdNextDue(t) ? `<span class="mini num">次回 ${fmtMD(tdNextDue(t))}(${dowJ(tdNextDue(t))})</span>` : ''}` : tdMute('なし'), { on: `tdRepEdit(${I})` }),
       actRow,
       ...(t.done ? [] : [row({ lead: ic('cal'), t: '予定にする', on: `tdPlanOpen(${I})`, chev: 1 })]),
       prop('エンティティ', (t.ents || []).length ? tdEntsV(t.ents) : tdMute('なし'), { on: `tdEntEdit(${I})` }),
