@@ -154,7 +154,18 @@ function cvPickKind() {
 
 /* 保存・詳しく直す */
 const cvHref = r => r.t === 'acts' ? `#/a/${r.k}` : r.t === 'tasks' ? `#/task/${r.k}` : `#/memo?focus=${r.k}`;
-function cvRun(c, confirm) { return typeof jotConvert === 'function' ? jotConvert(CV.jid, c, { confirm: !!confirm }) : { ok: false, why: '変換の仕組みがまだありません' }; }
+/** 今の記録(履歴から開いた確定済みの記録)。未確定の記録・雑記から新しく作る時は null */
+function cvLiveRec() {
+  const rec = CV && CV.rec, tbl = rec && typeof _jtTbl === 'function' ? _jtTbl(rec.t) : null, row = tbl && tbl[rec.k];
+  return row && !row.tent ? rec : null;
+}
+/** 変換する。確定済みの記録は作り直さず直す(jotRecUpdate)。confirm: true 確定 / false 未確定 / null 今の状態のまま */
+function cvRun(c, confirm) {
+  if (typeof jotConvert !== 'function') return { ok: false, why: '変換の仕組みがまだありません' };
+  const rec = cvLiveRec();
+  if (rec && typeof jotRecUpdate === 'function') return jotRecUpdate(CV.jid, rec, c, { confirm });
+  return jotConvert(CV.jid, c, { confirm: !!confirm });
+}
 /** 確定して登録(confirm = true)/ 未確定のまま保存(false) */
 function cvSave(confirm) {
   if (!CV) return;
@@ -162,14 +173,15 @@ function cvSave(confirm) {
   const r = cvRun(c, confirm);
   if (done(r, { close: true, msg: confirm ? '記録にしました' : '未確定のまま保存しました' })) typeof inRefresh === 'function' && inRefresh();
 }
-/** 今の下書きを未確定で保存して、その記録の詳細へ */
+/** 今の下書きを保存して、その記録の詳細へ。確定済みの記録は確定のまま(詳しく直すは状態を変えない)。未確定は未確定のまま */
 function cvDetail() {
   if (!CV) return;
   const c = cvCand(), why = cvCheck(c); if (why) return done({ ok: false, why });
-  const r = cvRun(c, false);
+  const live = !!cvLiveRec();
+  const r = cvRun(c, live ? true : null);
   if (!r.ok) return done(r);
   const rec = (r.recs || [])[0];
-  if (done(r, { close: true, go: rec ? cvHref(rec) : null, msg: '未確定で保存しました' })) typeof inRefresh === 'function' && inRefresh();
+  if (done(r, { close: true, go: rec ? cvHref(rec) : null, msg: live ? '直しました' : '未確定で保存しました' })) typeof inRefresh === 'function' && inRefresh();
 }
 
 /** 変換シートを開く。o = {rec:{t,k}, cand} */
@@ -177,7 +189,7 @@ function openConv(jid, o = {}) {
   const jot = DB.jots && DB.jots[jid];
   if (!jot) { toast('雑記が見つかりません', { bad: 1 }); return; }
   const body = jot.body || '';
-  CV = { jid, body, type: 'memo', f: null, touched: false };
+  CV = { jid, body, type: 'memo', f: null, touched: false, rec: o.rec || null };
   let c = o.cand || (o.rec ? cvRecCand(o.rec.t, o.rec.k) : null);
   if (!c) c = (typeof ruleCandidates === 'function' && (ruleCandidates(body) || [])[0]);
   if (!c) c = (typeof candFromType === 'function' && candFromType(body, 'memo')) || { type: 'memo', body, ents: [] };

@@ -9,6 +9,9 @@ const LM_MAX_BATCH = 10;                             /* 1回の呼び出しの�
 const LM_MAX_CANDS = 5;                              /* 1つの雑記に作る候補の最大 */
 const LM_MAX_BODY = 2000;                            /* 雑記1件の本文の最大(送る分・受ける memo) */
 const LM_MAX_RAW = 200000;                           /* 応答の最大字数 */
+const LM_MAX_NOTE = 500;                             /* 備考(note)の最大字数 */
+const LM_MAX_TAGS = 10;                              /* タグの最大数 */
+const LM_MAX_TAG = 30;                               /* タグ1つの最大字数 */
 const LM_KINDS = ['meal', 'talk', 'work', 'move', 'shop', 'play', 'health', 'trip', 'event', 'wake', 'sleep'];
 
 const LM_SYSTEM = [
@@ -95,8 +98,8 @@ const lmDateOf = v => (typeof v === 'string' && isDate(v) ? v : null);
 const lmTimeOf = v => (typeof v === 'string' && isHM(v) ? v : null);
 const lmAmt = v => (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 99999999 ? v : null);
 
-/** 1つの候補を、許す項目だけの新しいオブジェクトに写す。不正なら null */
-function lmCleanCand(c) {
+/** 1つの候補を、許す項目だけの新しいオブジェクトに写す。不正なら null。mock = 規則で読んだ候補(時刻の無い出来事は終日のまま) */
+function lmCleanCore(c, mock) {
   try {
     if (!lmIsObj(c)) return null;
     const type = c.type;
@@ -116,7 +119,7 @@ function lmCleanCand(c) {
     if (type === 'event' || type === 'plan') {
       const title = lmStr(c.title, 120, false);
       if (!title) return null;
-      const s0 = start === undefined ? (type === 'event' ? NOW : undefined) : start;
+      const s0 = start === undefined ? (type === 'event' && !mock ? NOW : undefined) : start;
       if (end !== undefined && (s0 === undefined || end <= s0)) return null;   /* end > start を守る */
       const out = { type, title, date: d, ents: [] };
       if (s0 !== undefined) out.start = s0;
@@ -142,6 +145,22 @@ function lmCleanCand(c) {
     if (!body) return null;
     return { type, body, ents: [] };
   } catch (e) { return null; }
+}
+/** 候補の門: lmCleanCore の項目に、備考(note)・タグ(tags)・終わりの日(date2)を足す。この3つは不正でも候補は捨てず、その項目だけ捨てる */
+function lmCleanCand(c, mock) {
+  const k = lmCleanCore(c, mock);
+  if (!k || !lmIsObj(c)) return k;
+  const note = lmStr(c.note, LM_MAX_NOTE, true);
+  if (note) k.note = note;
+  if (Array.isArray(c.tags)) {
+    const tags = [...new Set(c.tags.map(x => lmStr(x, LM_MAX_TAG, false).replace(/^[#＃]+/, '').replace(/\s+/g, '')).filter(Boolean))].slice(0, LM_MAX_TAGS);
+    if (tags.length) k.tags = tags;
+  }
+  if (k.type === 'event' || k.type === 'plan') {
+    const d2 = lmOpt(c.date2, lmDateOf);
+    if (d2 && d2 !== 'bad' && k.date && d2 > k.date) k.date2 = d2;     /* 終わりの日は始まりより後の日だけ */
+  }
+  return k;
 }
 
 /** 応答の文字列を検査し {n: [cand…]} を返す。形が違えば null。個々の不正な項目は捨てる */
@@ -170,16 +189,16 @@ function llmSanitize(raw, n) {
   } catch (e) { return null; }
 }
 
-/* ---- 模擬(LLM の代わり。規則で読む) ---- */
-function llmMock(text) {
+/* ---- 模擬(LLM の代わり。規則で読む)。at = 雑記の作成時刻(YYYY-MM-DD HH:MM)。「明日」「+1」などはこの日時を基準にする ---- */
+function llmMock(text, at) {
   try {
     /* 文 = 空行で分けた1まとまり(行の区切りは readText が読む。改行で割ると日時の行が別の文になる) */
     const parts = typeof readBlocks === 'function' ? readBlocks(text) : String(text == null ? '' : text).split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
     const out = [];
     for (const s of parts) {
       let rc = [];
-      try { rc = typeof ruleCandidates === 'function' ? ruleCandidates(s) : []; } catch (e) { rc = []; }
-      if (Array.isArray(rc) && rc.length) for (const c of rc) { const k = lmCleanCand(c); if (k) out.push(k); }
+      try { rc = typeof ruleCandidates === 'function' ? ruleCandidates(s, typeof _jtBase === 'function' ? _jtBase(at) : undefined) : []; } catch (e) { rc = []; }
+      if (Array.isArray(rc) && rc.length) for (const c of rc) { const k = lmCleanCand(c, true); if (k) out.push(k); }
       else out.push({ type: 'memo', body: s, ents: [] });
       if (out.length >= LM_MAX_CANDS) break;
     }
@@ -266,7 +285,7 @@ async function llmRun() {
       try {
         if (cfg.mode === 'mock') {
           await lmSleep(1200 + Math.random() * 1200);
-          results = batch.map(jid => ({ jid, cands: llmMock(lmJot(jid) ? lmJot(jid).body : '') }));
+          results = batch.map(jid => ({ jid, cands: llmMock(lmJot(jid) ? lmJot(jid).body : '', lmJot(jid) ? lmJot(jid).at : null) }));
         } else if (cfg.mode === 'endpoint' && cfg.url) {
           results = await lmEndpoint(cfg, batch);
         } else {

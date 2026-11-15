@@ -249,8 +249,12 @@ function readText(text, base, o = {}) {
     if (!T) return none();
     cand = { type, title: T, date: g1 ? g1.date : bd, ents };
     if (g1 && g1.start) cand.start = g1.start;
-    const end = (g1 && g1.end) || (g2 && g2.start) || null;
-    if (end) { if (!cand.start || end > cand.start) cand.end = end; else extra.push(`終わり ${end}`); }
+    /* 終わりの時刻: 始まりと同じ日なら終わりの欄(始まりより後の時だけ)。別の日の時刻(+N の行)は終わりの欄に持てないので、日付を付けて備考に入れる */
+    const endT = (g1 && g1.end) || (g2 && g2.start) || null, endD = g1 && g1.end ? cand.date : g2 && g2.start ? g2.date : cand.date;
+    if (endT) {
+      if (endD === cand.date && cand.start && endT > cand.start) cand.end = endT;
+      else extra.push(`終わり ${endD !== cand.date ? fmtMD(endD) + ' ' : ''}${endT}`);
+    }
     if (g2 && g2.date > cand.date) cand.date2 = g2.date;
     if (type === 'event') { const kind = _jtKind(raw); if (kind) cand.kind = kind; }
   } else if (type === 'task') {
@@ -404,6 +408,44 @@ function _jtConvert(jid, cands, o, label) {
 const jotConvert = (jid, cand, o = {}) => _jtConvert(jid, cand, { confirm: o.confirm, via: o.via || 'rule' }, '雑記を記録にしました');
 /** LLM の結果を入れる(jotConvert の配列版。LLM の印は消す。未確定でだけ入る) */
 const jotConvertMany = (jid, cands, o = {}) => _jtConvert(jid, cands, { confirm: false, via: o.via || 'llm', clearLlm: true }, '雑記を記録にしました');
+/** 確定済みの記録を直す(新しく作らない。既存の更新関数を呼ぶ)。rec = {t,k}、cand は変換シートの形(cvRecCand と同じ)。
+    o.confirm: true = 確定のまま / false = 未確定にする / null = 今の状態のまま。種類が変わる時(支払い ⇄ 出来事・予定 ⇄ ToDo など)は、その記録を消して作り直す。1回の変更 → {recs} */
+const jotRecUpdate = (jid, rec, cand, o = {}) => commit('記録を直しました', () => {
+  if (!DB.jots[jid]) fail('雑記が見つかりません');
+  const tbl = _jtTbl(rec && rec.t), row = tbl && tbl[rec.k];
+  if (!row) fail('記録が見つかりません');
+  const c = [].concat(cand || []).filter(Boolean)[0]; if (!c) fail('変換できませんでした');
+  const tags = (c.tags || []).filter(Boolean), tagLine = tags.map(x => '#' + x).join(' ');
+  const join = (...xs) => xs.filter(Boolean).join('\n') || undefined;
+  const group = t => t === 'acts' ? (row.pay ? 'pay' : 'act') : t === 'tasks' ? 'task' : 'memo';
+  const want = c.type === 'pay' ? 'pay' : c.type === 'task' ? 'task' : c.type === 'memo' ? 'memo' : 'act';
+  let out;
+  if (group(rec.t) !== want) {
+    _jtDrop(rec.t, rec.k);
+    out = candToRec(c, jid, { tent: o.confirm === false ? 1 : 0, via: row.via });
+  } else {
+    let r;
+    if (want === 'pay') {
+      const x = DB.exps[rec.k] || {}, total = +c.amt || 0, keep = total === payTotal(row) && row.pay.items && row.pay.items.length;
+      r = paySave({ id: rec.k, date: c.date, start: c.start || row.start || NOW, parent: row.parent || null, payee: c.payee || null, roles: row.roles || [],
+        amt: total, items: keep ? row.pay.items : [], payers: row.pay.payers, settled: row.pay.settled, unread: row.pay.unread, note: join(tagLine, c.note),
+        exp: { ...x, basis: x.basis || 'items', cat: c.cat || x.cat || 'eatout' } });
+    } else if (want === 'act') {
+      r = actUpdate(rec.k, { kind: c.kind || 'event', title: c.title, date: c.date, date2: c.date2 || null, start: c.start, end: c.end || null,
+        allDay: c.start ? 0 : 1, state: c.type === 'plan' ? 'plan' : 'done', note: join(tagLine, c.note) });
+    } else if (want === 'task') {
+      r = taskUpdate(rec.k, { t: c.t, due: c.due || undefined, list: c.list || undefined, pri: c.pri ? 1 : undefined, ents: c.ents || [], memo: join(c.note), tags: tags.length ? tags : undefined });
+    } else {
+      r = memoUpdate(rec.k, { body: c.body, ents: c.ents || [] });
+      if (r.ok) { if (tags.length) DB.memos[rec.k].tags = tags; else delete DB.memos[rec.k].tags; }
+    }
+    if (!r.ok) fail(r.why);
+    out = { t: rec.t, k: rec.k };
+  }
+  const now = _jtTbl(out.t)[out.k];
+  if (o.confirm === false) now.tent = 1; else if (o.confirm === true) delete now.tent;
+  return { recs: [out] };
+});
 /** 未確定を確定にする。refs = {t,k} か配列 */
 const tentConfirm = refs => commit('確定しました', () => {
   let n = 0;
@@ -506,4 +548,4 @@ function seedInbox() {
 }
 
 /* const で定義した公開関数も window に載せる(他の画面の window.xxx && xxx() の判定が偽にならないように) */
-Object.assign(window, { isTent, tentCount, jotsRaw, jotsSorted, inboxCount, jotUpdate, jotRemove, jotConvert, jotConvertMany, tentConfirm, tentConfirmAll, readText, readBlocks, ruleCandidates, candFromType, jotAddMany, diaryAppend });
+Object.assign(window, { isTent, tentCount, jotsRaw, jotsSorted, inboxCount, jotUpdate, jotRemove, jotConvert, jotConvertMany, jotRecUpdate, tentConfirm, tentConfirmAll, readText, readBlocks, ruleCandidates, candFromType, jotAddMany, diaryAppend });

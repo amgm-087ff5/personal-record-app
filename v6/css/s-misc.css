@@ -35,3 +35,16 @@
 .ms-note svg{width:16px;height:16px}
 
 .ms-old{display:inline-flex;align-items:center;min-height:44px;padding:0 var(--s3);font-weight:700;color:var(--me)}
+
+/* ホームの すぐメモ・金額欄(A4/A5) */
+.hm-quick{display:grid;gap:var(--s2)}
+.hm-quick-f{display:flex;justify-content:flex-end}
+.hm-qe{display:flex;align-items:flex-end;gap:var(--s2);flex-wrap:wrap;padding:var(--s2) var(--s1) 0}
+.hm-qe .field{flex:1;min-width:140px}
+.hm-qe .input{min-height:44px}
+
+/* 完了の「もっと見る」(C-R2): 一覧の最後に来るので、下のナビに隠れない余白を取る */
+.td-more{padding-bottom:var(--nav-h)}
+
+/* ToDo一覧の要約(C-R6) */
+.td-sum{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center;padding:0 var(--s1) var(--s2)}

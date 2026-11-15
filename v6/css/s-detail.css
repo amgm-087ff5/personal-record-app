@@ -47,6 +47,6 @@
 .dt-reg::after{content:"";position:absolute;inset:-10px -6px}
 .dt-rel{margin-left:var(--s2);font-size:var(--fs-cap);font-weight:700;color:var(--me);letter-spacing:0}
 .dt-diary{padding-block:var(--s3);margin-block:calc(var(--s2) * -1);-webkit-line-clamp:2;font-size:var(--fs-cap);line-height:1.6;color:var(--tx-2);overflow-wrap:anywhere}
-.photo .dt-pc{display:flex;flex-direction:column;font-size:var(--fs-min);line-height:1.35;text-align:left;text-shadow:0 1px 3px rgba(20,34,70,.55)}
+.photo .dt-pc{display:flex;flex-direction:column;font-size:var(--fs-min);line-height:1.35;text-align:left;text-shadow:0 1px 3px rgb(var(--ink-rgb) / .55)}
 .photo .dt-pc b{font-weight:700}
 .photo.add .dt-pc{text-shadow:none}

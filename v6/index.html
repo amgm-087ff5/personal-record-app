@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
-<meta name="theme-color" content="#EDF1F8">
+<meta name="theme-color">
 <meta name="mobile-web-app-capable" content="yes">
 <title>個人記録 v6</title>
 <script>
 /* 版は BUILD の1か所だけ */
-window.BUILD = "v6.4.2 · 20261113-1950";
+window.BUILD = "v6.5.0 · 20261115-1900";
 try { var __t = localStorage.getItem('prmock-v6-theme') || 'auto'; document.documentElement.dataset.theme = (__t === 'dark' || (__t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches)) ? 'dark' : 'light'; } catch (e) {}
 </script>
 </head>
@@ -26,6 +26,14 @@ try { var __t = localStorage.getItem('prmock-v6-theme') || 'auto'; document.docu
   JS.forEach(function (f) { document.write('<script src="' + f + V + '"><\/script>'); });
 })();
 </script>
-<script>boot(); window.llmRecover && llmRecover(); window.voiceInit && voiceInit();</script>
+<script>
+/* boot が無い・例外で止まった時も、白い画面を残さない(読み込み失敗の面を出す) */
+try { boot(); window.llmRecover && llmRecover(); window.voiceInit && voiceInit(); }
+catch (e) {
+  console.error(e); document.documentElement.classList.add('ready');
+  var mm = document.getElementById('main');
+  if (mm) mm.innerHTML = '<div class="screen" role="alert"><div class="empty"><p>読み込みに失敗しました</p><p class="field-h">この画面では操作できません。端末の再読み込みをお試しください。</p></div></div>';
+}
+</script>
 </body>
 </html>

@@ -70,7 +70,8 @@ function hmMoney() {
     <div class="money-h"><div>${amt(t, { cls: 'hero' })}<span class="tag">固定費を除く</span></div>
       <div class="money-c"><span>先週の${dowJ(lw)}曜 ${yen(l)}</span><b class="${t > l ? 'up' : t < l ? 'dn' : ''}">${t === l ? '±0' : (t > l ? '+' : '−') + yen(Math.abs(t - l)).slice(1)}</b></div></div>
     <div class="wk" role="img" aria-label="この7日の支出">${days.map((d, i) => `<a class="wk-c${d === TODAY ? ' on' : ''}" href="#/day/${d}"><span class="wk-v num">${vals[i] ? (vals[i] >= 10000 ? (vals[i] / 10000).toFixed(1) + '万' : vals[i].toLocaleString()) : ''}</span><i style="height:${vals[i] ? Math.max(4, Math.round(vals[i] / max * 72)) : 0}px"></i><span class="wk-d">${d === TODAY ? '今日' : dowJ(d)}</span></a>`).join('')}</div>
-    <div class="money-f"><span>この7日 <b class="num">${yen(w0)}</b></span>${pct == null ? '' : `<span>前の7日より <b class="num">${pct > 0 ? '+' : ''}${pct}%</b></span>`}${btn('支払いを記録', 'openPayEditor()', 'sec', { sm: 1, icon: 'yen' })}</div>
+    <div class="money-f"><span>この7日 <b class="num">${yen(w0)}</b></span>${pct == null ? '' : `<span>前の7日より <b class="num">${pct > 0 ? '+' : ''}${pct}%</b></span>`}</div>
+    <div class="hm-qe"><label class="field"><span class="field-l">金額</span><input id="hm-qe" class="input num" type="text" inputmode="numeric" placeholder="例: 1280" aria-label="金額"></label>${btn('支払いを記録', 'hmPayQuick()', 'sec', { sm: 1, icon: 'yen' })}</div>
   </div></section>`;
 }
 function hmTodo() {
@@ -85,7 +86,19 @@ function hmRecall() {
 }
 function hmMemo() {
   const ms = memosSorted().slice(0, 2);
-  return `<section>${sec('メモ', { act: { label: 'すべて', href: '#/memo' } })}${ms.length ? `<div class="stack">${ms.map(([id]) => memoCard(id, { clamp: 3 })).join('')}</div>` : `<div class="card">${empty({ icon: 'memo', text: 'メモは まだありません', action: { label: 'メモを書く', on: "openCapture('memo')" } })}</div>`}</section>`;
+  const quick = `<div class="card pad hm-quick">${textarea({ id: 'hm-memo', rows: 2, ph: 'いま思ったこと', label: 'すぐメモ' })}<div class="hm-quick-f">${btn('メモを保存', 'hmMemoSave()', 'sec', { sm: 1, icon: 'memo' })}</div></div>`;
+  return `<section>${sec('メモ', { act: { label: 'すべて', href: '#/memo' } })}${quick}${ms.length ?`<div class="stack">${ms.map(([id]) => memoCard(id, { clamp: 3 })).join('')}</div>` : `<div class="card">${empty({ icon: 'memo', text: 'メモは まだありません', action: { label: 'メモを書く', on: "openCapture('memo')" } })}</div>`}</section>`;
+}
+
+/** すぐメモ: 入力欄の文を保存(取り消し付き)。空なら理由を出して欄に残す */
+function hmMemoSave() {
+  const v = val('hm-memo'); if (!v.trim()) return toast('本文を入れてください', { bad: 1 });
+  done(memoAdd(v), { msg: 'メモを保存しました' });
+}
+/** 支払いを記録(ホーム): 金額欄の値を渡して開く。金額が空なら金額なしで開く */
+function hmPayQuick() {
+  const n = Number(String(val('hm-qe')).replace(/[,，\s]/g, ''));
+  openPayEditor(n > 0 ? { amount: Math.round(n) } : {});
 }
 
 /* ================= 日記のシート(ホーム・日のページ・＋から同じもの) ================= */
