@@ -117,7 +117,7 @@ function enRes() {
 function enRow(id, m) {
   const e = DB.ents[id];
   const when = `<span class="en-when">${m.last ? `<b>${relDay(m.last)}</b>` : '<b class="none">まだなし</b>'}${m.next ? `<small>次 ${fmtMD(m.next)}</small>` : ''}</span>`;
-  return row({ cls: 'en-row', href: `#/e/${id}`, lead: avatar(id, '', 'lg'), t: e.n, sHtml: `<span>${esc(isStub(id) ? (enKindPath(id) || '名前だけ') : enKindPath(id))}</span>${m.bal ? tag(`${m.bal > 0 ? '貸し' : '借り'} ${yen(Math.abs(m.bal))}`, 'owe') : ''}`, right: `${enBars(m.weeks)}${when}` });
+  return row({ cls: 'en-row', href: `#/e/${id}`, lead: avatar(id, '', 'lg'), t: e.n, sHtml: `<span>${esc(isStub(id) ? (enKindPath(id) || '名前だけ') : enKindPath(id))}</span>${m.bal ? tag(`${m.bal > 0 ? '貸し' : '借り'} ${yen(Math.abs(m.bal))}`, 'owe') : ''}`, right: id === 'me' ? '' : `${enBars(m.weeks)}${when}` });
 }
 
 /* ====================================================================

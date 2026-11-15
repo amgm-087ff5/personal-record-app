@@ -4,7 +4,7 @@
 /* ================= さがす =================
    入力欄は描き直さない。入力のたびに #ms-res だけを差し替える(フォーカスと変換中の文字を守る)。 */
 const MS = { q: '', kind: 'all', open: {}, seen: null };
-const MS_KEY = 'prmock-v6-recent';
+const MS_KEY = 'prmock-v7-recent';
 const MS_TYPES = [['act', 'アクティビティ'], ['item', '品目'], ['ent', 'エンティティ'], ['memo', 'メモ'], ['jot', '雑記'], ['task', 'ToDo'], ['note', 'ノート'], ['day', '日記'], ['photo', '写真']];
 const MS_LIMIT = 6;
 
@@ -144,7 +144,7 @@ route('settings', () => {
       row({ lead: ic('tag'), t: 'カテゴリ', right: `<span class="mini num">${Object.keys(DB.cats).length}</span>`, href: '#/cats', chev: 1 }),
       row({ lead: ic('tree'), t: '種類', right: `<span class="mini num">${Object.keys(DB.types).length}</span>`, href: '#/types', chev: 1 }),
       row({ lead: ic('list'), t: 'ToDoのリスト', right: `<span class="mini num">${Object.keys(DB.lists).length}</span>`, href: '#/todo', chev: 1 })])}</section>
-    <section>${sec('このアプリ')}${rows([prop('版', esc(String(window.BUILD || '').replace(/^v[\d.]+/, 'v6.5') || 'v6.5')), prop('今日', `<span class="num">${fmtFull(TODAY)} ${NOW}</span>`), prop('文字', 'M PLUS 2(SIL OFL)'), row({ lead: ic('undo'), t: '前の版を開く', sHtml: ['v5', 'v4', 'v3'].map(v => `<a class="ms-old" href="../${v}/">${v}</a>`).join('') })])}
+    <section>${sec('このアプリ')}${rows([prop('版', esc(String(window.BUILD || '').replace(/^v[\d.]+/, 'v7') || 'v7')), prop('今日', `<span class="num">${fmtFull(TODAY)} ${NOW}</span>`), prop('文字', 'M PLUS 2(SIL OFL)'), row({ lead: ic('undo'), t: '前の版を開く', sHtml: ['v6', 'v5', 'v4', 'v3'].map(v => `<a class="ms-old" href="../${v}/">${v}</a>`).join('') })])}
       <p class="ms-note">${ic('info')}<span>データはこの端末の中だけに保存されます</span></p></section>
   </div>`;
 }, { tab: 'settings', root: 1 });

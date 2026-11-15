@@ -3,7 +3,7 @@
 setNavBadge('todo', () => Object.values(DB.tasks).filter(taskLate).length);
 
 /* 画面の状態(描き直しても残す) */
-const TDS = { f: 'due', q: '', focus: null, done: (() => { try { return localStorage.getItem('prmock-v6-td-done') === '1'; } catch (e) { return false; } })() };
+const TDS = { f: 'due', q: '', focus: null, done: (() => { try { return localStorage.getItem('prmock-v7-td-done') === '1'; } catch (e) { return false; } })() };
 
 /* ---------- 小道具 ---------- */
 const tdListName = k => (DB.lists[k] || {}).n || '';
@@ -101,7 +101,7 @@ function tdDone() {
   const noList = TDS.f.startsWith('l:');
   return `<section class="td-done"><button class="td-dn" aria-expanded="${TDS.done}" onclick="tdDoneToggle()"><span>完了</span><b class="num">${ds.length}</b>${ic('chev')}</button>${TDS.done ? rows(ds.slice(0, 20).map(([id, t]) => `<div class="td-dr">${taskRow(id, { noList })}<span class="td-dd num">${fmtMD(t.done)}</span></div>`)) : ''}</section>`;
 }
-function tdDoneToggle() { TDS.done = !TDS.done; try { localStorage.setItem('prmock-v6-td-done', TDS.done ? '1' : '0'); } catch (e) { } tdRefresh(); }
+function tdDoneToggle() { TDS.done = !TDS.done; try { localStorage.setItem('prmock-v7-td-done', TDS.done ? '1' : '0'); } catch (e) { } tdRefresh(); }
 function tdFilter(k) { TDS.f = k; tdRefresh(); tdInput(TDS.q); }
 function tdRefresh() { const el = $('#td-list'); if (!el) return; el.innerHTML = tdBody(); wireSwipe(el); if (typeof renderNav === 'function') renderNav(); }
 

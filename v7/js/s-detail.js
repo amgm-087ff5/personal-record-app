@@ -82,7 +82,6 @@ function dtSettle(id, a) {
   return `<div class="dt-hero done">
     <div class="dt-k">${kindIc(a)}<span>${esc(KINDS.settle.n)}</span>${tag(s.dir === 'in' ? '受け取った' : '返した')}</div>
     <h1 class="dt-t" data-bar-watch>${esc(actTitle(a))}</h1>
-    <div class="dt-amt">${amt(s.amt, { cls: 'big' })}</div>
     <div class="dt-when num">${esc(dtWhen(a))}</div>
     ${rows([who ? prop('相手', who) : '', s.how ? prop('方法', esc(methodName(s.how))) : ''].join(''))}
     <a class="dt-date" href="#/day/${d}">${ic('cal')}<span>${fmtFull(d)}</span><small>${relDay(d)}</small>${ic('chev', 'row-chev')}</a>

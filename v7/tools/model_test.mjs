@@ -253,7 +253,7 @@ T('集計・検索・書き出し・読み込み', () => {
   assert.ok(M.searchAll('らーめん').some(r => r.type === 'act') && M.searchAll('らーめん').some(r => r.type === 'ent') && M.searchAll('家賃').some(r => r.href.startsWith('#/a/f_rent@')) && M.searchAll('卵').some(r => r.type === 'item') && M.searchAll('麺は硬め').some(r => r.type === 'note') && M.searchAll('日記').length >= 0);
   assert.ok(M.recallDays().length >= 1); assert.ok(M.daysWith('2026-11-01', '2026-11-30').length > 5); const dc = M.dataCounts(); assert.ok(dc.acts > 100 && dc.ents >= 11 && dc.bytes > 0);
   const j = M.exportJSON(); const before = snap(); const r = M.importJSON(j); assert.ok(r.ok); assert.ok(snap().replace(',"seeded":1', '') === before.replace(',"seeded":1', ''), 'import/export 往復'); r.undo();
-  assert.equal(M.importJSON(j.replace('"v": 65', '"v": 6')).ok, false); assert.equal(M.importJSON('x').ok, false);
+  assert.equal(M.importJSON(j.replace('"v": 7', '"v": 6')).ok, false); assert.equal(M.importJSON('x').ok, false);
   M.resetData(); assert.ok(M.DB.meta.v === 7 && M.DB.acts.l1); assert.equal(JSON.parse(store['prmock-v7']).meta.v, 7);
   assert.ok(M.DB.log.length >= 0);
 });

@@ -20,7 +20,7 @@ const pyShort = k => pyIsName(k) ? k.slice(1) : whoShort(k);
 const pyEnt = (k, o = {}) => pyIsName(k) ? ent(null, { link: false, name: k.slice(1), ...o }) : ent(k, { link: false, ...o });
 const pyBalText = (amt, who) => `${who.length ? who.map(w => pyShort(w) + (pyIsName(w) || E(w) ? 'さん' : '')).join('・') : '相手'}に${amt > 0 ? '貸し' : '借り'} ${yen(Math.abs(amt))}`;
 /** 'YYYY-MM-DD' と 'HH:MM' に分ける(TS か 'HH:MM' を受ける) */
-const pySplit = (s, d) => isTS(s) ? [dOf(s), tOf(s) || ''] : isHM(s) ? [d || '', s] : [d || '', ''];
+const pyTsSplit = (s, d) => isTS(s) ? [dOf(s), tOf(s) || ''] : isHM(s) ? [d || '', s] : [d || '', ''];
 /** 支払いを保存できる形に戻す(品目・払った人・支出をそのまま持つ。品目は id を持つ) */
 function pyRebuild(id) {
   const a = DB.acts[id], x = DB.exps[id], pr = rolesOf(a, '支払先')[0], cp = v => v == null ? v : JSON.parse(JSON.stringify(v));
@@ -252,7 +252,7 @@ function pyPrevMethod(payee) {
   const me = p && paidOf(p).find(z => z.who === 'me'); return me && me.how || null;
 }
 function pyDraft(o) {
-  const seed = window._capSeed && window._capSeed.type === 'pay' ? window._capSeed : null, cp = v => JSON.parse(JSON.stringify(v));
+  const seed = window._capSeed && window._capSeed.type === 'pay' ? window._capSeed : null, cp = v => v == null ? v : JSON.parse(JSON.stringify(v));
   let D;
   if (o.draft) { D = cp(o.draft); D.batch = o.batch || 0; }
   else if (o.id) {
@@ -265,7 +265,7 @@ function pyDraft(o) {
       cat: x ? x.cat : catGuess(pr ? { e: pr.e } : null), catTouched: 1, basis: x ? x.basis : 'items', n: x && x.n || 0, me: x && x.me || 0, fx: x && x.fx || null, sp: x && x.sp || null, memo: x && x.memo || '', itemCat: x && x.itemCat ? cp(x.itemCat) : {},
       unsure: cp(a.unsure) || null, via: a.via, roles: a.roles.filter(r => r.r !== '支払先' && r.r !== '同席' && r.r !== '参加'), note: a.note };
   } else {
-    const rd = o.read, sd = pySplit(o.start, o.date), rs = rd && rd.start ? pySplit(rd.start, rd.date) : ['', ''], ss = seed && seed.start ? pySplit(seed.start) : ['', ''];
+    const rd = o.read, sd = pyTsSplit(o.start, o.date), rs = rd && rd.start ? pyTsSplit(rd.start, rd.date) : ['', ''], ss = seed && seed.start ? pyTsSplit(seed.start) : ['', ''];
     const date = o.date || sd[0] || (rd && (rd.date || rs[0])) || ss[0] || TODAY, start = sd[1] || rs[1] || ss[1] || NOW;
     const payee = rd ? rd.payee : seed && seed.payee ? seed.payee : null, parent = o.parent !== undefined ? (o.parent && DB.acts[o.parent] ? o.parent : null) : pyDefParent(date, start);
     const ppl = [...new Set([...(seed && seed.ents || []).filter(e => E(e) && E(e).types[0] && isUnder(E(e).types[0], 'person')), ...pyParentPeople(parent)])];
@@ -462,7 +462,7 @@ const PY_EVERY = [['', '一度だけ'], ['month', '毎月'], ['week', '毎週'],
 function openPayPlanEditor(o = {}) {
   const a = o.id ? A(o.id) : null, pr = a && rolesOf(a, '支払先')[0], x = a && xOf(o.id), r = a && a.routine && DB.routines[a.routine];
   if (o.id && !a) return toast('支払い予定が見つかりません', { bad: 1 });
-  const sd = pySplit(o.start, o.date);
+  const sd = pyTsSplit(o.start, o.date);
   PYP = { id: o.id || null, payee: pr ? { e: pr.e } : null, title: a ? (a.title || '') : '', date: a ? aDate(a) : (sd[0] || dAdd(TODAY, 1)), time: a ? (aStart(a) && !isAllDay(a) ? aStart(a) : '') : sd[1], amt: a ? payTotal(a) : (+o.amt || 0), cat: x ? x.cat : catGuess(null), every: r ? r.every : '', fixedEvery: !!(a && !r) };
   PYP0 = JSON.stringify(PYP);
   openSheet({ id: 'pay-plan', title: o.id ? '支払い予定を直す' : '支払い予定を足す', tall: true, body: pypBody(), dirty: () => JSON.stringify(PYP) !== PYP0, primary: { label: '保存', on: pypSave } });
@@ -491,10 +491,10 @@ function pypSave() {
    レシートの読み取り(模擬。見本から選ぶ → 読み取り中 → 値の入った支払いの入力へ。読めなかった値は空のまま)
    ===================================================================== */
 const PY_RC = [
-  { k: 'super', t: 'スーパー', sub: '6品目・1品が読めない', read: () => ({ payee: { e: 'super' }, date: TODAY, start: '12:41', amt: 2190, unread: { amt: 1, payee: 1 },
+  { k: 'super', t: 'スーパー', sub: '6品目・1品が読めない', read: () => ({ payee: { e: 'super' }, date: TODAY, start: '12:41', amt: 2190, unsure: ['amt', 'payee'],
     items: [{ n: '牛乳', price: 238, tax: 8 }, { n: '食パン', price: 158, tax: 8 }, { n: '卵', price: 268, tax: 8 }, { n: '鶏むね肉', price: 498, tax: 8 }, { n: '洗濯洗剤', price: 698 }, { n: '', price: 330, unk: 1 }] }) },
-  { k: 'cafe', t: 'カフェ', sub: '2品目', read: () => ({ payee: { e: 'minato' }, date: TODAY, start: '09:15', amt: 740, unread: { amt: 1, payee: 1 }, items: [{ n: 'カフェラテ', price: 480 }, { n: '焼き菓子', price: 260 }] }) },
-  { k: 'total', t: '合計だけ', sub: '店名と品目は読めない', read: () => ({ payee: null, date: dAdd(TODAY, -1), start: null, amt: 1480, unread: { amt: 1, payee: 1 }, items: [] }) },
+  { k: 'cafe', t: 'カフェ', sub: '2品目', read: () => ({ payee: { e: 'minato' }, date: TODAY, start: '09:15', amt: 740, unsure: ['amt', 'payee'], items: [{ n: 'カフェラテ', price: 480 }, { n: '焼き菓子', price: 260 }] }) },
+  { k: 'total', t: '合計だけ', sub: '店名と品目は読めない', read: () => ({ payee: null, date: dAdd(TODAY, -1), start: null, amt: 1480, unsure: ['amt', 'payee'], items: [] }) },
 ];
 let PYRC = null;
 const pyPaper = r => `<div class="py-paper" aria-hidden="true"><b class="py-paper-h">${r.payee ? esc(E(r.payee.e).n) : '▒▒▒▒▒▒'}</b>

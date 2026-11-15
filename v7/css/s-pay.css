@@ -131,3 +131,12 @@
 .py-bt-t b{font-weight:750;overflow-wrap:anywhere}
 .py-bt-s{display:flex}
 .py-bt-x{flex:none;min-width:var(--tap);min-height:var(--tap);padding:0 var(--s2);font-size:var(--fs-cap);font-weight:700;color:var(--me)}
+
+/* ---------- 詳細: 相手ごとの貸し借り ---------- */
+.py-debts{display:flex;flex-direction:column;gap:var(--s3)}
+.py-debt{display:flex;flex-direction:column;gap:var(--s2);padding-top:var(--s3);border-top:1px solid var(--line)}
+.py-debt-h{display:flex;align-items:center;gap:var(--s2)}
+.py-debt-n{flex:1;min-width:0;font-weight:700;overflow-wrap:anywhere}
+.py-sl{position:relative;display:inline-flex;align-items:center;gap:var(--s1);font-size:var(--fs-cap);font-weight:650;color:var(--me)}
+.py-sl::after{content:"";position:absolute;inset:-12px -6px}
+.py-sl svg{width:16px;height:16px}

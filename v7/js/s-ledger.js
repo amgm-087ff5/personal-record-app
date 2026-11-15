@@ -42,16 +42,16 @@ function lgHeroTop(ym, S) {
   const cur = ym === lgNow(), prev = ymAdd(ym, -1), P = monthSum(prev);
   let cmp = '';
   if (P.n) {
-    const dd = +TODAY.slice(8), base = cur ? expsIn(prev).filter(([, a]) => +a.date.slice(8) <= dd).reduce((s, r) => s + r[2], 0) : P.total, diff = S.total - base;
+    const dd = +TODAY.slice(8), base = cur ? expsIn(prev).filter(([, a]) => +aDate(a).slice(8) <= dd).reduce((s, r) => s + r[2], 0) : P.total, diff = S.total - base;
     const pct = base > 0 ? Math.round(diff / base * 100) : null;
     cmp = `<div class="lg-cmp"><span>${cur ? '先月の同じ日まで' : '先月'} <b class="num">${yen(base)}</b></span><span class="lg-diff num" aria-label="差額">${diff === 0 ? '±¥0' : amt(diff, { sign: 1 })}${pct != null ? `<small class="lg-pct">${pct > 0 ? '+' : pct < 0 ? '−' : '±'}${Math.abs(pct)}%</small>` : ''}</span></div>`;
   }
   return `<div class="lg-hl">自分の支出</div>${amt(S.total, { cls: 'hero' })}${lgTentTag(ym)}${cmp}`;
 }
-/** 未確定の支出がある月だけ、その額の札(自分の額。合計にはもう入っている) */
+/** 未確認の支出がある月だけ、その額の札(自分の額。合計にはもう入っている) */
 function lgTentTag(ym) {
-  const v = expsIn(ym).filter(([id]) => DB.acts[id] && DB.acts[id].tent).reduce((s, r) => s + r[2], 0);
-  return v ? `<div class="lg-tent">${tag(`未確定を含む ${yen(v)}`, 'read')}</div>` : '';
+  const v = expsIn(ym).filter(([id]) => unsureCount(DB.acts[id]) > 0).reduce((s, r) => s + r[2], 0);
+  return v ? `<div class="lg-tent">${tag(`未確認を含む ${yen(v)}`, 'read')}</div>` : '';
 }
 function lgHero(ym, S) {
   const rs = S.roots.filter(r => r.amt > 0), top = rs.slice(0, 5), rest = rs.slice(5), restSum = rest.reduce((s, r) => s + r.amt, 0);
@@ -120,27 +120,37 @@ function lgTree(ym, S) {
   return `<section>${sec('内訳')}${rows(list)}</section>`;
 }
 
-/* ---------- 貸し借り ---------- */
+/* ---------- 貸し借り(相手ごとの差し引き・まとめて精算・最近の精算) ---------- */
 function lgOweOpen(who) { LG.owe[who] = !LG.owe[who]; rerender(); }
-function lgSettle(ids) { done(paySettle(ids)); }
+/** 精算する(相手 who の分だけ)。ids が複数なら1件にまとめる。終わったら、その精算へ行ける */
+function lgSettle(ids, who) {
+  const before = new Set(Object.keys(DB.acts)), w = who === 'other' ? null : who, r = paySettle(ids, true, { who: w });
+  if (!r.ok) return done(r);
+  const s = Object.keys(DB.acts).filter(k => !before.has(k) && DB.acts[k].settle);
+  done(r, s.length === 1 ? { act: { label: '精算を見る', on: () => go('#/a/' + s[0]) } } : {});
+}
+const lgRecentSettles = () => Object.entries(DB.acts).filter(([, a]) => a.settle).sort((x, y) => y[1].start.localeCompare(x[1].start)).slice(0, 3);
 function lgOwe() {
-  const ps = personBalances(); if (!ps.length) return '';
+  const ps = personBalances(), rs = lgRecentSettles(); if (!ps.length && !rs.length) return '';
   const lendSum = ps.filter(b => b.amt > 0).reduce((s, b) => s + b.amt, 0), borrowSum = ps.filter(b => b.amt < 0).reduce((s, b) => s - b.amt, 0);
   const tot = `<span class="lg-ot">${lendSum > 0 ? `<span>貸し ${amt(lendSum)}</span>` : ''}${borrowSum > 0 ? `<span>借り ${amt(borrowSum)}</span>` : ''}</span>`;
-  return `<section id="owe" class="lg-owe">${sec('貸し借り', { n: ps.length + tot })}${ps.map(b => {
-    const open = !!LG.owe[b.who], name = whoName(b.who), lend = b.amt > 0;
-    return `<div class="card lg-p">${rows(row({ on: `lgOweOpen(${q(b.who)})`, cls: open ? 'is-open' : '', lead: avatar(b.who, name), t: E(b.who) ? name + 'さん' : name, sHtml: `${tag(lend ? '貸し' : '借り', 'owe')}<span>${b.ids.length}件 未精算</span>`, right: amt(Math.abs(b.amt)), chev: true }), 'lg-ph')}
-      ${open ? `<div class="lg-pb stack">${b.ids.map(id => `<div class="lg-ps">${paySlip(id)}${b.ids.length > 1 ? `<button class="btn ghost sm" onclick="lgSettle(${q([id])})">${ic('check')}<span>精算済みにする</span></button>` : ''}</div>`).join('')}
-        ${b.ids.length > 1 ? btn('まとめて精算済みにする', `lgSettle(${q(b.ids)})`, 'sec', { wide: 1, icon: 'check' }) : btn('精算済みにする', `lgSettle(${q(b.ids)})`, 'sec', { wide: 1, icon: 'check' })}</div>` : ''}</div>`;
-  }).join('')}</section>`;
+  const recent = rs.length ? `${sec('最近の精算')}${rows(rs.map(([id, a]) => row({ href: `#/a/${id}`, lead: avatar(a.settle.who), t: actTitle(a), s: `${fmtMD(aDate(a))} · ${a.settle.pays.length}件`, chev: true })))}` : '';
+  return `<section id="owe" class="lg-owe">${ps.length ? sec('貸し借り', { n: ps.length + tot }) : ''}${ps.map(b => {
+    const open = !!LG.owe[b.who], oth = b.who === 'other', name = oth ? '相手' : whoName(b.who), lend = b.amt > 0;
+    return `<div class="card lg-p">${rows(row({ on: `lgOweOpen(${q(b.who)})`, cls: open ? 'is-open' : '', lead: avatar(oth ? null : b.who, name), t: E(b.who) ? name + 'さん' : name, sHtml: `${tag(b.amt === 0 ? '差し引きなし' : lend ? '貸し' : '借り', 'owe')}<span>${b.ids.length}件 未精算</span>`, right: amt(Math.abs(b.amt)), chev: true }), 'lg-ph')}
+      ${open ? `<div class="lg-pb stack">${b.ids.map(id => `<div class="lg-ps">${paySlip(id)}${b.ids.length > 1 ? `<button class="btn ghost sm" onclick="lgSettle(${q([id])},${q(b.who)})">${ic('check')}<span>この分を精算した</span></button>` : ''}</div>`).join('')}
+        ${btn(b.ids.length > 1 ? 'まとめて精算' : '精算した', `lgSettle(${q(b.ids)},${q(b.who)})`, 'sec', { wide: 1, icon: 'check' })}</div>` : ''}</div>`;
+  }).join('')}${recent}</section>`;
 }
 
-/* ---------- これからの支払い予定(今月を見ている時だけ) ---------- */
+/* ---------- これからの支払い予定(今月を見ている時だけ。支払い予定 = state plan の支払い) ---------- */
+const lgAddPlan = () => window.openPayEditor && openPayEditor({ plan: 1 });
 function lgUpcoming() {
-  const L = upcoming(40).filter(([, a]) => a.kind === 'pay'); if (!L.length) return '';
-  const sum = L.reduce((s, [, a]) => s + ((a.pay && a.pay.plan && a.pay.plan.amt) || 0), 0);
-  return `<section>${sec('これからの支払い', { n: L.length })}${rows([...L.map(([id, a, d]) => { const pl = (a.pay && a.pay.plan) || {};
-    return row({ href: `#/a/${id}`, lead: `<span class="lg-ud num">${fmtMD(d)}<small>${dowJ(d)}</small></span>`, t: actTitle(a) || payeeOf(a), sHtml: `${pl.cat ? catTag(pl.cat) : ''}<span class="mini">${ic('repeat')}${esc(repText(A(a.tpl || id)) || '一度だけ')}</span>`, right: amt(pl.amt || 0), chev: true }); }),
+  const L = upcoming(40).filter(([, a]) => isPay(a) && isPlan(a));
+  if (!L.length) return `<section>${sec('これからの支払い', { act: { label: '足す', on: 'lgAddPlan()' } })}<div class="card">${empty({ icon: 'repeat', text: '支払い予定は ありません', action: { label: '支払い予定を足す', on: 'lgAddPlan()' } })}</div></section>`;
+  const sum = L.reduce((s, [, a]) => s + payTotal(a), 0);
+  return `<section>${sec('これからの支払い', { n: L.length, act: { label: '足す', on: 'lgAddPlan()' } })}${rows([...L.map(([id, a, d]) => { const x = xOf(id), r = a.routine && DB.routines[a.routine];
+    return row({ href: `#/a/${id}`, lead: `<span class="lg-ud num">${fmtMD(d)}<small>${dowJ(d)}</small></span>`, t: actTitle(a) || payeeOf(a), sHtml: `${x ? catTag(x.cat) : ''}<span class="mini">${ic('repeat')}${esc(r ? repText(r) : '一度だけ')}</span>`, right: amt(payTotal(a)), chev: true }); }),
     `<div class="row lg-tot"><span class="row-m"><span class="row-t">あと</span></span><span class="row-r">${amt(sum)}</span></div>`])}</section>`;
 }
 
@@ -159,12 +169,12 @@ function lgMatch(id) {
 function lgList(ym) {
   const all = expsIn(ym), byCat = LG.f === 'cat' && LG.cat, L = all.filter(([id]) => lgMatch(id));
   const amtOf = r => byCat ? xCats(r[0]).filter(g => catAnc(g.cat).includes(LG.cat)).reduce((t, g) => t + g.amt, 0) : r[2], sum = L.reduce((s, r) => s + amtOf(r), 0);
-  const days = [...new Set(L.map(r => r[1].date))];
+  const days = [...new Set(L.map(r => aDate(r[1])))];
   const chipL = [['all', 'すべて'], ['fixed', '固定費'], ['variable', '変動費'], ...(monthSum(ym).unset > 0 || LG.f === 'unset' ? [['unset', '未指定']] : []), ['special', '非日常'], ...(LG.cat ? [['cat', catName(LG.cat)]] : []), ['shared', '割り勘・立替あり']];
   return `<section id="lg-list">${sec('支出')}${chips(chipL, LG.f, 'lgF').replace('class="chips"', 'class="chips wrap"')}
     <div class="lg-sum"><span class="num">${L.length}件</span>${amt(sum)}</div>
-    ${L.length ? days.map(d => `<div class="lg-dg"><div class="lg-dh"><b>${lgDay(d)}${d === TODAY ? ' <span class="tag me">今日</span>' : ''}</b>${amt(L.filter(r => r[1].date === d).reduce((s, r) => s + amtOf(r), 0), { cls: 'mute' })}</div>
-      <div class="stack">${L.filter(r => r[1].date === d).map(([id]) => paySlip(id, byCat ? { cat: LG.cat } : {})).join('')}</div></div>`).join('') : `<div class="card">${empty({ icon: 'filter', text: 'あてはまる支出は ありません', action: { label: 'すべて見る', on: "lgF('all')" } })}</div>`}</section>`;
+    ${L.length ? days.map(d => `<div class="lg-dg"><div class="lg-dh"><b>${lgDay(d)}${d === TODAY ? ' <span class="tag me">今日</span>' : ''}</b>${amt(L.filter(r => aDate(r[1]) === d).reduce((s, r) => s + amtOf(r), 0), { cls: 'mute' })}</div>
+      <div class="stack">${L.filter(r => aDate(r[1]) === d).map(([id]) => paySlip(id, byCat ? { cat: LG.cat } : {})).join('')}</div></div>`).join('') : `<div class="card">${empty({ icon: 'filter', text: 'あてはまる支出は ありません', action: { label: 'すべて見る', on: "lgF('all')" } })}</div>`}</section>`;
 }
 
 /* ================= カテゴリの木 ================= */
