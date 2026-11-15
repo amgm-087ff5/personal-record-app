@@ -1,0 +1,71 @@
+/* 個人記録 v6.4 — 入力の履歴側(担当 B2。INPUT3.md §2)。色と形は tokens.css の変数だけ */
+
+/* 未確定の帯: 点線の枠(--read)と札 */
+.in-band{display:flex;min-height:0;align-items:center;justify-content:space-between;gap:var(--s2);margin-top:var(--s2);padding:var(--s1) var(--s1) var(--s1) var(--s3);border-radius:var(--r-md);border:1.5px dashed var(--read);background:var(--card)}
+.in-band > .btn{flex:none}
+.in-band b{display:flex;align-items:center;gap:var(--s2);min-width:0;font-size:var(--fs-cap);font-weight:700;color:var(--tx-2)}
+
+/* 履歴: 古い順。最新が下 */
+.in-log{-webkit-mask-image:linear-gradient(to bottom,transparent 0,black 14px);mask-image:linear-gradient(to bottom,transparent 0,black 14px);position:relative;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:var(--s1);padding:var(--s2) 0 var(--s3)}
+.in-log > *{flex:none}
+.in-day{display:flex;justify-content:center;margin:var(--s3) 0 var(--s1)}
+.in-day span{padding:2px var(--s3);border-radius:var(--r-pill);background:var(--card-2);color:var(--tx-3);font-size:var(--fs-min);font-weight:700}
+.in-day.is-today span{background:var(--me);color:var(--on)}
+.in-more{margin:var(--s2) 0}
+
+/* 雑記 = 自分の吹き出し(右寄せの白い面) */
+.in-msg{display:flex;align-items:flex-start;gap:var(--s2);padding:var(--s1) 0}
+/* 雑記の包み: 吹き出し・その記録のカード・操作の列を縦に。カードは横幅いっぱい、吹き出しは右寄せ */
+.in-msg-col{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:var(--s2)}
+.in-bub{align-self:flex-end;max-width:min(86%,520px);min-width:0;padding:var(--s3) var(--s4);border-radius:var(--r-lg);overflow-wrap:anywhere}
+.in-bub-h{display:flex;align-items:center;gap:var(--s1);font-size:var(--fs-min);font-weight:650;color:var(--tx-3)}
+.in-ico svg{width:14px;height:14px}
+.in-bub-t{margin-top:var(--s1);font-size:var(--fs-body);line-height:1.6;color:var(--tx);white-space:pre-wrap;overflow-wrap:anywhere}
+.in-msg.is-sel .in-bub{box-shadow:var(--e1),0 0 0 2px var(--me)}
+.in-msg.is-focus .in-bub{box-shadow:var(--e2),var(--ring)}
+.in-msg.is-new{animation:inRise var(--t2) var(--ease)}
+@keyframes inRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* 操作の列(カードや吹き出しの下の外): 押せる所は 44px */
+.in-act{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);margin-top:var(--s2)}
+.in-acts{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);padding-top:var(--s1)}
+.in-acts.is-end{justify-content:flex-end}
+
+/* 横長のカード: 作った/直した/消した と、雑記からできた記録(.in-rc)は同じ寸法・同じ作り */
+.in-ec,.in-rc{position:relative;display:flex;flex-direction:column;gap:var(--s1);width:100%;min-width:0;padding:var(--s3) var(--s4);text-align:left;color:var(--tx)}
+button.in-ec{font:inherit;border:0;cursor:pointer}
+button.in-ec:active{background:var(--sunk)}
+.in-ec-h{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);min-width:0;font-size:var(--fs-min);font-weight:700;color:var(--tx-3)}
+.in-ec-v{display:inline-flex;align-items:center;gap:var(--s1);font-size:var(--fs-cap);font-weight:650;color:var(--tx-2)}
+.in-ec-v svg{flex:none;width:16px;height:16px;color:var(--tx-3)}
+.in-ec-at{margin-left:auto;font-size:var(--fs-cap);font-weight:650;color:var(--tx-3)}
+.in-ec-t{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:var(--fs-body);font-weight:750;line-height:1.5;color:var(--tx);overflow-wrap:anywhere}
+.in-ec-f{display:flex;flex-wrap:wrap;gap:2px var(--s3);font-size:var(--fs-cap);font-weight:650;color:var(--tx-2)}
+.in-ec.is-gone{opacity:.45;box-shadow:none}
+.in-ec.is-gone .in-ec-t{text-decoration:line-through}
+.in-ec.is-focus{background:var(--me-soft)}
+/* 未確定の記録: 点線の枠(--read)。面は無い */
+.in-rc.is-tent{background:transparent;box-shadow:none;border:1.5px dashed var(--read)}
+.in-rc.is-focus{box-shadow:var(--ring)}
+
+/* 履歴の中のボタン: parts.css の見出し用 .sec(margin-bottom:-12px)が btn sec にも当たるので、ここでは打ち消す */
+.in-log .btn,.in-band .btn,.in-topbar .btn{margin:0}
+
+/* 上の帯: 絞り込み(横に流れる)と、右の「選ぶ / 完了」 */
+.in-topbar{display:flex;align-items:center;gap:var(--s2);min-width:0}
+.in-topbar .in-chips{flex:1 1 auto;min-width:0;margin:0;padding:var(--s1) var(--s1) var(--s2) 0}
+.in-topbar > .btn{flex:none}
+
+/* LLM の進み */
+.in-llm{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s2);font-size:var(--fs-cap);font-weight:650;color:var(--tx-3)}
+.in-llm.is-err{color:var(--tx-2)}
+.in-dots{display:inline-flex;gap:3px}
+.in-dots i{width:4px;height:4px;border-radius:50%;background:currentColor;animation:inDot 1.2s var(--ease) infinite both}
+.in-dots i:nth-child(2){animation-delay:.15s}
+.in-dots i:nth-child(3){animation-delay:.3s}
+@keyframes inDot{0%,80%,100%{opacity:.25}40%{opacity:1}}
+
+/* 選ぶモード: 操作の列は出さず、横長のカードは押せない(選ぶ時に開いてしまわないように) */
+.in-log.is-sel .in-acts{display:none}
+.in-log.is-sel button.in-ec{pointer-events:none}
+

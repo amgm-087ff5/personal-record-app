@@ -1,0 +1,93 @@
+/* =====================================================================
+   個人記録 v7 「はれ」 — トークン(値の唯一の置き場)
+   v6「そら」から: 面と線を減らす / 色を澄ませる(くすみと紫みを抜く)/ 数字を大きく / 動きで手応え。
+   グラデは2つの意味だけ(空 = 時刻、青の塗り = 自分の主な操作)。影は「浮いている物」だけ。
+   時刻を色で表す唯一の物差し = 空の色(--sky)。それ以外の色は 1色 = 1意味。意味は v7/DESIGN.md。
+   ===================================================================== */
+:root{
+  /* --- 地と面 --- */
+  --bg:#F3F6FB;            /* 地 */
+  --bg-hi:#FFFFFF;         /* 地の明るい所(左上の光) */
+  --card:#FFFFFF;          /* 1つのオブジェクト */
+  --card-2:#F1F4FA;        /* 面の中のくぼみ(入力欄・子の領域) */
+  --sunk:#E6EBF4;          /* 押した時・溝 */
+  --line:#E6EAF2;          /* 区切り */
+  --line-2:#CCD4E2;        /* 入力欄の枠・点線 */
+  /* --- 文字(紺。黒にしない) --- */
+  --tx:#16213F;
+  --tx-2:#46536F;
+  --tx-3:#5F6B85;          /* 最小の補足(白の上 5.0:1 / 地の上 4.5:1) */
+  --on:#FFFFFF;            /* 塗りの上 */
+  /* --- 意味の色 --- */
+  --me:#2563FF;            /* 自分・操作・選択 */
+  --me-2:#5A93FF;          /* 塗りの明るい側(光) */
+  --me-soft:#E8EFFF;
+  --me-line:#BCD0FF;
+  --done:#34446C;          /* 起きたこと(記録) */
+  --done-soft:#E9EDF5;
+  --kin:#0C857F;           /* エンティティ(自分以外の人・場所・物) */
+  --kin-soft:#DBF2EF;
+  --over:#E5484D;          /* ToDoの期限切れ(赤はこの意味だけ) */
+  --over-soft:#FDE8E8;
+  --owe:#AD6408;           /* 貸し借り・未精算 */
+  --owe-soft:#FBF0DB;
+  --owe-line:#E2A64B;
+  --ok:#23875A;            /* 完了の手応え */
+  --ok-soft:#DFF3E8;
+  --read:#7F8FB3;          /* 読み取った値(未確認) */
+  /* --- 空(時刻の物差し。0時→24時) --- */
+  --sky:linear-gradient(90deg,#0F1B45 0%,#1F3270 17%,#3F62B5 22.5%,#FFB48A 26%,#FFD9B0 28.5%,#BFE3FF 32%,#7CC4FF 42%,#56B0FF 54%,#8FCBFF 65%,#FFD08F 70.5%,#FF9E7A 74.5%,#4A63B8 79%,#1F3270 86%,#0F1B45 100%);
+  --sky-v:linear-gradient(180deg,#0F1B45 0%,#1F3270 17%,#3F62B5 22.5%,#FFB48A 26%,#FFD9B0 28.5%,#BFE3FF 32%,#7CC4FF 42%,#56B0FF 54%,#8FCBFF 65%,#FFD08F 70.5%,#FF9E7A 74.5%,#4A63B8 79%,#1F3270 86%,#0F1B45 100%);
+  /* --- 光と影(光は左上) --- */
+  --fill-me:radial-gradient(120% 140% at 12% 0%,var(--me-2),var(--me) 62%);
+  --fill-done:radial-gradient(120% 140% at 12% 0%,#51628C,var(--done) 62%);
+  --e1:0 1px 2px rgba(22,33,63,.04),0 8px 24px -12px rgba(30,60,140,.18);
+  --e2:0 2px 8px rgba(22,33,63,.05),0 20px 40px -18px rgba(30,60,140,.30);
+  --e3:0 8px 20px rgba(15,27,69,.10),0 30px 60px -16px rgba(15,27,69,.32);
+  --e-me:0 10px 24px -10px rgba(37,99,255,.6);
+  --e-nav:0 1px 2px rgba(22,33,63,.05),0 10px 28px -14px rgba(30,60,140,.30);   /* すりガラスのナビ(薄い影) */
+  --glass:color-mix(in srgb,var(--card) 74%,transparent);                      /* すりガラスの面(非対応でも読める地の色は --glass-solid) */
+  --glass-solid:color-mix(in srgb,var(--card) 96%,var(--bg));
+  --scrim:rgba(14,22,44,.42);
+  --toast-bg:#1E2A47; --toast-tx:#F2F5FB; --toast-act:#A9C3FF;
+  --ring:0 0 0 3px color-mix(in srgb,var(--me) 28%,transparent);
+  /* --- 空の面(ホームの「いま」)。文字色は輝度で切り替える(JS) --- */
+  --sky-ink-d:#0E1833; --sky-ink-l:#FFFFFF;
+  --sky-track:color-mix(in srgb,var(--card) 90%,transparent);   /* 面の中の帯の地(白い面・点線・針が見える) */
+  --sky-chip:color-mix(in srgb,var(--sky-ink,#0E1833) 14%,transparent);
+  /* --- 角 --- */
+  --r-xs:8px; --r-sm:12px; --r-md:16px; --r-lg:22px; --r-xl:28px; --r-pill:999px;
+  /* --- 文字 --- */
+  --font:"M PLUS 2 Variable","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --fs-hero:48px; --fs-big:30px; --fs-title:20px; --fs-body:15px; --fs-cap:13px; --fs-min:12px; --fs-input:16px;           /* 入力欄だけ 16px(iOS は 16px 未満だと焦点で拡大する) */
+  /* --- 余白(4の刻み) --- */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s7:32px; --s8:40px;
+  --page-x:16px; --gap-sec:28px; --tap:44px; --nav-h:62px;
+  --page-end:calc(var(--nav-h) + 56px + env(safe-area-inset-bottom));
+  /* --- 動き --- */
+  --ease:cubic-bezier(.22,.9,.24,1); --spring:cubic-bezier(.3,1.35,.4,1);
+  --t1:.12s; --t2:.24s; --t3:.42s; --pop:cubic-bezier(.34,1.56,.64,1);
+  --stagger:25ms; --count:.4s;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#0B1222; --bg-hi:#101A30; --card:#151F35; --card-2:#1B2740; --sunk:#070D1A; --line:#222E48; --line-2:#34425F;
+  --tx:#E6EBF5; --tx-2:#B5BFD1; --tx-3:#8F9BB1; --on:#FFFFFF;
+  --me:#7FA6FF; --me-2:#5A8BFF; --me-soft:#1A2A52; --me-line:#324A86;
+  --done:#93A3C6; --done-soft:#222D45;
+  --kin:#4CC4BD; --kin-soft:#12322F;
+  --over:#FF6B6B; --over-soft:#3A1B1E;
+  --owe:#EBA552; --owe-soft:#33271A; --owe-line:#A9772F;
+  --ok:#63C795; --ok-soft:#143024; --read:#8898BA;
+  --fill-me:radial-gradient(120% 140% at 12% 0%,#5A8BFF,#2B5AE0 62%);
+  --fill-done:radial-gradient(120% 140% at 12% 0%,#4B5B82,#34425F 62%);
+  --e1:0 0 0 1px rgba(255,255,255,.04),0 8px 24px -12px rgba(0,0,0,.55);
+  --e2:0 0 0 1px rgba(255,255,255,.05),0 2px 6px rgba(0,0,0,.35),0 18px 36px -16px rgba(0,0,0,.6);
+  --e3:0 0 0 1px rgba(255,255,255,.06),0 6px 14px rgba(0,0,0,.4),0 24px 48px -12px rgba(0,0,0,.65);
+  --e-me:0 10px 24px -10px rgba(43,90,224,.75);
+  --e-nav:0 0 0 1px rgba(255,255,255,.05),0 10px 28px -12px rgba(0,0,0,.6);
+  --glass:color-mix(in srgb,var(--card) 70%,transparent);
+  --scrim:rgba(2,6,16,.6);
+  --toast-bg:#2A3757; --toast-tx:#F2F5FB; --toast-act:#A9C3FF;
+  color-scheme:dark;
+}
