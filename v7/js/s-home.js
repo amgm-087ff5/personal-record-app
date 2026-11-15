@@ -1,20 +1,24 @@
-/* 個人記録 v6 — ホーム(いま)・日記のシート */
+/* 個人記録 v7 — ホーム(いま)・日記のシート */
 'use strict';
 
 /* ================= ホーム ================= */
 route('home', () => {
   const up = upcoming(0).filter(([, a]) => hasT(a.start) && tOf(a.start) > NOW)[0];
   const allDay = actsOn(TODAY).filter(([, a]) => isAllDay(a));
-  const hol = holOn(TODAY), ts = nowStamp();
+  const hol = holOn(TODAY), ts = nowStamp(), face = skyFace(NOW);
   const doing = actsOn(TODAY).find(([, a]) => hasT(a.start) && hasT(a.end) && a.start <= ts && ts < a.end);
   return `<div class="screen s-home">
     ${head(fmtMDJ(TODAY), { sub: `${dowJ(TODAY)}曜${hol ? ' · ' + esc(hol) : ''}`, actions: iconBtn('search', 'さがす', "go('#/search')", 'on-card') + iconBtn('pencil', dayOf(TODAY).diary ? '今日の日記を開く' : '今日の日記を書く', `openDiary(${q(TODAY)})`, 'on-card') })}
-    <section class="card now-card">
-      <div class="now-h"><div class="now-t"><span>いま</span><b class="num">${NOW}</b></div>${doing ? `<a class="now-doing" href="#/a/${doing[0]}">${kindIc(doing[1])}<span>${esc(actTitle(doing[1]))}</span></a>` : ''}<a class="sec-a" href="#/day/${TODAY}">今日のページ</a></div>
-      ${skyBand(TODAY)}
-      ${allDay.length ? `<div class="ents">${allDay.map(([id, a]) => `<a class="tag plan" href="#/a/${id}">${esc(actTitle(a))}</a>`).join('')}</div>` : ''}
-      ${up ? hmNext(up) : `<div class="now-none">${ic('check')}<span>今日の予定は ここまで</span></div>`}
-      ${hmFlow()}
+    <section class="card now-card lift">
+      <div class="now-sky ink-${face.ink}" style="${face.style}">
+        <div class="now-h"><div class="now-t"><span>いま</span><b class="num">${NOW}</b></div>${doing ? `<a class="now-doing" href="#/a/${doing[0]}">${kindIc(doing[1])}<span>${esc(actTitle(doing[1]))}</span></a>` : ''}<a class="now-pg" href="#/day/${TODAY}">今日のページ${ic('chev')}</a></div>
+        ${skyBand(TODAY)}
+      </div>
+      <div class="now-body">
+        ${allDay.length ? `<div class="ents">${allDay.map(([id, a]) => `<a class="tag plan" href="#/a/${id}">${esc(actTitle(a))}</a>`).join('')}</div>` : ''}
+        ${up ? hmNext(up) : `<div class="now-none">${ic('check')}<span>今日の予定は ここまで</span></div>`}
+        ${hmFlow()}
+      </div>
     </section>
     <button class="quick" onclick="openCapture()">${ic('plus')}<span>入力する</span><kbd>ランチ 1200</kbd></button>
     ${hmReview()}
@@ -67,7 +71,7 @@ function hmMoney() {
   const w0 = vals.reduce((s, v) => s + v, 0), w1 = [...Array(7)].reduce((s, _, i) => s + daySpend(dAdd(TODAY, i - 13), { noFixed: 1 }), 0);
   const pct = w1 ? Math.round((w0 - w1) / w1 * 100) : null;
   return `<section>${sec('今日の支出', { act: { label: '家計簿', href: '#/ledger' } })}<div class="card pad money">
-    <div class="money-h"><div>${amt(t, { cls: 'hero' })}<span class="tag">固定費を除く</span></div>
+    <div class="money-h"><div>${amt(t, { cls: 'hero', count: 1 })}<span class="tag">固定費を除く</span></div>
       <div class="money-c"><span>先週の${dowJ(lw)}曜 ${yen(l)}</span><b class="${t > l ? 'up' : t < l ? 'dn' : ''}">${t === l ? '±0' : (t > l ? '+' : '−') + yen(Math.abs(t - l)).slice(1)}</b></div></div>
     <div class="wk" role="img" aria-label="この7日の支出">${days.map((d, i) => `<a class="wk-c${d === TODAY ? ' on' : ''}" href="#/day/${d}"><span class="wk-v num">${vals[i] ? (vals[i] >= 10000 ? (vals[i] / 10000).toFixed(1) + '万' : vals[i].toLocaleString()) : ''}</span><i style="height:${vals[i] ? Math.max(4, Math.round(vals[i] / max * 72)) : 0}px"></i><span class="wk-d">${d === TODAY ? '今日' : dowJ(d)}</span></a>`).join('')}</div>
     <div class="money-f"><span>この7日 <b class="num">${yen(w0)}</b></span>${pct == null ? '' : `<span>前の7日より <b class="num">${pct > 0 ? '+' : ''}${pct}%</b></span>`}${btn('支払いを記録', 'openPayEditor()', 'sec', { sm: 1, icon: 'yen' })}</div>

@@ -1,4 +1,4 @@
-/* 個人記録 v6 — メモ(接頭辞 mm)。値は tokens.css の変数だけ */
+/* 個人記録 v7 — メモ(接頭辞 mm)。値は tokens.css の変数だけ */
 .mm-comp{display:flex;flex-direction:column;gap:var(--s3)}
 .mm-new{padding:var(--s3) var(--s4) var(--s4)}
 .mm-ta{display:block;width:100%;min-height:84px;padding:0 var(--s3) 0 0;border:0;background:transparent;resize:none;line-height:1.7;font-weight:500;overflow:hidden}

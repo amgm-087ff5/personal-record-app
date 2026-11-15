@@ -53,8 +53,8 @@ const bar = (title, o = {}) => `<div class="bar"><button class="icon-btn" onclic
 const sec = (title, o = {}) => `<div class="sec"><h2>${esc(title)}</h2>${o.n != null ? `<span class="sec-n num">${o.n}</span>` : ''}${o.act ? (o.act.href ? `<a class="sec-a" href="${o.act.href}">${esc(o.act.label)}</a>` : `<button class="sec-a" onclick="${o.act.on}">${esc(o.act.label)}</button>`) : ''}</div>`;
 
 /* ---------- 基本 ---------- */
-/** 金額。¥ は小さく。o = {cls, sign(+/− を付ける)} */
-const amt = (n, o = {}) => `<span class="amt ${o.cls || ''}">${o.sign ? (n > 0 ? '+' : n < 0 ? '−' : '±') : ''}<i>¥</i>${Math.abs(Math.round(n || 0)).toLocaleString('ja-JP')}</span>`;
+/** 金額。¥ は小さく。o = {cls, sign(+/− を付ける), count(画面を開いた時 0 から数え上がる。core.js の countUps)} */
+const amt = (n, o = {}) => `<span class="amt ${o.cls || ''}"${o.count && Math.abs(Math.round(n || 0)) > 0 ? ` data-count="${Math.abs(Math.round(n))}"` : ''}>${o.sign ? (n > 0 ? '+' : n < 0 ? '−' : '±') : ''}<i>¥</i>${Math.abs(Math.round(n || 0)).toLocaleString('ja-JP')}</span>`;
 /** 札。kind = owe(貸し借り)| late(ToDoの期限切れ)| miss(過ぎた予定)| plan(予定)| me | kin | read(未確認)| ''(ふつう) */
 const tag = (text, kind = '') => `<span class="tag ${kind}">${esc(text)}</span>`;
 /** カテゴリ(色の小さい四角 + 名前)。o.path で親からの道 */
@@ -111,10 +111,24 @@ const progress = (p, label = '') => `<div class="prog" role="progressbar" aria-v
 /* ---------- 空(時刻の物差し) ---------- */
 const SKY = [[0, [15, 27, 69]], [.17, [31, 50, 112]], [.225, [63, 98, 181]], [.26, [255, 180, 138]], [.285, [255, 217, 176]], [.32, [191, 227, 255]], [.42, [124, 196, 255]], [.54, [86, 176, 255]], [.65, [143, 203, 255]], [.705, [255, 208, 143]], [.745, [255, 158, 122]], [.79, [74, 99, 184]], [.86, [31, 50, 112]], [1, [15, 27, 69]]];
 /** その時刻の空の色 */
-function skyAt(hm) {
+function skyRgb(hm) {
   const p = Math.max(0, Math.min(1, hm2m(hm) / 1440)); let i = 1; while (i < SKY.length - 1 && SKY[i][0] < p) i++;
   const [p0, c0] = SKY[i - 1], [p1, c1] = SKY[i], t = (p - p0) / (p1 - p0 || 1);
-  return `rgb(${c0.map((v, k) => Math.round(v + (c1[k] - v) * t)).join(',')})`;
+  return c0.map((v, k) => Math.round(v + (c1[k] - v) * t));
+}
+function skyAt(hm) { return `rgb(${skyRgb(hm).join(',')})`; }
+/** ホームの空の面: その時刻の空の色 + 左上が少し明るい同系色。文字色は輝度で選ぶ(明るい空 = 紺、暗い空 = 白)。
+ *  どちらの端(明るい端・暗い端)でも 5:1 を下回る時は、地を文字色と反対へ寄せて必ず読めるようにする。 → {style, ink:'d'|'l'} */
+function skyFace(hm) {
+  const lin = v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+  const lum = c => .2126 * lin(c[0]) + .7152 * lin(c[1]) + .0722 * lin(c[2]);
+  const cr = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+  const mix = (c, t, k) => c.map((v, i) => Math.round(v + (t[i] - v) * k));
+  const INK = { d: [14, 24, 51], l: [255, 255, 255] }, hi = c => mix(c, [255, 255, 255], .2);
+  const worst = (c, k) => Math.min(cr(c, INK[k]), cr(hi(c), INK[k]));
+  let c = skyRgb(hm); const ink = worst(c, 'd') >= worst(c, 'l') ? 'd' : 'l';
+  for (let n = 0; n < 40 && worst(c, ink) < 5; n++) c = mix(c, ink === 'd' ? [255, 255, 255] : [0, 0, 0], .04);
+  return { ink, style: `--sky-c:rgb(${c.join(',')});--sky-hi:rgb(${hi(c).join(',')})` };
 }
 const _pct = hm => (hm2m(hm) / 1440 * 100).toFixed(2);
 /** 1日の空の帯: 0時〜24時。記録=白い面 / 予定=点線 / 支払い=下の小さな印 / いま=赤い針。o = {mini, link(既定 true)} */
@@ -238,7 +252,7 @@ function taskRow(id, o = {}) {
     <span class="task-s">${t.due && !t.done ? tag(late ? `${relDay(t.due)}` : t.due === TODAY ? '今日' : `${fmtMD(t.due)} ${dowJ(t.due)}`, late ? 'late' : t.due === TODAY ? 'me' : '') : ''}${t.rep ? `<span class="mini">${ic('repeat')}</span>` : ''}${sub.length ? `<span class="mini num">${ic('list')}${sub.filter(s => s.d).length}/${sub.length}</span>` : ''}${a ? `<span class="mini">${ic('cal')}${esc(actTitle(a))}</span>` : ''}${(t.ents || []).map(e => ent(e, { link: false, short: 1 })).join('')}${!o.noList && DB.lists[t.list] ? `<span class="mini">${esc(DB.lists[t.list].n)}</span>` : ''}</span></a></div>`;
 }
 /** チェックの切替(どの画面でも同じ) */
-function taskCheck(id) { const r = taskToggle(id); if (done(r, { quiet: 1 })) toast(r.done ? '完了にしました' : '未完了に戻しました', { undo: r.undo }); }
+function taskCheck(id) { const r = taskToggle(id); if (done(r, { quiet: 1 })) { toast(r.done ? '完了にしました' : '未完了に戻しました', { undo: r.undo }); if (r.done) motionPopCheck(id); } }
 /** メモの紙(角を折った紙)。o = {clamp(行数), bare(影なし), href} */
 function memoCard(id, o = {}) {
   const m = DB.memos[id]; if (!m) return '';
@@ -250,5 +264,5 @@ function memoCard(id, o = {}) {
 function recordPlan(id) {
   const a = A(id); if (!a) return;
   const r = planRecord(id);
-  if (done(r, { quiet: 1 })) toast('記録にしました', { undo: r.undo, act: null });
+  if (done(r, { quiet: 1 })) { toast('記録にしました', { undo: r.undo, act: null }); motionSolid(r.id || id); }
 }

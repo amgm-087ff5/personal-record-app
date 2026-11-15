@@ -9,9 +9,9 @@ from playwright.async_api import async_playwright
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 BASE = 'file://' + os.path.join(ROOT, 'index.html') + '?now=2026-11-11T13:20'
 ROUTES = ['/home', '/acts', '/acts?view=day', '/acts?view=month', '/acts?m=2026-10', '/day/2026-11-10', '/day/2026-11-11', '/day/2026-11-13', '/day/2025-11-11',
-          '/a/l1', '/a/w2', '/a/c1', '/a/w1', '/a/m1', '/a/e1', '/a/e9', '/a/e6', '/a/f_rent@2026-11-27', '/a/p1', '/a/p16', '/a/p17', '/a/p2', '/a/p31', '/a/p3', '/a/f_rent_2026-10-27',
-          '/todo', '/task/t1', '/task/t2', '/task/t5', '/memo', '/memo?v=notes', '/ents', '/e/hanako', '/e/aoba', '/e/minato', '/e/acorp', '/e/proj1', '/e/ken', '/types', '/n/hanako', '/n/ken',
-          '/ledger', '/ledger?m=2026-10', '/ledger?m=2026-06', '/cats', '/search', '/search?q=らーめん', '/search?q=zzzz', '/settings']
+          '/a/l1', '/a/w2', '/a/w3', '/a/s1', '/a/c1', '/a/w1', '/a/m1', '/a/e1', '/a/e9', '/a/e6', '/a/f_rent@2026-11-27', '/a/p1', '/a/p16', '/a/p17', '/a/p2', '/a/p31', '/a/p3', '/a/f_rent_2026-10-27',
+          '/todo', '/task/t1', '/task/t2', '/task/t5', '/memo', '/memo?v=notes', '/ents', '/e/hanako', '/e/me', '/e/aoba', '/e/minato', '/e/acorp', '/e/proj1', '/e/ken', '/types', '/n/hanako', '/n/ken',
+          '/ledger', '/ledger?v=owe', '/ledger?m=2026-10', '/ledger?m=2026-06', '/cats', '/search', '/search?q=らーめん', '/search?q=zzzz', '/settings']
 JS = r"""() => {
   const vis = el => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && +cs.opacity > 0.05 };
   const small = [], taps = [];

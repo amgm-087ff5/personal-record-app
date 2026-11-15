@@ -45,7 +45,16 @@
   --e2:0 2px 8px rgba(22,33,63,.05),0 20px 40px -18px rgba(30,60,140,.30);
   --e3:0 8px 20px rgba(15,27,69,.10),0 30px 60px -16px rgba(15,27,69,.32);
   --e-me:0 10px 24px -10px rgba(37,99,255,.6);
+  --e-nav:0 1px 2px rgba(22,33,63,.05),0 10px 28px -14px rgba(30,60,140,.30);   /* すりガラスのナビ(薄い影) */
+  --glass:color-mix(in srgb,var(--card) 74%,transparent);                      /* すりガラスの面(非対応でも読める地の色は --glass-solid) */
+  --glass-solid:color-mix(in srgb,var(--card) 96%,var(--bg));
+  --scrim:rgba(14,22,44,.42);
+  --toast-bg:#1E2A47; --toast-tx:#F2F5FB; --toast-act:#A9C3FF;
   --ring:0 0 0 3px color-mix(in srgb,var(--me) 28%,transparent);
+  /* --- 空の面(ホームの「いま」)。文字色は輝度で切り替える(JS) --- */
+  --sky-ink-d:#0E1833; --sky-ink-l:#FFFFFF;
+  --sky-track:color-mix(in srgb,var(--card) 90%,transparent);   /* 面の中の帯の地(白い面・点線・針が見える) */
+  --sky-chip:color-mix(in srgb,var(--sky-ink,#0E1833) 14%,transparent);
   /* --- 角 --- */
   --r-xs:8px; --r-sm:12px; --r-md:16px; --r-lg:22px; --r-xl:28px; --r-pill:999px;
   /* --- 文字 --- */
@@ -53,11 +62,12 @@
   --fs-hero:48px; --fs-big:30px; --fs-title:20px; --fs-body:15px; --fs-cap:13px; --fs-min:12px; --fs-input:16px;           /* 入力欄だけ 16px(iOS は 16px 未満だと焦点で拡大する) */
   /* --- 余白(4の刻み) --- */
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s7:32px; --s8:40px;
-  --page-x:16px; --tap:44px; --nav-h:62px;
+  --page-x:16px; --gap-sec:28px; --tap:44px; --nav-h:62px;
   --page-end:calc(var(--nav-h) + 56px + env(safe-area-inset-bottom));
   /* --- 動き --- */
   --ease:cubic-bezier(.22,.9,.24,1); --spring:cubic-bezier(.3,1.35,.4,1);
   --t1:.12s; --t2:.24s; --t3:.42s; --pop:cubic-bezier(.34,1.56,.64,1);
+  --stagger:25ms; --count:.4s;
   color-scheme:light;
 }
 :root[data-theme="dark"]{
@@ -75,5 +85,9 @@
   --e2:0 0 0 1px rgba(255,255,255,.05),0 2px 6px rgba(0,0,0,.35),0 18px 36px -16px rgba(0,0,0,.6);
   --e3:0 0 0 1px rgba(255,255,255,.06),0 6px 14px rgba(0,0,0,.4),0 24px 48px -12px rgba(0,0,0,.65);
   --e-me:0 10px 24px -10px rgba(43,90,224,.75);
+  --e-nav:0 0 0 1px rgba(255,255,255,.05),0 10px 28px -12px rgba(0,0,0,.6);
+  --glass:color-mix(in srgb,var(--card) 70%,transparent);
+  --scrim:rgba(2,6,16,.6);
+  --toast-bg:#2A3757; --toast-tx:#F2F5FB; --toast-act:#A9C3FF;
   color-scheme:dark;
 }

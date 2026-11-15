@@ -1,7 +1,7 @@
-/* 個人記録 v6 — 詳細(接頭辞 dt)。値は tokens.css の変数だけ */
+/* 個人記録 v7 — 詳細(接頭辞 dt)。値は tokens.css の変数だけ */
 
 /* 親の連なり = 封筒。外側から順に入れ子 */
-.dt-env{display:flex;flex-direction:column;gap:var(--s1);padding:var(--s1) var(--s2) var(--s2);border-radius:var(--r-lg);background:var(--card-2);box-shadow:inset 0 0 0 1px var(--line)}
+.dt-env{display:flex;flex-direction:column;gap:var(--s1);padding:var(--s1) var(--s2) var(--s2);border-radius:var(--r-lg);background:var(--card-2)}
 .dt-env .dt-env{background:var(--bg)}
 .dt-env-h{position:relative;display:flex;align-items:center;gap:var(--s2);min-height:var(--tap);padding:0 var(--s2);font-size:var(--fs-cap);font-weight:700;color:var(--tx-2)}
 .dt-env-h > svg:first-child{flex:none;width:18px;height:18px;color:var(--done)}
@@ -10,7 +10,7 @@
 .dt-env-h:active{background:var(--sunk);border-radius:var(--r-sm)}
 
 /* 主役。記録 = 影のある白い面 / 予定 = 点線 / 過ぎた予定 = 赤の点線 */
-.dt-hero{position:relative;display:flex;flex-direction:column;gap:var(--s3);padding:var(--s4);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--e2)}
+.dt-hero{position:relative;display:flex;flex-direction:column;gap:var(--s3);padding:var(--s4);border-radius:var(--r-lg);background:var(--card)}
 .dt-hero.plan,.dt-hero.late{background:transparent;box-shadow:none;border:1.5px dashed var(--line-2)}
 .dt-hero.late{border-color:var(--me)}
 .dt-k{display:flex;align-items:center;gap:var(--s2);min-height:24px;font-size:var(--fs-cap);font-weight:750;color:var(--done)}

@@ -18,7 +18,7 @@ const getTheme = () => { try { return localStorage.getItem(THEME_KEY) || 'auto';
 function applyTheme() {
   const t = getTheme(), dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  const m = $('meta[name=theme-color]'); if (m) m.content = dark ? '#0E1525' : '#EDF1F8';
+  const m = $('meta[name=theme-color]'); if (m) m.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || m.content;
 }
 function setTheme(t) { try { localStorage.setItem(THEME_KEY, t); } catch (e) { } applyTheme(); }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
@@ -34,6 +34,49 @@ function parseHash(h = location.hash) {
 }
 let _after = [], _rootHash = '#/home', _curTab = 'home', _depth = 0, _lastHash = '', _back = false;
 const _scroll = new Map();
+
+/* ---------- 動き(手応え)。CSS が基本。ここは「最初に開いた時だけ」の付け外しと、数え上がり ---------- */
+/** 一覧の面・行: 画面を開いた最初だけ、上から順に(見えている範囲の最大8個。1個 25ms ずつ遅れて) */
+const RISE_SEL = '.now-card,.quick,.slip,.ev,.rv-i,.rc,.memo,.dh,.py-rc,.lift,.task,.rows > .row,.rows > .prop,.stats,.chips,.seg';
+function motionRise(root) {
+  if (!root || reduced()) return;
+  const vh = innerHeight, picked = [];
+  for (const el of $$(RISE_SEL, root)) {
+    if (picked.length >= 8) break;
+    if (picked.some(p => p.contains(el))) continue;
+    const r = el.getBoundingClientRect(); if (r.top >= vh || r.bottom < 0) continue;
+    picked.push(el);
+  }
+  picked.forEach((el, i) => { el.style.setProperty('--i', i); el.classList.add('rise'); });
+}
+/** 主役の金額([data-count])を 0 から数え上がる(400ms)。最後は必ず元の書式(¥1,234)で止まる。読み上げには最終値 */
+function motionCount(root) {
+  if (!root || reduced()) return;
+  $$('[data-count],.lg-hero .amt.hero,.py-mine .amt.hero', root).forEach(el => {
+    const to = el.dataset.count ? +el.dataset.count : parseInt(el.textContent.replace(/[^\d]/g, ''), 10); if (!isFinite(to) || to <= 0 || el.dataset.counting) return;
+    const orig = el.innerHTML, fin = el.textContent.trim(), w = el.getBoundingClientRect().width;
+    let tn = null; for (const n of el.childNodes) if (n.nodeType === 3 && /\d/.test(n.nodeValue)) tn = n; if (!tn) return;
+    el.dataset.counting = '1'; el.setAttribute('aria-label', fin); el.setAttribute('role', 'text'); el.style.display = 'inline-block'; el.style.minWidth = w + 'px';
+    const t0 = performance.now(), dur = 400, endIt = () => { if (el.isConnected) { el.innerHTML = orig; el.removeAttribute('aria-label'); el.removeAttribute('role'); el.removeAttribute('data-counting'); el.style.display = ''; el.style.minWidth = ''; } };
+    tn.nodeValue = '0';
+    (function tick(now) {
+      if (!el.isConnected) return;
+      const k = Math.max(0, Math.min(1, (now - t0) / dur)), e = 1 - Math.pow(1 - k, 3);
+      if (k >= 1) return endIt();
+      tn.nodeValue = Math.round(to * e).toLocaleString('ja-JP'); requestAnimationFrame(tick);
+    })(t0);
+  });
+}
+/** ToDo を完了した時: そのチェックが弾む(描き直しの後に、押した1つだけ) */
+function motionPopCheck(id) {
+  if (reduced()) return;
+  $$('.chk.on').filter(b => (b.getAttribute('onclick') || '').includes(`taskCheck(${q(id)})`)).forEach(b => b.classList.add('pop'));
+}
+/** 「記録にする」: 点線の面が実線へ変わるのが見える(その1つだけ) */
+function motionSolid(id) {
+  if (reduced() || !id) return;
+  $$(`a[href="#/a/${id}"],button[onclick*="${id}"]`).map(a => a.closest('.ev,.slip,.dt-hero,.rv-i')).filter(Boolean).forEach(el => el.classList.add('solidify'));
+}
 /** 描いた直後に1回だけ呼ぶ処理 */
 const after = fn => _after.push(fn);
 const currentTab = () => _curTab;
@@ -72,6 +115,7 @@ function render(keep) {
   _lastHash = hash; _back = false;
   renderNav(); wireBars();
   const fns = _after; _after = []; fns.forEach(f => { try { f(); } catch (e) { console.error(e); } });
+  if (!keep) { const tgt = isTwoPane() && !rt.root ? side : main; try { motionRise(tgt); motionCount(tgt); } catch (e) { console.error(e); } }
   try { if (typeof inRefresh === 'function') inRefresh(); } catch (e) { console.error(e); }
 }
 /** 同じ画面を、スクロール位置を保って描き直す */

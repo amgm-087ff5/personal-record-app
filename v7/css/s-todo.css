@@ -1,4 +1,4 @@
-/* 個人記録 v6 — ToDo(接頭辞 td)。値は tokens.css の変数だけ */
+/* 個人記録 v7 — ToDo(接頭辞 td)。値は tokens.css の変数だけ */
 
 /* ---------- 一覧: すばやく足す ---------- */
 .td-quick{display:flex;flex-direction:column;gap:var(--s2)}

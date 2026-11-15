@@ -1,4 +1,4 @@
-/* 個人記録 v6 — エンティティ(一覧・詳細・種類の木・ノート)。接頭辞 en。値は tokens.css の変数だけ */
+/* 個人記録 v7 — エンティティ(一覧・詳細・種類の木・ノート)。接頭辞 en。値は tokens.css の変数だけ */
 
 /* ---------- 一覧 ---------- */
 .en-q{position:relative}
@@ -89,7 +89,7 @@
 .en-tr .row-r{font-weight:700;color:var(--tx-2);min-width:24px;justify-content:flex-end}
 .en-np{gap:var(--s2)}
 .en-np .input{min-height:44px;flex:1}
-.en-tg{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);min-height:52px;padding:0 var(--s4);border-radius:var(--r-lg);background:var(--card);box-shadow:var(--e1);font-weight:650}
+.en-tg{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);min-height:52px;padding:0 var(--s4);border-radius:var(--r-lg);background:var(--card);font-weight:650}
 #enf-warn:empty{display:none}
 
 /* ---------- ノート ---------- */

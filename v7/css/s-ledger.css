@@ -1,4 +1,4 @@
-/* 個人記録 v6 — 家計簿(lg)。値は tokens.css の変数だけ */
+/* 個人記録 v7 — 家計簿(lg)。値は tokens.css の変数だけ */
 .s-ledger .tl-sticky,.s-cats .tl-sticky{padding-bottom:var(--s1)}
 .lg-hero{padding:var(--s5) var(--s4) var(--s4);display:flex;flex-direction:column;gap:var(--s3)}
 .lg-hl{font-size:var(--fs-cap);font-weight:700;color:var(--tx-3);margin-bottom:calc(var(--s2) * -1)}
@@ -24,7 +24,7 @@
 .lg-pl .a{stroke:var(--me);stroke-width:2.5}
 .lg-pl .b{stroke:var(--tx-3);stroke-width:2;stroke-dasharray:2 5}
 .lg-pmax{position:absolute;left:0;top:-20px;font-size:var(--fs-min);font-weight:650;color:var(--tx-3)}
-.lg-dot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:var(--me);box-shadow:0 0 0 3px var(--card)}
+.lg-dot{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:4px;background:var(--me);box-shadow:0 0 0 3px var(--card)}
 .lg-dl{position:absolute;transform:translate(-50%,-26px);font-size:var(--fs-min);font-weight:800;color:var(--tx);white-space:nowrap;background:var(--card);padding:0 4px;border-radius:var(--r-xs)}
 .lg-dl.r{transform:translate(-100%,-26px);margin-left:6px}
 .lg-px{position:absolute;left:0;right:0;top:calc(100% + 6px);height:16px;font-size:var(--fs-min);font-weight:600;color:var(--tx-3)}
