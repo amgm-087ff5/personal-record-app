@@ -102,7 +102,7 @@
 
 /* カテゴリのシート */
 .lg-cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:var(--s2)}
-.lg-col{position:relative;height:44px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--tx);box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
+.lg-col{position:relative;height:44px;border-radius:var(--r-sm);display:grid;place-items:center;color:var(--tx);box-shadow:inset 0 0 0 1px var(--line-2)}
 .lg-col[aria-checked="true"]{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--me)}
 .lg-col svg{width:20px;height:20px;stroke-width:3}
 .lg-pv{display:inline-flex;align-items:center;gap:var(--s2)}
@@ -116,3 +116,5 @@
 .lg-st4 .stat b{font-size:var(--fs-body)}
 .lg-ot{display:inline-flex;flex-wrap:wrap;gap:0 var(--s3);margin-left:var(--s2);font-size:var(--fs-cap);font-weight:700;color:var(--owe)}
 .lg-ot .amt{font-size:inherit}
+/* W2: 内訳の軸切替 */
+.lg-ax{padding:0 0 var(--s2)}

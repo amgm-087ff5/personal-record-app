@@ -11,6 +11,8 @@ const q = v => esc(JSON.stringify(v == null ? null : v));
 const hapt = (ms = 8) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { } };
 const isWide = () => innerWidth >= 900, isTwoPane = () => innerWidth >= 1180;
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** scrollIntoView のオプション。動きを減らす設定の時は瞬時に移る(extra を後ろに足す) */
+const smoothOpt = (extra = {}) => ({ behavior: reduced() ? 'auto' : 'smooth', ...extra });
 
 /* ---------- テーマ ---------- */
 const THEME_KEY = 'prmock-v6-theme';
@@ -29,7 +31,9 @@ const ROUTES = {};
 function route(name, fn, o = {}) { ROUTES[name] = { fn, ...o }; }
 function parseHash(h = location.hash) {
   const [path, qs = ''] = h.replace(/^#\/?/, '').split('?');
-  const seg = path.split('/').filter(Boolean).map(decodeURIComponent);
+  /* 壊れた % の並び(#/a/% など)で落ちないように、デコードできない所はそのまま使う(見つからない扱いになる) */
+  const dec = s => { try { return decodeURIComponent(s); } catch (e) { return s; } };
+  const seg = path.split('/').filter(Boolean).map(dec);
   return { name: ROUTES[seg[0]] ? seg[0] : 'home', id: seg[1] || '', rest: seg.slice(2), q: Object.fromEntries(new URLSearchParams(qs)) };
 }
 let _after = [], _rootHash = '#/home', _curTab = 'home', _depth = 0, _lastHash = '', _back = false;
@@ -85,13 +89,33 @@ function go(hash, o = {}) { if (location.hash === hash) return rerender(); if (o
 function goBack() { if (_depth > 0) history.back(); else go(_rootHash || '#/home', { replace: true }); }
 function _draw(el, r) {
   const rt = ROUTES[r.name];
-  let html; try { html = rt.fn(r.id, r.q, r.rest); } catch (e) { console.error(e); html = `<div class="screen"><div class="empty"><p>表示できませんでした</p><button class="btn sec" onclick="go('#/home')">ホームへ</button></div></div>`; }
+  let html; try { html = rt.fn(r.id, r.q, r.rest); } catch (e) { console.error(e); html = `<div class="screen" role="alert"><div class="empty"><p>表示できませんでした</p>${r.name === 'home' ? '' : `<button class="btn sec" onclick="go('#/home')">ホームへ</button>`}<button class="btn pri" onclick="fbExport()">書き出す</button><button class="btn sec" onclick="fbGoSettings()">設定を開く</button><button class="btn sec" onclick="fbReset()">初期化して始める</button></div></div>`; }
   el.innerHTML = html;
 }
 let _isKeep = false;
 /** いまの描画は「描き直し」か(位置合わせは初回だけにする時に使う) */
 const isRerender = () => _isKeep;
+/** 描画の入口。例外が出ても白い画面を残さず、読み込み失敗の面を出す */
 function render(keep) {
+  try { _renderInner(keep); } catch (e) { console.error(e); showFallback(e); }
+}
+/** 読み込み・描画に失敗した時の面。設定(書き出し・初期化)へ行く手段を必ず出す */
+function showFallback(e) {
+  document.documentElement.classList.add('ready');
+  const m = $('#main'); if (!m) return;
+  document.body.classList.remove('two'); const s = $('#side'); if (s) s.innerHTML = '';
+  m.innerHTML = `<div class="screen" role="alert"><div class="empty"><p>読み込みに失敗しました</p>
+    <button class="btn pri" onclick="fbExport()">書き出す</button><button class="btn sec" onclick="fbGoSettings()">設定を開く</button><button class="btn sec" onclick="fbReset()">初期化して始める</button></div></div>`;
+}
+/** 失敗面の操作。書き出しは、読めなかった元の文字列も含めて、保存されているものをそのまま出す */
+function fbExport() {
+  let txt = null; try { txt = localStorage.getItem(STORE_KEY); } catch (e) { }
+  if (txt === null) { try { txt = exportJSON(); } catch (e) { txt = ''; } }
+  downloadText('prmock-v7-backup.json', txt);
+}
+function fbGoSettings() { try { location.hash = '#/settings'; if (location.hash === '#/settings') render(); } catch (e) { showFallback(e); } }
+function fbReset() { if (!confirm('保存したデータを消して、見本のデータで始めます。よろしいですか?')) return; try { resetData(); } catch (e) { } location.hash = '#/home'; render(); }
+function _renderInner(keep) {
   _isKeep = !!keep;
   const r = parseHash(), rt = ROUTES[r.name], hash = location.hash || '#/home';
   const main = $('#main'), side = $('#side');
@@ -278,7 +302,11 @@ function toast(msg, o = {}) {
   el.innerHTML = `<span class="toast-ic">${ic(o.bad ? 'warn' : 'check')}</span><span class="toast-m">${esc(msg)}</span>${o.act ? `<button class="toast-u" data-act>${esc(o.act.label)}</button>` : ''}${o.undo ? `<button class="toast-u" data-undo>取り消す</button>` : ''}`;
   let dead = false;
   const kill = () => { if (dead) return; dead = true; el.classList.remove('in'); setTimeout(() => { el.remove(); const n = _toastQ.shift(); if (n) toast(n[0], n[1]); }, 220); };
-  if (o.undo) $('[data-undo]', el).onclick = () => { o.undo(); kill(); rerender(); toast('取り消しました'); };
+  if (o.undo) $('[data-undo]', el).onclick = () => {
+    const r = o.undo() || {}; kill(); rerender();
+    /* 後の変更と重なって戻せなかった項目があれば、そう知らせる(戻せた所は戻っている) */
+    if (r.skipped) toast(`取り消しました。後に直した ${r.skipped}か所は、そのまま残しています`, { bad: 1 }); else toast('取り消しました');
+  };
   if (o.act) $('[data-act]', el).onclick = () => { kill(); o.act.on(); };
   $('#toasts').appendChild(el); requestAnimationFrame(() => el.classList.add('in'));
   setTimeout(kill, o.undo || o.act ? 6000 : o.bad ? 3600 : 2400);
@@ -312,10 +340,15 @@ function wireSwipe(root = document) {
 
 /* ---------- 起動 ---------- */
 function boot() {
-  applyTheme(); load(); navGestures();
-  if (!location.hash) history.replaceState(null, '', '#/home');
-  _stack.push(location.hash);
-  render();
-  setInterval(() => { const t = NOW, d = TODAY; clockRead(); if ((t !== NOW || d !== TODAY) && !sheetOpen() && !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) rerender(); }, 20000);
-  document.documentElement.classList.add('ready');
+  try {
+    applyTheme(); load(); navGestures();
+    if (!location.hash) history.replaceState(null, '', '#/home');
+    _stack.push(location.hash);
+    render();
+    if (typeof _brokenNotice === 'string' && _brokenNotice) toast(_brokenNotice, { bad: 1 });   /* 壊れた保存データの知らせは起動時に1回だけ */
+    setInterval(() => { const t = NOW, d = TODAY; clockRead(); if ((t !== NOW || d !== TODAY) && !sheetOpen() && !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))) rerender(); }, 20000);
+  } catch (e) {
+    console.error(e); showFallback(e);
+  }
+  document.documentElement.classList.add('ready');     /* 例外があっても必ず見える状態にする(白い画面を残さない) */
 }

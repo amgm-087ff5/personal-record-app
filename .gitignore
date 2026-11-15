@@ -12,3 +12,4 @@ captures/
 # 署名鍵は絶対にコミットしない(CIがSecretsから復元する)
 app/debug.keystore
 *.keystore
+__pycache__/

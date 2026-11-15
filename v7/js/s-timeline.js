@@ -4,12 +4,13 @@ const TLS = { view: 'list', ym: '', d: '', filter: 'all' };
 const TL_H = 52;   /* 日の表示: 1時間の高さ(px) */
 
 route('acts', (id, qs) => {
-  if (qs.view) TLS.view = qs.view; if (qs.d && isDate(qs.d)) { TLS.d = qs.d; TLS.ym = ymOf(qs.d); } if (qs.m) TLS.ym = qs.m;
+  if (qs.view) TLS.view = qs.view; if (qs.d && isDate(qs.d)) { TLS.d = qs.d; TLS.ym = ymOf(qs.d); } 
+  if (qs.m) TLS.ym = /^\d{4}-(0[1-9]|1[0-2])$/.test(qs.m) ? qs.m : ymOf(TODAY);   /* 不正な月は今月に直す */
   if (!TLS.ym) TLS.ym = ymOf(TODAY); if (!TLS.d) TLS.d = TODAY;
   const v = TLS.view;
   if (!isRerender() && !_back) after(tlLand);
   return `<div class="screen s-acts v-${v}">
-    ${head('アクティビティ', { actions: iconBtn('search', 'さがす', "go('#/search')", 'on-card') + iconBtn('plus', '出来事を追加', `openActEditor({state:${v === 'list' ? "'done'" : "'plan'"},date:${q(v === 'list' ? TODAY : TLS.d)}})`, 'pri') })}
+    ${head('アクティビティ', { actions: iconBtn('search', 'さがす', "go('#/search')", 'on-card') + iconBtn('yen', '支払いを記録', `openPayEditor({date:${q(v === 'list' ? TODAY : TLS.d)}})`) + iconBtn('plus', '出来事を追加', `openActEditor({state:${v === 'list' ? "'done'" : "'plan'"},date:${q(v === 'list' ? TODAY : TLS.d)}})`, 'pri') })}
     ${seg([['list', 'リスト'], ['day', '日'], ['month', '月']], v, 'tlView')}
     ${v === 'list' ? tlSummary() : ''}
     ${v === 'list' ? tlList() : v === 'day' ? tlDay() : tlMonth()}
@@ -89,7 +90,7 @@ function tlMonth() {
 
 /* ================= 日のページ ================= */
 route('day', d => {
-  if (!isDate(d)) d = TODAY;
+  if (!isDate(d)) return `<div class="screen s-day">${bar('日のページ')}<div class="card">${empty({ icon: 'day', text: '日が見つかりません' })}</div></div>`;
   if (d === TODAY && !isRerender() && !_back) after(() => requestAnimationFrame(() => { const el = $('#now'); if (el) el.scrollIntoView({ block: 'center' }); }));
   const dy = dayOf(d), items = actsOn(d), done = items.filter(([, a]) => !isPlan(a)), sp = daySpend(d), phs = photosOn(d);
   const all = [...items.map(i => i[0]), ...items.flatMap(([id]) => id.includes('@') ? [] : descOf(id))].map(id => [id, A(id)]).filter(([, a]) => a);
@@ -113,6 +114,6 @@ route('day', d => {
   </div>`;
 }, { tab: 'acts' });
 function dayPhoto(d) {
-  openSheet({ title: '写真を追加', body: banner('この試作では、写真の代わりに ひとことを残します。', 'info') + field('ひとこと', input({ id: 'ph-c', ph: '何の写真?', auto: 1 })), primary: { label: '写真を追加', on: () => done(photoAdd({ d, cap: val('ph-c') }), { close: 1 }) } });
+  openSheet({ title: '写真を追加', body: banner('この試作では、写真の代わりに ひとことを残します。', 'info') + field('ひとこと', input({ id: 'ph-c', ph: '何の写真?', auto: 1 })), dirty: () => !!val('ph-c').trim(), primary: { label: '写真を追加', on: () => done(photoAdd({ d, cap: val('ph-c') }), { close: 1 }) } });
 }
 function dayPhotoMenu(pid) { menu('写真', [{ label: '写真を外す', icon: 'trash', on: () => done(photoRemove(pid)) }]); }

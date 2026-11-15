@@ -57,8 +57,10 @@ async def main():
         if f.endswith('tokens.css'): continue
         for i, line in enumerate(open(f).read().split('\n'), 1):
             for m in re.finditer(r'#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b(?![0-9a-zA-Z_-])', line):
-                if os.path.basename(f) == 'model.js' or 'SKY' in line or m.group(0).lower() in ('#fff', '#ffffff') or '.toast' in line: continue
+                if os.path.basename(f) == 'model.js' or 'SKY' in line or '.toast' in line: continue
                 bad.append(f'{os.path.basename(f)}:{i} {m.group(0)}')
+            for m in re.finditer(r'\brgba\(', line):     # 直書きの rgba は置かない(成分の変数 rgb(var(--ink-rgb) / .3) を使う)
+                if os.path.basename(f) != 'model.js': bad.append(f'{os.path.basename(f)}:{i} {m.group(0)}…')
             if f.endswith('.css'):
                 for m in re.finditer(r'font-size:\s*(\d+)px', line):
                     if int(m.group(1)) < 12: bad.append(f'{os.path.basename(f)}:{i} font-size {m.group(1)}px')

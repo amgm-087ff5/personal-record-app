@@ -20,7 +20,6 @@
 DB = {
   meta    : { v:7, born:'YYYY-MM-DD', seeded?:1 }
   days    : { 'YYYY-MM-DD': {diary} }                          日 = 鍵。日記だけ
-  holidays: { 'YYYY-MM-DD': 名前 }                             祝日(参照データ)
   photos  : { id: {at:TS, cap?, file?, act?, ents?:[], geo?:{lat,lng}} }
   acts    : { id: Act }                                        実際の1回(記録も予定も)
   routines: { id: Routine }                                    繰り返しの決まり
@@ -38,11 +37,12 @@ DB = {
 }
 Act = { kind, title?, start:TS, end?:TS, state:'plan'|'done', parent?, roles:[{r, e}],
         note?, alarm?, routine?(元の決まりの id), planned?:{start,end?}(予定の時の時刻),
-        unsure?, via?, jot?, pay?:Pay, settle?:Settle }
+        unsure?, via?, jot?, pay?:Pay, settle?:Settle,
+        photo?(支払いのレシート写真のハッシュ。重複の検出に使う) }
    - end が無い = 瞬間 / ある = 期間。end は日をまたげる(睡眠 11-14T23:30 → 11-15T07:00、旅行 11-21 → 11-23)。
    - start が日だけなら end も日だけ(か無し)。
    - kind は KINDS の鍵: meal talk work move shop play health trip event sleep pay settle。
-     (v6.4 の wake・holiday は無い。睡眠は1件の期間。祝日は holidays)
+     (v6.4 の wake・holiday は無い。睡眠は1件の期間。祝日は表に持たず `holOn(d)` が規則で計算する)
 Routine = { every:'day'|'week'|'month', from:'YYYY-MM-DD', until?, skip?:['YYYY-MM-DD'],
             tpl:{ kind, title?, at?:'HH:MM', endAt?:'HH:MM', roles:[{r,e}], note?, alarm?, pay?:{amt}, exp?:{cat} } }
    - 各回は「決まりid@日付」という仮の回(保存しない。state:'plan', virt:1, routine:決まりid)。
@@ -64,6 +64,7 @@ via = 'rule' | 'llm' | 'ocr' | 'gps'(推し量った出所。手で入れた行�
 ```
 
 ## 2. 計算(保存しない)
+- 祝日: 保存しない。`holOn(d)` が日本の祝日を規則で計算する(1980〜2099 年。固定日・第n月曜・春分/秋分の近似式・振替休日・国民の休日)。
 - 日に属する: act は start の日〜end の日の全ての日に出る(`actsOn`)。写真・メモは at の日。
 - 長さ: end − start(日をまたいでも正しい分)。
 - 記録待ち: state:'plan' で、終わり(無ければ始まり)を過ぎたもの。

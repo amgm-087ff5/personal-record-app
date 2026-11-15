@@ -4,7 +4,7 @@
 
 ## フィールド(旧 → 新)
 - `a.date` → `aDate(a)` / `a.date2` → `aDate2(a)`(別の日なら日、無ければ null)/ `a.start`('HH:MM')→ `aStart(a)` / `a.end`('HH:MM')→ `aEnd(a)`。**`a.start` `a.end` は TS('YYYY-MM-DD' か 'YYYY-MM-DDTHH:MM')**。
-- `a.allDay` → `isAllDay(a)`(start が日だけ)/ `a.hol` `kind:'holiday'` → 廃止(`DB.holidays`, `holOn(d)`)。
+- `a.allDay` → `isAllDay(a)`(start が日だけ)/ `a.hol` `kind:'holiday'` → 廃止(祝日は表に持たず、`holOn(d)` / `holidayName(d)` / `holidaysOf(y)` が規則で計算する。`DB.holidays` は無い)。
 - `a.rep` → 廃止(`DB.routines[id]`)/ `a.src` → `a.routine` / `a.tpl`(仮の回) → `a.routine`。
 - `a.planned:{start,end}` は TS。
 - `DB.v` `DB.born` `DB.ibx` → `DB.meta.v` `DB.meta.born` `DB.meta.seeded`。
@@ -51,7 +51,7 @@
 - 新設: `sleepWake(ts)` `holOn(d)` `photosOn(d)` `photoUpdate` `routineAdd/Update/Remove/Skip` `repOn(routine, d)`(旧は act を渡した)`isUnsure` `confirmRows` `isStub` `spanOn(a, d)` `aDate` `aDate2` `aStart` `aEnd` `isAllDay` `dOf` `tOf` `hasT` `tsOf` `isTS` `factsNow` `factHist` `factAt`。
 - `sortKey(a)` は `a.start`(TS)を返す(旧は 'HH:MM')。日の中の並びは `actsOn(d)` の順に従う。`byTime` は TS 順。
 - `isLate(a)`: 終日は「その日が TODAY より前」。`upcoming` `pendingPlans` は変わらない。
-- `commit` `fail` `_logWhat` `_logPush` `TABLES` `uid` `nowStamp` `save` `dbNormalize` `dbSeedInbox` は名前・役割そのまま(`TABLES` は photos routines rels holidays を含む)。
+- `commit` `fail` `_logWhat` `_logPush` `TABLES` `uid` `nowStamp` `save` `dbNormalize` `dbSeedInbox` は名前・役割そのまま(`TABLES` は photos routines rels を含む)。
 
 ## 画面担当が特に注意すること
 - `DB.ibx` → `DB.meta.seeded`(m-inbox の `seedInbox` の判定。`dbSeedInbox` は更新済み)。m-inbox の `a.date` `a.tent` `diaryAppend`(`{photos:[]}` を足さない)・`candToRec`(`paySave` の入力)・`tentConfirm` は新形に直すこと。

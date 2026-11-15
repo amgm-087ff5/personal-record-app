@@ -2,7 +2,11 @@
 'use strict';
 
 /* 状態(モジュールの変数): 月・絞り込み・開いている枝 */
-const LG = { ym: '', shown: '', f: 'all', cat: null, open: {}, owe: {} };
+const LG = { ym: '', shown: '', f: 'all', cat: null, open: {}, owe: {}, ax: 'cat' };
+/** 内訳の軸(カテゴリの木 / 固定・変動 / 特別感)の名前 */
+const LG_AX = [['cat', 'カテゴリ'], ['fx', '固定・変動'], ['sp', '特別感']];
+/** 一覧の絞り込みで、軸の行から来る名前(chip に出す) */
+const LG_XF = { daily: '日常', spunset: '特別感 未設定' };
 const lgNow = () => ymOf(TODAY);
 const lgDay = d => `${+d.slice(8)}日 ${dowJ(d)}曜`;
 
@@ -17,7 +21,7 @@ route('ledger', (id, qs) => {
   const ym = LG.ym, S = monthSum(ym);
   if (qs.v === 'owe' && !isRerender()) after(() => { const el = $('#owe'); if (el) el.scrollIntoView({ block: 'start' }); });
   return `<div class="screen s-ledger">
-    ${head('家計簿', { actions: iconBtn('tag', 'カテゴリ', "go('#/cats')", 'on-card') + iconBtn('plus', '支払いを記録', 'lgAddPay()', 'pri') })}
+    ${head('家計簿', { actions: iconBtn('camera', 'レシートから読み取る', 'openReceipt()', 'on-card') + iconBtn('tag', 'カテゴリ', "go('#/cats')", 'on-card') + iconBtn('plus', '支払いを記録', 'lgAddPay()', 'pri') })}
     <div class="tl-sticky">${monthNav(ym, 'lgStep', { noPrev: ym <= oldest, noNext: ym >= lgNow() })}</div>
     ${S.n ? lgHero(ym, S) + lgStats(S) + lgPace(ym) + lgTrend(ym) + lgTree(ym, S) : `<section class="card lg-hero">${lgHeroTop(ym, S)}${empty({ icon: 'wallet', text: `${fmtYM(ym)}の支出は ありません`, action: { label: '支払いを記録', on: 'lgAddPay()' } })}</section>`}
     ${lgOwe()}
@@ -29,13 +33,15 @@ route('ledger', (id, qs) => {
 const lgAddPay = () => window.openPayEditor && openPayEditor({ date: LG.ym === lgNow() ? TODAY : LG.ym + '-01' });
 function lgStep(n) { const ym = ymAdd(LG.ym, n); if (ym > lgNow() || ym < oldestYm()) return; go(`#/ledger?m=${ym}`, { replace: 1 }); }
 function lgMonth(ym) { go(`#/ledger?m=${ym}`, { replace: 1 }); }
-function lgToList() { after(() => { const el = $('#lg-list'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }); }
+function lgToList() { after(() => { const el = $('#lg-list'); if (el) el.scrollIntoView(smoothOpt({ block: 'start' })); }); }
 /** 絞り込みを選ぶ(chips)。選んでいるものをもう一度で解除 */
 function lgF(k) { LG.f = LG.f === k && k !== 'all' ? 'all' : k; if (k === 'cat') LG.cat = LG.f === 'cat' ? LG.cat : null; rerender(); }
 /** 数字3つから絞る(下の一覧へ運ぶ) */
 function lgStat(k) { LG.f = LG.f === k ? 'all' : k; if (LG.f !== 'cat') LG.cat = null; if (LG.f !== 'all') lgToList(); rerender(); }
 function lgCatFilter(k) { if (LG.f === 'cat' && LG.cat === k) { LG.f = 'all'; LG.cat = null; } else { LG.f = 'cat'; LG.cat = k; lgToList(); } rerender(); }
 function lgToggle(k) { LG.open[k] = !LG.open[k]; rerender(); }
+/** 内訳の軸を切り替える(カテゴリ / 固定・変動 / 特別感) */
+function lgAxisSet(k) { LG.ax = k; rerender(); }
 
 /* ---------- 主役: その月の自分の支出 ---------- */
 function lgHeroTop(ym, S) {
@@ -116,8 +122,22 @@ function lgTree(ym, S) {
     }
     return out;
   };
+  const axSeg = `<div class="lg-ax">${seg(LG_AX, LG.ax, 'lgAxisSet')}</div>`;
+  if (LG.ax !== 'cat') return `<section>${sec('内訳')}${axSeg}${rows(lgFlat(ym, S))}</section>`;
   const list = S.roots.filter(r => r.amt > 0).flatMap(r => node(r.cat, 0));
-  return `<section>${sec('内訳')}${rows(list)}</section>`;
+  return `<section>${sec('内訳')}${axSeg}${rows(list)}</section>`;
+}
+/** 固定・変動 / 特別感の内訳(平らな行。金額と割合。行を押すと一覧が絞られる) */
+function lgFlat(ym, S) {
+  const total = S.total || 1, L = expsIn(ym), where = p => L.reduce((s, [id, , v]) => s + (p(id) ? v : 0), 0);
+  const items = LG.ax === 'fx'
+    ? [['fixed', '固定', S.fixed, 'var(--done)'], ['variable', '変動', S.variable, 'var(--me)'], ['unset', '未指定', S.unset, 'var(--line-2)']]
+    : (() => { const dl = where(id => xSp(id) === '日常'), nd = S.special, un = S.total - dl - nd; return [['daily', '日常', dl, 'var(--done)'], ['special', '非日常', nd, 'var(--me)'], ['spunset', '未設定', un, 'var(--line-2)']]; })();
+  return items.filter(([k, , v]) => v > 0 || (k !== 'unset' && k !== 'spunset')).map(([k, l, v, c]) => row({
+    on: `lgStat(${q(k)})`, cls: `lg-n d0${LG.f === k ? ' is-on' : ''}`, lead: `<i class="lg-sw" style="background:${c}"></i>`, t: l,
+    sHtml: `<i class="lg-bar"><b style="width:${Math.max(1.5, v / total * 100).toFixed(1)}%;background:${c}"></b></i>`,
+    right: `<span class="lg-pc num">${Math.round(v / total * 100) || '<1'}%</span>${amt(v)}`
+  }));
 }
 
 /* ---------- 貸し借り(相手ごとの差し引き・まとめて精算・最近の精算) ---------- */
@@ -161,6 +181,8 @@ function lgMatch(id) {
     case 'variable': return xFx(id) === '変動';
     case 'unset': return xFx(id) == null;
     case 'special': return xSp(id) === '非日常';
+    case 'daily': return xSp(id) === '日常';
+    case 'spunset': return xSp(id) == null;
     case 'shared': return isShared(id);
     case 'cat': return xCats(id).some(g => catAnc(g.cat).includes(LG.cat));
     default: return true;
@@ -170,7 +192,7 @@ function lgList(ym) {
   const all = expsIn(ym), byCat = LG.f === 'cat' && LG.cat, L = all.filter(([id]) => lgMatch(id));
   const amtOf = r => byCat ? xCats(r[0]).filter(g => catAnc(g.cat).includes(LG.cat)).reduce((t, g) => t + g.amt, 0) : r[2], sum = L.reduce((s, r) => s + amtOf(r), 0);
   const days = [...new Set(L.map(r => aDate(r[1])))];
-  const chipL = [['all', 'すべて'], ['fixed', '固定費'], ['variable', '変動費'], ...(monthSum(ym).unset > 0 || LG.f === 'unset' ? [['unset', '未指定']] : []), ['special', '非日常'], ...(LG.cat ? [['cat', catName(LG.cat)]] : []), ['shared', '割り勘・立替あり']];
+  const chipL = [['all', 'すべて'], ['fixed', '固定費'], ['variable', '変動費'], ...(monthSum(ym).unset > 0 || LG.f === 'unset' ? [['unset', '未指定']] : []), ['special', '非日常'], ...(LG.f in LG_XF ? [[LG.f, LG_XF[LG.f]]] : []), ...(LG.cat ? [['cat', catName(LG.cat)]] : []), ['shared', '割り勘・立替あり']];
   return `<section id="lg-list">${sec('支出')}${chips(chipL, LG.f, 'lgF').replace('class="chips"', 'class="chips wrap"')}
     <div class="lg-sum"><span class="num">${L.length}件</span>${amt(sum)}</div>
     ${L.length ? days.map(d => `<div class="lg-dg"><div class="lg-dh"><b>${lgDay(d)}${d === TODAY ? ' <span class="tag me">今日</span>' : ''}</b>${amt(L.filter(r => aDate(r[1]) === d).reduce((s, r) => s + amtOf(r), 0), { cls: 'mute' })}</div>

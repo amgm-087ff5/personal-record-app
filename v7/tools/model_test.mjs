@@ -284,4 +284,81 @@ undoCheck('confirmRows', () => M.confirmRows([{ t: 'acts', k: 'p31' }]));
 undoCheck('routineSkip', () => M.routineSkip('e12', '2026-11-14'));
 undoCheck('actUpdate(rep:null)', () => M.actUpdate('f_sub@2026-11-15', { rep: null }));
 undoCheck('typeRemove 失敗でないもの', () => M.typeAdd('tmp', 'person'));
+
+/* ---- v6.5.0 の修正の移植(土台・祝日・取り消しの競合・重複・関係・不正な月日) ---- */
+T('祝日: 規則で計算(DB に表は無い・先の年も・振替休日・国民の休日)', () => {
+  assert.equal(M.DB.holidays, undefined);
+  const KNOWN = { '2027-01-11': '成人の日', '2027-03-21': '春分の日', '2027-05-03': '憲法記念日', '2027-05-05': 'こどもの日', '2027-07-19': '海の日', '2027-08-11': '山の日', '2027-09-20': '敬老の日', '2027-09-23': '秋分の日', '2027-10-11': 'スポーツの日', '2027-11-23': '勤労感謝の日', '2030-05-06': '振替休日', '2026-03-20': '春分の日', '2026-09-23': '秋分の日', '2026-10-12': 'スポーツの日', '2026-11-03': '文化の日' };
+  for (const [d, nm] of Object.entries(KNOWN)) { assert.equal(M.holidayName(d), nm, d); assert.equal(M.holOn(d), nm, d); }
+  assert.equal(M.holOn('2026-11-04'), ''); assert.equal(M.holOn('2026-02-30'), ''); assert.ok(!M.isDate('2026-02-30') && !M.isDate('2026-13-01') && M.isDate('2028-02-29') && !M.isTS('2026-02-31T10:00')); assert.equal(M.holOn('xx'), '');
+  let kokumin = 0;
+  for (let y = 2026; y <= 2040; y++) for (const [d, nm] of Object.entries(M.holidaysOf(y))) if (nm === '国民の休日') { kokumin++; assert.ok(M.holOn(M.dAdd(d, -1)) && M.holOn(M.dAdd(d, 1)), d); }
+  assert.ok(kokumin > 0);
+  assert.ok(!M.actsOn('2027-05-03').some(([, a]) => a.kind === 'holiday'));
+});
+T('undo: 後の変更と同じ項目は戻さず skipped を返す', () => {
+  const id = Object.keys(M.DB.tasks)[0], t0 = M.DB.tasks[id].t;
+  const r1 = ok(M.taskUpdate(id, { t: 'A1' })); ok(M.taskUpdate(id, { t: 'B2' }));
+  const u = r1.undo(); assert.equal(u.skipped, 1); assert.equal(M.DB.tasks[id].t, 'B2');
+  // 別の項目への後の変更は消さない
+  const r3 = ok(M.taskUpdate(id, { t: 'D4' })); ok(M.taskUpdate(id, { pri: 1 }));
+  const u3 = r3.undo(); assert.equal(u3.skipped, 0); assert.equal(M.DB.tasks[id].pri, 1); assert.notEqual(M.DB.tasks[id].t, 'D4');
+  // 単独は元どおり
+  const id2 = Object.keys(M.DB.tasks)[1], b2 = M.DB.tasks[id2].t; const r4 = ok(M.taskUpdate(id2, { t: 'E5' })); const u4 = r4.undo();
+  assert.equal(u4.skipped, 0); assert.equal(M.DB.tasks[id2].t, b2);
+  // 追加した行を後で直されていたら、消さない
+  const r5 = ok(M.taskAdd({ t: '追加テスト' })); ok(M.taskUpdate(r5.id, { t: '追加テスト2' })); assert.equal(r5.undo().skipped, 1); assert.ok(M.DB.tasks[r5.id]);
+  M.taskRemove(r5.id);
+});
+T('listAdd: 同じ名前は断る', () => {
+  const nm = Object.values(M.DB.lists)[0].n; const r = M.listAdd(nm); assert.equal(r.ok, false); assert.match(r.why, /同じ名前/);
+  const r2 = ok(M.listAdd('新しいリスト')); assert.equal(M.listAdd('新しいリスト').ok, false); r2.undo();
+});
+T('payDup / payPhotoSet: 同じ写真は重複の疑い', () => {
+  const r = ok(M.paySave({ start: '2026-11-03T09:00', payee: { name: '写真テスト店' }, items: [{ n: 'x', price: 777, users: ['me'], tax: 10 }], exp: { cat: 'food' } }));
+  assert.equal(M.payDup({ start: '2026-11-04T10:00', total: 1, photo: 'h1' }).length, 0);
+  ok(M.payPhotoSet(r.id, 'h1')); assert.equal(M.A(r.id).photo, 'h1');
+  deq(M.payDup({ start: '2026-11-04T10:00', total: 1, photo: 'h1' }).map(x => x[0]), [r.id]);
+  assert.equal(M.payDup({ start: '2026-11-04T10:00', total: 1, photo: 'h2' }).length, 0);
+  assert.equal(M.payPhotoSet('nothing', 'h').ok, false);
+  assert.equal(M.payPhotoSet(Object.keys(M.DB.acts).find(i => !M.DB.acts[i].pay), 'h').ok, false);
+  ok(M.paySave({ id: r.id, start: '2026-11-03T09:00', payee: { name: '写真テスト店' }, items: [{ n: 'x', price: 777, users: ['me'], tax: 10 }], exp: { cat: 'food' } }));
+});
+T('relUpdate: 見ている側の形(a 側・b 側・双方向・一方向)と不正な月日', () => {
+  const x = ok(M.relAdd({ a: 'hanako', b: 'ken', role: '同僚' })).id;
+  ok(M.relUpdate(x, 'hanako', { other: 'taro', role: '上司', sym: false, inv: '部下', since: '2024-05' }));
+  deq([M.DB.rels[x].a, M.DB.rels[x].b, M.DB.rels[x].role, M.DB.rels[x].inv, M.DB.rels[x].from], ['hanako', 'taro', '上司', '部下', '2024-05']);
+  ok(M.relUpdate(x, 'taro', { other: 'hanako', role: '部下', sym: false, inv: '上司' }));       /* b 側から見て直す: 保存は a=hanako のまま */
+  deq([M.DB.rels[x].a, M.DB.rels[x].b, M.DB.rels[x].role, M.DB.rels[x].inv], ['hanako', 'taro', '上司', '部下']);
+  ok(M.relUpdate(x, 'taro', { other: 'hanako', role: '友人', sym: true })); assert.equal(M.DB.rels[x].inv, undefined); assert.equal(M.DB.rels[x].role, '友人');
+  assert.equal(M.relUpdate(x, 'hanako', { other: 'hanako', role: 'a', sym: true }).ok, false);
+  assert.equal(M.relUpdate(x, 'hanako', { other: 'ken', role: '', sym: true }).ok, false);
+  assert.equal(M.relUpdate(x, 'ken', { other: 'taro', role: 'a', sym: true }).ok, false);
+  assert.equal(M.relUpdate(x, 'hanako', { other: 'ken', role: 'a', sym: false }).ok, false);          /* 一方向は相手から見た名が要る */
+  for (const bad of ['2026-13', '2026-00', '2026-02-30', '26-01', 'abc']) { assert.equal(M.relUpdate(x, { from: bad }).ok, false, bad); assert.equal(M.relAdd({ a: 'ken', b: 'taro', role: 'r', from: bad }).ok, false, bad); assert.equal(M.factSet('hanako', '電話', '1', { since: bad }).ok, false, bad); }
+  assert.ok(M.isCoarse('2026') && M.isCoarse('2026-02') && M.isCoarse('2028-02-29') && !M.isCoarse('2027-02-29'));
+  M.relRemove(x);
+});
+T('dbFill / load / importJSON: 欠けた表・型違い・壊れた保存の退避', () => {
+  const c = M.dbFill({ meta: { v: 7 }, acts: {}, ents: {}, cats: {} });
+  assert.ok(c.ok); for (const t of ['days', 'tasks', 'lists', 'rels', 'photos', 'routines', 'jots', 'memos', 'notes', 'types', 'exps']) if (t !== 'types') deq(c.db[t], {}, t);
+  assert.ok(Array.isArray(c.db.log) && c.db.ents.me && c.db.types.method);
+  for (const bad of [{ meta: { v: 7 }, acts: [] }, { meta: { v: 7 }, tasks: 'x' }, { meta: { v: 7 }, rels: [] }, { meta: 5 }, [], null]) assert.equal(M.dbFill(bad).ok, false, JSON.stringify(bad));
+  const keep = snap();
+  assert.ok(M.importJSON(JSON.stringify({ meta: { v: 7 }, acts: {}, ents: {}, cats: {} })).ok);
+  deq(Object.keys(M.DB.acts), []); assert.ok(M.DB.tasks && M.DB.lists && Array.isArray(M.DB.log) && M.DB.meta.seeded);
+  for (const bad of ['{"meta":{"v":7},"acts":[],"ents":{}}', '{"meta":{"v":7},"tasks":"x"}', '{"meta":{"v":7},"rels":[]}', '{"v":6}', 'nope']) assert.equal(M.importJSON(bad).ok, false, bad);
+  // 壊れた保存データは退避され、見本で始まる
+  store['prmock-v7'] = '{broken'; M.load();
+  assert.equal(store['prmock-v7-broken'], '{broken'); assert.match(vm.runInContext('_brokenNotice', ctx), /読めなかった/); assert.ok(M.DB.acts.l1);
+  assert.equal(JSON.parse(store['prmock-v7']).meta.v, 7);
+  // 型が違う保存データも退避
+  store['prmock-v7'] = JSON.stringify({ meta: { v: 7 }, acts: {}, tasks: [] }); M.load(); assert.ok(store['prmock-v7-broken'].includes('"tasks":[]')); assert.ok(M.DB.acts.l1);
+  // 表が欠けた保存データは補って読む(退避しない)
+  vm.runInContext('_brokenNotice = null', ctx); delete store['prmock-v7-broken'];
+  store['prmock-v7'] = JSON.stringify({ meta: { v: 7, born: '2026-01-01', seeded: 1 }, acts: {}, ents: { me: { n: '自分', types: ['person'], facts: [] } }, cats: {} }); M.load();
+  assert.equal(store['prmock-v7-broken'], undefined); assert.equal(vm.runInContext('_brokenNotice', ctx), null); deq(M.DB.tasks, {}); assert.ok(Array.isArray(M.DB.log));
+  M.resetData(); assert.ok(M.DB.acts.l1);
+});
+
 console.log(`\n${n} tests passed${process.exitCode ? ' (with failures)' : ''}`);
