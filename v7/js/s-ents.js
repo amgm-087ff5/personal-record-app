@@ -262,14 +262,14 @@ function enfSave() {
 
 /* ---------- 関係 ---------- */
 /** 関係の1行。ended = 終わった関係(期間を出す) */
-function enRelRow(r) {
+function enRelRow(r, vid) {
   const rr = DB.rels[r.id] || {}, ended = !!r.to;
-  return `<div class="prop${ended ? ' en-ended' : ''}"><span class="prop-k">${esc(r.role)}</span><span class="prop-v">${ent(r.other)}${ended ? `<span class="mini">${esc(enSpan(r))}</span>` : r.from ? `<span class="mini">${enYm(r.from)}から</span>` : ''}${enDir(rr)}</span><button class="icon-btn en-x" onclick="enRelMenu(${q(r.id)},${q(r.other)})" aria-label="関係の操作 ${esc(r.role)}">${ic('more')}</button></div>`;
+  return `<div class="prop${ended ? ' en-ended' : ''}"><span class="prop-k">${esc(r.role)}</span><span class="prop-v">${ent(r.other)}${ended ? `<span class="mini">${esc(enSpan(r))}</span>` : r.from ? `<span class="mini">${enYm(r.from)}から</span>` : ''}${enDir(rr)}</span><button class="icon-btn en-x" onclick="enRelMenu(${q(r.id)},${q(r.other)},${q(vid)})" aria-label="関係の操作 ${esc(r.role)}">${ic('more')}</button></div>`;
 }
 function enRels(id) {
   const rs = relsOf(id), ended = relsOf(id, { ended: true }).filter(r => r.to), open = !!ENX.ended[id];
   const endBtn = ended.length ? `<button class="prop en-more${open ? ' is-open' : ''}" onclick="enEndedTog(${q(id)})"><span class="prop-k">${open ? 'たたむ' : `終わった関係 ${ended.length}`}</span>${ic('down', 'row-chev')}</button>` : '';
-  const list = [...rs.map(enRelRow), ...(open ? ended.map(enRelRow) : []), ...(endBtn ? [endBtn] : [])];
+  const list = [...rs.map(r => enRelRow(r, id)), ...(open ? ended.map(r => enRelRow(r, id)) : []), ...(endBtn ? [endBtn] : [])];
   return `<section>${sec('関係', { n: rs.length || undefined, act: rs.length || ended.length ? { label: '足す', on: `enRelNew(${q(id)})` } : null })}${list.length
     ? rows(list)
     : btn('関係を足す', `enRelNew(${q(id)})`, 'dash', { icon: 'plus' })}</section>`;
@@ -277,9 +277,10 @@ function enRels(id) {
 function enEndedTog(id) { ENX.ended[id] = !ENX.ended[id]; rerender(); }
 /** 関係の向きの印(お互い = swap / 一方向 = move)。inv があれば一方向 */
 const enDir = r => { const one = !!r.inv; return `<span class="en-dir" role="img" aria-label="${one ? '一方向' : 'お互い'}">${ic(one ? 'move' : 'swap')}</span>`; };
-function enRelMenu(rid, other) {
+function enRelMenu(rid, other, vid) {
   const r = DB.rels[rid]; if (!r) return;
   menu(`${r.to ? r.inv || r.role : r.role} ${(E(other) || {}).n || ''}`, [
+    ...(vid ? [{ label: '直す', icon: 'edit', on: () => enRelEdit(vid, rid) }] : []),
     r.to ? { label: '続いていることにする', icon: 'undo', on: () => done(relUpdate(rid, { to: null })) } : { label: '終わりにする', icon: 'check', on: () => enRelEnd(rid) },
     { label: '消す', icon: 'trash', on: () => enRelDel(rid) },
   ]);
@@ -298,7 +299,17 @@ function enRelEndSave() {
   done(relUpdate(ENZ.id, { to: ENZ.to }), { close: 1, msg: '関係を終わりにしました' });
 }
 const EN_ROLES = [['配偶者', ''], ['友人', ''], ['家族', ''], ['勤務先', '従業員'], ['一緒に', '']];
-let ENR = null;
+let ENR = null, ENR0 = '';
+const enrSig = () => JSON.stringify([ENR.role.trim(), ENR.inv.trim(), ENR.dir, ENR.other, ENR.since]);
+const enrLabel = () => ENR.rid ? '保存' : '足す';
+/** 関係を直す。見ている側(id)から見た呼び名・相手・向き・始まりを、保存の形(a/b と role/inv)に戻して直す */
+function enRelEdit(id, rid) {
+  const r = DB.rels[rid]; if (!r) return;
+  const fromA = r.a === id, one = !!r.inv;
+  ENR = { id, rid, dir: one ? 'one' : 'sym', role: (fromA || !one) ? r.role : r.inv, inv: one ? (fromA ? r.inv : r.role) : '', other: fromA ? r.b : r.a, since: r.from || '', fromA };
+  ENR0 = enrSig();
+  openSheet({ id: 'enrel', title: '関係を直す', body: enrBody(), dirty: () => enrSig() !== ENR0, primary: { label: '保存', on: enrSave, disabled: !enrOk() } });
+}
 function enRelNew(id) {
   ENR = { id, role: '', inv: '', dir: 'sym', other: null, since: ymOf(TODAY) };
   openSheet({ id: 'enrel', title: '関係を足す', body: enrBody(), dirty: () => !!(ENR.role || ENR.other), primary: { label: '足す', on: enrSave, disabled: true } });
@@ -313,16 +324,22 @@ function enrBody() {
     ${field('いつから', input({ id: 'enr-s', type: 'month', value: R.since, oninput: 'ENR.since=this.value' }))}`;
 }
 const enrOk = () => !!(ENR.role.trim() && ENR.other && (ENR.dir !== 'one' || ENR.inv.trim()));
-function enrDir(k) { ENR.dir = k; setSheetBody(enrBody()); setSheetPrimary({ label: '足す', on: enrSave, disabled: !enrOk() }); }
-function enrInv(v) { ENR.inv = v; setSheetPrimary({ label: '足す', on: enrSave, disabled: !enrOk() }); }
-function enrRole(v) { ENR.role = v; setSheetPrimary({ label: '足す', on: enrSave, disabled: !enrOk() }); }
-function enrCand(r) { ENR.role = r; ENR.inv = (EN_ROLES.find(x => x[0] === r) || [0, ''])[1]; ENR.dir = ENR.inv ? 'one' : 'sym'; setSheetBody(enrBody()); setSheetPrimary({ label: '足す', on: enrSave, disabled: !enrOk() }); }
+function enrDir(k) { ENR.dir = k; setSheetBody(enrBody()); setSheetPrimary({ label: enrLabel(), on: enrSave, disabled: !enrOk() }); }
+function enrInv(v) { ENR.inv = v; setSheetPrimary({ label: enrLabel(), on: enrSave, disabled: !enrOk() }); }
+function enrRole(v) { ENR.role = v; setSheetPrimary({ label: enrLabel(), on: enrSave, disabled: !enrOk() }); }
+function enrCand(r) { ENR.role = r; ENR.inv = (EN_ROLES.find(x => x[0] === r) || [0, ''])[1]; ENR.dir = ENR.inv ? 'one' : 'sym'; setSheetBody(enrBody()); setSheetPrimary({ label: enrLabel(), on: enrSave, disabled: !enrOk() }); }
 function enrOther() {
-  pick({ title: '相手を選ぶ', search: true, cur: ENR.other, items: enPickIds().filter(k => k !== ENR.id).map(k => ({ k, label: DB.ents[k].n, sub: enKind(k), lead: avatar(k) })), on: k => { if (!k) return; ENR.other = k; setSheetBody(enrBody()); setSheetPrimary({ label: '足す', on: enrSave, disabled: !enrOk() }); } });
+  pick({ title: '相手を選ぶ', search: true, cur: ENR.other, items: enPickIds().filter(k => k !== ENR.id).map(k => ({ k, label: DB.ents[k].n, sub: enKind(k), lead: avatar(k) })), on: k => { if (!k) return; ENR.other = k; setSheetBody(enrBody()); setSheetPrimary({ label: enrLabel(), on: enrSave, disabled: !enrOk() }); } });
 }
 function enrSave() {
   const R = ENR; if (!enrOk()) return toast(R.dir === 'one' && R.role.trim() && R.other ? '相手から見た呼び名を入れてください' : '関係の名前と相手を入れてください', { bad: 1 });
-  done(relAdd({ a: R.id, b: R.other, role: R.role.trim(), inv: R.dir === 'one' ? R.inv.trim() : undefined, from: /^\d{4}-\d{2}$/.test(R.since) ? R.since : undefined }), { close: 1 });
+  const from = /^\d{4}-\d{2}$/.test(R.since) ? R.since : undefined, one = R.dir === 'one', role = R.role.trim(), inv = one ? R.inv.trim() : '';
+  if (R.rid) {
+    if (R.other === R.id) return toast('自分自身とは結べません', { bad: 1 });
+    const a = R.fromA ? R.id : R.other, b = R.fromA ? R.other : R.id;
+    return done(relUpdate(R.rid, { a, b, role: R.fromA || !one ? role : inv, inv: one ? (R.fromA ? inv : role) : '', from: from || '' }), { close: 1 });
+  }
+  done(relAdd({ a: R.id, b: R.other, role, inv: one ? inv : undefined, from }), { close: 1 });
 }
 
 /* ---------- ノート・ToDo・メモ ---------- */
@@ -462,16 +479,24 @@ let ENT = null, ENP = null, ENY = null;
 function enTypeOpen(key) {
   const t = DB.types[key]; if (!t) return;
   ENT = { key, n: t.n, n0: t.n, p: t.p || null, p0: t.p || null, np: '' };
-  openSheet({ id: 'entype', title: '種類', body: entBody(), dirty: () => ENT.n !== ENT.n0 || ENT.p !== ENT.p0 || !!ENT.np.trim(), primary: { label: '保存', on: entSave } });
+  openSheet({ id: 'entype', title: '種類', body: entBody(), dirty: () => ENT.n !== ENT.n0 || ENT.p !== ENT.p0 || !!ENT.np.trim(), primary: { label: '保存', on: entSave }, onClose: () => { const c = ENT_NEXT; ENT_NEXT = null; if (c) enTypeOpen(c); } });
+}
+/** 子の種類を開く。編集中の内容があれば確認を出し、破棄したあとで子が開く(続けるなら開かない) */
+let ENT_NEXT = null;
+function enTypeChild(c) {
+  const dirty = ENT && (ENT.n !== ENT.n0 || ENT.p !== ENT.p0 || ENT.np.trim());
+  ENT_NEXT = c; dirty ? closeSheet() : closeSheet(true);
 }
 function entBody() {
-  const k = ENT.key, props = propsOf(k), ents = entsOfType(k);
-  return `${field('名前', input({ id: 'ent-n', value: ENT.n, oninput: 'ENT.n=this.value' }))}
+  ENT_NEXT = null;
+  const k = ENT.key, props = propsOf(k), ents = entsOfType(k), kids = typeKids(k);
+  return `${field('名前', input({ id: 'ent-n', value: ENT.n, oninput: 'ENT.n=this.value;ENT_NEXT=null' }))}
     ${pickField('親', ENT.p ? esc(enTypeName(ENT.p)) : 'なし', 'entParent()', { emptyv: !ENT.p })}
     <section>${sec('項目', { n: props.length })}<div class="rows">${props.map(([p, from]) => from === k
       ? `<div class="row"><span class="row-m"><span class="row-t">${esc(p)}</span></span>${btn('改名', `entPropRen(${q(p)})`, 'ghost', { sm: 1 })}${btn('消す', `entPropDel(${q(p)})`, 'ghost', { sm: 1 })}</div>`
       : `<div class="row"><span class="row-m"><span class="row-t">${esc(p)}</span></span><span class="mini">${esc(enTypeName(from))}から</span></div>`).join('')}
-      <div class="row en-np"><input class="input" id="ent-np" placeholder="項目を足す" value="${esc(ENT.np)}" oninput="ENT.np=this.value" onkeydown="if(event.key==='Enter'){event.preventDefault();entPropAdd()}" aria-label="項目の名前" autocomplete="off">${btn('足す', 'entPropAdd()', 'sec', { sm: 1 })}</div></div></section>
+      <div class="row en-np"><input class="input" id="ent-np" placeholder="項目を足す" value="${esc(ENT.np)}" oninput="ENT.np=this.value;ENT_NEXT=null" onkeydown="if(event.key==='Enter'){event.preventDefault();entPropAdd()}" aria-label="項目の名前" autocomplete="off">${btn('足す', 'entPropAdd()', 'sec', { sm: 1 })}</div></div></section>
+    ${kids.length ? `<section>${sec('子の種類', { n: kids.length })}${rows(kids.map(c => row({ t: DB.types[c].n, on: `enTypeChild(${q(c)})`, chev: 1 })))}</section>` : ''}
     ${ents.length ? `<section>${sec('この種類のエンティティ', { n: ents.length })}${rows(ents.map(id => row({ lead: avatar(id), t: DB.ents[id].n, s: enKind(id), on: `enGoEnt(${q(id)})`, chev: 1 })))}</section>` : ''}
     ${btn('この中に種類を足す', `enTypeNew(${q(k)})`, 'dash', { icon: 'plus' })}
     ${btn('この種類を消す', 'entDel()', 'sec', { icon: 'trash' })}`;
@@ -573,7 +598,7 @@ function enRefPick(tid, set) {
 }
 function ennMove(i, d) { const s = ENN.secs, j = i + d; if (j < 0 || j >= s.length) return; [s[i], s[j]] = [s[j], s[i]]; setSheetBody(ennBody()); }
 function ennDel(i) { ENN.secs.splice(i, 1); if (!ENN.secs.length) ENN.secs.push({ h: '', t: '' }); setSheetBody(ennBody()); }
-function ennAdd() { ENN.secs.push({ h: '', t: '' }); setSheetBody(ennBody()); setTimeout(() => { const el = $$('.en-nsec', _sheets[_sheets.length - 1].el).pop(); if (el) { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); const f = $('input', el); f && f.focus({ preventScroll: true }); } }, 30); }
+function ennAdd() { ENN.secs.push({ h: '', t: '' }); setSheetBody(ennBody()); setTimeout(() => { const el = $$('.en-nsec', _sheets[_sheets.length - 1].el).pop(); if (el) { el.scrollIntoView(smoothOpt({ block: 'nearest' })); const f = $('input', el); f && f.focus({ preventScroll: true }); } }, 30); }
 function ennSave() {
   const secs = JSON.parse(ennSig()); if (!secs.length) return toast('本文を入れてください', { bad: 1 });
   if (ennSig() === ENN.orig) return closeSheet(true);

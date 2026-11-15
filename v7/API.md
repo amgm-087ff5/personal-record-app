@@ -36,7 +36,7 @@ TS(時刻。'YYYY-MM-DD' = 終日 / 'YYYY-MM-DDTHH:MM'): `isTS(s)` `dOf(ts)`(日
 ### 読む
 - `A(id)` → Act。`決まりid@日付` は仮の回(`virt:1, routine:決まりid, state:'plan'`)。`決まりid` 単体は null。`E(id)` → ent(`'me'` も本物の行)/ `isStub(id)`
 - `isPay` `isSpan`(= end がある) `isPlan` `isLate` `isUnsure(row)` `timeText(a)` `actMins(a)`(日またぎも正しい。終日は 0) `actTitle(a)`(支払い = 支払先、精算 = 「花子さんから ¥…」) `payeeOf(a)` `placeOf(a)` `rolesOf(a, ...役割名)` `roleName(role)`
-- `actsOn(d, {state})` → [[id, act]](start の日〜end の日。時刻順、終日が先頭、前日から続くものは 00:00 扱い。仮の回を含む)/ `kidsOf` `descOf` `ancOf` `daysWith(from, to)` `dayOf(d)` → {diary} / `holOn(d)` → 祝日の名前か '' / `photosOn(d)` `photosOfAct(id)` → [[id, photo]]
+- `actsOn(d, {state})` → [[id, act]](start の日〜end の日。時刻順、終日が先頭、前日から続くものは 00:00 扱い。仮の回を含む)/ `kidsOf` `descOf` `ancOf` `daysWith(from, to)` `dayOf(d)` → {diary} / `holOn(d)` / `holidayName(d)` → 祝日の名前か ''(規則の計算。保存しない)/ `holidaysOf(年)` → {日付: 名前} / `photosOn(d)` `photosOfAct(id)` → [[id, photo]]
 - `pendingPlans()` `upcoming(日数)` / 繰り返し: `DB.routines[id]` `repOn(routine, d)` `repText(routine)` `repNext(routine, from)` `recordsOfRoutine(id)`
 - `roleIn(a, eid)`(役割名 / 支払った / 使った / 支払い方法 / 精算)`actsOfEnt(eid)`
 - 種類: `typeAnc` `typeKids` `isUnder` `typePath` `propsOf` / ent の一覧: `entsAll({stubs})` `entsOfType(k, deep=true, {stubs})`(既定は stub を除く)`entRoot(id)` / 事実: `factsNow(eid)` `factHist(eid, k)`(新しい順)`factAt(eid, k, 日付)` / 関係: `relsOf(id, {ended})` → [{id, role, other, from, to}]
@@ -47,20 +47,20 @@ TS(時刻。'YYYY-MM-DD' = 終日 / 'YYYY-MM-DDTHH:MM'): `isTS(s)` `dOf(ts)`(日
 - 未確認: `unsureCount(a)`(支払い: 項目の数 + unsure の品目の数)
 - 家計簿: `expsIn(ym)` `monthSum(ym)` `catSum(ym, k)` `daySpend(d, {noFixed})` `paceOf(ym, 日数)`(settle は入らない)
 - ent の数字: `spendWith(eid)` `entStats(eid)`
-- ToDo: `taskOpen` `taskLate` `tasksDue()` `tasksOfAct(id)`(決まりid の ToDo も返す)`tasksOfEnt` / メモ: `memosSorted()` `memosOn(d)` / `recallDays()` `searchAll(q)` `parseQuick(s)`(pay/plan の時刻は TS の start・end)`parseTask(s)` `parseDateWord(s)` `dataCounts()` `oldestYm()` `shopMatches(items)` `payDup({id?, start, total})`
+- ToDo: `taskOpen` `taskLate` `tasksDue()` `tasksOfAct(id)`(決まりid の ToDo も返す)`tasksOfEnt` / メモ: `memosSorted()` `memosOn(d)` / `recallDays()` `searchAll(q)` `parseQuick(s)`(pay/plan の時刻は TS の start・end)`parseTask(s)` `parseDateWord(s)` `dataCounts()` `oldestYm()` `shopMatches(items)` `payDup({id?, start, total, photo?})` `payPhotoSet(支払いid, ハッシュ)`
 
-### 書く(全て `{ok:true, label, undo(), …}` か `{ok:false, why}`)
+### 書く(全て `{ok:true, label, undo(), …}` か `{ok:false, why}`。`undo()` は `{ok:true, skipped}` を返す。後の変更と重なった項目は戻さず skipped に数える)
 - 日・写真: `daySetDiary(d, 文)` `photoAdd({at?, d?, cap, act?, ents?, geo?})` → {id} `photoUpdate(id, patch)` `photoRemove(id)`
 - Act: `actAdd({kind, title, start, end?, state, parent?, roles:[{r, e|name}], note?, alarm?, rep?:{u}})` → {id}(rep があれば決まりを作り {id:'決まりid@最初の日', routine})/ `actUpdate(id, patch)`(`決まりid@日付` は決まりを直す。`rep:null` は決まりをやめて1回だけの予定にして {id})/ `actRemove(id)`(仮の回はその回だけ skip)/ `actMove(id, 親|null)` / `planRecord(id, {start?, end?, amt?, how?})` → {id} / `sleepWake(ts)` → {id}
 - 繰り返し: `routineAdd({every, from, until?, tpl})` `routineUpdate(id, patch)`(tpl は部分上書き)`routineRemove(id)` `routineSkip(id, 日付, on=true)`
 - 支払い: `paySave({id?, start, parent?, payee:{e}|{name}, roles?, items:[{n, price|lines, tax, users, memo?, unk?, unsure?}], amt?, payers?:[{who, amt, how}], note?, unsure?:[…]|true, via?, exp:{…}, doneTasks?})` → {id} / `payPlanSave({id?, start, payee, title?, amt, cat, rep?})` / `expUpdate(id, patch)` / `itemRemove(id, 品目id)` / `paySettle(id か配列, on=true, {who?, date?, how?})` / `confirmRows([{t:'acts'|'tasks'|'memos', k}])`
 - ToDo: `taskAdd` `taskUpdate` `taskToggle` `taskRemove` `listAdd` `listRemove` `listRename` `listSetShop` `taskToPlan(id, {start, end?})` `planToTask(id)`
 - メモ: `memoAdd` `memoUpdate` `memoPin` `memoRemove`
-- ent: `entAdd({n, types, facts?})` `entUpdate(id, {n?, types?, facts?, stub?:null})` `factSet(id, 項目, 値, {keepHist, why, since})` `entRemove(id)` / `relAdd({a, b, role, inv?, from?})` → {id} `relUpdate(id, patch)` `relRemove(id)`
+- ent: `entAdd({n, types, facts?})` `entUpdate(id, {n?, types?, facts?, stub?:null})` `factSet(id, 項目, 値, {keepHist, why, since})` `entRemove(id)` / `relAdd({a, b, role, inv?, from?})` → {id} `relUpdate(id, patch)` か `relUpdate(関係id, 見ている側のid, {other, role, sym, inv, since})` `relRemove(id)`
 - 種類: `typeAdd` `typeUpdate` `typeRemove` `typePropAdd` `typePropRename` `typePropRemove` / ノート: `noteSave(eid, [{h, text}])` `noteSubSave(eid, subId|null, {n, sub, text})` → {id} `noteSubRemove(eid, subId)`
 - カテゴリ: `catAdd` `catUpdate` `catRemove` / 支払い方法: `methodAdd(名前)` → {id} `methodRemove(id)`
-- 全体: `exportJSON()` `importJSON(text)`(v65 のみ)`resetData()`
-- 内部(m-inbox 用): `commit(label, fn)` `fail(msg)` `_logWhat` `_logPush` `TABLES` `save` `dbNormalize` `dbSeedInbox`
+- 全体: `exportJSON()` `importJSON(text)`(meta.v が 7 のみ。欠けた表は補い、型違いは断る)`resetData()`
+- 内部(m-inbox 用): `commit(label, fn)` `fail(msg)` `_logWhat` `_logPush` `TABLES` `save` `dbNormalize` `dbFill` `dbSeedInbox` `_brokenNotice`(壊れた保存データを退避した時のお知らせ。core の boot が1回出す)
 
 ## 2. core.js
 - `esc(s)` `q(v)` `$(sel, el?)` `$$(sel, el?)` `hapt()` `isWide()`
@@ -83,6 +83,6 @@ TS(時刻。'YYYY-MM-DD' = 終日 / 'YYYY-MM-DDTHH:MM'): `isTS(s)` `dOf(ts)`(日
 - CSS の共通クラス: `.card`(白い面) `.card.pad` `.rows` `.grid2`(2列) `.stack`(縦に 8px) `.ents`(エンティティの並び) `.mini`(小さい補足) `.num`(等幅の数字) `.hit`(面全体を押せるリンク: `<div class="card" style="position:relative"><a class="hit" href></a>…中のボタンは自動で上に出る</div>`) `.clamp`
 
 ## 4. v6.1 で足した共通の関数(model.js 部分は v6.5 で書き直し)
-- model.js: 旧 → 新の対応表は `MODEL-API-CHANGES.md`。`shopMatches(items)` `payDup({id?, start, total})` `photosOfAct(id)` → [[id, photo]] `recordsOfRoutine(決まりid)` `oldestYm()` `listRename` `listSetShop` `taskToPlan(taskId, {start, end?})` `planToTask(id)` `monthSum(ym).unset` `paySave({... doneTasks:[taskId]})`。人・店・支払い方法は ents の id(名前だけは `{name}` で入力 → stub が自動で作られ、指されなくなると消える)。
+- model.js: 旧 → 新の対応表は `MODEL-API-CHANGES.md`。`shopMatches(items)` `payDup({id?, start, total, photo?})` `payPhotoSet(支払いid, ハッシュ)` `photosOfAct(id)` → [[id, photo]] `recordsOfRoutine(決まりid)` `oldestYm()` `listRename` `listSetShop` `taskToPlan(taskId, {start, end?})` `planToTask(id)` `monthSum(ym).unset` `paySave({... doneTasks:[taskId]})`。人・店・支払い方法は ents の id(名前だけは `{name}` で入力 → stub が自動で作られ、指されなくなると消える)。
 - parts.js: `paySlip(id, {cat})`(そのカテゴリに計上した額を右に出し、全額と違えば「支出 ¥全額」の札)。支払いの面に特別感の印(非日常 / 未設定)。`tlAct(id, {roleOf: エンティティid})`(その相手の役割の札を出す)。`dayHead` に日記の一言。
 - core.js: トーストは3つまで表示し、残りは順番待ち(取り消しは消えない)。画面を移ると、未保存でないシートは閉じる。保存に失敗すると知らせる。

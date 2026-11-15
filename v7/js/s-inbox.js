@@ -17,7 +17,7 @@ let IN_KEEP = false;      /* 次の描き直しで位置を保つ(もっと前) 
 let IN_UNDO = null, IN_UNDO_T = 0;
 let IN_SHOWN = [];        /* いま描いている雑記id(すべて選ぶ用) */
 let IN_MIC_ON = false;
-let IN_OFF = new Set();   /* 読みから取り消した役: date | time | amt | type */
+let IN_OFF = new Set();   /* 読みから取り消した行。キーは "文の番号:行番号"(例 "0:1")。その文の行だけに効く(次の文には持ち越さない) */
 const IN_KINDS = [[null, '自動'], ['pay', '支払い'], ['plan', '予定'], ['event', '出来事'], ['task', 'ToDo'], ['memo', 'メモ'], ['diary', '日記']];
 /* ⑤ の道具の列: 左=日付の行の列を開閉 / 中央=音声(大きい丸) / 右=改行・¥・# */
 const IN_TOOLS = '<div class="in-tl-l"><button class="in-tb in-tb-cal" aria-label="日付・時刻の行を入れる" aria-expanded="false" onclick="inInsToggle()">' + ic('calendar') + '</button></div>'
@@ -365,10 +365,12 @@ function inReadOne(text, o) {
 /** 入力全体の読み {items:[{text, r}], multi}。入力が空なら null */
 function inRead() {
   const list = inBlocks(); if (!list.length) return null;
-  const type = IN_FORCE && IN_FORCE !== 'diary' ? IN_FORCE : null, off = [...IN_OFF];
-  const items = list.map(text => ({ text, r: inReadOne(text, { type, off }) }));
+  const type = IN_FORCE && IN_FORCE !== 'diary' ? IN_FORCE : null;
+  const items = list.map((text, bi) => ({ text, r: inReadOne(text, { type, off: inOffOf(bi) }) }));
   return { items, multi: items.length > 1 };
 }
+/** 文(ブロック)bi で取り消した行の番号(その文の中の行番号)の一覧 */
+function inOffOf(bi) { const p = bi + ':'; return [...IN_OFF].filter(k => k.startsWith(p)).map(k => +k.slice(p.length)); }
 /** いまの書きかけの候補(旧 inCand の互換。無ければ雑記の候補) */
 function inCand() {
   const R = inRead(); const it = R && R.items[0]; if (!it) return null;
@@ -404,21 +406,21 @@ function inCardsHtml(R) {
   const it = R.items[0], r = it.r;
   if (!r.cand) {
     if (r.hint === 'diary') return `<section class="in-card is-diary"><p class="in-tt clamp">${esc(it.text)}</p><div class="in-facts"><span>${esc(relDay(r.hintDate || TODAY))}</span></div><div class="in-act">${btn('日記に書く', 'inDiaryAt(0)', 'sec', { wide: 1 })}</div></section>`;
-    return `<section class="in-card is-none"><span>雑記のまま置きます</span>${inMarksHtml(r)}</section>`;
+    return `<section class="in-card is-none"><span>雑記のまま置きます</span>${inMarksHtml(r, 0)}</section>`;
   }
   const k = inCardOf(r.cand);
   return `<section class="in-card${r.conf === 'weak' ? ' is-weak' : ''}">
     <div class="in-card-h">こう記録します</div>
     <div class="in-card-b"><span class="in-ty${k.cls}">${esc(k.ty)}</span><b class="in-tt">${esc(k.title)}</b></div>
     ${k.facts.length ? `<div class="in-facts num">${k.facts.map(f => `<span>${esc(f)}</span>`).join('')}</div>` : ''}
-    ${inMarksHtml(r)}
+    ${inMarksHtml(r, 0)}
   </section>`;
 }
 /** 読んだ語の小札。押すと取り消す(取り消した語は押すと戻る)。文の一部と判断して採らなかった語は押せない */
-function inMarksHtml(r) {
-  const on = (r.marks || []).map(m => `<button class="in-mk" onclick="inOffToggle(${m.line})" aria-label="${esc(m.label)}を取り消す"><span class="in-mk-c">${esc(m.label)}${ic('close')}</span></button>`);
-  const off = (r.off || []).map(m => IN_OFF.has(m.line)
-    ? `<button class="in-mk is-off" onclick="inOffToggle(${m.line})" aria-label="${esc(m.label)}を戻す"><span class="in-mk-c">${esc(m.label)}${ic('undo')}</span></button>`
+function inMarksHtml(r, bi) {
+  const on = (r.marks || []).map(m => `<button class="in-mk" onclick="inOffToggle(${bi}, ${m.line})" aria-label="${esc(m.label)}を取り消す"><span class="in-mk-c">${esc(m.label)}${ic('close')}</span></button>`);
+  const off = (r.off || []).map(m => IN_OFF.has(`${bi}:${m.line}`)
+    ? `<button class="in-mk is-off" onclick="inOffToggle(${bi}, ${m.line})" aria-label="${esc(m.label)}を戻す"><span class="in-mk-c">${esc(m.label)}${ic('undo')}</span></button>`
     : `<span class="in-mk is-dim"><span class="in-mk-c">${esc(m.label)}</span></span>`);
   const all = [...on, ...off];
   return all.length ? `<div class="in-mks">${all.join('')}</div>` : '';
@@ -453,7 +455,7 @@ function inKindsMenu() {
 /** 種類の決め打ち(自動 = null) */
 function inForce(k) { IN_FORCE = k || null; const w = inWrap(); if (w) inPaintRec(w); inFocusT(); }
 /** 取り消す役を切り替える(読みを取り直す) */
-function inOffToggle(role) { if (IN_OFF.has(role)) IN_OFF.delete(role); else IN_OFF.add(role); inPaintRec(); }
+function inOffToggle(bi, line) { const k = `${bi}:${line}`; if (IN_OFF.has(k)) IN_OFF.delete(k); else IN_OFF.add(k); inPaintRec(); }
 /** 道具: 改行は改行だけ。¥ # と日付の行(今日 明日 +0 +1 /日 時刻)は「新しい行+X」: カーソルが空の行なら改行を足さず X だけ、そうでなければ改行してから X。入れた後はカーソルが X の直後 */
 function inTool(k) {
   const t = $('#in-t', inWrap() || document); if (!t) return;
@@ -615,7 +617,13 @@ function inDiaryAt(i) {
   inFocusT();
 }
 /** 文の一つを入力から外す(空行で分けて残す) */
-function inDropBlock(i) { const b = inBlocks(); b.splice(i, 1); inSetDraft(b.join('\n\n')); }
+function inDropBlock(i) {
+  /* 文を外すと後ろの文の番号が一つ減る。取り消しの印も同じに付け替える(外した文の印は消す) */
+  const nx = new Set();
+  IN_OFF.forEach(k => { const [bi, ln] = k.split(':'); if (+bi === i) return; nx.add((+bi > i ? +bi - 1 : +bi) + ':' + ln); });
+  IN_OFF = nx;
+  const b = inBlocks(); b.splice(i, 1); inSetDraft(b.join('\n\n'));
+}
 
 /** 候補を確かめ済みの記録にする(雑記は作らない)。作り方は m-inbox.js の candSave(種類 wake・sleep もここ) */
 function inSaveCand(c) { return c && typeof candSave === 'function' ? candSave(c) : null; }

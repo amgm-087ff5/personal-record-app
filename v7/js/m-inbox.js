@@ -252,9 +252,15 @@ function readText(text, base, o = {}) {
     if (!T) return none();
     cand = { type, title: T, date: g1 ? g1.date : bd, ents };
     if (g1 && g1.start) cand.start = g1.start;
-    const end = (g1 && g1.end) || (g2 && g2.start) || null;
-    if (end) { if (!cand.start || end > cand.start) cand.end = end; else extra.push(`終わり ${end}`); }
+    /* 終わりの時刻: 終わりは TS で持てるので、別の日(+N の行)なら終わりの日(date2)と時刻に分けて入れる。
+       始まりと同じ日なら始まりより後の時だけ終わりの欄。始まりが無い(終日)・始まり以前・始まりより前の日の時刻は、日付を付けて備考へ */
+    const endT = (g1 && g1.end) || (g2 && g2.start) || null, endD = g1 && g1.end ? cand.date : g2 && g2.start ? g2.date : cand.date;
     if (g2 && g2.date > cand.date) cand.date2 = g2.date;
+    if (endT) {
+      if (cand.start && endD > cand.date) cand.end = endT;
+      else if (cand.start && endD === cand.date && endT > cand.start) cand.end = endT;
+      else extra.push(`終わり ${endD !== cand.date ? fmtMD(endD) + ' ' : ''}${endT}`);
+    }
     if (type === 'event') { const kind = _jtKind(raw); if (kind) cand.kind = kind; }
   } else if (type === 'task') {
     if (!T) return none();
@@ -430,6 +436,44 @@ function _jtConvert(jid, cands, o, label) {
 const jotConvert = (jid, cand, o = {}) => _jtConvert(jid, cand, { confirm: o.confirm, via: o.via || 'rule' }, '雑記を記録にしました');
 /** LLM の結果を入れる(jotConvert の配列版。LLM の印は消す。未確認でだけ入る) */
 const jotConvertMany = (jid, cands, o = {}) => _jtConvert(jid, cands, { confirm: false, via: o.via || 'llm', clearLlm: true }, '雑記を記録にしました');
+/** 確かめ済みの記録を直す(新しく作らない。model の更新関数を呼ぶ)。rec = {t,k}、cand は変換シートの形(cvRecCand と同じ)。
+    o.confirm: true = 確かめたまま / false = 未確認にする / null = 今の状態のまま。種類が変わる時(支払い ⇄ 出来事・予定 ⇄ ToDo など)は、その記録を消して作り直す。1回の変更 → {recs} */
+const jotRecUpdate = (jid, rec, cand, o = {}) => commit('記録を直しました', () => {
+  if (!DB.jots[jid]) fail('雑記が見つかりません');
+  const tbl = _jtTbl(rec && rec.t), row = tbl && tbl[rec.k];
+  if (!row) fail('記録が見つかりません');
+  const c = [].concat(cand || []).filter(Boolean)[0]; if (!c) fail('変換できませんでした');
+  const tagLine = (c.tags || []).filter(Boolean).map(x => '#' + x).join(' ');
+  const join = (...xs) => xs.filter(Boolean).join('\n') || undefined;
+  const group = rec.t === 'acts' ? (row.pay ? 'pay' : 'act') : rec.t === 'tasks' ? 'task' : 'memo';
+  const want = c.type === 'pay' ? 'pay' : c.type === 'task' ? 'task' : c.type === 'memo' ? 'memo' : 'act';
+  let out;
+  if (group !== want || row.settle || (want === 'act' && c.kind === 'wake')) {
+    _jtDrop(rec.t, rec.k);
+    out = candToRec(c, jid, { unsure: o.confirm === false, via: row.via });
+  } else {
+    let r;
+    if (want === 'pay') {
+      const x = DB.exps[rec.k] || {}, total = +c.amt || 0, keep = total === payTotal(row) && row.pay.items.length;
+      const start = tsOf(isDate(c.date) ? c.date : aDate(row), isHM(c.start) ? c.start : (hasT(row.start) ? tOf(row.start) : NOW));
+      r = paySave({ id: rec.k, start, parent: row.parent || null, payee: c.payee || null, roles: row.roles || [], amt: total, items: keep ? row.pay.items : [], payers: row.pay.payers,
+        note: join(tagLine, c.note), unsure: row.unsure, via: row.via, exp: { ...x, basis: x.basis || 'items', cat: c.cat || x.cat || 'eatout' } });
+    } else if (want === 'act') {
+      const { start, end } = _jtSpan(c);
+      r = actUpdate(rec.k, { kind: KINDS[c.kind] ? c.kind : 'event', title: c.title, start, end: end || null, state: c.type === 'plan' ? 'plan' : 'done', note: join(tagLine, c.note, !isHM(c.start) && isHM(c.end) ? `終わり ${c.end}` : null) });
+    } else if (want === 'task') {
+      r = taskUpdate(rec.k, { t: c.t, due: c.due || undefined, list: c.list || undefined, pri: c.pri ? 1 : undefined, ents: (c.ents || []).filter(e => E(e)), memo: join(tagLine, c.note) });
+    } else {
+      r = memoUpdate(rec.k, { body: join(c.body, c.note, tagLine), ents: c.ents || [] });
+    }
+    if (!r.ok) fail(r.why);
+    out = { t: rec.t, k: rec.k };
+  }
+  const now = _jtTbl(out.t)[out.k];
+  if (o.confirm === false) now.unsure = true;
+  else if (o.confirm === true) { delete now.unsure; if (now.pay) now.pay.items.forEach(i => { delete i.unsure; }); }
+  return { recs: [out] };
+});
 /** 未確認の記録を全て確かめる(1件・複数件は model の confirmRows) */
 const confirmAll = () => confirmRows(unsureRows().map(({ t, k }) => ({ t, k })));
 /** LLM の印を付ける・消す(取り消しの対象にしない。_snap の外で書いて保存する) */
@@ -523,4 +567,4 @@ function seedInbox() {
 }
 
 /* const で定義した公開関数も window に載せる(他の画面の window.xxx && xxx() の判定が偽にならないように) */
-Object.assign(window, { unsureRows, unsureRowCount, confirmAll, candSave, jotsRaw, jotsSorted, inboxCount, jotUpdate, jotRemove, jotConvert, jotConvertMany, readText, readBlocks, ruleCandidates, candFromType, jotAddMany, diaryAppend });
+Object.assign(window, { unsureRows, unsureRowCount, confirmAll, candSave, jotsRaw, jotsSorted, inboxCount, jotUpdate, jotRemove, jotConvert, jotConvertMany, jotRecUpdate, readText, readBlocks, ruleCandidates, candFromType, jotAddMany, diaryAppend });

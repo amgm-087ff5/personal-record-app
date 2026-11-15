@@ -59,9 +59,13 @@
   --r-xs:8px; --r-sm:12px; --r-md:16px; --r-lg:22px; --r-xl:28px; --r-pill:999px;
   /* --- 文字 --- */
   --font:"M PLUS 2 Variable","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --fs-day:34px; --fs-sub:17px; --fs-lead:16px; --fs-jumbo:64px;     /* 段階の外の大きさ(見た目を保つため名前を付けて置く): 日の数字 / 小さい金額・入力 / 本文の大きめ / 日の大きい数字 */
   --fs-hero:48px; --fs-big:30px; --fs-title:20px; --fs-body:15px; --fs-cap:13px; --fs-min:12px; --fs-input:16px;           /* 入力欄だけ 16px(iOS は 16px 未満だと焦点で拡大する) */
   /* --- 余白(4の刻み) --- */
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:24px; --s7:32px; --s8:40px;
+  --s-hair:2px; --s-tight:3px; --s-snug:6px;                          /* 4の刻みの外。細かい字間・小さい札・小物の間 */
+  /* --- 色の成分(rgb(var(--x-rgb) / 不透明度) で使う。直書きの rgba を置かないため) --- */
+  --white-rgb:255,255,255; --ink-rgb:20,34,70;
   --page-x:16px; --gap-sec:28px; --tap:44px; --nav-h:62px;
   --page-end:calc(var(--nav-h) + 56px + env(safe-area-inset-bottom));
   /* --- 動き --- */

@@ -58,7 +58,7 @@ function dtHero(id, a) {
   const r = a.routine ? DB.routines[a.routine] : null, rep = repText(r), tags = plan ? tag(late ? '過ぎた予定' : '予定', late ? 'miss' : 'plan') : '';
   const nx = r ? repNext(r, d >= TODAY ? dAdd(d, 1) : TODAY) : '', diary = dayOf(d).diary;
   const rel = plan && !late ? (d === TODAY ? (hasT(a.start) && aStart(a) > NOW ? 'あと ' + durJ(hm2m(aStart(a)) - hm2m(NOW)) : '') : d > TODAY ? relDay(d) : '') : '';
-  const meta = [nx && plan ? `<span class="mini">${ic('repeat')}次回 ${fmtMD(nx)}(${dowJ(nx)})</span>` : '', rep ? `<span class="mini">${ic('repeat')}${esc(rep)}</span>` : '', a.alarm && plan ? `<span class="mini">${ic('bell')}${esc(a.alarm)}</span>` : ''].join('');
+  const meta = [nx && plan ? `<span class="mini">${ic('repeat')}次回 ${fmtMD(nx)}(${dowJ(nx)})</span>` : '', rep ? `<span class="mini">${ic('repeat')}${esc(rep)}</span>` : '', a.alarm && plan ? `<span class="mini">${ic('bell')}${esc(alarmNorm(a.alarm))}</span>` : ''].join('');
   const x = a.pay && plan ? xOf(id) : null;
   const pl = a.planned && !plan ? `<div class="mini num">予定は ${esc(dtTs(a.planned.start))}${a.planned.end ? '–' + esc(dtTs(a.planned.end)) : ''}</div>` : '';
   const wake = a.kind === 'sleep' && !a.end && !plan ? btn('起きた', `dtWake(${q(id)})`, 'pri', { icon: 'sun', wide: 1 }) : '';
@@ -277,7 +277,9 @@ function dtRecSave() {
 /* ================= 出来事・予定の入力 ================= */
 let DTE = null, DTE0 = '';
 const DT_REPS = [['', 'なし'], ['day', '毎日'], ['week', '毎週'], ['month', '毎月']];
-const DT_ALARMS = [['', 'なし'], ['10分前', '10分前'], ['30分前', '30分前'], ['1時間前', '1時間前'], ['前日', '前日']];
+const DT_ALARMS = [['', 'なし'], ['5分前', '5分前'], ['10分前', '10分前'], ['30分前', '30分前'], ['1時間前', '1時間前'], ['1日前', '1日前']];
+/** 通知の値。旧データの「前日」は「1日前」と同じ選択として扱う(保存値はそのまま) */
+const alarmNorm = v => v === '前日' ? '1日前' : (v || '');
 const DT_FIXED = ['pay', 'settle'];
 /** 分を足した TS('YYYY-MM-DDTHH:MM') */
 function dtAddMin(ts, m) { const t = tsMin(ts) + m, dd = Math.floor(t / 1440), r = t - dd * 1440; return tsOf(dAdd('1970-01-01', dd), m2hm(r)); }
@@ -343,7 +345,7 @@ function dtEBody() {
     ${rows(row({ t: '終日', right: toggle(d.allDay, 'dtEAll()', '終日') }))}
     ${time}
     ${d.kind === 'pay' ? field('金額', input({ value: d.amt || '', mode: 'numeric', ph: '0', oninput: "dtEIn('amt',this.value)" })) : ''}
-    ${plan && (d.tpl || !d.id || d.real) && !fx ? dtGroup('繰り返し', seg(DT_REPS, d.rep, 'dtERep')) : ''}${plan && !fx ? dtGroup('通知', dtWrap(chips(DT_ALARMS, d.alarm, 'dtEAlarm'))) : ''}
+    ${plan && (d.tpl || !d.id || d.real) && !fx ? dtGroup('繰り返し', seg(DT_REPS, d.rep, 'dtERep')) : ''}${plan && !fx ? dtGroup('通知', dtWrap(chips(DT_ALARMS, alarmNorm(d.alarm), 'dtEAlarm'))) : ''}
     ${d.kind === 'settle' ? '' : dtGroup('関わった', `<div class="stack">${d.roles.length ? rows(d.roles.map((r, i) => `<div class="prop"><button class="prop-k dt-rk" onclick="dtERoleSet(${i})" aria-label="${esc(r.r)}の役割を直す">${esc(r.r)}</button><span class="prop-v"><button class="dt-rp" onclick="dtEPartner(${i})" aria-label="相手を選び直す">${ent(r.e, { name: r.name, link: false })}</button></span><button class="icon-btn" onclick="dtERoleDel(${i})" aria-label="${esc(roleName(r) || r.name || r.r)}を外す">${ic('close')}</button></div>`)) : ''}${btn('足す', 'dtERoleAdd()', 'dash', { icon: 'plus' })}</div>`)}
     ${cands.length || par ? pickField('活動の中', par ? `${kindIc(par)}${esc(actTitle(par))}` : 'なし', 'dtEParent()', { emptyv: !par }) : ''}
     ${field('メモ書き', textarea({ value: d.note, rows: 3, ph: 'メモ', oninput: "dtEIn('note',this.value)" }))}</div>`;
