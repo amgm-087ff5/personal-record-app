@@ -85,4 +85,4 @@
 /* ---------- 一覧の要約・完了のもっと見る ---------- */
 .td-sum{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s3);align-items:center;padding:0 var(--s1)}
 /* 一覧の最後に来るので、下のナビに隠れない余白を取る */
-.td-more{display:flex;margin-top:var(--s2);padding-bottom:calc(var(--nav-h) + var(--s5) + env(safe-area-inset-bottom))}
+.td-more{display:flex;margin-top:var(--s2)}
