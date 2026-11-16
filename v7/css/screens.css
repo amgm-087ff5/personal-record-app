@@ -138,11 +138,17 @@ i.p{box-shadow:inset 0 0 0 1.2px var(--tx-3)}
 
 /* ホーム: 今日の流れ(帯の中身を言葉で) */
 .flow{display:flex;flex-direction:column}
-.fl{display:grid;grid-template-columns:44px 14px minmax(0,1fr) auto;align-items:center;gap:var(--s2);min-height:44px;font-size:var(--fs-cap)}
+.fl{position:relative;display:grid;grid-template-columns:44px 14px minmax(0,1fr) auto;align-items:center;gap:var(--s2);min-height:44px;font-size:var(--fs-cap)}
+/* 時間の線: 点の列(44+8+7 = 59px)を縦につなぐ。済んだ所は実線、これからは破線。先頭は点から下、末尾は上から点まで */
+.fl::before{content:"";position:absolute;left:58.25px;top:0;bottom:0;width:1.5px;background:var(--rail)}
+.fl.plan::before,.fl.late::before{background:repeating-linear-gradient(to bottom,var(--rail) 0 4px,transparent 4px 8px)}
+.fl:first-of-type::before{top:50%}.fl:last-of-type::before{bottom:50%}.fl:only-of-type::before{display:none}
+.fl > i{position:relative;z-index:1}
+.fl.plan > i,.fl.late > i{background:var(--card)}   /* 点の後ろで線が透けないように */
 .fl time{font-weight:var(--w-m);color:var(--tx-3);text-align:right}
 .fl > i{justify-self:center;width:8px;height:8px;border-radius:2.5px;background:var(--done);transform:rotate(45deg)}
 .fl.span > i{transform:none;width:6px;height:18px;border-radius:3px}
-.fl.plan > i,.fl.late > i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line-2)}
+.fl.plan > i,.fl.late > i{box-shadow:inset 0 0 0 1.5px var(--line-2)}
 .fl.late > i{box-shadow:inset 0 0 0 1.5px var(--me)}
 .fl b{font-weight:var(--w-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fl.plan b{color:var(--tx-2)}

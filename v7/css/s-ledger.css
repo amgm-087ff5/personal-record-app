@@ -58,7 +58,8 @@
 /* 内訳・カテゴリの行 */
 .lg-sw{display:block;width:12px;height:12px;border-radius:4px;flex:none}
 .lg-n{padding-left:calc(var(--s4) + var(--dd,0px))}
-.lg-n.d1{--dd:20px}.lg-n.d2{--dd:40px}.lg-n.d3{--dd:60px}
+.lg-n.d1{--dd:20px;--depth:1}.lg-n.d2{--dd:40px;--depth:2}.lg-n.d3{--dd:60px;--depth:3}
+.lg-n.d1,.lg-n.d2,.lg-n.d3{background-image:repeating-linear-gradient(90deg,transparent 0 9.25px,var(--rail) 9.25px 10.75px,transparent 10.75px 20px);background-repeat:no-repeat;background-size:calc(var(--depth) * 20px) 100%;background-position:12px 0}   /* 木の線(カテゴリの入れ子。親の色の四角の真下を通る) */
 .lg-n .row-lead{width:12px}
 .lg-n .row-t{font-weight:var(--w-m)}
 .lg-n.d1 .row-t,.lg-n.d2 .row-t{font-weight:var(--w-m)}
@@ -95,8 +96,13 @@
 .lg-sum{display:flex;align-items:baseline;justify-content:space-between;padding:0 var(--s1);font-size:var(--fs-cap);font-weight:var(--w-m);color:var(--tx-2)}
 .lg-sum .amt{font-size:var(--fs-title);color:var(--tx)}
 #lg-list{display:flex;flex-direction:column;gap:var(--s3)}
-.lg-dg{display:flex;flex-direction:column;gap:var(--s2)}
-.lg-dh{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);padding:var(--s2) var(--s1) 0}
+.lg-dg{position:relative;padding-left:var(--s5);display:flex;flex-direction:column;gap:var(--s2)}
+/* 時間の線: 日のかたまりを縦の線でつなぎ、日の見出しに点を置く(日付順の並びだと一目で分かる) */
+.lg-dg::before{content:"";position:absolute;left:7px;top:0;bottom:calc(var(--s3) * -1);width:1.5px;background:var(--rail)}
+.lg-dg:first-of-type::before{top:calc(var(--s2) + 10px)}.lg-dg:last-child::before{bottom:0}.lg-dg:only-child::before{display:none}
+.lg-dh::before{content:"";position:absolute;left:calc(var(--s5) * -1 + 4px);top:calc(var(--s2) + 6px);width:7px;height:7px;border-radius:2px;background:var(--sub);transform:rotate(45deg)}
+.lg-dg:has(.tag.me) .lg-dh::before{background:var(--me)}
+.lg-dh{position:relative;display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);padding:var(--s2) var(--s1) 0}
 .lg-dh b{font-size:var(--fs-cap);font-weight:var(--w-m);color:var(--tx-2);display:inline-flex;gap:var(--s2);align-items:center}
 .lg-dh .amt{font-size:var(--fs-cap)}
 

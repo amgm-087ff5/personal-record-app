@@ -242,7 +242,7 @@ function enfBody() {
     <div id="enf-warn">${enfWarn()}</div>
     ${F.exists ? `<div class="en-tg"><span>前の値を履歴に残す</span>${toggle(F.keep, 'enfKeep()', '前の値を履歴に残す')}</div>` : ''}
     ${F.exists && F.keep ? `<div class="grid2">${field('いつから', input({ id: 'enf-s', type: 'month', value: F.since, oninput: 'ENF.since=this.value' }))}${field('理由', input({ id: 'enf-w', value: F.why, ph: '例: 転居', oninput: 'ENF.why=this.value' }))}</div>` : ''}
-    ${hist.length ? `<section>${sec('履歴', { n: hist.length })}${rows(hist.map(h => row({ t: h.v, s: `${enSpan(h)}${h.why ? ' · 理由: ' + h.why : ''}` })))}</section>` : ''}`;
+    ${hist.length ? `<section>${sec('履歴', { n: hist.length })}${rows(hist.map(h => row({ cls: 'rl-h', t: h.v, s: `${enSpan(h)}${h.why ? ' · 理由: ' + h.why : ''}` })))}</section>` : ''}`;
 }
 function enfInput(v) {
   ENF.v = v; $('#enf-warn').innerHTML = enfWarn();

@@ -66,7 +66,7 @@ function mmMemos() {
   const card = id => `<div class="mm-i" id="mm-${id}">${memoCard(id, { clamp: 5, on: `openMemoEditor(${q(id)})` })}</div>`;
   const pins = list.filter(([, m]) => m.pin), days = [...new Set(list.filter(([, m]) => !m.pin).map(([, m]) => dOf(m.at)))];
   return (pins.length ? `<section>${sec('ピン留め', { n: pins.length })}<div class="stack">${pins.map(([id]) => card(id)).join('')}</div></section>` : '')
-    + days.map(d => { const ms = list.filter(([, m]) => !m.pin && dOf(m.at) === d); return `<section>${sec(mmDayLabel(d), { n: ms.length })}<div class="stack">${ms.map(([id]) => card(id)).join('')}</div></section>`; }).join('');
+    + days.map((d, i) => { const ms = list.filter(([, m]) => !m.pin && dOf(m.at) === d); return `<section class="rl-day${i === 0 ? ' rl-b' : ''}${i === days.length - 1 ? ' rl-e' : ''}">${sec(mmDayLabel(d), { n: ms.length })}<div class="stack">${ms.map(([id]) => card(id)).join('')}</div></section>`; }).join('');
 }
 
 /* ---------- ノートの一覧(更新の新しい順) ---------- */
