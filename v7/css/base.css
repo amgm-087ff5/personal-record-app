@@ -124,7 +124,8 @@ body.has-sheet .toasts{bottom:calc(env(safe-area-inset-bottom) + 96px)}
 /* ---------- ソフトウェアキーボード(js/kbd.js)---------- */
 /* --kb = 画面が縮まなかった端末でキーボードが覆う高さ。その分の余白を足し、最下部までスクロールできるようにする */
 .sheet-b{padding-bottom:calc(var(--s5) + var(--kb,0px))}
-.screen{padding-bottom:calc(var(--s8) + var(--kb,0px))}
+.screen{padding-bottom:calc(var(--page-end) + var(--kb,0px))}
+@media (min-width:900px){.screen{padding-bottom:calc(var(--s8) + var(--kb,0px))}}  /* 幅広はナビが無い */
 body.kb-open #nav{display:none}
 body.kb-open .toasts{bottom:var(--s3)}
 body.kb-open .sheet-f{padding-bottom:var(--s3)}
