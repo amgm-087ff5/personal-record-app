@@ -1,10 +1,11 @@
 /* 個人記録 v7「はれ」 — 土台(リセット・骨組み・ナビ・シート・トースト)。値は tokens.css の変数だけ */
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%;scroll-padding-top:60px}
-body{margin:0;font-family:var(--font);font-size:var(--fs-body);line-height:1.5;color:var(--tx);font-weight:450;
+body{margin:0;font-family:var(--font);font-size:var(--fs-body);line-height:1.5;color:var(--tx);font-weight:var(--w);
   background:radial-gradient(120% 60% at 0% 0%,var(--bg-hi),transparent 60%) fixed,var(--bg);
   -webkit-font-smoothing:antialiased;font-feature-settings:"palt" 0;overflow-x:hidden;min-height:100svh;-webkit-tap-highlight-color:transparent}
 h1,h2,h3,p,figure{margin:0}
+h1,h2,h3,h4,b,strong,th{font-weight:var(--w-m)}   /* 既定の太字を使わない。強弱は大きさで */
 a{color:inherit;text-decoration:none}
 button,input,select,textarea{font:inherit;color:inherit;margin:0}
 button{background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
@@ -36,19 +37,18 @@ html:not(.ready) body{visibility:hidden}
 .nav-bar{position:relative;height:var(--nav-h);max-width:536px;margin:0 auto;border-radius:var(--r-xl);background:var(--glass-solid);box-shadow:var(--e-nav);overflow:hidden;pointer-events:auto}
 @supports ((-webkit-backdrop-filter:blur(1px)) or (backdrop-filter:blur(1px))){.nav-bar{background:var(--glass);-webkit-backdrop-filter:blur(20px) saturate(1.5);backdrop-filter:blur(20px) saturate(1.5)}}
 .nav-deck{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr 64px 1fr 1fr;align-items:stretch;padding:0 var(--s-hair);pointer-events:none}  /* 2枚が重なるので枠は押下を受けない(受けると下の枚のタブが押せない) */
-.nav-i{pointer-events:auto;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s-hair);color:var(--tx-3);font-size:var(--fs-min);font-weight:600;letter-spacing:-.06em;white-space:nowrap;will-change:transform}
+.nav-i{pointer-events:auto;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s-hair);color:var(--tx-3);font-size:var(--fs-min);font-weight:var(--w-m);letter-spacing:-.06em;white-space:nowrap;will-change:transform}
 /* 幅の狭い画面(360px級)では、長い題が中央の＋に当たるので短い題に替える */
 .nav-i .nav-s{display:none}
 @media (max-width:379px){.nav-i .nav-s{display:inline}.nav-i:has(.nav-s)>span:first-of-type{display:none}}
 .nav-i svg{width:24px;height:24px}
-.nav-i{font-weight:600}
-.nav-i.is-on{color:var(--me);font-weight:800}   /* 選択中 = 色と太さだけ */
-.nav-i.is-on svg{stroke-width:2.3}
+.nav-i{font-weight:var(--w-m)}
+.nav-i.is-on{color:var(--me)}   /* 選択中 = 色だけ(アイコンは面なので色で見せる) */
 .nav-i svg{transition:transform var(--t3) var(--pop)}
 .nav-i:active svg{transform:scale(.88);transition-duration:var(--t1)}
-.nav-badge{position:absolute;top:8px;left:calc(50% + 6px);min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--over);color:var(--on);font-size:var(--fs-min);font-weight:700;line-height:17px;text-align:center;font-style:normal;box-shadow:0 0 0 2px var(--card)}
+.nav-badge{position:absolute;top:8px;left:calc(50% + 6px);min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--over);color:var(--on);font-size:var(--fs-min);font-weight:var(--w-m);line-height:17px;text-align:center;font-style:normal;box-shadow:0 0 0 2px var(--card)}
 .nav-plus{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + var(--s2) + 7px);width:56px;height:48px;margin-left:-28px;border-radius:18px;background:var(--fill-me);color:var(--on);display:grid;place-items:center;box-shadow:var(--e-me),inset 0 1px 0 rgb(var(--white-rgb) /.3);pointer-events:auto;transition:transform var(--t3) var(--pop)}
-.nav-plus svg{width:26px;height:26px;stroke-width:2.4}
+.nav-plus svg{width:26px;height:26px}
 .nav-plus .nav-badge,.rail-plus .nav-badge{top:-6px;left:auto;right:-6px;background:var(--card);color:var(--me);box-shadow:0 0 0 1.5px var(--me)}   /* ＋の数は青(面が青の塗りなので白地に青の文字・縁)。赤は ToDo だけ */
 .rail-plus{position:relative}
 .nav-plus:active{transform:scale(.93);transition-duration:var(--t1)}
@@ -67,13 +67,13 @@ body.has-sheet #nav{pointer-events:none}
   #main,#side{overflow:auto;height:100dvh}
   .screen{padding-bottom:var(--s8)}
   .rail-logo{width:44px;height:44px;border-radius:14px;background:var(--sky);background-size:240% 100%;background-position:45% 0;color:var(--on);display:grid;place-items:center;margin-bottom:var(--s3)}
-  .rail-i{position:relative;width:88px;white-space:nowrap;letter-spacing:-.05em;min-height:56px;border-radius:var(--r-md);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s-hair);font-size:var(--fs-min);font-weight:600;color:var(--tx-3)}
+  .rail-i{position:relative;width:88px;white-space:nowrap;letter-spacing:-.05em;min-height:56px;border-radius:var(--r-md);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s-hair);font-size:var(--fs-min);font-weight:var(--w-m);color:var(--tx-3)}
   .rail-i{transition:background var(--t1),transform var(--t3) var(--pop)}
   .rail-i:hover{background:var(--card)}
   .rail-i:active{transform:scale(.96);transition-duration:var(--t1)}
   .rail-i.is-on{color:var(--me);background:var(--me-soft)}
   .rail-i .nav-badge{top:6px}
-  .rail-plus{margin-top:var(--s3);width:60px;height:60px;border-radius:20px;background:var(--fill-me);color:var(--on);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:var(--fs-min);font-weight:700;box-shadow:var(--e-me)}
+  .rail-plus{margin-top:var(--s3);width:60px;height:60px;border-radius:20px;background:var(--fill-me);color:var(--on);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:var(--fs-min);font-weight:var(--w-m);box-shadow:var(--e-me)}
   .toasts{left:96px!important}
 }
 @media (min-width:1180px){
@@ -95,26 +95,26 @@ body.has-sheet #nav{pointer-events:none}
 .sheet-wrap.is-open .sheet{transform:none}
 .sheet-h{position:relative;flex:none;display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:var(--s1);padding:var(--s4) var(--s3) var(--s2);touch-action:none;cursor:grab}
 .sheet-grab{position:absolute;top:7px;left:50%;width:40px;height:4px;margin-left:-20px;border-radius:2px;background:var(--line-2)}
-.sheet-h h2{font-size:var(--fs-title);font-weight:750;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet-h h2{font-size:var(--fs-title);font-weight:var(--w-m);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sheet-lead{display:flex;gap:var(--s1);align-items:center;min-width:44px;justify-content:flex-end}
 .sheet-b{flex:1;overflow:auto;overscroll-behavior:contain;padding:var(--s2) var(--page-x) var(--s5);display:flex;flex-direction:column;gap:var(--s4)}
 .sheet-b > *{flex:none}
 .sheet-f{flex:none;display:flex;gap:var(--s2);padding:var(--s3) var(--page-x) calc(env(safe-area-inset-bottom) + var(--s3));background:linear-gradient(transparent,var(--bg) 30%)}
 .sheet-ask{position:absolute;left:0;right:0;bottom:0;z-index:3;display:grid;grid-template-columns:1fr 1fr;gap:var(--s2);padding:var(--s5) var(--page-x) calc(env(safe-area-inset-bottom) + var(--s4));background:var(--card);border-radius:var(--r-xl) var(--r-xl) 0 0;box-shadow:var(--e3)}
-.sheet-ask p{grid-column:1/-1;font-weight:700;font-size:var(--fs-title)}
+.sheet-ask p{grid-column:1/-1;font-weight:var(--w-m);font-size:var(--fs-title)}
 .confirm-b{font-size:var(--fs-body);color:var(--tx-2);line-height:1.7}
 @media (min-width:900px){.sheet-wrap{align-items:center}.sheet{border-radius:var(--r-xl);max-height:min(86dvh,860px);box-shadow:var(--e3);transform:translateY(24px) scale(.96);opacity:0;transition:transform var(--t3) var(--pop),opacity var(--t2)}.sheet.tall{height:min(86dvh,860px)}.sheet-wrap.is-open .sheet{opacity:1}.sheet-grab{display:none}}
 
 /* ---------- トースト ---------- */
 .toasts{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + var(--nav-h) + 44px);z-index:60;display:flex;flex-direction:column;align-items:center;gap:var(--s2);padding:0 var(--s4);pointer-events:none}
 body.has-sheet .toasts{bottom:calc(env(safe-area-inset-bottom) + 96px)}
-.toast{pointer-events:auto;display:flex;align-items:center;gap:var(--s2);min-height:48px;max-width:480px;padding:var(--s1) var(--s2) var(--s1) var(--s3);border-radius:var(--r-md);background:var(--toast-bg);color:var(--toast-tx);box-shadow:var(--e3);font-weight:600;font-size:var(--fs-cap);opacity:0;transform:translateY(16px) scale(.94);transition:opacity var(--t2),transform var(--t3) var(--pop)}
+.toast{pointer-events:auto;display:flex;align-items:center;gap:var(--s2);min-height:48px;max-width:480px;padding:var(--s1) var(--s2) var(--s1) var(--s3);border-radius:var(--r-md);background:var(--toast-bg);color:var(--toast-tx);box-shadow:var(--e3);font-weight:var(--w-m);font-size:var(--fs-cap);opacity:0;transform:translateY(16px) scale(.94);transition:opacity var(--t2),transform var(--t3) var(--pop)}
 .toast.in{opacity:1;transform:none}
 .toast-ic{width:22px;height:22px;border-radius:7px;background:var(--ok);color:var(--on);display:grid;place-items:center}
-.toast-ic svg{width:15px;height:15px;stroke-width:2.6}
+.toast-ic svg{width:15px;height:15px}
 .toast.bad .toast-ic{background:var(--done)}
 .toast-m{padding:var(--s2) var(--s1);margin-right:auto}
-.toast-u{min-height:40px;padding:0 var(--s3);border-radius:var(--r-sm);color:var(--toast-act);font-weight:700;white-space:nowrap}
+.toast-u{min-height:40px;padding:0 var(--s3);border-radius:var(--r-sm);color:var(--toast-act);font-weight:var(--w-m);white-space:nowrap}
 .toast-u:active{background:rgb(var(--white-rgb) /.1)}
 /* 動きは全部止める(出る・弾む・明滅・数え上がり。数え上がりは core.js も止める) */
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important;transition-delay:0s!important;scroll-behavior:auto!important}}
@@ -129,3 +129,11 @@ body.has-sheet .toasts{bottom:calc(env(safe-area-inset-bottom) + 96px)}
 body.kb-open #nav{display:none}
 body.kb-open .toasts{bottom:var(--s3)}
 body.kb-open .sheet-f{padding-bottom:var(--s3)}
+
+/* ---------- 編集シートのフォーム欄 = カード(入力欄はカードの中で一段くぼむ) ---------- */
+.sheet-b .field,.sheet-b > .grid2{padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--card-fill);box-shadow:var(--e-card)}
+.sheet-b .field .field,.sheet-b .grid2 .field{padding:0;background:none;box-shadow:none;border-radius:0}
+.sheet-b .field .input,.sheet-b .grid2 .input{background:var(--card-2);box-shadow:none}
+.sheet-b .field .input:focus,.sheet-b .grid2 .input:focus{box-shadow:inset 0 0 0 1.5px var(--me),var(--ring)}
+.sheet{box-shadow:var(--edge),var(--e3),0 60px 0 var(--bg)}
+.toast{box-shadow:var(--e3)}

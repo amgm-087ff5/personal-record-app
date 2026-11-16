@@ -299,10 +299,10 @@ const catKids = k => Object.keys(DB.cats).filter(c => (DB.cats[c].p || null) ===
 const catName = k => DB.cats[k] ? DB.cats[k].n : '未分類';
 const catPath = k => catAnc(k).map(c => DB.cats[c].n).join(' › ') || '未分類';
 const catRoot = k => catAnc(k)[0] || k;
-const catColor = k => { for (const c of catAnc(k).reverse()) if (DB.cats[c].c) return DB.cats[c].c; return '#9AA6BC'; };
+const catColor = k => { for (const c of catAnc(k).reverse()) if (DB.cats[c].c) return DB.cats[c].c; return '#8E9BB8'; };
 const _inh = (k, f) => { for (const c of catAnc(k).reverse()) if (DB.cats[c][f] !== undefined) return DB.cats[c][f] === 'ask' ? null : DB.cats[c][f]; return null; };
 const catFx = k => _inh(k, 'fx'), catSp = k => _inh(k, 'sp');
-const CAT_COLORS = ['#8A9AC0', '#6FB3B8', '#E08FA6', '#8CC49A', '#7FAAE3', '#A9D3EA', '#F0BBCB', '#E3B36B', '#A9B4C6'];
+const CAT_COLORS = ['#2F4F9E', '#5A78BF', '#8EA3D6', '#1F3677', '#B9C6E6', '#54648A', '#C3CBDC', '#8E9BB8', '#B9C2D6'];
 
 /* ---- 支払い方法(種類 method の ent) ---- */
 const methodsAll = () => Object.entries(DB.ents).filter(([, e]) => e.types.includes('method'));
@@ -1215,13 +1215,13 @@ function seed() {
   R('hanako', 'taro', '配偶者', { from: '2020-04' }); R('hanako', 'acorp', '勤務先', { inv: '従業員', from: '2018-04' }); R('hanako', 'ken', '友人'); R('proj1', 'hanako', '一緒に');
   R('ken', 'acorp', '勤務先', { inv: '従業員', from: '2016-04', to: '2022-03' });
   db.cats = {
-    house: { n: '住居', c: '#8A9AC0', fx: '固定', sp: '日常' }, rent: { n: '家賃', p: 'house' },
-    comm: { n: '通信', c: '#6FB3B8', fx: '固定', sp: '日常' }, phone: { n: 'スマホ', p: 'comm' }, sub: { n: 'サブスク', p: 'comm' },
-    food: { n: '食費', c: '#E08FA6', fx: '変動', sp: '日常' }, cook: { n: '自炊', p: 'food' }, eatout: { n: '外食', p: 'food' }, cafe: { n: 'カフェ・軽食', p: 'food' }, alcohol: { n: 'お酒', p: 'food' },
-    daily: { n: '日用品', c: '#8CC49A', fx: '変動', sp: '日常' },
-    trans: { n: '交通費', c: '#7FAAE3', fx: '変動', sp: '日常' }, train: { n: '電車', p: 'trans' }, taxi: { n: 'タクシー', p: 'trans', sp: '非日常' },
-    fun: { n: '娯楽', c: '#E3B36B', fx: '変動', sp: '日常' }, hobby: { n: '趣味', p: 'fun' }, travel: { n: '旅行', p: 'fun', sp: '非日常' },
-    gift: { n: '贈り物', c: '#F0BBCB', fx: 'ask', sp: '非日常' },
+    house: { n: '住居', c: '#2F4F9E', fx: '固定', sp: '日常' }, rent: { n: '家賃', p: 'house' },
+    comm: { n: '通信', c: '#5A78BF', fx: '固定', sp: '日常' }, phone: { n: 'スマホ', p: 'comm' }, sub: { n: 'サブスク', p: 'comm' },
+    food: { n: '食費', c: '#8EA3D6', fx: '変動', sp: '日常' }, cook: { n: '自炊', p: 'food' }, eatout: { n: '外食', p: 'food' }, cafe: { n: 'カフェ・軽食', p: 'food' }, alcohol: { n: 'お酒', p: 'food' },
+    daily: { n: '日用品', c: '#1F3677', fx: '変動', sp: '日常' },
+    trans: { n: '交通費', c: '#B9C6E6', fx: '変動', sp: '日常' }, train: { n: '電車', p: 'trans' }, taxi: { n: 'タクシー', p: 'trans', sp: '非日常' },
+    fun: { n: '娯楽', c: '#8E9BB8', fx: '変動', sp: '日常' }, hobby: { n: '趣味', p: 'fun' }, travel: { n: '旅行', p: 'fun', sp: '非日常' },
+    gift: { n: '贈り物', c: '#C3CBDC', fx: 'ask', sp: '非日常' },
   };
   db.lists = { inbox: { n: '受信箱' }, life: { n: '生活' }, shop: { n: '買い物', shop: 'super' } };
   const HOW = { '現金': 'cash', 'クレジットカード ••1234': 'card', 'Suica': 'suica', 'QRコード決済': 'qr', '銀行振込': 'bank' };
