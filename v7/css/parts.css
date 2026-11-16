@@ -326,3 +326,14 @@ a.sky-b::after{content:"";position:absolute;inset:-10px -4px}
 .solidify::before{content:"";position:absolute;inset:0;border:1.5px dashed var(--line-2);border-radius:inherit;pointer-events:none;animation:dash-out var(--t3) var(--ease) forwards}
 @keyframes solid-in{from{background:transparent;box-shadow:none}}
 @keyframes dash-out{from{opacity:1}to{opacity:0}}
+
+/* =====================================================================
+   構造の手がかり(v7.2): 並びの性質を、さりげない線で見せる(標準 3.13)
+   時間の並び = 縦の線 + 点 / 階層の並び = 親から下がる木の線。線は --rail(淡い青灰)・1.5px。
+   ===================================================================== */
+/* 木の線の書き方: repeating-linear-gradient で段ごとの縦線を引き、background-size の幅を 段数 x 20px に切る(種類の木 .en-tr / カテゴリの木 .lg-n) */
+/* 変化の並び(履歴): 左に縦の線と点。先頭は点から下、末尾は上から点まで */
+.rl-h{padding-left:calc(var(--s4) + 28px);background-image:linear-gradient(var(--done),var(--done)),linear-gradient(var(--rail),var(--rail));background-repeat:no-repeat;background-size:7px 7px,1.5px 100%;background-position:17.5px 50%,21px 0}
+.rl-h:first-child{background-size:7px 7px,1.5px 50%;background-position:17.5px 50%,21px 50%}
+.rl-h:last-child{background-size:7px 7px,1.5px 50%;background-position:17.5px 50%,21px 0}
+.rl-h:only-child{background-size:7px 7px,0 0}

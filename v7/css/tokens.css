@@ -33,6 +33,7 @@
   --owe:var(--sub); --owe-soft:var(--sub-soft); --owe-line:var(--sub-line);
   --ok:var(--me); --ok-soft:var(--me-soft);
   --read:#8794AC;          /* 読み取った値(未確認)= サブの薄い側 */
+  --rail:color-mix(in srgb,var(--sub-line) 62%,transparent);   /* 構造の線(時間の線・木の線)。さりげなく */
   --over:#C8454B;          /* ToDo の期限切れ(赤はこの意味だけ) */
   --over-soft:#F8E7E8;
   /* --- 空(時刻の物差し。0時→24時) --- */

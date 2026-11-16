@@ -24,3 +24,10 @@
 .mm-lk b{font-weight:var(--w-m);overflow-wrap:anywhere}
 .mm-lk .mini{color:var(--tx-3)}
 #mm-find:empty{display:none}
+
+/* 時間の線: 日のかたまりを縦の線でつなぎ、日の見出しに点を置く(新しい順の並びだと一目で分かる) */
+.rl-day{position:relative;padding-left:var(--s5)}
+.rl-day::before{content:"";position:absolute;left:7px;top:0;bottom:calc(var(--gap-sec) * -1);width:1.5px;background:var(--rail)}
+.rl-day.rl-b::before{top:14px}.rl-day.rl-e::before{bottom:0}.rl-day.rl-b.rl-e::before{display:none}
+.rl-day .sec{position:relative}
+.rl-day .sec::before{content:"";position:absolute;left:calc(var(--s5) * -1 + 4px);top:11px;width:7px;height:7px;border-radius:2px;background:var(--sub);transform:rotate(45deg)}
