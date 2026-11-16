@@ -3,7 +3,7 @@
 .cv-jot{padding:var(--s3) var(--s4)}
 .cv-jot-b{margin:0;font-size:var(--fs-body);line-height:1.7;color:var(--tx);white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .cv-jot-b.is-full{display:block;overflow:visible}
-.cv-more{min-height:44px;padding:0 var(--s2);font-size:var(--fs-cap);font-weight:700;color:var(--me)}
+.cv-more{min-height:44px;padding:0 var(--s2);font-size:var(--fs-cap);font-weight:var(--w-m);color:var(--me)}
 .cv-f{min-width:0}
 .cv-f .grid2{min-width:0}
 .cv-f .grid2 > .field{min-width:0}

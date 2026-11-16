@@ -19,12 +19,12 @@
 .in-dock{flex:none;display:flex;flex-direction:column;gap:var(--s2);padding:var(--s2) 0 calc(env(safe-area-inset-bottom) + var(--s2));border-top:1px solid var(--line)}
 .in-undo{order:-1;display:flex;justify-content:flex-end}
 .in-undo:empty{display:none}
-.in-undo-in{display:inline-flex;align-items:center;gap:var(--s1);padding-left:var(--s3);border-radius:var(--r-pill);background:var(--card);box-shadow:none;font-size:var(--fs-cap);font-weight:650;color:var(--tx-2)}
+.in-undo-in{display:inline-flex;align-items:center;gap:var(--s1);padding-left:var(--s3);border-radius:var(--r-pill);background:var(--card);box-shadow:none;font-size:var(--fs-cap);font-weight:var(--w);color:var(--tx-2)}
 .in-aux:empty{display:none}
 .in-selbar{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center}
 
 .in-row{display:flex;align-items:flex-end;gap:var(--s2)}
-.in-t{flex:1 1 auto;min-width:0;min-height:48px;padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--card);box-shadow:inset 0 0 0 1px var(--line-2);border:0;font:inherit;font-size:var(--fs-input);line-height:1.6;color:var(--tx);resize:none;overflow-y:hidden;appearance:none;-webkit-appearance:none}
+.in-t{flex:1 1 auto;min-width:0;min-height:48px;padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--card-fill);box-shadow:var(--edge),inset 0 0 0 1px var(--line-2);border:0;font:inherit;font-size:var(--fs-input);line-height:1.6;color:var(--tx);resize:none;overflow-y:hidden;appearance:none;-webkit-appearance:none}
 .in-t::placeholder{color:var(--tx-3);opacity:.8}
 .in-t:focus{outline:none;box-shadow:inset 0 0 0 2px var(--me),var(--ring)}
 .in-mic{flex:none;background:var(--card);box-shadow:none;color:var(--tx-2)}
@@ -38,7 +38,7 @@
 /* 種類の列(横に流れる) */
 .in-kinds{flex:none;gap:var(--s2);overflow-x:auto;margin:0 calc(var(--page-x) * -1);padding:var(--s1) var(--page-x);scrollbar-width:none}
 .in-kinds::-webkit-scrollbar{display:none}
-.in-k{flex:none;display:inline-flex;align-items:center;min-height:44px;padding:0 var(--s3);border-radius:var(--r-pill);border:1.5px solid transparent;background:var(--card);box-shadow:none;font-size:var(--fs-cap);font-weight:700;color:var(--tx-2);white-space:nowrap}
+.in-k{flex:none;display:inline-flex;align-items:center;min-height:44px;padding:0 var(--s3);border-radius:var(--r-pill);border:1.5px solid transparent;background:var(--card);box-shadow:none;font-size:var(--fs-cap);font-weight:var(--w-m);color:var(--tx-2);white-space:nowrap}
 .in-k:active{background:var(--card-2)}
 .in-k.is-on{background:var(--me-soft);color:var(--me);box-shadow:none}
 .in-k.is-read{border:1.5px dashed var(--read);box-shadow:none}
@@ -47,14 +47,14 @@
 .in-cards{flex:0 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;flex-direction:column;gap:var(--s2)}
 .in-card{display:flex;flex-direction:column;gap:var(--s1);min-width:0;padding:var(--s3) var(--s4);border-radius:var(--r-md);background:var(--card-2)}
 .in-card.is-weak{background:transparent;border:1.5px dashed var(--read)}
-.in-card.is-empty{flex:1 1 auto;align-items:center;justify-content:center;background:transparent;border:1.5px dashed var(--read);font-size:var(--fs-cap);font-weight:700;color:var(--tx-3)}
-.in-card.is-none{padding:var(--s2) var(--s1);background:transparent;font-size:var(--fs-cap);font-weight:700;color:var(--tx-3)}
-.in-card-h{display:flex;align-items:center;gap:var(--s2);font-size:var(--fs-min);font-weight:700;color:var(--tx-3)}
+.in-card.is-empty{flex:1 1 auto;align-items:center;justify-content:center;background:transparent;border:1.5px dashed var(--read);font-size:var(--fs-cap);font-weight:var(--w);color:var(--tx-3)}
+.in-card.is-none{padding:var(--s2) var(--s1);background:transparent;font-size:var(--fs-cap);font-weight:var(--w);color:var(--tx-3)}
+.in-card-h{display:flex;align-items:center;gap:var(--s2);font-size:var(--fs-min);font-weight:var(--w);color:var(--tx-3)}
 .in-card-b{display:flex;align-items:center;gap:var(--s2);min-width:0}
-.in-ty{flex:none;display:inline-flex;align-items:center;min-height:22px;padding:0 var(--s2);border-radius:var(--r-xs);background:var(--card);color:var(--tx-2);font-size:var(--fs-min);font-weight:700;white-space:nowrap}
+.in-ty{flex:none;display:inline-flex;align-items:center;min-height:22px;padding:0 var(--s2);border-radius:var(--r-xs);background:var(--card);color:var(--tx-2);font-size:var(--fs-min);font-weight:var(--w-m);white-space:nowrap}
 .in-ty.is-plan{background:transparent;border:1.5px dashed var(--line-2)}
-.in-tt{min-width:0;font-size:var(--fs-body);font-weight:750;color:var(--tx);overflow-wrap:anywhere}
-.in-facts{display:flex;flex-wrap:wrap;gap:2px var(--s3);font-size:var(--fs-cap);font-weight:650;color:var(--tx-2)}
+.in-tt{min-width:0;font-size:var(--fs-body);font-weight:var(--w-m);color:var(--tx);overflow-wrap:anywhere}
+.in-facts{display:flex;flex-wrap:wrap;gap:2px var(--s3);font-size:var(--fs-cap);font-weight:var(--w);color:var(--tx-2)}
 .in-card.is-diary .in-tt{-webkit-line-clamp:3}
 .in-card.is-diary .in-act{margin-top:var(--s1)}
 .in-card.is-diary .in-act .btn{flex:1 1 auto}
@@ -62,7 +62,7 @@
 /* 読んだ語の小札(押すと取り消す。押せる面は 44px) */
 .in-mks{display:flex;flex-wrap:wrap;gap:0 var(--s1)}
 .in-mk{display:inline-flex;align-items:center;min-height:44px;padding:0}
-.in-mk-c{display:inline-flex;align-items:center;gap:4px;min-height:26px;padding:0 var(--s2);border-radius:var(--r-pill);border:1.5px dashed var(--read);background:var(--card);font-size:var(--fs-min);font-weight:700;color:var(--tx-2);white-space:nowrap}
+.in-mk-c{display:inline-flex;align-items:center;gap:4px;min-height:26px;padding:0 var(--s2);border-radius:var(--r-pill);border:1.5px dashed var(--read);background:var(--card);font-size:var(--fs-min);font-weight:var(--w);color:var(--tx-2);white-space:nowrap}
 .in-mk-c svg{width:12px;height:12px}
 .in-mk.is-off .in-mk-c{border-style:solid;border-color:var(--line-2);color:var(--tx-3);text-decoration:line-through}
 .in-mk.is-off .in-mk-c svg{text-decoration:none}
@@ -81,7 +81,7 @@
 .in-tl-l{justify-self:start}
 .in-tl-c{justify-self:center}
 .in-tl-r{justify-self:end;display:flex;gap:2px}
-.in-tb{flex:none;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:var(--r-pill);background:var(--card);box-shadow:none;font-size:var(--fs-body);font-weight:700;color:var(--tx-2)}
+.in-tb{flex:none;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:var(--r-pill);background:var(--card);box-shadow:none;font-size:var(--fs-body);font-weight:var(--w);color:var(--tx-2)}
 .in-tb:active{background:var(--card-2)}
 .in-tb[aria-expanded="true"]{background:var(--me-soft);color:var(--me);box-shadow:none}
 .in-mic2{width:56px;height:56px;border-radius:var(--r-pill)}
@@ -89,7 +89,7 @@
 /* 日付の行の列(#in-ins。左ボタンで開いた時だけ。入力欄のすぐ上。横に流れる) */
 .in-ins{flex:none;gap:var(--s2);overflow-x:auto;scrollbar-width:none;margin:0 calc(var(--page-x) * -1);padding:0 var(--page-x)}
 .in-ins::-webkit-scrollbar{display:none}
-.in-ins-b{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 var(--s3);border-radius:var(--r-pill);background:var(--card);box-shadow:none;font-size:var(--fs-cap);font-weight:700;color:var(--tx-2);white-space:nowrap}
+.in-ins-b{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 var(--s3);border-radius:var(--r-pill);background:var(--card);box-shadow:none;font-size:var(--fs-cap);font-weight:var(--w);color:var(--tx-2);white-space:nowrap}
 .in-ins-b:active{background:var(--card-2)}
 
 /* 操作の列: 雑記に置く(副)・記録する(主) */
