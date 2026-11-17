@@ -361,4 +361,101 @@ T('dbFill / load / importJSON: 欠けた表・型違い・壊れた保存の退�
   M.resetData(); assert.ok(M.DB.acts.l1);
 });
 
+/* ===== 評価(事実「評価」)・目標(プロジェクト+繰り返し)・連続日数(2026-11-18 追加。新しい表は無い) ===== */
+T('評価: 付ける・付け直す・外す。今の値が最新、前の値は履歴(新しい順)', () => {
+  M.resetData();
+  const id = ok(M.entAdd({ n: 'テスト本', types: ['thing'] })).id;
+  assert.equal(M.ratingNow(id), null); deq(M.ratingHist(id), []);
+  ok(M.rateSet(id, 4)); assert.equal(M.ratingNow(id), 4);
+  assert.equal(M.E(id).facts.find(f => f.k === '評価' && !f.to).from, M.TODAY, '日まで持つ(月単位にしない)');
+  ok(M.rateSet(id, 5, { why: '2回目で好きに' })); assert.equal(M.ratingNow(id), 5);
+  ok(M.rateSet(id, 3)); assert.equal(M.ratingNow(id), 3);
+  deq(M.ratingHist(id).map(h => h.v), [5, 4], '同じ日に2回付け直しても新しい順');
+  assert.equal(M.ratingHist(id)[0].why, '', '理由は付け直し前の行に残る(この例では 5 → 3 の理由は無し)');
+  assert.equal(M.ratingHist(id)[1].why, '2回目で好きに');
+  const n0 = M.E(id).facts.length; ok(M.rateSet(id, 3)); assert.equal(M.E(id).facts.length, n0, '同じ星を続けても変わらない');
+  ok(M.rateSet(id, null)); assert.equal(M.ratingNow(id), null); deq(M.ratingHist(id).map(h => h.v), [5, 4], '外しても前の評価は履歴に残る');
+  ok(M.rateSet(id, 2)); assert.equal(M.ratingNow(id), 2);
+});
+T('評価: 1〜5の整数だけ。人・店・場所・プロジェクトなど ent なら何にでも付く', () => {
+  M.resetData();
+  const id = ok(M.entAdd({ n: 'テスト店', types: ['shop'] })).id;
+  for (const bad of [0, 6, 2.5, '', 'x', NaN, -1]) { const r = M.rateSet(id, bad); assert.equal(r.ok, false, String(bad)); assert.equal(M.ratingNow(id), null); }
+  assert.equal(M.rateSet('nope', 3).ok, false);
+  for (const eid of ['me', 'proj1', id]) { ok(M.rateSet(eid, 5)); assert.equal(M.ratingNow(eid), 5); }
+});
+T('評価: 取り消しで前に戻る / 事実の一覧を直しても評価は消えない', () => {
+  M.resetData();
+  const id = ok(M.entAdd({ n: 'テスト物', types: ['thing'], facts: [{ k: '購入日', v: '2026-10' }] })).id;
+  ok(M.rateSet(id, 4)); ok(M.rateSet(id, 5));
+  const r = ok(M.rateSet(id, 2)); r.undo(); assert.equal(M.ratingNow(id), 5);
+  ok(M.entUpdate(id, { facts: [{ k: '購入日', v: '2026-11' }] }));
+  assert.equal(M.ratingNow(id), 5, '画面が評価を知らずに facts を送っても消えない'); deq(M.ratingHist(id).map(h => h.v), [4]);
+  ok(M.entUpdate(id, { facts: [{ k: '評価', v: '1' }] })); assert.equal(M.ratingNow(id), 1, '評価を含めて送れば送った値になる');
+});
+T('期日: 期間の事実を読む(日・月・年・期日だけ・無し)', () => {
+  M.resetData();
+  const mk = v => ok(M.entAdd({ n: 'P' + v, types: ['life_proj'], facts: v === null ? [] : [{ k: '期間', v }] })).id;
+  deq(M.projSpan(mk('2026-10-05〜2026-12-31')), { from: '2026-10-05', to: '2026-12-31' });
+  deq(M.projSpan(mk('2026-10〜2027-02')), { from: '2026-10-01', to: '2027-02-28' }, '月だけなら月初・月末(2月は28日)');
+  deq(M.projSpan(mk('2028-02〜2028-02')), { from: '2028-02-01', to: '2028-02-29' }, 'うるう年');
+  deq(M.projSpan(mk('2026〜2027')), { from: '2026-01-01', to: '2027-12-31' });
+  deq(M.projSpan(mk('2026-12-31')), { from: null, to: '2026-12-31' }, '「〜」が無ければ期日だけ');
+  deq(M.projSpan(mk('いつか〜そのうち')), { from: null, to: null });
+  deq(M.projSpan(mk(null)), { from: null, to: null });
+  const id = mk('2026-11-01〜2026-11-30'); assert.equal(M.projDaysLeft(id), 19); assert.equal(M.projDaysLeft(id, '2026-11-30'), 0); assert.equal(M.projDaysLeft(id, '2026-12-02'), -2);
+  assert.equal(M.projDaysLeft(mk(null)), null);
+  assert.ok(M.E('proj1') && M.projSpan('proj1').to, '見本のプロジェクト(月までの期間)も読める');
+});
+const _goal = (extra = {}) => {
+  const pid = ok(M.entAdd({ n: '顔やせする', types: ['life_proj'], facts: [{ k: '期間', v: '2026-11-01〜2026-12-31' }, { k: '状況', v: '進行中' }] })).id;
+  const rid = ok(M.routineAdd({ every: 'day', from: '2026-11-05', tpl: { kind: 'health', title: '表情筋体操', at: '21:00', roles: [{ r: 'プロジェクト', e: pid }] }, ...extra })).id;
+  return { pid, rid };
+};
+const _rec = (rid, ...days) => days.forEach(d => ok(M.planRecord(rid + '@' + d)));
+T('連続日数: 記録済みが今日から続く数。今日が未記録でも途切れない', () => {
+  M.resetData(); const { pid, rid } = _goal();
+  deq(M.streakOf(pid), { n: 0, unit: '日', todayDue: true, todayDone: false });
+  _rec(rid, '2026-11-08', '2026-11-09', '2026-11-10');
+  deq(M.streakOf(pid), { n: 3, unit: '日', todayDue: true, todayDone: false }, '今日(11-11)が未記録でも昨日までの3日');
+  _rec(rid, '2026-11-11'); deq(M.streakOf(pid), { n: 4, unit: '日', todayDue: true, todayDone: true });
+  assert.equal(M.streakOf(pid, '2026-11-12').n, 4, '翌日の朝は今日(11-12)未記録でも途切れない');
+  assert.equal(M.streakOf(pid, '2026-11-13').n, 0, '昨日(11-12)と今日が未記録なら 0(昨日が途切れ)');
+});
+T('連続日数: 途切れ・休み(skip)は途切れにしない・始まる前は数えない', () => {
+  M.resetData(); const { pid, rid } = _goal();
+  _rec(rid, '2026-11-05', '2026-11-06', '2026-11-08', '2026-11-09', '2026-11-10');   // 11-07 だけ抜けた
+  assert.equal(M.streakOf(pid).n, 3, '11-07 の抜けで途切れ。11-08〜10 の3日');
+  ok(M.routineSkip(rid, '2026-11-07')); assert.equal(M.streakOf(pid).n, 5, '11-07 を休みにすると数えずに続く。11-05・06・08・09・10 の5日(始まりの前は数えない)');
+});
+T('連続日数: 週・月の繰り返しを含むと単位は回 / 複数の繰り返しは全部記録した日だけ / 繰り返しが無ければ null', () => {
+  M.resetData();
+  const none = ok(M.entAdd({ n: '繰り返し無し', types: ['life_proj'], facts: [{ k: '状況', v: '進行中' }] })).id; assert.equal(M.streakOf(none), null);
+  const { pid, rid } = _goal();
+  const rid2 = ok(M.routineAdd({ every: 'day', from: '2026-11-05', tpl: { kind: 'health', title: '体重', roles: [{ r: 'プロジェクト', e: pid }] } })).id;
+  _rec(rid, '2026-11-09', '2026-11-10'); _rec(rid2, '2026-11-10');
+  assert.equal(M.streakOf(pid).n, 1, '11-10 は2つとも記録済み(1日)。11-09 は体重が未記録で途切れ');
+  M.resetData(); const g = _goal(); const wk = ok(M.routineAdd({ every: 'week', from: '2026-11-04', tpl: { kind: 'health', title: '週1', roles: [{ r: 'プロジェクト', e: g.pid }] } })).id;
+  _rec(wk, '2026-11-04'); _rec(g.rid, '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08', '2026-11-09', '2026-11-10');
+  const s = M.streakOf(g.pid); assert.equal(s.unit, '回'); assert.equal(s.n, 7, '毎日の分6回(11-05〜10)+ 週1の1回(11-04)。今日(水)の2回は未記録でも途切れない');
+});
+T('目標のカード: 進行中の一覧(期日順)・期日まで・今日の分(仮の回の id → 記録にする)', () => {
+  M.resetData();
+  const a = _goal(), far = ok(M.entAdd({ n: '遠い目標', types: ['life_proj'], facts: [{ k: '期間', v: '2027-03' }, { k: '状況', v: '進行中' }] })).id;
+  const done = ok(M.entAdd({ n: '終わった目標', types: ['life_proj'], facts: [{ k: '期間', v: '2026-10' }, { k: '状況', v: '完了' }] })).id;
+  const ids = M.goalsNow(); assert.ok(ids.includes(a.pid) && ids.includes(far) && !ids.includes(done), '状況が進行中のものだけ');
+  assert.ok(ids.indexOf(a.pid) < ids.indexOf(far), '期日が近い順');
+  assert.ok(ids.indexOf('proj1') >= 0, '見本の「引っ越し準備」も進行中の目標');
+  const c = M.goalCard(a.pid); assert.equal(c.name, '顔やせする'); assert.equal(c.to, '2026-12-31'); assert.equal(c.daysLeft, 50);
+  deq(c.today.map(x => [x.id, x.title, x.done]), [[a.rid + '@2026-11-11', '表情筋体操', false]]);
+  const rec = ok(M.planRecord(c.today[0].id)); const c2 = M.goalCard(a.pid);
+  deq(c2.today.map(x => [x.id, x.done]), [[rec.id, true]], '記録にすると記録の id・完了');
+  assert.equal(c2.streak.n, 1); assert.equal(M.goalCard('nope'), null);
+  deq(M.goalCard(far).today, []); assert.equal(M.goalCard(far).streak, null);
+});
+T('評価・目標: 画面が使う関数は全て公開されている(API の取りこぼし防止)', () => {
+  for (const f of ['ratingNow', 'ratingHist', 'rateSet', 'projSpan', 'projDaysLeft', 'projRoutines', 'streakOf', 'goalsNow', 'goalCard']) assert.equal(typeof M[f], 'function', f);
+  deq(Object.keys(M.RATE_LABELS), ['1', '2', '3', '4', '5']); assert.equal(M.RATE_KEY, '評価'); assert.equal(M.GOAL_ACTIVE, '進行中');
+});
+
 console.log(`\n${n} tests passed${process.exitCode ? ' (with failures)' : ''}`);

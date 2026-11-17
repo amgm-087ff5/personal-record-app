@@ -40,6 +40,7 @@ TS(時刻。'YYYY-MM-DD' = 終日 / 'YYYY-MM-DDTHH:MM'): `isTS(s)` `dOf(ts)`(日
 - `pendingPlans()` `upcoming(日数)` / 繰り返し: `DB.routines[id]` `repOn(routine, d)` `repText(routine)` `repNext(routine, from)` `recordsOfRoutine(id)`
 - `roleIn(a, eid)`(役割名 / 支払った / 使った / 支払い方法 / 精算)`actsOfEnt(eid)`
 - 種類: `typeAnc` `typeKids` `isUnder` `typePath` `propsOf` / ent の一覧: `entsAll({stubs})` `entsOfType(k, deep=true, {stubs})`(既定は stub を除く)`entRoot(id)` / 事実: `factsNow(eid)` `factHist(eid, k)`(新しい順)`factAt(eid, k, 日付)` / 関係: `relsOf(id, {ended})` → [{id, role, other, from, to}]
+- 評価・目標(2026-11-18。新しい表なし): `RATE_KEY`('評価') `RATE_LABELS`{1〜5:名前} `GOAL_ACTIVE`('進行中') / `ratingNow(eid)` → 1〜5 か null / `ratingHist(eid)` → [{v, from, to, why}](新しい順)/ `goalsNow()` → 進行中のプロジェクト id(期日順)/ `projSpan(eid)` → {from, to} / `projDaysLeft(eid, today?)` / `projRoutines(eid)` → [[決まりid, 決まり]] / `streakOf(eid, today?)` → {n, unit:'日'|'回', todayDue, todayDone} か null / `goalCard(eid, today?)` → {id, name, from, to, daysLeft, streak, today:[{id, title, done}]}。評価の事実(`k:'評価'`)は星の部品で出し、事実の一覧には出さない
 - カテゴリ: `catAnc` `catKids` `catName` `catPath` `catRoot` `catColor` `catFx` `catSp` `catGuess({e}|{name}, text)`
 - 支払い方法(ent): `methodsAll()` → [[id, ent]] `methodDefault()` `methodName(id)`
 - お金(id = 支払いの act の id): `itemAmt` `itemTax` `usersOf` `payItems(a)` `payTotal(a)` `paidOf(a)` [{who, amt, how(支払い方法の id)}] `myPaid(a)` `payMethod(a)`(名前を「・」でつなぐ)`whoName(w)` `whoShort(w)` `peopleOf(id)` `xOf(id)`(仮の回も)`xShares` `xAmt` `xItems(id)` [{i, id(品目id), n, price, full, how, cat, memo, unk}] `xCats(id)` [{cat, amt, ids}] `xFx` `xSp` `isShared(id)` `basisGuess` `lnAmts`
@@ -56,6 +57,7 @@ TS(時刻。'YYYY-MM-DD' = 終日 / 'YYYY-MM-DDTHH:MM'): `isTS(s)` `dOf(ts)`(日
 - 支払い: `paySave({id?, start, parent?, payee:{e}|{name}, roles?, items:[{n, price|lines, tax, users, memo?, unk?, unsure?}], amt?, payers?:[{who, amt, how}], note?, unsure?:[…]|true, via?, exp:{…}, doneTasks?})` → {id} / `payPlanSave({id?, start, payee, title?, amt, cat, rep?})` / `expUpdate(id, patch)` / `itemRemove(id, 品目id)` / `paySettle(id か配列, on=true, {who?, date?, how?})` / `confirmRows([{t:'acts'|'tasks'|'memos', k}])`
 - ToDo: `taskAdd` `taskUpdate` `taskToggle` `taskRemove` `listAdd` `listRemove` `listRename` `listSetShop` `taskToPlan(id, {start, end?})` `planToTask(id)`
 - メモ: `memoAdd` `memoUpdate` `memoPin` `memoRemove`
+- 評価: `rateSet(eid, 1〜5 | null, {why?})`(付け直しは前の行に to を付けて履歴に残す。日まで持つ。同じ星は変化なし。null で今の評価を外す)
 - ent: `entAdd({n, types, facts?})` `entUpdate(id, {n?, types?, facts?, stub?:null})` `factSet(id, 項目, 値, {keepHist, why, since})` `entRemove(id)` / `relAdd({a, b, role, inv?, from?})` → {id} `relUpdate(id, patch)` か `relUpdate(関係id, 見ている側のid, {other, role, sym, inv, since})` `relRemove(id)`
 - 種類: `typeAdd` `typeUpdate` `typeRemove` `typePropAdd` `typePropRename` `typePropRemove` / ノート: `noteSave(eid, [{h, text}])` `noteSubSave(eid, subId|null, {n, sub, text})` → {id} `noteSubRemove(eid, subId)`
 - カテゴリ: `catAdd` `catUpdate` `catRemove` / 支払い方法: `methodAdd(名前)` → {id} `methodRemove(id)`

@@ -5,6 +5,8 @@ cd "$(dirname "$0")/.." || exit 1
 ng=0
 out=$(node tools/model_test.mjs 2>&1); rc=$?
 if [ $rc -ne 0 ] || echo "$out" | grep -q "FAIL\|NG"; then echo "NG  model_test"; echo "$out" | tail -5; ng=1; else echo "OK  model_test"; fi
+out=$(node tools/model_sync.mjs 2>&1); rc=$?
+if [ $rc -ne 0 ]; then echo "NG  model_sync"; echo "$out" | tail -8; ng=1; else echo "OK  model_sync"; fi
 out=$(python3 -I tools/regress.py 2>&1); rc=$?
 if [ $rc -ne 0 ] || echo "$out" | grep -q "FAIL\|NG"; then echo "NG  regress"; echo "$out" | tail -5; ng=1; else echo "OK  regress"; fi
 for f in tools/t_*.py; do

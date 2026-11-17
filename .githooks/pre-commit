@@ -1,0 +1,4 @@
+#!/bin/sh
+# 画面かモデルをコミットする時、model_sync(文書・検査・画面とのずれ)を先に検査する。
+git diff --cached --name-only | grep -qE '^v7/(js/|index\.html|MODEL\.md|API\.md|tools/model_)' || exit 0
+exec node v7/tools/model_sync.mjs

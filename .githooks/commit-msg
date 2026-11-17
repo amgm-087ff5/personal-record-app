@@ -1,0 +1,3 @@
+#!/bin/sh
+# データモデル追従の検査(tools/MODEL-GUARD.md)。有効化: sh tools/setup_hooks.sh
+exec node v7/tools/model_coupling.mjs --msg "$1"

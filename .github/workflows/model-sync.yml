@@ -1,0 +1,24 @@
+name: model-sync
+# UIを変えたのにデータモデル(model.js・MODEL.md・API.md・model_test.mjs)が追従していない変更を止める
+on:
+  push:
+    branches: ['**']
+    paths: ['v7/**', 'tools/**', '.github/workflows/model-sync.yml']
+  pull_request:
+    paths: ['v7/**', 'tools/**']
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: モデルの検査(単体テスト + 文書・画面とのずれ)
+        run: node v7/tools/model_test.mjs && node v7/tools/model_sync.mjs
+      - name: Data-Model 行の検査(PR / push の各コミット)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then R="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}";
+          elif [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then R="${{ github.event.before }}..${{ github.sha }}";
+          else R="origin/main..${{ github.sha }}"; fi
+          node v7/tools/model_coupling.mjs --range "$R"
