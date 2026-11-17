@@ -455,6 +455,8 @@ T('目標のカード: 進行中の一覧(期日順)・期日まで・今日の�
 });
 T('評価・目標: 画面が使う関数は全て公開されている(API の取りこぼし防止)', () => {
   for (const f of ['ratingNow', 'ratingHist', 'rateSet', 'projSpan', 'projDaysLeft', 'projRoutines', 'streakOf', 'goalsNow', 'goalCard']) assert.equal(typeof M[f], 'function', f);
+  { const sid0 = ok(M.entAdd({ n: '評価ガード', types: ['shop'] })).id; assert.equal(M.factSet(sid0, '評価', 'おいしい').ok, false, '評価に文字は入れられない'); assert.equal(M.ratingNow(sid0), null); }
+  { const sid = ok(M.entAdd({ n: '評価の店', types: ['shop'] })).id; deq(M.ratableOf({ roles: [{ r: '場所', e: sid }, { r: '場所', e: sid }] }), [sid]); } assert.ok(M.RATE_NG_ROLES.includes('同席')); assert.ok(!M.ratableOf({ roles: [{ r: '同席', e: 'hanako' }, { r: 'プロジェクト', e: 'proj1' }, { r: '場所', e: 'me' }] }).length, '人・プロジェクト・自分は対象外');
   deq(Object.keys(M.RATE_LABELS), ['1', '2', '3', '4', '5']); assert.equal(M.RATE_KEY, '評価'); assert.equal(M.GOAL_ACTIVE, '進行中');
 });
 

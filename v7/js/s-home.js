@@ -21,6 +21,7 @@ route('home', () => {
       </div>
     </section>
     <button class="quick" onclick="openCapture()">${ic('plus')}<span>入力する</span><kbd>ランチ 1200</kbd></button>
+    ${hmGoals()}
     ${hmReview()}
     ${hmMoney()}
     ${hmTodo()}
@@ -45,6 +46,24 @@ function hmNext([id, a]) {
     <div class="next-l"><span>次</span><b class="num">${tOf(a.start)}</b></div>
     <div class="next-m"><b>${esc(actTitle(a))}</b><div class="ents">${roleEnts(a, { link: false })}${tasks.length ? `<span class="mini">${ic('task')}${tasks.length}</span>` : ''}</div></div>
     <div class="next-r"><span>あと</span><b>${durJ(left)}</b></div></div>`;
+}
+/** 取り組み中(目標): 進行中のプロジェクトを1件1枚。期日・連続・今日の回(未記録は「記録にする」) */
+function hmGoals() {
+  const ids = goalsNow(); if (!ids.length) return '';
+  const cards = ids.map(id => goalCard(id)).filter(Boolean).map(hmGoalCard).join('');
+  return `<section>${sec('取り組み中', { n: ids.length })}<div class="stack">${cards}</div></section>`;
+}
+function hmGoalCard(g) {
+  const d = g.daysLeft;
+  const left = d == null ? '' : d < 0 ? `<span class="gl-over"><b class="num">${-d}</b>日 過ぎた</span>`
+    : d === 0 ? `<span class="gl-near">今日まで</span>`
+    : `<span class="${d <= 7 ? 'gl-near' : ''}">あと<b class="num">${d}</b>日</span>`;
+  const st = g.streak && g.streak.n > 0 ? `<span><b class="num">${g.streak.n}</b>${esc(g.streak.unit)} 連続</span>` : '';
+  const meta = left || st ? `<div class="gl-meta">${left}${st}</div>` : '';
+  const today = g.today.length ? `<div class="gl-today">${g.today.map(t => t.done
+    ? `<div class="gl-t done">${ic('check')}<span>${esc(t.title)}</span></div>`
+    : `<div class="gl-t"><span>${esc(t.title)}</span>${btn('記録にする', `recordPlan(${q(t.id)})`, 'pri', { sm: 1 })}</div>`).join('')}</div>` : '';
+  return `<article class="card gl-card"><div class="gl-h"><a class="gl-name" href="#/e/${esc(g.id)}">${esc(g.name)}</a>${meta}</div>${today}</article>`;
 }
 /** 確かめる: 承認するだけで片づくもの(記録待ちの予定・未確認の行・未精算) */
 function hmTitle(x) { const r = x.row; return x.t === 'acts' ? actTitle(r) : x.t === 'tasks' ? r.t : String(r.body || '').slice(0, 24); }

@@ -314,6 +314,17 @@ function projSpan(eid) {
 /** 期日までの日数(期日が今日なら 0、過ぎていれば負)。期日が無ければ null */
 const projDaysLeft = (eid, today = TODAY) => { const { to } = projSpan(eid); return to ? dDiff(to, today) : null; };
 /** そのプロジェクトの毎日の行動 = tpl.roles に {r:'プロジェクト', e} を持つ繰り返し [[決まりid, 決まり]] */
+/** 出来事に関わった「評価できるもの」(物・店・場所など)の ent id。人・プロジェクト・自分・名前だけの stub は除く。重複は1つ、最大 max 件 */
+const RATE_NG_ROLES = ['プロジェクト', '同席', '参加'];
+function ratableOf(a, max = 5) {
+  const seen = new Set(), out = [];
+  for (const r of (a && a.roles) || []) {
+    if (!r.e || seen.has(r.e) || RATE_NG_ROLES.includes(r.r) || r.e === 'me' || isStub(r.e) || !DB.ents[r.e]) continue;
+    if ((DB.ents[r.e].types || []).some(t => isUnder(t, 'person') || isUnder(t, 'project'))) continue;
+    seen.add(r.e); out.push(r.e); if (out.length >= max) break;
+  }
+  return out;
+}
 const projRoutines = eid => Object.entries(DB.routines).filter(([, r]) => (r.tpl.roles || []).some(x => x.r === 'プロジェクト' && x.e === eid));
 /** 連続日数(保存しない)。そのプロジェクトの繰り返しの予定の回(休み = skip の回は無いものとして数えない)が、今日から過去へ「記録済み(state done)」で続く数。
  *  今日の分が未記録でも途切れ扱いにしない(今日の終わりまで)。毎日の繰り返しだけなら単位は「日」(その日の回が全部記録済みの日)、週・月を含めば「回」。繰り返しが無ければ null
@@ -1091,6 +1102,7 @@ const entUpdate = (id, patch) => commit('直しました', () => {
 /** 事実の値を変える。keepHist なら前の値を残す(今の行に to と why、新しい行に from)。値を空にすると、その項目の行を全て消す(keepHist なら今の行だけ) */
 const factSet = (id, k, v, o = {}) => commit('直しました', () => {
   const e = DB.ents[id]; if (!e) fail('エンティティが見つかりません'); const val = _str(v); _coarse(o.since, '始まり');
+  if (k === RATE_KEY && val && !_rateNum(val)) fail('評価は1〜5です');
   const i = e.facts.findIndex(f => f.k === k && !f.to), f = e.facts[i];
   if (!f) { if (val) e.facts.push({ k, v: val, ...(o.since ? { from: o.since } : {}) }); return; }
   if (!val) { e.facts = o.keepHist ? e.facts.filter(x => x !== f) : e.facts.filter(x => x.k !== k); return; }
@@ -1390,6 +1402,10 @@ function seed() {
   act('e11', { kind: 'event', title: '不動産屋と打ち合わせ', start: at(D(6), '14:00'), end: at(D(6), '15:00'), state: 'plan', roles: [{ r: '場所', name: '不動産ファースト' }, { r: 'プロジェクト', e: 'proj1' }] });
   act('e6', { kind: 'trip', title: '温泉旅行', start: D(10), end: D(11), state: 'plan', roles: [{ r: '場所', name: '宿 山の湯' }, { r: '同席', e: 'hanako' }] });
   db.routines.e12 = { every: 'week', from: D(-7 - ((dDow(T) + 1) % 7)), tpl: { kind: 'event', title: '資源ごみの日', roles: [] } };
+  /* 目標の例: 期日つきのプロジェクト + 毎日の繰り返し(連続日数は計算。ここには持たない) */
+  db.ents.proj2 = { n: '顔やせする', types: ['life_proj'], facts: [{ k: '期間', v: `${ymOf(D(-12))}〜${D(40)}` }, { k: '状況', v: '進行中' }] };
+  db.routines.gp1 = { every: 'day', from: D(-12), tpl: { kind: 'health', title: '表情筋体操', at: '21:00', roles: [{ r: 'プロジェクト', e: 'proj2' }] } };
+  [1, 2, 3, 4, 5].forEach(i => act('gp1d' + i, { kind: 'health', title: '表情筋体操', start: at(D(-i), '21:00'), routine: 'gp1', roles: [{ r: 'プロジェクト', e: 'proj2' }] }));
   /* --- ToDo --- */
   db.tasks = {
     t2: { t: '映画のチケットを予約', due: T, list: 'inbox', act: 'e1', pri: 1 },
