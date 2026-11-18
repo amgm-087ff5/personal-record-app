@@ -26,7 +26,7 @@ route('a', id => {
     ${dtUnsure(id, a)}
     ${dtEnv(ancOf(id), dtHero(id, a))}
     ${plan ? btn(a.virt ? 'この回だけ記録にする' : '記録にする', `dtRecOpen(${q(id)})`, 'pri', { icon: 'check', wide: 1 }) : ''}
-    ${dtRoles(id, a)}${dtNoteBlock(id, a)}${dtPhotos(id, a)}${dtRecords(id, a)}${dtKids(id, a, kids)}${dtTasksMemos(id, a)}
+    ${dtRoles(id, a)}${dtRate(id, a)}${dtNoteBlock(id, a)}${dtPhotos(id, a)}${dtRecords(id, a)}${dtKids(id, a, kids)}${dtTasksMemos(id, a)}
   </div>`;
 });
 
@@ -145,6 +145,14 @@ function dtEntNew(r, name, cb) {
 }
 function dtRoleAdd(id) { dtRolePick(role => done(actUpdate(id, { roles: [...dtRolesOf(id), role] }))); }
 function dtRoleDel(id, i) { done(actUpdate(id, { roles: dtRolesOf(id).filter((_, j) => j !== i) })); }
+
+/* ---------- 星の評価(実績の出来事に関わった物・店・場所。人とプロジェクトは除く) ---------- */
+/** 評価の節。予定には出さず、対象が無ければ節ごと出さない */
+function dtRate(id, a) {
+  if (!a || isPlan(a) || a.virt || a.kind === 'settle') return '';
+  const ids = ratableOf(a); if (!ids.length) return '';
+  return `<section>${sec('評価', { n: ids.length })}${rows(ids.map(eid => `<div class="da-rate">${ent(eid)}${rateStars(eid)}</div>`).join(''))}</section>`;
+}
 
 /* ---------- 記録に付いた写真 ---------- */
 function dtPhotos(id, a) {

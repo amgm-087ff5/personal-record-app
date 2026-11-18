@@ -3,7 +3,7 @@
 
 /* 画面をまたいで持つ状態(描き直しても残す) */
 const ENS = { q: '', root: 'all', stubs: false };   /* 一覧: さがす文字・大分類・名前だけの相手の一覧 */
-const ENX = { rare: {}, rec: {}, sub: {}, tree: {}, ended: {} };   /* 詳細: まれな事実を開く・記録の件数・サブページの開閉 / 種類の木の開閉(鍵 → true=開く) */
+const ENX = { rare: {}, rec: {}, sub: {}, tree: {}, ended: {}, rate: {} };   /* 詳細: まれな事実を開く・記録の件数・サブページの開閉 / 種類の木の開閉(鍵 → true=開く) / 前の評価を開く */
 
 /* ---------- 小道具 ---------- */
 /** 種類の木を深さ優先で並べる [{k, depth}] */
@@ -133,6 +133,8 @@ route('e', id => {
     ${isStub(id) ? btn('登録する', `enRegister(${q(id)})`, 'pri', { icon: 'check', wide: 1 }) : ''}
     ${me ? '' : enNums(id, st)}
     ${me ? '' : enWeeks(st)}
+    ${enGoal(id, e)}
+    ${enRating(id)}
     ${enFacts(id, e)}
     ${enRels(id)}
     ${enNote(id)}
@@ -207,11 +209,42 @@ function enWeeks(st) {
     <div class="en-wk-x"><span>12週前</span><span>今週</span></div></div></section>`;
 }
 
+/* ---------- 評価(どの ent にも付く。星 = 事実「評価」。星の部品は parts.js の rateStars) ---------- */
+const RT_KEEP = 3;   /* 前の評価はこの件数まで出し、残りは「ほか n件」で開く */
+/** 年月日の粗い表示「11月3日」(年が今年と違えば年を付ける) */
+const enMDJ = d => (d.slice(0, 4) !== TODAY.slice(0, 4) ? d.slice(0, 4) + '年' : '') + fmtMDJ(d);
+/** 前の評価の星(読むだけ。今の評価は rateStars) */
+const rtStars = n => `<span class="rt-hs" role="img" aria-label="星${n}">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= n ? 'on' : ''}">${ic('star')}</i>`).join('')}</span>`;
+function enRating(id) {
+  const v = ratingNow(id), hist = ratingHist(id), open = !!ENX.rate[id];
+  const shown = open || hist.length <= RT_KEEP ? hist : hist.slice(0, RT_KEEP);
+  const more = hist.length > RT_KEEP ? `<button class="prop en-more${open ? ' is-open' : ''}" onclick="enRateTog(${q(id)})"><span class="prop-k">${open ? 'たたむ' : `ほか ${hist.length - RT_KEEP}件`}</span>${ic('down', 'row-chev')}</button>` : '';
+  const hrow = h => `<div class="prop rt-h">${rtStars(h.v)}<span class="prop-v">${esc(RATE_LABELS[h.v] || '')}${h.to ? `<span class="mini">${enMDJ(h.to)}まで</span>` : ''}${h.why ? `<span class="mini">${esc(h.why)}</span>` : ''}</span></div>`;
+  return `<section>${sec('評価')}
+    <div class="rt-now">${rateStars(id)}<span class="rt-l">${v ? `<b class="num">${v}</b> ${esc(RATE_LABELS[v] || '')}` : '<span class="mini">まだ評価していません</span>'}</span></div>
+    ${hist.length ? `<div class="rows">${shown.map(hrow).join('')}${more}</div>` : ''}</section>`;
+}
+function enRateTog(id) { ENX.rate[id] = !ENX.rate[id]; rerender(); }
+
+/* ---------- 目標(プロジェクト: 期日・連続日数・毎日の行動。計算は model.js) ---------- */
+function enGoal(id, e) {
+  if (!(e.types || []).some(t => isUnder(t, 'project'))) return '';
+  const { to } = projSpan(id), left = projDaysLeft(id), st = streakOf(id), reps = projRoutines(id).filter(([, r]) => r.tpl.title);
+  const left0 = left == null ? '' : left > 0 ? `あと${left}日` : left === 0 ? '今日まで' : `${-left}日過ぎた`;
+  const list = [
+    to && prop('期日', `<b class="num gl-n">${enMDJ(to)}</b><span class="mini">${left0}</span>`),
+    st && prop('連続', st.n > 0 ? `<b class="num gl-n">${st.n}</b><span>${st.unit} 連続</span>` : '<span class="mini">まだ連続していません</span>'
+      + (st.todayDue && !st.todayDone ? '<span class="gl-hint">今日はまだ</span>' : '')),
+    reps.length && prop('毎日の行動', reps.map(([, r]) => `<span class="gl-rt">${esc(r.tpl.title)}<span class="mini">${esc(repText(r))}</span></span>`).join('')),
+  ].filter(Boolean);
+  return list.length ? `<section>${sec('目標')}${rows(list)}</section>` : '';
+}
+
 /* ---------- 事実 ---------- */
 const enFv = (id, f) => { const n = factHist(id, f.k).length; return `${esc(f.v)}${f.from ? `<span class="mini">${enYm(f.from)}から</span>` : ''}${n ? `<span class="mini en-chg">${n}回 変わった</span>` : ''}`; };
 function enFacts(id, e) {
-  const now = factsNow(id), main = now.filter(f => !f.rare), rare = now.filter(f => f.rare), open = !!ENX.rare[id];
-  const defined = [...new Set(e.types.flatMap(t => propsOf(t).map(p => p[0])))], missing = defined.filter(k => !now.some(f => f.k === k));
+  const now = factsNow(id).filter(f => f.k !== RATE_KEY), main = now.filter(f => !f.rare), rare = now.filter(f => f.rare), open = !!ENX.rare[id];
+  const defined = [...new Set(e.types.flatMap(t => propsOf(t).map(p => p[0])))].filter(k => k !== RATE_KEY), missing = defined.filter(k => !now.some(f => f.k === k));
   const fr = f => prop(f.k, enFv(id, f), { on: `enFactEdit(${q(id)},${q(f.k)})` });
   const list = [...main.map(fr), ...(open ? rare.map(fr) : []), ...missing.map(k => `<button class="prop en-add" onclick="enFactEdit(${q(id)},${q(k)})"><span class="prop-k">${esc(k)}</span><span class="prop-v">${ic('plus')}足す</span></button>`),
     ...(rare.length ? [`<button class="prop en-more${open ? ' is-open' : ''}" onclick="enRare(${q(id)})"><span class="prop-k">${open ? 'たたむ' : `ほか ${rare.length}件`}</span>${ic('down', 'row-chev')}</button>`] : [])];

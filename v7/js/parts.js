@@ -14,6 +14,7 @@ const IC = {
   down: '<path d="M4.71 9.29Q4.13 9.87 4.71 10.45L11.42 17.16Q12 17.74 12.58 17.16L19.29 10.45Q19.87 9.87 19.29 9.29L18.71 8.71Q18.13 8.13 17.55 8.71L12.58 13.68Q12 14.26 11.42 13.68L6.45 8.71Q5.87 8.13 5.29 8.71z"/>',
   up: '<path d="M5.29 15.29Q5.87 15.87 6.45 15.29L11.42 10.32Q12 9.74 12.58 10.32L17.55 15.29Q18.13 15.87 18.71 15.29L19.29 14.71Q19.87 14.13 19.29 13.55L12.58 6.84Q12 6.26 11.42 6.84L4.71 13.55Q4.13 14.13 4.71 14.71z"/>',
   check: '<path d="M4.47 12.94Q3.89 13.55 4.5 14.13L9.03 18.47Q9.64 19.05 10.22 18.45L19.56 8.71Q20.15 8.11 19.54 7.53L18.86 6.87Q18.25 6.29 17.67 6.9L10.14 14.74Q9.56 15.35 8.95 14.76L6.31 12.23Q5.71 11.65 5.13 12.26z"/>',
+  star: '<path d="M11.28 4.40Q12.00 2.60 12.72 4.40L14.22 8.14Q14.59 9.04 15.56 9.11L19.57 9.38Q21.51 9.51 20.02 10.76L16.93 13.34Q16.18 13.96 16.42 14.90L17.40 18.81Q17.88 20.69 16.23 19.66L12.82 17.52Q12.00 17.00 11.18 17.52L7.77 19.66Q6.12 20.69 6.60 18.81L7.58 14.90Q7.82 13.96 7.07 13.34L3.98 10.76Q2.49 9.51 4.43 9.38L8.44 9.11Q9.41 9.04 9.78 8.14z"/>',
   more: '<path d="M2.8 12a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0z"/><path d="M9.8 12a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0z"/><path d="M16.8 12a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0 -4.4 0z"/>',
   pencil: '<path d="M16.92 3.03Q17.37 2.59 17.81 3.03L20.97 6.19Q21.41 6.63 20.97 7.08L11.2 16.84Q10.76 17.29 10.15 17.47L5.6 18.82Q5 19 5.18 18.4L6.53 13.85Q6.71 13.24 7.16 12.8zM14.7 5.25Q14.8 5.16 14.9 5.25L18.75 9.1Q18.84 9.2 18.75 9.3L17.93 10.11Q17.83 10.21 17.73 10.11L13.89 6.27Q13.79 6.17 13.89 6.07z"/>',
   edit: '<path d="M15.69 2.82Q16.14 2.37 16.58 2.82L19.18 5.42Q19.63 5.86 19.18 6.31L10.87 14.62Q10.43 15.07 9.82 15.25L6.06 16.37Q5.45 16.55 5.63 15.94L6.75 12.18Q6.93 11.57 7.38 11.13zM13.82 4.69Q13.92 4.59 14.02 4.69L17.31 7.98Q17.41 8.08 17.31 8.18L16.64 8.86Q16.54 8.95 16.44 8.86L13.14 5.56Q13.05 5.46 13.14 5.36z"/><path d="M4.34 19.2H19.66A0.84 0.84 0 0 1 20.5 20.04V20.76A0.84 0.84 0 0 1 19.66 21.6H4.34A0.84 0.84 0 0 1 3.5 20.76V20.04A0.84 0.84 0 0 1 4.34 19.2z"/>',
@@ -291,6 +292,19 @@ function memoCard(id, o = {}) {
   const a = m.act && A(m.act);
   return `<article class="memo${m.pin ? ' pin' : ''}${o.bare ? ' bare' : ''}"><a class="hit" href="${o.href || `#/memo?focus=${id}`}" ${o.on ? `onclick="event.preventDefault();${o.on}"` : ''} aria-label="メモを開く"></a><p ${o.clamp ? `style="-webkit-line-clamp:${o.clamp}" class="clamp"` : ''}>${esc(m.body)}</p>
     <footer>${unsureTag(m)}${m.pin ? ic('pin', 'memo-pin') : ''}<time class="num" ${o.noTime ? 'hidden' : ''}>${dOf(m.at) === TODAY ? tOf(m.at) : `${fmtMD(dOf(m.at))} ${tOf(m.at)}`}</time>${(m.ents || []).map(e => ent(e, { link: false, short: 1 })).join('')}${a ? `<span class="mini">${kindIc(a)}${esc(actTitle(a))}</span>` : ''}</footer></article>`;
+}
+/* ---------- 星の評価(1〜5)。ent に付く事実「評価」。何にでも使う(食べ物に限らない)。保存は model.js の rateSet のみ ---------- */
+/** 星の列。o.size='sm' で小さく、o.edit=false で表示のみ。同じ星をもう一度押すと評価を外す */
+function rateStars(eid, o = {}) {
+  const v = ratingNow(eid) || 0, edit = o.edit !== false;
+  return `<span class="rate${o.size === 'sm' ? ' sm' : ''}" role="${edit ? 'radiogroup' : 'img'}" aria-label="評価 ${v ? v + '/5 ' + (RATE_LABELS[v] || '') : 'まだなし'}">${[1, 2, 3, 4, 5].map(n => edit
+    ? `<button class="rate-s${n <= v ? ' on' : ''}" role="radio" aria-checked="${n === v}" aria-label="${n}${RATE_LABELS[n] ? ' ' + RATE_LABELS[n] : ''}" onclick="rateTap(${q(eid)},${n})">${ic('star')}</button>`
+    : `<span class="rate-s${n <= v ? ' on' : ''}">${ic('star')}</span>`).join('')}</span>`;
+}
+/** 星を押した時(同じ星=外す)。付け直しは履歴に残る */
+function rateTap(eid, n) {
+  const cur = ratingNow(eid), r = rateSet(eid, cur === n ? null : n);
+  if (done(r, { quiet: 1 })) toast(cur === n ? '評価を外しました' : `評価 ${n}${RATE_LABELS[n] ? ' ' + RATE_LABELS[n] : ''}`, { undo: r.undo, act: null });
 }
 /** 予定を記録にする(どの画面でも同じ)。支払い予定は金額を確かめてから */
 function recordPlan(id) {

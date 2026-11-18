@@ -59,3 +59,8 @@
 .dt-hero.plan,.dt-hero.late{background:transparent;box-shadow:none}
 .dt-env{background:var(--card-2)}
 .dt-when{font-weight:var(--w)}
+
+/* 評価(関わったもの)の星。星の押す面は rateStars(parts.css)の 44px */
+.da-rate{position:relative;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s1) var(--s2);min-height:var(--tap);padding:var(--s1) var(--s4)}
+.da-rate + .da-rate::before{content:"";position:absolute;top:0;left:var(--s4);right:0;height:1px;background:var(--line)}
+.da-rate > .ent{flex:1 1 auto;min-width:0;white-space:normal;overflow-wrap:anywhere}

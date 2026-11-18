@@ -12,6 +12,14 @@
 5. **同じものは同じ形**。予定と記録は state だけが違う(支払い予定も、支払いと同じ形)。
 引き継ぐ約束: 計算で出せる値は保存しない / 支払い(事実)と支出(家計簿)は分ける / 変更は全て `commit()` を通る / 画面は model.js の関数だけでデータを読み書きする。
 
+## 0.5 UIを変える時(必読。機械検査と連動)
+UI(`js/s-*.js` `js/parts.js` `js/core.js` `js/m-*.js` `index.html`)を変える前に、このファイルと `API.md` を読む。
+1. 新しいデータを読み書きしたい・新しい意味(評価・目標のようなもの)を持たせたい時は、**先に既存の型で足りないか調べる**(ents・facts・routines・acts・tasks・memos・photos)。例: 2026-11-18 の「評価」= 事実 `評価`、「目標」= プロジェクト + 繰り返し(新しい表は作らなかった)。足りなければ、UIより先に `model.js` → このファイル → `API.md` → `tools/model_test.mjs` の順に直す。
+2. 画面は `model.js` の関数だけでデータにさわる(`DB` は読むだけ。書き換えない)。
+3. コミットメッセージに `Data-Model:` の行を必ず書く(`Data-Model: changed` / `Data-Model: unchanged — 理由` / `Data-Model: docs-na — 理由`)。UI を変えたのにモデル一式(model.js・MODEL.md・API.md・tools/model_test.mjs)が変わっていなければ `unchanged — 理由` が必要。model.js を変えたのに文書・検査が変わっていなければ `docs-na — 理由`(例: 色の定数だけ)が必要。
+4. `sh tools/check_all.sh`(中の model_sync)が通ること。
+気づかせる仕組み: リポジトリ直下の `CLAUDE.md`、`.claude/settings.json` のフック、`.githooks/`、CI(`.github/workflows/model-sync.yml`)。しくみの説明は `tools/MODEL-GUARD.md`。
+
 ## 1. 形
 ```
 時刻(TS) = 'YYYY-MM-DD'(日だけ = 終日) か 'YYYY-MM-DDTHH:MM'(日と時刻)。文字のまま大小を比べられる。
@@ -58,6 +66,8 @@ Settle = { who(相手の ent id か null), dir:'in'|'out'(in = 受け取った /
    - ある支払いの、ある相手との貸し借りが精算済み = その相手の settle の pays にその支払いが入っている。
 Ent = { n, types:[種類], stub?:1(名前だけ・未登録), geo?:{lat,lng}, facts:[Fact] }
 Fact = { k, v, from?, to?, why?, rare? }                       to が無い行 = 今の値。to がある行 = 前の値(why = 変わった理由)
+   - 特別なキー: '評価' = 星1〜5の整数(文字で持つ)。ent なら何にでも付く(人・店・場所・物・会社・書類・プロジェクト)。付け直しは前の行に to を付けて新しい行(日まで)。
+   - プロジェクトの '期間' = 「始まり〜終わり」(年・月だけでも可。「〜」が無ければ期日だけ)、'状況' = '進行中' など。
 Task = { t, due?, done?(日付), list, pri?, act?, ents?:[], rep?:{u}, memo?, sub?:[{t,d}], payAct?, unsure?, via?, jot? }
 unsure = true(行の全体が未確認) | ['amt','payee', …](その項目だけ未確認)。品目は Item.unsure:1
 via = 'rule' | 'llm' | 'ocr' | 'gps'(推し量った出所。手で入れた行には無い)
@@ -76,6 +86,11 @@ via = 'rule' | 'llm' | 'ocr' | 'gps'(推し量った出所。手で入れた行�
   4. N > 0(貸し): 不足(負担 − 払った額 > 0)のある相手に、不足の比で N を配る。N < 0(借り): 余り(払った額 − 負担 > 0)のある相手に、余りの比で配る。
   5. 相手が1人も分からなければ who:null の1件。端数は先頭に寄せ、合計が必ず N になる。
 - 相手ごとの差し引き(`personBalances`)= 未精算の debts の合計。
+- 評価: 保存するのは事実 `評価` の行だけ(新しい表は無い)。いまの評価 = `to` の無い行(`ratingNow`)、前の評価 = `to` のある行(`ratingHist`、新しい順)。付け直しは `rateSet`(日まで持つ。同じ星は変化なし。null で外す)。`entUpdate` の facts に評価が無ければ既存の評価は残す。集計は今の値だけを使う。星の呼び名は `RATE_LABELS`(1・2 は仮)。事実 `評価` に 1〜5 以外は入らない(`factSet` が断る)。出来事に関わって評価できるもの = `ratableOf(act)`。同じ日の付け直しは1行にまとまる(日まで持つため)。
+- 目標: 状況が '進行中' のプロジェクトの ent(`goalsNow`。期日が近い順)。毎日の行動 = tpl.roles に {r:'プロジェクト', e} を持つ routines(`projRoutines`)、実績 = routine 付きの state:'done' の act。
+- 期日: 事実 `期間` を読む(`projSpan`。月だけなら月初・月末)。期日まで = `projDaysLeft`(過ぎていれば負)。
+- 連続日数: `streakOf(プロジェクトid)` → {n, unit, todayDue, todayDone}。予定の回(skip は無いものとして数えない)が、今日から過去へ記録済みで続く数。今日が未記録でも途切れない。毎日の繰り返しだけなら単位「日」、週・月を含めば「回」。保存しない。
+- ホームのカード: `goalCard(プロジェクトid)` → {name, to, daysLeft, streak, today:[{id, title, done}]}。today[].id の未記録分は仮の回の id なので「記録にする」= `planRecord(id)`。
 
 ## 3. 現実の場面
 | 場面 | 表し方 |
@@ -90,6 +105,8 @@ via = 'rule' | 'llm' | 'ocr' | 'gps'(推し量った出所。手で入れた行�
 | 同僚が退職した | 関係に to(消さない) |
 | レシートを読み取った | 支払い1件、unsure に未確認の項目、via 'ocr'。確かめると unsure が消える |
 | 来月の支払い予定 | state:'plan' の支払い(pay.amt)+ 支出(cat)。払ったら state を done に |
+| 本に5つ星を付け、後で3に付け直した | その物の ent の事実 `評価`。5 の行に to、新しい行 3(今の値)。履歴は `ratingHist`、集計は今の値だけ |
+| 「顔やせする」(期日 12/31)を毎日やる | プロジェクト ent(種類 生活、期間 …〜2026-12-31、状況 進行中)+ routines(every day、tpl.roles にそのプロジェクト)。連続日数は `streakOf`(保存しない) |
 
 ## 4. モデルの外に置くもの・未決
 - 位置情報の生の記録(GPS の履歴)はモデルの外(取り込み元)。取り込んだ結果は via:'gps' + unsure の act(滞在・移動)として入る想定。場所の座標は Ent.geo、写真の位置は photos.geo。取り込みは未実装。

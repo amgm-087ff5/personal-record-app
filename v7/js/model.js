@@ -289,6 +289,78 @@ function factAt(eid, k, d) {
   rows.sort((x, y) => (y.from || '').localeCompare(x.from || ''));
   return rows.length ? rows[0].v : null;
 }
+
+/* ---------- 評価と目標(新しい表は無い。評価 = ent の事実「評価」、目標 = プロジェクト + 繰り返し。最新・連続日数・期日までは計算) ---------- */
+const RATE_KEY = '評価';
+/** 星の呼び名。5=好き・4=良かった・3=普通 はユーザー指定(2026-11-17)。1・2 は仮(ユーザー確認待ち)。名前を変える時はここだけ */
+const RATE_LABELS = { 1: '苦手', 2: 'いまいち', 3: '普通', 4: '良かった', 5: '好き' };
+const GOAL_ACTIVE = '進行中';
+const _rateNum = v => { const n = Number(v); return v !== '' && v != null && Number.isInteger(n) && n >= 1 && n <= 5 ? n : null; };
+/** いまの評価(1〜5)か null。対象は ent なら何でも(人・店・場所・物・会社・書類・プロジェクト) */
+const ratingNow = eid => { const f = factsNow(eid).find(x => x.k === RATE_KEY); return f ? _rateNum(f.v) : null; };
+/** 前の評価(新しい順)[{v, from, to, why}]。why = その評価から付け直した理由 */
+const ratingHist = eid => factHist(eid, RATE_KEY).map(f => ({ v: _rateNum(f.v), from: f.from || '', to: f.to, why: f.why || '' })).filter(x => x.v);
+/** プロジェクトの期間(事実「期間」=「始まり〜終わり」。年・月だけでも書ける)→ {from, to}('YYYY-MM-DD' か null)。月だけなら月初・月末。「〜」が無ければ期日だけ */
+function projSpan(eid) {
+  const f = factsNow(eid).find(x => x.k === '期間'); if (!f) return { from: null, to: null };
+  const parts = String(f.v).split(/\s*[〜~～]\s*/);
+  const edge = (s, end) => {
+    s = (s || '').trim(); if (!isCoarse(s)) return null; if (isDate(s)) return s;
+    if (s.length === 7) return end ? `${s}-${pad2(ymDays(s))}` : `${s}-01`;
+    return end ? `${s}-12-31` : `${s}-01-01`;
+  };
+  return parts.length === 1 ? { from: null, to: edge(parts[0], true) } : { from: edge(parts[0], false), to: edge(parts[1], true) };
+}
+/** 期日までの日数(期日が今日なら 0、過ぎていれば負)。期日が無ければ null */
+const projDaysLeft = (eid, today = TODAY) => { const { to } = projSpan(eid); return to ? dDiff(to, today) : null; };
+/** そのプロジェクトの毎日の行動 = tpl.roles に {r:'プロジェクト', e} を持つ繰り返し [[決まりid, 決まり]] */
+/** 出来事に関わった「評価できるもの」(物・店・場所など)の ent id。人・プロジェクト・自分・名前だけの stub は除く。重複は1つ、最大 max 件 */
+const RATE_NG_ROLES = ['プロジェクト', '同席', '参加'];
+function ratableOf(a, max = 5) {
+  const seen = new Set(), out = [];
+  for (const r of (a && a.roles) || []) {
+    if (!r.e || seen.has(r.e) || RATE_NG_ROLES.includes(r.r) || r.e === 'me' || isStub(r.e) || !DB.ents[r.e]) continue;
+    if ((DB.ents[r.e].types || []).some(t => isUnder(t, 'person') || isUnder(t, 'project'))) continue;
+    seen.add(r.e); out.push(r.e); if (out.length >= max) break;
+  }
+  return out;
+}
+const projRoutines = eid => Object.entries(DB.routines).filter(([, r]) => (r.tpl.roles || []).some(x => x.r === 'プロジェクト' && x.e === eid));
+/** 連続日数(保存しない)。そのプロジェクトの繰り返しの予定の回(休み = skip の回は無いものとして数えない)が、今日から過去へ「記録済み(state done)」で続く数。
+ *  今日の分が未記録でも途切れ扱いにしない(今日の終わりまで)。毎日の繰り返しだけなら単位は「日」(その日の回が全部記録済みの日)、週・月を含めば「回」。繰り返しが無ければ null
+ *  → {n, unit:'日'|'回', todayDue(今日の回がある), todayDone(今日の回が全て記録済み)} */
+function streakOf(eid, today = TODAY) {
+  const rs = projRoutines(eid); if (!rs.length) return null;
+  const unit = rs.every(([, r]) => r.every === 'day') ? '日' : '回';
+  const done = new Set();
+  for (const a of Object.values(DB.acts)) if (a.routine && a.state === 'done') done.add(a.routine + '@' + dOf((a.planned && a.planned.start) || a.start));
+  const first = rs.reduce((m, [, r]) => r.from < m ? r.from : m, rs[0][1].from);
+  const dueOf = d => rs.filter(([, r]) => repOn(r, d)).map(([rid]) => rid + '@' + d);
+  let n = 0;
+  for (let d = today, i = 0; d >= first && i < 3700; d = dAdd(d, -1), i++) {
+    const due = dueOf(d); if (!due.length) continue;
+    const ok = due.filter(k => done.has(k)).length;
+    if (d === today) { n += unit === '日' ? (ok === due.length ? 1 : 0) : ok; continue; }
+    if (ok < due.length) break;
+    n += unit === '日' ? 1 : due.length;
+  }
+  const td = dueOf(today);
+  return { n, unit, todayDue: td.length > 0, todayDone: td.length > 0 && td.every(k => done.has(k)) };
+}
+/** いま取り組んでいる目標 = 状況が「進行中」のプロジェクトの id(期日が近い順。期日なしは最後) */
+const goalsNow = () => entsOfType('project').filter(id => factsNow(id).some(f => f.k === '状況' && f.v === GOAL_ACTIVE))
+  .sort((a, b) => (projSpan(a).to || '9999-99-99').localeCompare(projSpan(b).to || '9999-99-99') || E(a).n.localeCompare(E(b).n));
+/** ホームの「取り組み中」カード用の1件 → {id, name, from, to, daysLeft, streak(streakOf か null), today:[{id, title, done}]}
+ *  today[].id は、記録済みなら記録の id、未記録なら仮の回の id('決まりid@日付')。「記録にする」= planRecord(id) */
+function goalCard(eid, today = TODAY) {
+  const e = E(eid); if (!e) return null;
+  const sp = projSpan(eid);
+  const items = projRoutines(eid).filter(([, r]) => repOn(r, today)).map(([rid, r]) => {
+    const rec = Object.entries(DB.acts).find(([, a]) => a.routine === rid && dOf((a.planned && a.planned.start) || a.start) === today);
+    return { id: rec ? rec[0] : rid + '@' + today, title: r.tpl.title || (KINDS[r.tpl.kind] || {}).n || '', done: !!(rec && rec[1].state === 'done') };
+  });
+  return { id: eid, name: e.n, from: sp.from, to: sp.to, daysLeft: sp.to ? dDiff(sp.to, today) : null, streak: streakOf(eid, today), today: items };
+}
 /** 関係 [{id, role, other, from, to}](自分側から見た呼び名)。既定は続いているものだけ。{ended:true} で終わったものも */
 function relsOf(id, o = {}) {
   return Object.entries(DB.rels).filter(([, r]) => (r.a === id || r.b === id) && (o.ended || !r.to))
@@ -1023,18 +1095,27 @@ const entUpdate = (id, patch) => commit('直しました', () => {
   const e = DB.ents[id]; if (!e) fail('エンティティが見つかりません');
   if (patch.n !== undefined) e.n = _str(patch.n, '名前を入れてください');
   if (patch.types) { const t = patch.types.filter(k => DB.types[k]); if (!t.length) fail('種類は1つ以上必要です'); e.types = t; }
-  if (patch.facts) e.facts = _cleanFacts(patch.facts);
+  if (patch.facts) { const next = _cleanFacts(patch.facts); e.facts = next.some(f => f.k === RATE_KEY) ? next : [...next, ...e.facts.filter(f => f.k === RATE_KEY)]; }   /* 評価(と履歴)は事実の一覧を直す画面から消えない */
   if ('stub' in patch) { if (patch.stub) e.stub = 1; else delete e.stub; }
   if (!e.stub && !e.types.length) fail('種類を選んでください');
 });
 /** 事実の値を変える。keepHist なら前の値を残す(今の行に to と why、新しい行に from)。値を空にすると、その項目の行を全て消す(keepHist なら今の行だけ) */
 const factSet = (id, k, v, o = {}) => commit('直しました', () => {
   const e = DB.ents[id]; if (!e) fail('エンティティが見つかりません'); const val = _str(v); _coarse(o.since, '始まり');
+  if (k === RATE_KEY && val && !_rateNum(val)) fail('評価は1〜5です');
   const i = e.facts.findIndex(f => f.k === k && !f.to), f = e.facts[i];
   if (!f) { if (val) e.facts.push({ k, v: val, ...(o.since ? { from: o.since } : {}) }); return; }
   if (!val) { e.facts = o.keepHist ? e.facts.filter(x => x !== f) : e.facts.filter(x => x.k !== k); return; }
   if (o.keepHist && f.v !== val) { const at = o.since || ymOf(TODAY); f.to = at; if (o.why) f.why = o.why; e.facts.splice(i, 0, { k, v: val, from: at }); return; }
   f.v = val;
+});
+/** 評価を付ける・付け直す。v = 1〜5(整数)、null で今の評価を外す(前の評価は履歴に残る)。履歴は日まで持つ(since = 今日)。o.why = 前の評価から付け直した理由(前の行に残る)。
+ *  同じ星を続けて付けても何も変わらない */
+const rateSet = (eid, v, o = {}) => commit(v == null ? '評価を外しました' : '評価しました', () => {
+  if (!DB.ents[eid]) fail('エンティティが見つかりません');
+  if (v == null) { const r = factSet(eid, RATE_KEY, '', { keepHist: true }); if (!r.ok) fail(r.why); return; }
+  const n = _rateNum(v); if (!n) fail('評価は1〜5です');
+  const r = factSet(eid, RATE_KEY, String(n), { keepHist: true, since: TODAY, ...(o.why ? { why: _str(o.why) } : {}) }); if (!r.ok) fail(r.why);
 });
 /** 消す。支払い(払った人・使った人・精算)から指されていれば stub に戻して名前だけ残す。支払い方法は使われていれば消せない */
 const entRemove = id => commit('エンティティを消しました', () => {
@@ -1321,6 +1402,10 @@ function seed() {
   act('e11', { kind: 'event', title: '不動産屋と打ち合わせ', start: at(D(6), '14:00'), end: at(D(6), '15:00'), state: 'plan', roles: [{ r: '場所', name: '不動産ファースト' }, { r: 'プロジェクト', e: 'proj1' }] });
   act('e6', { kind: 'trip', title: '温泉旅行', start: D(10), end: D(11), state: 'plan', roles: [{ r: '場所', name: '宿 山の湯' }, { r: '同席', e: 'hanako' }] });
   db.routines.e12 = { every: 'week', from: D(-7 - ((dDow(T) + 1) % 7)), tpl: { kind: 'event', title: '資源ごみの日', roles: [] } };
+  /* 目標の例: 期日つきのプロジェクト + 毎日の繰り返し(連続日数は計算。ここには持たない) */
+  db.ents.proj2 = { n: '顔やせする', types: ['life_proj'], facts: [{ k: '期間', v: `${ymOf(D(-12))}〜${D(40)}` }, { k: '状況', v: '進行中' }] };
+  db.routines.gp1 = { every: 'day', from: D(-12), tpl: { kind: 'health', title: '表情筋体操', at: '21:00', roles: [{ r: 'プロジェクト', e: 'proj2' }] } };
+  [1, 2, 3, 4, 5].forEach(i => act('gp1d' + i, { kind: 'health', title: '表情筋体操', start: at(D(-i), '21:00'), routine: 'gp1', roles: [{ r: 'プロジェクト', e: 'proj2' }] }));
   /* --- ToDo --- */
   db.tasks = {
     t2: { t: '映画のチケットを予約', due: T, list: 'inbox', act: 'e1', pri: 1 },
